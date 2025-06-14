@@ -1,19 +1,26 @@
-from typing import Callable, Optional
+from typing import Callable
 
 import pyglet
+from pyglet.gl import glClearColor
 
 
 class RenderWindow(pyglet.window.Window):
-    def __init__(self, width: int, height: int, on_draw_cb: Optional[Callable[[], None]] = None):
+    def __init__(self, width: int, height: int, *, bg_color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)):
         super().__init__(width=width, height=height, caption="PyLineSketch")
-        if on_draw_cb is None:
-            self._draw_callback = lambda: None
-        else:
-            self._draw_callback = on_draw_cb
+        self._bg_color = bg_color
+        self._draw_callbacks: list[Callable[[], None]] = []
 
-    def set_draw_callback(self, func: Callable[[], None]) -> None:
-        self._draw_callback = func
+    def add_draw_callback(self, func: Callable[[], None]) -> None:
+        """
+        Add a function to be called during on_draw.
+        The function should take no arguments and perform rendering.
+        Callbacks are called in the order added.
+        """
+        self._draw_callbacks.append(func)
 
     def on_draw(self):  # Pyglet 既定のイベント名
+        r, g, b, a = self._bg_color
+        glClearColor(r, g, b, a)
         self.clear()
-        self._draw_callback()  # Renderer.draw() を呼ぶだけ
+        for cb in self._draw_callbacks:
+            cb()

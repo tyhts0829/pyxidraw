@@ -56,15 +56,11 @@ def run_sketch(
 
     # ---- ③ SwapBuffer + Worker/Receiver ---------------------------
     swap_buffer = SwapBuffer()
-    worker_pool = WorkerPool(
-        fps=fps,
-        draw_callback=user_draw,
-        cc_snapshot=midi_service.snapshot,
-    )
+    worker_pool = WorkerPool(fps=fps, draw_callback=user_draw, cc_snapshot=midi_service.snapshot)
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)
 
     # ---- ④ Window & ModernGL --------------------------------------
-    rendering_window = RenderWindow(window_width, window_height)
+    rendering_window = RenderWindow(window_width, window_height, bg_color=background)
     mgl_ctx: moderngl.Context = moderngl.create_context()
     mgl_ctx.enable(moderngl.BLEND)
     mgl_ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
@@ -86,22 +82,15 @@ def run_sketch(
 
     line_renderer = LineRenderer(mgl_context=mgl_ctx, projection_matrix=proj, double_buffer=swap_buffer)  # type: ignore
 
-    # set composite draw (renderer + HUD)
-    def _composite_draw():
-        line_renderer.draw()
-        overlay.draw()
-
-    rendering_window.set_draw_callback(_composite_draw)
+    # ---- Draw callbacks ----------------------------------
+    rendering_window.add_draw_callback(line_renderer.draw)
+    rendering_window.add_draw_callback(overlay.draw)
 
     # ---- ⑥ FrameCoordinator ---------------------------------------
     frame_clock = FrameClock([midi_service, worker_pool, stream_receiver, line_renderer, sampler, overlay])
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
 
     # ---- ⑦ pyglet イベント -----------------------------------------
-    @rendering_window.event
-    def on_draw():  # noqa: ANN001
-        line_renderer.clear(background)
-
     @rendering_window.event
     def on_key_press(sym, _mods):  # noqa: ANN001
         if sym == key.ESCAPE:

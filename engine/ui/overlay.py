@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import Mapping
-
 import pyglet
-from pyglet.window import FPSDisplay
+from pyglet.window import FPSDisplay, Window
 
 from ..core.tickable import Tickable
 from ..monitor.sampler import MetricSampler
@@ -14,7 +12,7 @@ class OverlayHUD(Tickable):
 
     def __init__(
         self,
-        window: pyglet.window.Window,
+        window: Window,
         sampler: MetricSampler,
         show_fps: bool = True,
         font_size: int = 12,

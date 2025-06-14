@@ -41,7 +41,7 @@ class MetricSampler(Tickable):
         return 0 if vlist is None else int(sum(v.shape[0] for v in vlist))
 
     @staticmethod
-    def _human(n: int) -> str:
+    def _human(n: float) -> str:
         for u in "B KB MB GB TB".split():
             if n < 1024:
                 return f"{n:4.1f}{u}"
