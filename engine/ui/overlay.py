@@ -15,8 +15,8 @@ class OverlayHUD(Tickable):
         window: Window,
         sampler: MetricSampler,
         show_fps: bool = True,
-        font_size: int = 12,
-        color=(0, 0, 0, 255),
+        font_size: int = 8,
+        color=(0, 0, 0, 155),
     ):
         self.window = window
         self.sampler = sampler
@@ -28,6 +28,7 @@ class OverlayHUD(Tickable):
             self.fps_display = FPSDisplay(window)
         else:
             self.fps_display = None
+        self.font_size = font_size
 
     # -------- Tickable --------
     def tick(self, dt: float) -> None:
@@ -42,7 +43,7 @@ class OverlayHUD(Tickable):
                     anchor_x="left",
                     anchor_y="top",
                     font_name=self._font,
-                    font_size=12,
+                    font_size=self.font_size,
                     color=self._color,
                 )
             self._labels[key].text = f"{key} : {txt}"
