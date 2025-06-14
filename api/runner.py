@@ -64,7 +64,7 @@ def run_sketch(
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)
 
     # ---- ④ Window & ModernGL --------------------------------------
-    rendering_window = RenderWindow(window_width, window_height, on_draw_cb=lambda: None)
+    rendering_window = RenderWindow(window_width, window_height)
     mgl_ctx: moderngl.Context = moderngl.create_context()
     mgl_ctx.enable(moderngl.BLEND)
     mgl_ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
@@ -84,24 +84,23 @@ def run_sketch(
         dtype="f4",
     ).T  # 転置を適用
 
-    renderer_subsys = LineRenderer(mgl_context=mgl_ctx, projection_matrix=proj, double_buffer=swap_buffer)  # type: ignore
+    line_renderer = LineRenderer(mgl_context=mgl_ctx, projection_matrix=proj, double_buffer=swap_buffer)  # type: ignore
 
     # set composite draw (renderer + HUD)
     def _composite_draw():
-        renderer_subsys.draw()
+        line_renderer.draw()
         overlay.draw()
 
-    rendering_window._on_draw_cb = _composite_draw
+    rendering_window.set_draw_callback(_composite_draw)
 
     # ---- ⑥ FrameCoordinator ---------------------------------------
-    frame_clock = FrameClock([midi_service, worker_pool, stream_receiver, renderer_subsys, sampler, overlay])
+    frame_clock = FrameClock([midi_service, worker_pool, stream_receiver, line_renderer, sampler, overlay])
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
 
     # ---- ⑦ pyglet イベント -----------------------------------------
     @rendering_window.event
     def on_draw():  # noqa: ANN001
-        renderer_subsys.clear(background)
-        _composite_draw()
+        line_renderer.clear(background)
 
     @rendering_window.event
     def on_key_press(sym, _mods):  # noqa: ANN001
@@ -112,7 +111,7 @@ def run_sketch(
     def on_close():  # noqa: ANN001
         worker_pool.close()
         midi_manager.save_cc()
-        renderer_subsys.release()
+        line_renderer.release()
         pyglet.app.exit()
 
     pyglet.app.run()
