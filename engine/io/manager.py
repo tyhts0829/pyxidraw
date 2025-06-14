@@ -1,7 +1,7 @@
 import mido
 from icecream import ic
 
-from src.utils.module import load_config
+from previous_design.src.utils.module import load_config
 
 from .controller import MidiController
 
