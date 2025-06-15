@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from ..shapes import ShapeFactory
+from shapes import ShapeFactory
 
 # Global shape factory instance
 _factory = ShapeFactory()

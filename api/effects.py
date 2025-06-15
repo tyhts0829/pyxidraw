@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from ..effects import (
+from effects import (
     Array,
     Boldify,
     Buffer,
