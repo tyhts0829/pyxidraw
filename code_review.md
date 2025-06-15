@@ -223,21 +223,6 @@ def close(self) -> None:
 
 #### 改善提案
 
-**スレッドセーフティの強化**
-
-```python
-import threading
-
-class ThreadSafeMidiService:
-    def __init__(self):
-        self._lock = threading.Lock()
-
-    def _flatten_cc_values(self) -> Dict[int, int]:
-        with self._lock:
-            # 同期化されたアクセス
-            pass
-```
-
 **リソース管理の改善**
 
 ```python
