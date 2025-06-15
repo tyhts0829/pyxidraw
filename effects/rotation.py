@@ -10,7 +10,7 @@ from .base import BaseEffect
 
 @njit(fastmath=True, cache=True)
 def _rotation_matrix_x(angle: float) -> np.ndarray:
-    """Create rotation matrix around X axis."""
+    """X軸周りの回転行列を作成します。"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -22,7 +22,7 @@ def _rotation_matrix_x(angle: float) -> np.ndarray:
 
 @njit(fastmath=True, cache=True)
 def _rotation_matrix_y(angle: float) -> np.ndarray:
-    """Create rotation matrix around Y axis."""
+    """Y軸周りの回転行列を作成します。"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -34,7 +34,7 @@ def _rotation_matrix_y(angle: float) -> np.ndarray:
 
 @njit(fastmath=True, cache=True)
 def _rotation_matrix_z(angle: float) -> np.ndarray:
-    """Create rotation matrix around Z axis."""
+    """Z軸周りの回転行列を作成します。"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -46,31 +46,31 @@ def _rotation_matrix_z(angle: float) -> np.ndarray:
 
 @njit(fastmath=True, cache=True)
 def _apply_rotation(vertices: np.ndarray, rotation_matrix: np.ndarray) -> np.ndarray:
-    """Apply rotation matrix to vertices."""
+    """頂点に回転行列を適用します。"""
     # Apply rotation
     rotated = vertices @ rotation_matrix.T  # Transpose for row vectors
     return rotated.astype(np.float32)
 
 
 class Rotation(BaseEffect):
-    """Rotate vertices around specified axes."""
+    """指定された軸周りに頂点を回転します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              angle_x: float = 0.0,
              angle_y: float = 0.0,
              angle_z: float = 0.0,
              **params: Any) -> list[np.ndarray]:
-        """Apply rotation effect.
+        """回転エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            angle_x: Rotation angle around X axis in radians
-            angle_y: Rotation angle around Y axis in radians
-            angle_z: Rotation angle around Z axis in radians
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            angle_x: X軸周りの回転角（ラジアン）
+            angle_y: Y軸周りの回転角（ラジアン）
+            angle_z: Z軸周りの回転角（ラジアン）
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Rotated vertex arrays
+            回転された頂点配列
         """
         # Create rotation matrices using numba-optimized functions
         Rx = _rotation_matrix_x(angle_x)

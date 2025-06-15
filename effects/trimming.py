@@ -8,21 +8,21 @@ from .base import BaseEffect
 
 
 class Trimming(BaseEffect):
-    """Trim lines to specified parameter range."""
+    """線を指定されたパラメータ範囲にトリミングします。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply trimming effect.
+        """トリミングエフェクトを適用します。
         
-        Trims lines to specified start and end parameters.
+        指定された開始と終了パラメータに線をトリミングします。
         
         Args:
-            vertices_list: Input vertex arrays
-            start_param: Start parameter (0.0 = beginning) - default 0.0
-            end_param: End parameter (1.0 = end) - default 1.0
-            **params: Additional parameters
+            vertices_list: 入力頂点配列
+            start_param: 開始パラメータ (0.0 = 開始) - デフォルト 0.0
+            end_param: 終了パラメータ (1.0 = 終了) - デフォルト 1.0
+            **params: 追加パラメータ
             
         Returns:
-            Trimmed vertex arrays
+            トリミングされた頂点配列
         """
         start_param = params.get('start_param', 0.0)
         end_param = params.get('end_param', 1.0)
@@ -48,7 +48,7 @@ class Trimming(BaseEffect):
         return trimmed_results
     
     def _trim_path(self, vertices: np.ndarray, start_param: float, end_param: float) -> np.ndarray | None:
-        """Trim a single path to specified parameter range."""
+        """単一のパスを指定されたパラメータ範囲にトリミングします。"""
         if len(vertices) < 2:
             return vertices
         
@@ -87,7 +87,7 @@ class Trimming(BaseEffect):
         return np.array(trimmed_vertices) if len(trimmed_vertices) >= 2 else None
     
     def _interpolate_at_distance(self, vertices: np.ndarray, distances: list[float], target_dist: float) -> np.ndarray | None:
-        """Interpolate point at specific distance along path."""
+        """パス上の特定距離で点を補間します。"""
         if target_dist <= 0:
             return vertices[0]
         if target_dist >= distances[-1]:

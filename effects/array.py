@@ -8,22 +8,22 @@ from .base import BaseEffect
 
 
 class Array(BaseEffect):
-    """Create array of copies of the input."""
+    """入力のコピーを配列状に生成します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              count_x: int = 1, count_y: int = 1, count_z: int = 1,
              spacing_x: float = 1.0, spacing_y: float = 1.0, spacing_z: float = 1.0,
              **params: Any) -> list[np.ndarray]:
-        """Apply array effect.
+        """配列エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            count_x, count_y, count_z: Number of copies in each direction
-            spacing_x, spacing_y, spacing_z: Spacing between copies
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            count_x, count_y, count_z: 各方向のコピー数
+            spacing_x, spacing_y, spacing_z: コピー間の間隔
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Arrayed vertex arrays
+            配列化された頂点配列
         """
         new_vertices_list = []
         

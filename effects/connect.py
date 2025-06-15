@@ -17,7 +17,7 @@ def catmull_rom_spline_alpha(
     p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, 
     n_points: int = 20, alpha: float = 0.5
 ) -> np.ndarray:
-    """Interpolate 4 points using alpha-Catmull-Rom spline."""
+    """α-Catmull-Romスプラインを使用し4点を補間します。"""
     
     def tj(ti, pi, pj):
         # Handle zero distance
@@ -62,7 +62,7 @@ def _connect_core(
     cyclic: bool,
     num_lines: int
 ):
-    """Numba-optimized core function for connect processing."""
+    """接続処理用のNumba最適化コア関数です。"""
     if cyclic:
         loop_count = num_lines
     else:
@@ -133,24 +133,24 @@ def _connect_core(
 
 
 class Connect(BaseEffect):
-    """Connect multiple lines smoothly using Catmull-Rom splines."""
+    """Catmull-Romスプラインを使用して複数の線を滑らかに接続します。"""
     
     def apply(self, vertices_list: list[np.ndarray], 
              n_points: float = 0.5,
              alpha: float = 0.0,
              cyclic: bool = False,
              **params: Any) -> list[np.ndarray]:
-        """Apply connect effect.
+        """接続エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            n_points: Number of interpolation points (0.0-1.0, mapped to 0-50)
-            alpha: Spline tension parameter (0.0-1.0, mapped to 0-2)
-            cyclic: Whether to connect last line to first
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            n_points: 補間点数 (0.0-1.0、0-50にマッピング)
+            alpha: スプラインテンションパラメータ (0.0-1.0、0-2にマッピング)
+            cyclic: 最後の線を最初の線に接続するか
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Connected vertex arrays
+            接続された頂点配列
         """
         alpha = alpha * MAX_ALPHA
         n_points = int(n_points * MAX_N_POINTS)

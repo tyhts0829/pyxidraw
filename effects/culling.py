@@ -8,7 +8,7 @@ from .base import BaseEffect
 
 
 class Culling(BaseEffect):
-    """Remove vertices outside specified bounds."""
+    """指定された範囲外の頂点を除去します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              min_x: float = -1.0, max_x: float = 1.0,
@@ -16,18 +16,18 @@ class Culling(BaseEffect):
              min_z: float = -1.0, max_z: float = 1.0,
              mode: str = "clip",
              **params: Any) -> list[np.ndarray]:
-        """Apply culling effect.
+        """カリングエフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            min_x, max_x: X-axis bounds
-            min_y, max_y: Y-axis bounds
-            min_z, max_z: Z-axis bounds
-            mode: "clip" to clip lines at bounds, "remove" to remove entire lines
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            min_x, max_x: X軸の範囲
+            min_y, max_y: Y軸の範囲
+            min_z, max_z: Z軸の範囲
+            mode: 線を範囲でクリップする"clip"、線全体を除去する"remove"
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Culled vertex arrays
+            カリングされた頂点配列
         """
         new_vertices_list = []
         
@@ -58,7 +58,7 @@ class Culling(BaseEffect):
                             min_x: float, max_x: float,
                             min_y: float, max_y: float,
                             min_z: float, max_z: float) -> np.ndarray:
-        """Clip a line to the specified bounds."""
+        """指定された範囲に線をクリップします。"""
         # For simplicity, just clamp vertices to bounds
         # A more sophisticated implementation would compute intersections
         clipped = vertices.copy()

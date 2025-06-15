@@ -10,14 +10,14 @@ from .base import BaseEffect
 
 @njit(fastmath=True, cache=True)
 def _apply_scaling(vertices: np.ndarray, scale_matrix: np.ndarray) -> np.ndarray:
-    """Apply scaling matrix to vertices."""
+    """頂点にスケール行列を適用します。"""
     # Apply scaling
     scaled = vertices @ scale_matrix.T
     return scaled.astype(np.float32)
 
 
 class Scaling(BaseEffect):
-    """Scale vertices along specified axes."""
+    """指定された軸に沿って頂点をスケールします。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              scale_x: float = 1.0,
@@ -25,18 +25,18 @@ class Scaling(BaseEffect):
              scale_z: float = 1.0,
              uniform_scale: float | None = None,
              **params: Any) -> list[np.ndarray]:
-        """Apply scaling effect.
+        """スケールエフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            scale_x: Scale factor for X axis
-            scale_y: Scale factor for Y axis
-            scale_z: Scale factor for Z axis
-            uniform_scale: If provided, overrides individual scale factors
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            scale_x: X軸のスケール率
+            scale_y: Y軸のスケール率
+            scale_z: Z軸のスケール率
+            uniform_scale: 指定された場合、個別のスケール率をオーバーライド
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Scaled vertex arrays
+            スケールされた頂点配列
         """
         # Use uniform scale if provided
         if uniform_scale is not None:

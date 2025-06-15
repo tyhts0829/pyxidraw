@@ -1,12 +1,14 @@
 from typing import Callable
 
 import pyglet
-from pyglet.gl import glClearColor
+from pyglet.gl import Config, glClearColor
 
 
 class RenderWindow(pyglet.window.Window):
     def __init__(self, width: int, height: int, *, bg_color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)):
-        super().__init__(width=width, height=height, caption="PyLineSketch")
+        # Enable MSAA for smooth line rendering
+        config = Config(double_buffer=True, sample_buffers=1, samples=4, vsync=True)
+        super().__init__(width=width, height=height, caption="Pyxidraw", config=config)
         self._bg_color = bg_color
         self._draw_callbacks: list[Callable[[], None]] = []
 

@@ -8,21 +8,21 @@ from .base import BaseEffect
 
 
 class Desolve(BaseEffect):
-    """Dissolve/fragment lines into individual segments."""
+    """線を個別のセグメントに分解/分割します。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply desolve effect.
+        """分解エフェクトを適用します。
         
-        Breaks continuous polylines into individual line segments.
+        連続したポリラインを個別の線セグメントに分割します。
         
         Args:
-            vertices_list: Input vertex arrays
-            factor: Dissolution factor (0.0-1.0) - controls randomness (not used in basic implementation)
-            seed: Random seed for reproducibility (not used in basic implementation)
-            **params: Additional parameters
+            vertices_list: 入力頂点配列
+            factor: 分解率 (0.0-1.0) - ランダム性を制御（基本実装では使用しない）
+            seed: 再現可能性のためのランダムシード（基本実装では使用しない）
+            **params: 追加パラメータ
             
         Returns:
-            List of individual line segments (each with 2 vertices)
+            個別の線セグメントのリスト（各セグメントは2個の頂点を持つ）
         """
         factor = params.get('factor', 0.5)
         seed = params.get('seed', None)
@@ -36,15 +36,15 @@ class Desolve(BaseEffect):
         return new_vertices_list
     
     def _desolve_core(self, vertices: np.ndarray, factor: float, seed: int | None) -> list[np.ndarray]:
-        """Break a polyline into individual line segments.
+        """ポリラインを個別の線セグメントに分割します。
         
         Args:
-            vertices: (N, 3) array of vertices forming a polyline
-            factor: Dissolution factor (currently unused, for future enhancement)
-            seed: Random seed (currently unused, for future enhancement)
+            vertices: ポリラインを形成する(N, 3)の頂点配列
+            factor: 分解率（現在未使用、将来の拡張用）
+            seed: ランダムシード（現在未使用、将来の拡張用）
             
         Returns:
-            List of (2, 3) arrays, each representing one line segment
+            (2, 3)配列のリスト、各配列は1つの線セグメントを表す
         """
         # If vertices has 2 or fewer points, return as is
         if len(vertices) <= 2:

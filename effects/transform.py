@@ -8,20 +8,20 @@ from .base import BaseEffect
 
 
 class Transform(BaseEffect):
-    """Apply arbitrary transformation matrix."""
+    """任意の変換行列を適用します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              matrix: np.ndarray | None = None,
              **params: Any) -> list[np.ndarray]:
-        """Apply transform effect.
+        """変換エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            matrix: 4x4 transformation matrix (or 3x3)
-            **params: Additional parameters (ignored)
+            vertices_list: 入力适点配列
+            matrix: 4x4変換行列（または3x3）
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Transformed vertex arrays
+            変換された頂点配列
         """
         if matrix is None:
             return vertices_list

@@ -8,21 +8,21 @@ from .base import BaseEffect
 
 
 class Collapse(BaseEffect):
-    """Collapse vertices toward a center point."""
+    """頂点を中心点に向かって崩壊します。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply collapse effect.
+        """崩壊エフェクトを適用します。
         
-        Moves vertices toward a center point by specified factor.
+        指定された率で頂点を中心点に向かって移動します。
         
         Args:
-            vertices_list: Input vertex arrays
-            center: Center point to collapse toward (x, y, z) - default (0, 0, 0)
-            factor: Collapse factor (0.0 = no change, 1.0 = complete collapse) - default 0.0
-            **params: Additional parameters
+            vertices_list: 入力頂点配列
+            center: 崩壊する先の中心点 (x, y, z) - デフォルト (0, 0, 0)
+            factor: 崩壊率 (0.0 = 変化なし、0.0 = 完全崩壊) - デフォルト 0.0
+            **params: 追加パラメータ
             
         Returns:
-            Collapsed vertex arrays
+            崩壊された頂点配列
         """
         center = params.get('center', (0.0, 0.0, 0.0))
         factor = params.get('factor', 0.0)

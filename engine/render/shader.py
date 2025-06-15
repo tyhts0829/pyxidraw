@@ -11,7 +11,7 @@ class Shader:
         #version 410
         layout(lines) in; // 入力は線
         layout(triangle_strip, max_vertices = 4) out; // 出力は四角形（2つの三角形）
-        uniform float line_thickness = 0.001;
+        uniform float line_thickness = 0.0006;
         void main() {
             // 線の太さ
             float thickness = line_thickness; // 太さを調整

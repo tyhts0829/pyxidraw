@@ -8,22 +8,22 @@ from .base import BaseEffect
 
 
 class Subdivision(BaseEffect):
-    """Subdivide lines by adding intermediate points."""
+    """中間点を追加して線を細分化します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              subdivisions: int = 1,
              smoothing: float = 0.0,
              **params: Any) -> list[np.ndarray]:
-        """Apply subdivision effect.
+        """細分化エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            subdivisions: Number of subdivision iterations
-            smoothing: Smoothing factor (0.0 = linear, 1.0 = maximum smoothing)
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            subdivisions: 細分化反復回数
+            smoothing: スムージング率 (0.0 = 線形、1.0 = 最大スムージング)
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Subdivided vertex arrays
+            細分化された頂点配列
         """
         new_vertices_list = []
         
@@ -42,7 +42,7 @@ class Subdivision(BaseEffect):
         return new_vertices_list
     
     def _subdivide_once(self, vertices: np.ndarray, smoothing: float) -> np.ndarray:
-        """Perform one subdivision iteration."""
+        """1回の細分化反復を実行します。"""
         n = len(vertices)
         if n < 2:
             return vertices

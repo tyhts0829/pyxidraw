@@ -10,7 +10,7 @@ from .base import BaseEffect
 
 @njit(fastmath=True, cache=True)
 def _apply_noise(vertices: np.ndarray, amplitude: float, seed: int) -> np.ndarray:
-    """Apply noise to vertices."""
+    """頂点にノイズを適用します。"""
     # Set seed for reproducibility
     np.random.seed(seed)
     
@@ -23,22 +23,22 @@ def _apply_noise(vertices: np.ndarray, amplitude: float, seed: int) -> np.ndarra
 
 
 class Noise(BaseEffect):
-    """Add random noise to vertices."""
+    """頂点にランダムノイズを追加します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              amplitude: float = 0.01,
              seed: int | None = None,
              **params: Any) -> list[np.ndarray]:
-        """Apply noise effect.
+        """ノイズエフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            amplitude: Maximum displacement amplitude
-            seed: Random seed for reproducibility
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            amplitude: 最大変位振幅
+            seed: 再現可能性のためのランダムシード
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Noisy vertex arrays
+            ノイズが適用された頂点配列
         """
         # Use a default seed if none provided
         effective_seed = seed if seed is not None else 42

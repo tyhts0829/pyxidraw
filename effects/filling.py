@@ -9,20 +9,20 @@ from util.geometry import transform_to_xy_plane, transform_back
 
 
 class Filling(BaseEffect):
-    """Fill closed shapes with hatching patterns."""
+    """閉じた形状をハッチングパターンで塗りつぶします。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply filling effect.
+        """塗りつぶしエフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays (should form closed shapes)
-            pattern: Fill pattern ("lines", "cross", "dots") - default "lines"
-            density: Fill density (0.0-1.0) - default 0.1
-            angle: Pattern angle in radians - default 0.0
-            **params: Additional parameters
+            vertices_list: 入力頂点配列（閉じた形状を形成する必要がある）
+            pattern: 塗りつぶしパターン ("lines", "cross", "dots") - デフォルト "lines"
+            density: 塗りつぶし密度 (0.0-1.0) - デフォルト 0.1
+            angle: パターンの角度（ラジアン） - デフォルト 0.0
+            **params: 追加パラメータ
             
         Returns:
-            Filled vertex arrays including original shapes and fill lines
+            元の形状と塗りつぶし線を含む塗りつぶし頂点配列
         """
         pattern = params.get('pattern', 'lines')
         density = params.get('density', 0.1)
@@ -56,7 +56,7 @@ class Filling(BaseEffect):
         return filled_results
     
     def _generate_line_fill(self, vertices: np.ndarray, density: float, angle: float = 0.0) -> list[np.ndarray]:
-        """Generate parallel line fill pattern."""
+        """平行線塗りつぶしパターンを生成します。"""
         # Transform to XY plane for easier processing
         vertices_2d, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
         
@@ -105,13 +105,13 @@ class Filling(BaseEffect):
         return fill_lines
     
     def _generate_cross_fill(self, vertices: np.ndarray, density: float, angle: float = 0.0) -> list[np.ndarray]:
-        """Generate cross-hatch fill pattern."""
+        """クロスハッチ塗りつぶしパターンを生成します。"""
         lines1 = self._generate_line_fill(vertices, density, angle)
         lines2 = self._generate_line_fill(vertices, density, angle + np.pi/2)
         return lines1 + lines2
     
     def _generate_dot_fill(self, vertices: np.ndarray, density: float) -> list[np.ndarray]:
-        """Generate dot fill pattern."""
+        """ドット塗りつぶしパターンを生成します。"""
         # Transform to XY plane
         vertices_2d, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
         coords_2d = vertices_2d[:, :2]
@@ -141,7 +141,7 @@ class Filling(BaseEffect):
         return dots
     
     def _find_line_intersections(self, polygon: np.ndarray, y: float) -> list[float]:
-        """Find intersections of horizontal line with polygon edges."""
+        """水平線とポリゴンエッジの交点を検索します。"""
         intersections = []
         n = len(polygon)
         
@@ -159,7 +159,7 @@ class Filling(BaseEffect):
         return intersections
     
     def _point_in_polygon(self, polygon: np.ndarray, point: list[float]) -> bool:
-        """Check if point is inside polygon using ray casting algorithm."""
+        """レイキャスティングアルゴリズムを使用して点がポリゴン内部にあるかをチェックします。"""
         x, y = point
         n = len(polygon)
         inside = False

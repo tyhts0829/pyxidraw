@@ -8,59 +8,59 @@ from .base import BaseEffect
 
 
 class EffectPipeline:
-    """Pipeline for chaining multiple effects together."""
+    """複数のエフェクトを連結するためのパイプラインです。"""
     
     def __init__(self, effects: Sequence[BaseEffect] | None = None):
-        """Initialize pipeline with optional initial effects.
+        """初期エフェクトでパイプラインを初期化します。
         
         Args:
-            effects: Sequence of effects to apply in order
+            effects: 順番に適用するエフェクトのシーケンス
         """
         self.effects = list(effects) if effects else []
     
     def add(self, effect: BaseEffect) -> EffectPipeline:
-        """Add an effect to the pipeline.
+        """パイプラインにエフェクトを追加します。
         
         Args:
-            effect: Effect to add
+            effect: 追加するエフェクト
             
         Returns:
-            Self for method chaining
+            メソッドチェーンのための自身
         """
         self.effects.append(effect)
         return self
     
     def remove(self, effect: BaseEffect) -> EffectPipeline:
-        """Remove an effect from the pipeline.
+        """パイプラインからエフェクトを除去します。
         
         Args:
-            effect: Effect to remove
+            effect: 除去するエフェクト
             
         Returns:
-            Self for method chaining
+            メソッドチェーンのための自身
         """
         if effect in self.effects:
             self.effects.remove(effect)
         return self
     
     def clear(self) -> EffectPipeline:
-        """Clear all effects from the pipeline.
+        """パイプラインからすべてのエフェクトをクリアします。
         
         Returns:
-            Self for method chaining
+            メソッドチェーンのための自身
         """
         self.effects.clear()
         return self
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply all effects in the pipeline sequentially.
+        """パイプライン内のすべてのエフェクトを順次適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            **params: Parameters passed to all effects
+            vertices_list: 入力頂点配列
+            **params: すべてのエフェクトに渡されるパラメータ
             
         Returns:
-            Transformed vertex arrays
+            変換された頂点配列
         """
         result = vertices_list
         for effect in self.effects:
@@ -68,22 +68,22 @@ class EffectPipeline:
         return result
     
     def __call__(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply the pipeline (alias for apply method)."""
+        """パイプラインを適用します（applyメソッドのエイリアス）。"""
         return self.apply(vertices_list, **params)
     
     def __len__(self) -> int:
-        """Get number of effects in pipeline."""
+        """パイプライン内のエフェクト数を取得します。"""
         return len(self.effects)
     
     def __getitem__(self, index: int) -> BaseEffect:
-        """Get effect at index."""
+        """インデックスのエフェクトを取得します。"""
         return self.effects[index]
     
     def __iter__(self):
-        """Iterate over effects."""
+        """エフェクトを反復します。"""
         return iter(self.effects)
     
     def clear_all_caches(self):
-        """Clear caches for all effects in the pipeline."""
+        """パイプライン内のすべてのエフェクトのキャッシュをクリアします。"""
         for effect in self.effects:
             effect.clear_cache()

@@ -10,7 +10,7 @@ from .base import BaseEffect
 
 @njit(fastmath=True, cache=True)
 def _calculate_line_normals_3d(vertices: np.ndarray) -> np.ndarray:
-    """Calculate normal vectors in XY plane for 3D line segments."""
+    """3D線分のXY平面での法線ベクトルを計算します。"""
     if vertices.shape[0] < 2:
         return np.zeros((0, 3), dtype=np.float32)
     
@@ -37,7 +37,7 @@ def _boldify_normal_based(
     vertices_list: List[np.ndarray],
     thickness: float = 0.01,
 ) -> List[np.ndarray]:
-    """Normal-based efficient bold line implementation."""
+    """法線ベースの効率的な太線実装です。"""
     if thickness <= 0:
         return vertices_list
     
@@ -91,7 +91,7 @@ def _boldify_adaptive(
     density: float = 0.5,
     base_thickness: float = 0.01,
 ) -> List[np.ndarray]:
-    """Adaptive density control bold line implementation."""
+    """アダプティブ密度制御の太線実装です。"""
     if density <= 0:
         return vertices_list
     
@@ -139,24 +139,24 @@ def _boldify_adaptive(
 
 
 class Boldify(BaseEffect):
-    """Make lines appear bolder by adding parallel lines."""
+    """平行線を追加して線を太く見せます。"""
     
     def apply(self, vertices_list: list[np.ndarray], 
              offset: float = 1.0,
              num_offset: tuple[float, float, float] = (0.5, 0.5, 0.5),
              method: str = "normal",
              **params: Any) -> list[np.ndarray]:
-        """Apply boldify effect.
+        """太線化エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            offset: Thickness coefficient (0.0-1.0, multiplied by 0.1 internally)
-            num_offset: Density control for adaptive method
-            method: Implementation method ("normal" or "adaptive")
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            offset: 太さ係数（0.0-1.0、内部では0.1を乗算）
+            num_offset: アダプティブ方式の密度制御
+            method: 実装方式（"normal"または"adaptive"）
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Boldified vertex arrays
+            太線化された頂点配列
         """
         if offset <= 0:
             return vertices_list

@@ -8,22 +8,22 @@ from .base import BaseEffect
 
 
 class Sweep(BaseEffect):
-    """Remove duplicate line segments from vertex lists."""
+    """頂点リストから重複した線セグメントを除去します。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply sweep effect.
+        """スイープエフェクトを適用します。
         
-        Removes duplicate line segments across all vertex arrays.
-        This is useful for cleaning up overlapping geometry.
+        すべての頂点配列から重複した線セグメントを除去します。
+        これは重なり合うジオメトリのクリーンアップに有用です。
         
         Args:
-            vertices_list: Input vertex arrays
-            path: Path to sweep along (unused in current implementation)
-            profile: Profile to sweep (unused in current implementation)
-            **params: Additional parameters
+            vertices_list: 入力頂点配列
+            path: スイープするパス（現在の実装では未使用）
+            profile: スイープするプロファイル（現在の実装では未使用）
+            **params: 追加パラメータ
             
         Returns:
-            Vertex arrays with duplicate line segments removed
+            重複した線セグメントが除去された頂点配列
         """
         path = params.get('path', None)
         profile = params.get('profile', None)
@@ -33,13 +33,13 @@ class Sweep(BaseEffect):
         return self._remove_duplicate_segments(vertices_list)
     
     def _remove_duplicate_segments(self, vertices_list: list[np.ndarray]) -> list[np.ndarray]:
-        """Remove duplicate line segments from vertex lists.
+        """頂点リストから重複した線セグメントを除去します。
         
         Args:
-            vertices_list: List of vertex arrays
+            vertices_list: 頂点配列のリスト
             
         Returns:
-            List of vertex arrays with duplicate segments removed
+            重複セグメントが除去された頂点配列のリスト
         """
         # Track seen segments to avoid duplicates
         # Use normalized tuple representation (smaller vertex first)

@@ -10,31 +10,31 @@ from .base import BaseEffect
 
 @njit(fastmath=True, cache=True)
 def _apply_translation(vertices: np.ndarray, offset: np.ndarray) -> np.ndarray:
-    """Apply translation to vertices."""
+    """頂点に移動を適用します。"""
     # Apply translation
     translated = vertices + offset
     return translated.astype(np.float32)
 
 
 class Translation(BaseEffect):
-    """Translate vertices by specified offset."""
+    """指定されたオフセットで頂点を移動します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              offset_x: float = 0.0,
              offset_y: float = 0.0,
              offset_z: float = 0.0,
              **params: Any) -> list[np.ndarray]:
-        """Apply translation effect.
+        """移動エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            offset_x: Translation offset for X axis
-            offset_y: Translation offset for Y axis
-            offset_z: Translation offset for Z axis
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            offset_x: X軸の移動オフセット
+            offset_y: Y軸の移動オフセット
+            offset_z: Z軸の移動オフセット
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Translated vertex arrays
+            移動された頂点配列
         """
         # Create offset vector
         offset = np.array([offset_x, offset_y, offset_z], dtype=np.float32)

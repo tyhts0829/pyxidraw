@@ -8,23 +8,23 @@ from .base import BaseEffect
 
 
 class Extrude(BaseEffect):
-    """Extrude 2D shapes into 3D."""
+    """2D形状を3Dに押し出します。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply extrude effect.
+        """押し出しエフェクトを適用します。
         
-        Extrudes 2D shapes in a specified direction to create 3D structures.
+        2D形状を指定された方向に押し出して3D構造を作成します。
         
         Args:
-            vertices_list: Input vertex arrays
-            direction: Extrusion direction vector (x, y, z) - default (0, 0, 1)
-            distance: Extrusion distance - default 1.0
-            scale: Scale factor for extruded geometry - default 1.0
-            subdivisions: Number of subdivision steps - default 0
-            **params: Additional parameters
+            vertices_list: 入力頂点配列
+            direction: 押し出し方向ベクトル (x, y, z) - デフォルト (0, 0, 1)
+            distance: 押し出し距離 - デフォルト 1.0
+            scale: 押し出したジオメトリのスケール率 - デフォルト 1.0
+            subdivisions: 細分化ステップ数 - デフォルト 0
+            **params: 追加パラメータ
             
         Returns:
-            Extruded vertex arrays including original, extruded, and connecting edges
+            元の形状、押し出し形状、接続エッジを含む押し出し頂点配列
         """
         direction = params.get('direction', (0.0, 0.0, 1.0))
         distance = params.get('distance', 1.0)
@@ -75,14 +75,14 @@ class Extrude(BaseEffect):
         return extruded_vertices_list
     
     def _subdivide_vertices(self, vertices_list: list[np.ndarray], subdivisions: int) -> list[np.ndarray]:
-        """Apply simple subdivision to increase vertex density.
+        """頂点密度を増やすための簡単な細分化を適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            subdivisions: Number of subdivision iterations
+            vertices_list: 入力頂点配列
+            subdivisions: 細分化反復回数
             
         Returns:
-            Subdivided vertex arrays
+            細分化された頂点配列
         """
         result = []
         

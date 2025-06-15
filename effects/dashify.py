@@ -8,22 +8,22 @@ from .base import BaseEffect
 
 
 class Dashify(BaseEffect):
-    """Convert continuous lines into dashed lines."""
+    """連続線を破線に変換します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              dash_length: float = 0.1,
              gap_length: float = 0.05,
              **params: Any) -> list[np.ndarray]:
-        """Apply dashify effect.
+        """破線化エフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            dash_length: Length of each dash
-            gap_length: Length of gap between dashes
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            dash_length: 各ダッシュの長さ
+            gap_length: ダッシュ間のギャップの長さ
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Dashed vertex arrays
+            破線化された頂点配列
         """
         new_vertices_list = []
         pattern_length = dash_length + gap_length
@@ -64,7 +64,7 @@ class Dashify(BaseEffect):
     
     def _interpolate_segment(self, vertices: np.ndarray, cumulative_distances: np.ndarray,
                            start_dist: float, end_dist: float) -> np.ndarray:
-        """Interpolate vertices between two distances along the line."""
+        """線上の2つの距離間で頂点を補間します。"""
         # Find indices
         start_idx = np.searchsorted(cumulative_distances, start_dist)
         end_idx = np.searchsorted(cumulative_distances, end_dist)

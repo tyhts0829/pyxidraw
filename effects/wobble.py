@@ -8,7 +8,7 @@ from .base import BaseEffect
 
 
 class Wobble(BaseEffect):
-    """Add wobble/wave distortion to lines."""
+    """線にウォブル/波の歪みを追加します。"""
     
     def apply(self, vertices_list: list[np.ndarray],
              amplitude: float = 0.05,
@@ -16,18 +16,18 @@ class Wobble(BaseEffect):
              phase: float = 0.0,
              axis: str = "y",
              **params: Any) -> list[np.ndarray]:
-        """Apply wobble effect.
+        """ウォブルエフェクトを適用します。
         
         Args:
-            vertices_list: Input vertex arrays
-            amplitude: Wave amplitude
-            frequency: Wave frequency
-            phase: Phase offset
-            axis: Axis to apply wobble ("x", "y", or "z")
-            **params: Additional parameters (ignored)
+            vertices_list: 入力頂点配列
+            amplitude: 波の振幅
+            frequency: 波の周波数
+            phase: 位相オフセット
+            axis: ウォブルを適用する軸 ("x", "y", または "z")
+            **params: 追加パラメータ（無視される）
             
         Returns:
-            Wobbled vertex arrays
+            ウォブルが適用された頂点配列
         """
         axis_map = {"x": 0, "y": 1, "z": 2}
         if axis not in axis_map:

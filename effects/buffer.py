@@ -8,21 +8,21 @@ from .base import BaseEffect
 
 
 class Buffer(BaseEffect):
-    """Buffer/offset paths by creating parallel lines."""
+    """平行線を作成してパスをバッファー/オフセットします。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply buffer effect.
+        """バッファーエフェクトを適用します。
         
-        Creates parallel lines at specified distance from input paths.
+        入力パスから指定された距離に平行線を作成します。
         
         Args:
-            vertices_list: Input vertex arrays
-            distance: Buffer distance (positive = outward, negative = inward) - default 0.1
-            join_style: Join style for corners ("round", "miter", "bevel") - default "round"
-            **params: Additional parameters
+            vertices_list: 入力頂点配列
+            distance: バッファー距離（正の値=外向き、負の値=内向き） - デフォルト 0.1
+            join_style: 角の接合スタイル（"round", "miter", "bevel"） - デフォルト "round"
+            **params: 追加パラメータ
             
         Returns:
-            Buffered vertex arrays including original and offset paths
+            元のパスとオフセットパスを含むバッファー化された頂点配列
         """
         distance = params.get('distance', 0.1)
         join_style = params.get('join_style', 'round')
@@ -47,7 +47,7 @@ class Buffer(BaseEffect):
         return buffered_results
     
     def _create_offset_paths(self, vertices: np.ndarray, distance: float, join_style: str) -> list[np.ndarray]:
-        """Create offset paths on both sides of the input path."""
+        """入力パスの両側にオフセットパスを作成します。"""
         if len(vertices) < 2:
             return []
         
@@ -64,7 +64,7 @@ class Buffer(BaseEffect):
         return paths
     
     def _offset_path(self, vertices: np.ndarray, distance: float) -> np.ndarray | None:
-        """Create a single offset path at specified distance."""
+        """指定された距離に単一のオフセットパスを作成します。"""
         if len(vertices) < 2:
             return None
         

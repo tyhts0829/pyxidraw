@@ -8,21 +8,21 @@ from .base import BaseEffect
 
 
 class Webify(BaseEffect):
-    """Create web-like connections between vertices."""
+    """頂点間にウェブ状の接続を作成します。"""
     
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
-        """Apply webify effect.
+        """ウェブ化エフェクトを適用します。
         
-        Creates web-like connections between nearby vertices.
+        近い頂点間にウェブ状の接続を作成します。
         
         Args:
-            vertices_list: Input vertex arrays
-            connection_probability: Probability of connecting nearby vertices - default 0.5
-            max_distance: Maximum distance for connections - default 1.0
-            **params: Additional parameters
+            vertices_list: 入力頂点配列
+            connection_probability: 近い頂点を接続する確率 - デフォルト 0.5
+            max_distance: 接続の最大距離 - デフォルト 1.0
+            **params: 追加パラメータ
             
         Returns:
-            Original vertex arrays plus web connections
+            元の頂点配列とウェブ接続
         """
         connection_probability = params.get('connection_probability', 0.5)
         max_distance = params.get('max_distance', 1.0)
@@ -49,7 +49,7 @@ class Webify(BaseEffect):
         return result
     
     def _create_web_connections(self, vertices: np.ndarray, probability: float, max_distance: float) -> list[np.ndarray]:
-        """Create web connections between vertices."""
+        """頂点間にウェブ接続を作成します。"""
         connections = []
         n_vertices = len(vertices)
         
