@@ -75,6 +75,7 @@ class MidiService(Tickable):
           先に検出したデバイスを優先する（後勝ちにしたい場合は `reversed()`）。
         - デバイスごとに完全に独立させたい場合は、このメソッドを
           オーバーライドした派生クラスを作ると良い。
+        self._manager.controllersはマルチスレッド環境での共有リソースではないので、スレッドセーフ対策は不要
         """
         flat: Dict[int, int] = {}
         for controller in self._manager.controllers.values():
