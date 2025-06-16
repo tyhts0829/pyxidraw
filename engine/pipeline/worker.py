@@ -73,6 +73,8 @@ class WorkerPool(Tickable):
         for _ in self._workers:
             self._task_q.put(None)  # sentinel
         for w in self._workers:
-            w.join()
+            w.join(timeout=1.0)  # 1秒でタイムアウト
+            if w.is_alive():
+                w.terminate()  # 強制終了
         self._task_q.close()
         self._result_q.close()

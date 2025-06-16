@@ -13,7 +13,7 @@ def draw(t, cc) -> list[np.ndarray]:
     # Use polygon shape with number of sides controlled by MIDI
     n_sides = 3 + int(cc[1] * 10)  # 3-13 sides
     poly = shapes.polygon(n_sides=n_sides, center=(100, 100, 0), scale=(100, 100, 100))
-    polyh = shapes.polyhedron(center=(100, 150, 0), scale=(80, 80, 80), rotate=(cc[2], 0, 0))
+    polyh = shapes.polyhedron(polygon_type="dodeca", center=(100, 150, 0), scale=(80, 80, 80), rotate=(cc[2], 0, 0))
     polyh = effects.filling(polyh, density=cc[3], angle=cc[4])
     # polyとpolyhを組み合わせて描画
     ret = []
