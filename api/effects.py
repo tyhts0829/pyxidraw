@@ -36,17 +36,17 @@ def boldify(
     method: str = "normal",
     **params: Any,
 ) -> list[np.ndarray]:
-    """Make lines appear bolder by adding parallel lines.
+    """平行線を追加してラインを太く見せます。
 
     Args:
-        vertices_list: Input vertex arrays
-        offset: Thickness coefficient (0.0-1.0, multiplied by 0.1 internally)
-        num_offset: Density control for adaptive method
-        method: Implementation method ("normal" or "adaptive")
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        offset: 太さ係数 (0.0-1.0、内部で0.1倍される)
+        num_offset: 適応的手法の密度制御
+        method: 実装手法 ("normal" または "adaptive")
+        **params: 追加パラメータ
 
     Returns:
-        Boldified vertex arrays
+        太字化された頂点配列
     """
     effect = Boldify()
     return effect(vertices_list, offset=offset, num_offset=num_offset, method=method, **params)
@@ -55,17 +55,17 @@ def boldify(
 def connect(
     vertices_list: list[np.ndarray], n_points: float = 0.5, alpha: float = 0.0, cyclic: bool = False, **params: Any
 ) -> list[np.ndarray]:
-    """Connect multiple lines smoothly using Catmull-Rom splines.
+    """Catmull-Romスプラインを使用して複数の線を滑らかに接続します。
 
     Args:
-        vertices_list: Input vertex arrays
-        n_points: Number of interpolation points (0.0-1.0, mapped to 0-50)
-        alpha: Spline tension parameter (0.0-1.0, mapped to 0-2)
-        cyclic: Whether to connect last line to first
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        n_points: 補間点の数 (0.0-1.0、0-50にマップ)
+        alpha: スプライン張力パラメータ (0.0-1.0、0-2にマップ)
+        cyclic: 最後の線を最初の線に接続するかどうか
+        **params: 追加パラメータ
 
     Returns:
-        Connected vertex arrays
+        接続された頂点配列
     """
     effect = Connect()
     return effect(vertices_list, n_points=n_points, alpha=alpha, cyclic=cyclic, **params)
@@ -74,17 +74,17 @@ def connect(
 def rotation(
     vertices_list: list[np.ndarray], angle_x: float = 0.0, angle_y: float = 0.0, angle_z: float = 0.0, **params: Any
 ) -> list[np.ndarray]:
-    """Rotate vertices around specified axes.
+    """指定した軸の周りで頂点を回転させます。
 
     Args:
-        vertices_list: Input vertex arrays
-        angle_x: Rotation angle around X axis in radians
-        angle_y: Rotation angle around Y axis in radians
-        angle_z: Rotation angle around Z axis in radians
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        angle_x: X軸周りの回転角度（ラジアン）
+        angle_y: Y軸周りの回転角度（ラジアン）
+        angle_z: Z軸周りの回転角度（ラジアン）
+        **params: 追加パラメータ
 
     Returns:
-        Rotated vertex arrays
+        回転した頂点配列
     """
     effect = Rotation()
     return effect(vertices_list, angle_x=angle_x, angle_y=angle_y, angle_z=angle_z, **params)
@@ -98,18 +98,18 @@ def scaling(
     uniform_scale: float | None = None,
     **params: Any,
 ) -> list[np.ndarray]:
-    """Scale vertices along specified axes.
+    """指定した軸に沿って頂点をスケールします。
 
     Args:
-        vertices_list: Input vertex arrays
-        scale_x: Scale factor for X axis
-        scale_y: Scale factor for Y axis
-        scale_z: Scale factor for Z axis
-        uniform_scale: If provided, overrides individual scale factors
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        scale_x: X軸のスケール係数
+        scale_y: Y軸のスケール係数
+        scale_z: Z軸のスケール係数
+        uniform_scale: 指定された場合、個別のスケール係数を上書き
+        **params: 追加パラメータ
 
     Returns:
-        Scaled vertex arrays
+        スケールされた頂点配列
     """
     effect = Scaling()
     return effect(
@@ -120,17 +120,17 @@ def scaling(
 def translation(
     vertices_list: list[np.ndarray], offset_x: float = 0.0, offset_y: float = 0.0, offset_z: float = 0.0, **params: Any
 ) -> list[np.ndarray]:
-    """Translate vertices by specified offset.
+    """指定したオフセットで頂点を移動します。
 
     Args:
-        vertices_list: Input vertex arrays
-        offset_x: Translation offset for X axis
-        offset_y: Translation offset for Y axis
-        offset_z: Translation offset for Z axis
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        offset_x: X軸の移動オフセット
+        offset_y: Y軸の移動オフセット
+        offset_z: Z軸の移動オフセット
+        **params: 追加パラメータ
 
     Returns:
-        Translated vertex arrays
+        移動した頂点配列
     """
     effect = Translation()
     return effect(vertices_list, offset_x=offset_x, offset_y=offset_y, offset_z=offset_z, **params)
@@ -139,16 +139,16 @@ def translation(
 def dashify(
     vertices_list: list[np.ndarray], dash_length: float = 0.1, gap_length: float = 0.05, **params: Any
 ) -> list[np.ndarray]:
-    """Convert continuous lines into dashed lines.
+    """連続線を破線に変換します。
 
     Args:
-        vertices_list: Input vertex arrays
-        dash_length: Length of each dash
-        gap_length: Length of gap between dashes
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        dash_length: 各破線の長さ
+        gap_length: 破線間のギャップ長
+        **params: 追加パラメータ
 
     Returns:
-        Dashed vertex arrays
+        破線化された頂点配列
     """
     effect = Dashify()
     return effect(vertices_list, dash_length=dash_length, gap_length=gap_length, **params)
@@ -157,16 +157,16 @@ def dashify(
 def noise(
     vertices_list: list[np.ndarray], amplitude: float = 0.01, seed: int | None = None, **params: Any
 ) -> list[np.ndarray]:
-    """Add random noise to vertices.
+    """頂点にランダムノイズを追加します。
 
     Args:
-        vertices_list: Input vertex arrays
-        amplitude: Maximum displacement amplitude
-        seed: Random seed for reproducibility
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        amplitude: 最大変位振幅
+        seed: 再現性のためのランダムシード
+        **params: 追加パラメータ
 
     Returns:
-        Noisy vertex arrays
+        ノイズを加えた頂点配列
     """
     effect = Noise()
     return effect(vertices_list, amplitude=amplitude, seed=seed, **params)
@@ -175,16 +175,16 @@ def noise(
 def subdivision(
     vertices_list: list[np.ndarray], subdivisions: int = 1, smoothing: float = 0.0, **params: Any
 ) -> list[np.ndarray]:
-    """Subdivide lines by adding intermediate points.
+    """中間点を追加して線を細分化します。
 
     Args:
-        vertices_list: Input vertex arrays
-        subdivisions: Number of subdivision iterations
-        smoothing: Smoothing factor (0.0 = linear, 1.0 = maximum smoothing)
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        subdivisions: 細分化の反復回数
+        smoothing: 平滑化係数 (0.0 = 線形、1.0 = 最大平滑化)
+        **params: 追加パラメータ
 
     Returns:
-        Subdivided vertex arrays
+        細分化された頂点配列
     """
     effect = Subdivision()
     return effect(vertices_list, subdivisions=subdivisions, smoothing=smoothing, **params)
@@ -201,18 +201,18 @@ def culling(
     mode: str = "clip",
     **params: Any,
 ) -> list[np.ndarray]:
-    """Remove vertices outside specified bounds.
+    """指定した範囲外の頂点を除去します。
 
     Args:
-        vertices_list: Input vertex arrays
-        min_x, max_x: X-axis bounds
-        min_y, max_y: Y-axis bounds
-        min_z, max_z: Z-axis bounds
-        mode: "clip" to clip lines at bounds, "remove" to remove entire lines
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        min_x, max_x: X軸の範囲
+        min_y, max_y: Y軸の範囲
+        min_z, max_z: Z軸の範囲
+        mode: "クリップ"で範囲で線を切り取り、"除去"で線全体を除去
+        **params: 追加パラメータ
 
     Returns:
-        Culled vertex arrays
+        カリングされた頂点配列
     """
     effect = Culling()
     return effect(
@@ -228,18 +228,18 @@ def wobble(
     axis: str = "y",
     **params: Any,
 ) -> list[np.ndarray]:
-    """Add wobble/wave distortion to lines.
+    """線にワブル/波の歪みを追加します。
 
     Args:
-        vertices_list: Input vertex arrays
-        amplitude: Wave amplitude
-        frequency: Wave frequency
-        phase: Phase offset
-        axis: Axis to apply wobble ("x", "y", or "z")
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        amplitude: 波の振幅
+        frequency: 波の周波数
+        phase: 位相オフセット
+        axis: ワブルを適用する軸 ("x"、"y"、または "z")
+        **params: 追加パラメータ
 
     Returns:
-        Wobbled vertex arrays
+        ワブルした頂点配列
     """
     effect = Wobble()
     return effect(vertices_list, amplitude=amplitude, frequency=frequency, phase=phase, axis=axis, **params)
@@ -255,16 +255,16 @@ def array(
     spacing_z: float = 1.0,
     **params: Any,
 ) -> list[np.ndarray]:
-    """Create array of copies of the input.
+    """入力のコピーを配列作成します。
 
     Args:
-        vertices_list: Input vertex arrays
-        count_x, count_y, count_z: Number of copies in each direction
-        spacing_x, spacing_y, spacing_z: Spacing between copies
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        count_x, count_y, count_z: 各方向のコピー数
+        spacing_x, spacing_y, spacing_z: コピー間の間隔
+        **params: 追加パラメータ
 
     Returns:
-        Arrayed vertex arrays
+        配列化された頂点配列
     """
     effect = Array()
     return effect(
@@ -282,16 +282,16 @@ def array(
 def sweep(
     vertices_list: list[np.ndarray], path: np.ndarray | None = None, profile: np.ndarray | None = None, **params: Any
 ) -> list[np.ndarray]:
-    """Sweep a profile along a path.
+    """パスに沿ってプロファイルをスイープします。
 
     Args:
-        vertices_list: Input vertex arrays (used as path if path not provided)
-        path: Path to sweep along
-        profile: Profile to sweep (if None, uses simple circular profile)
-        **params: Additional parameters
+        vertices_list: 入力頂点配列（pathが提供されない場合はパスとして使用）
+        path: スイープするパス
+        profile: スイープするプロファイル（Noneの場合はシンプルな円形プロファイルを使用）
+        **params: 追加パラメータ
 
     Returns:
-        Swept vertex arrays
+        スイープされた頂点配列
     """
     effect = Sweep()
     return effect(vertices_list, path=path, profile=profile, **params)
@@ -303,16 +303,16 @@ def extrude(
     distance: float = 1.0,
     **params: Any,
 ) -> list[np.ndarray]:
-    """Extrude 2D shapes into 3D.
+    """2D形状を3Dに押し出します。
 
     Args:
-        vertices_list: Input vertex arrays
-        direction: Extrusion direction vector
-        distance: Extrusion distance
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        direction: 押し出し方向ベクトル
+        distance: 押し出し距離
+        **params: 追加パラメータ
 
     Returns:
-        Extruded vertex arrays
+        押し出しされた頂点配列
     """
     effect = Extrude()
     return effect(vertices_list, direction=direction, distance=distance, **params)
@@ -321,17 +321,17 @@ def extrude(
 def filling(
     vertices_list: list[np.ndarray], pattern: str = "lines", density: float = 0.1, angle: float = 0.0, **params: Any
 ) -> list[np.ndarray]:
-    """Fill closed shapes with hatching patterns.
+    """ハッチングパターンで閉じた形状を塗りつぶします。
 
     Args:
-        vertices_list: Input vertex arrays (should form closed shapes)
-        pattern: Fill pattern type ("lines", "cross", "dots")
-        density: Fill density (spacing between pattern elements)
-        angle: Pattern angle in radians
-        **params: Additional parameters
+        vertices_list: 入力頂点配列（閉じた形状を形成する必要があります）
+        pattern: 塗りつぶしパターンタイプ ("lines"、"cross"、"dots")
+        density: 塗りつぶしの密度（パターン要素間の間隔）
+        angle: パターンの角度（ラジアン）
+        **params: 追加パラメータ
 
     Returns:
-        Filled vertex arrays
+        塗りつぶしされた頂点配列
     """
     effect = Filling()
     return effect(vertices_list, pattern=pattern, density=density, angle=angle, **params)
@@ -340,16 +340,16 @@ def filling(
 def trimming(
     vertices_list: list[np.ndarray], start_param: float = 0.0, end_param: float = 1.0, **params: Any
 ) -> list[np.ndarray]:
-    """Trim lines to specified parameter range.
+    """指定したパラメータ範囲で線をトリムします。
 
     Args:
-        vertices_list: Input vertex arrays
-        start_param: Start parameter (0.0 = beginning of line)
-        end_param: End parameter (1.0 = end of line)
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        start_param: 開始パラメータ（0.0 = 線の開始点）
+        end_param: 終了パラメータ（1.0 = 線の終点）
+        **params: 追加パラメータ
 
     Returns:
-        Trimmed vertex arrays
+        トリムされた頂点配列
     """
     effect = Trimming()
     return effect(vertices_list, start_param=start_param, end_param=end_param, **params)
@@ -358,16 +358,16 @@ def trimming(
 def webify(
     vertices_list: list[np.ndarray], connection_probability: float = 0.5, max_distance: float = 1.0, **params: Any
 ) -> list[np.ndarray]:
-    """Create web-like connections between vertices.
+    """頂点間にウェブ状の接続を作成します。
 
     Args:
-        vertices_list: Input vertex arrays
-        connection_probability: Probability of connecting nearby vertices
-        max_distance: Maximum distance for connections
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        connection_probability: 近くの頂点を接続する確率
+        max_distance: 接続の最大距離
+        **params: 追加パラメータ
 
     Returns:
-        Webified vertex arrays
+        ウェブ化された頂点配列
     """
     effect = Webify()
     return effect(vertices_list, connection_probability=connection_probability, max_distance=max_distance, **params)
@@ -376,16 +376,16 @@ def webify(
 def desolve(
     vertices_list: list[np.ndarray], factor: float = 0.5, seed: int | None = None, **params: Any
 ) -> list[np.ndarray]:
-    """Dissolve/fragment lines randomly.
+    """線をランダムに溶解/断片化します。
 
     Args:
-        vertices_list: Input vertex arrays
-        factor: Dissolution factor (0.0 = no change, 1.0 = maximum dissolution)
-        seed: Random seed for reproducibility
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        factor: 溶解係数 (0.0 = 変化なし1.0 = 最大溶解)
+        seed: 再現性のためのランダムシード
+        **params: 追加パラメータ
 
     Returns:
-        Dissolved vertex arrays
+        溶解された頂点配列
     """
     effect = Desolve()
     return effect(vertices_list, factor=factor, seed=seed, **params)
@@ -397,16 +397,16 @@ def collapse(
     factor: float = 0.0,
     **params: Any,
 ) -> list[np.ndarray]:
-    """Collapse vertices toward a center point.
+    """頂点を中心点に向かって崩壊させます。
 
     Args:
-        vertices_list: Input vertex arrays
-        center: Point to collapse toward
-        factor: Collapse factor (0.0 = no change, 1.0 = complete collapse)
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        center: 崩壊させる中心点
+        factor: 崩壊係数 (0.0 = 変化なし1.0 = 完全崩壊)
+        **params: 追加パラメータ
 
     Returns:
-        Collapsed vertex arrays
+        崩壊された頂点配列
     """
     effect = Collapse()
     return effect(vertices_list, center=center, factor=factor, **params)
@@ -419,15 +419,17 @@ def transform(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Apply arbitrary transformation matrix.
+    """任意の変換行列を適用します。
 
     Args:
-        vertices_list: Input vertex arrays
-        matrix: 3x3 or 4x4 transformation matrix (if None, uses identity)
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        center: 中心点
+        scale: スケール
+        rotate: 回転
+        **params: 追加パラメータ
 
     Returns:
-        Transformed vertex arrays
+        変換された頂点配列
     """
     effect = Transform()
     return effect(vertices_list, center=center, scale=scale, rotate=rotate, **params)
@@ -436,29 +438,29 @@ def transform(
 def buffer(
     vertices_list: list[np.ndarray], distance: float = 0.1, join_style: str = "round", **params: Any
 ) -> list[np.ndarray]:
-    """Create buffer/offset around paths.
+    """パスの周りにバッファ/オフセットを作成します。
 
     Args:
-        vertices_list: Input vertex arrays
-        distance: Buffer distance (positive = outward, negative = inward)
-        join_style: Join style for corners ("round", "miter", "bevel")
-        **params: Additional parameters
+        vertices_list: 入力頂点配列
+        distance: バッファ距離（正の値 = 外方、負の値 = 内方）
+        join_style: 角の接合スタイル ("round"、"miter"、"bevel")
+        **params: 追加パラメータ
 
     Returns:
-        Buffered vertex arrays
+        バッファされた頂点配列
     """
     effect = Buffer()
     return effect(vertices_list, distance=distance, join_style=join_style, **params)
 
 
-# Create a convenient pipeline function
+# 便利なパイプライン関数を作成
 def pipeline(*effects: Any) -> EffectPipeline:
-    """Create an effect pipeline.
+    """エフェクトパイプラインを作成します。
 
     Args:
-        *effects: Effect instances to add to the pipeline
+        *effects: パイプラインに追加するエフェクトインスタンス
 
     Returns:
-        EffectPipeline instance
+        EffectPipelineインスタンス
     """
     return EffectPipeline(effects)

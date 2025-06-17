@@ -6,7 +6,7 @@ import numpy as np
 
 from shapes import ShapeFactory
 
-# Global shape factory instance
+# グローバル形状ファクトリインスタンス
 _factory = ShapeFactory()
 
 
@@ -17,17 +17,17 @@ def polygon(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a regular polygon.
+    """正多角形を生成します。
 
     Args:
-        n_sides: Number of sides. If float, exponentially mapped from 0-100.
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        n_sides: 辺の数。浮動小数点の場合0-100から指数的にマップ。
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List containing a single array of vertices
+        頂点の単一配列を含むリスト
     """
     shape = _factory.create("polygon")
     return shape(n_sides=n_sides, center=center, scale=scale, rotate=rotate, **params)
@@ -40,17 +40,17 @@ def sphere(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a sphere.
+    """球体を生成します。
 
     Args:
-        subdivisions: Subdivision level (0.0-1.0, mapped to 0-5)
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        subdivisions: 細分化レベル (0.0-1.0、0-5にマップ)
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for sphere triangles
+        球体三角形の頂点配列のリスト
     """
     shape = _factory.create("sphere")
     return shape(subdivisions=subdivisions, center=center, scale=scale, rotate=rotate, **params)
@@ -63,17 +63,17 @@ def grid(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a grid.
+    """グリッドを生成します。
 
     Args:
-        n_divisions: (x_divisions, y_divisions) as floats 0.0-1.0
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        n_divisions: (x_divisions, y_divisions) 0.0-1.0の浮動小数点
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for grid lines
+        グリッド線の頂点配列のリスト
     """
     shape = _factory.create("grid")
     return shape(n_divisions=n_divisions, center=center, scale=scale, rotate=rotate, **params)
@@ -86,17 +86,17 @@ def polyhedron(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a regular polyhedron.
+    """正多面体を生成します。
 
     Args:
-        polygon_type: Type of polyhedron (name or number of faces)
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        polygon_type: 多面体のタイプ（名前または面の数）
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for polyhedron edges
+        多面体の端の頂点配列のリスト
     """
     shape = _factory.create("polyhedron")
     return shape(polygon_type=polygon_type, center=center, scale=scale, rotate=rotate, **params)
@@ -112,20 +112,20 @@ def lissajous(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a Lissajous curve.
+    """リサージュ曲線を生成します。
 
     Args:
-        freq_x: X-axis frequency
-        freq_y: Y-axis frequency
-        phase: Phase offset in radians
-        points: Number of points to generate
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        freq_x: X軸の周波数
+        freq_y: Y軸の周波数
+        phase: 位相オフセット（ラジアン）
+        points: 生成する点の数
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List containing a single array of vertices
+        頂点の単一配列を含むリスト
     """
     shape = _factory.create("lissajous")
     return shape(
@@ -143,20 +143,20 @@ def torus(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a torus.
+    """トーラスを生成します。
 
     Args:
-        major_radius: Major radius (from center to tube center)
-        minor_radius: Minor radius (tube radius)
-        major_segments: Number of segments around major circle
-        minor_segments: Number of segments around minor circle
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        major_radius: 主半径（中心からチューブ中心まで）
+        minor_radius: 副半径（チューブ半径）
+        major_segments: 主円の周りのセグメント数
+        minor_segments: 副円の周りのセグメント数
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for torus lines
+        トーラス線の頂点配列のリスト
     """
     shape = _factory.create("torus")
     return shape(
@@ -180,19 +180,19 @@ def cylinder(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a cylinder.
+    """円柱を生成します。
 
     Args:
-        radius: Cylinder radius
-        height: Cylinder height
-        segments: Number of segments around circumference
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        radius: 円柱の半径
+        height: 円柱の高さ
+        segments: 周囲のセグメント数
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for cylinder lines
+        円柱線の頂点配列のリスト
     """
     shape = _factory.create("cylinder")
     return shape(radius=radius, height=height, segments=segments, center=center, scale=scale, rotate=rotate, **params)
@@ -207,19 +207,19 @@ def cone(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a cone.
+    """円錐を生成します。
 
     Args:
-        radius: Base radius
-        height: Cone height
-        segments: Number of segments around circumference
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        radius: 底面半径
+        height: 円錐の高さ
+        segments: 周囲のセグメント数
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for cone lines
+        円錐線の頂点配列のリスト
     """
     shape = _factory.create("cone")
     return shape(radius=radius, height=height, segments=segments, center=center, scale=scale, rotate=rotate, **params)
@@ -234,19 +234,19 @@ def capsule(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a capsule shape.
+    """カプセル形状を生成します。
 
     Args:
-        radius: Radius of the hemispheres
-        height: Height of the cylindrical section
-        segments: Number of segments for curves
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        radius: 半球の半径
+        height: 円柱部分の高さ
+        segments: 曲線のセグメント数
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for capsule lines
+        カプセル線の頂点配列のリスト
     """
     shape = _factory.create("capsule")
     return shape(radius=radius, height=height, segments=segments, center=center, scale=scale, rotate=rotate, **params)
@@ -261,19 +261,19 @@ def attractor(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate a strange attractor.
+    """ストレンジアトラクターを生成します。
 
     Args:
-        attractor_type: Type of attractor ("lorenz", "rossler", "chua")
-        points: Number of points to generate
-        dt: Time step for integration
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        attractor_type: アトラクターのタイプ ("lorenz"、"rossler"、"chua")
+        points: 生成する点の数
+        dt: 積分の時間ステップ
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List containing a single array of vertices
+        頂点の単一配列を含むリスト
     """
     shape = _factory.create("attractor")
     return shape(
@@ -289,18 +289,18 @@ def text(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate text as line segments.
+    """テキストを線分として生成します。
 
     Args:
-        text: Text string to render
-        size: Text size
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        text: レンダリングするテキスト文字列
+        size: テキストサイズ
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for text outlines
+        テキストアウトラインの頂点配列のリスト
     """
     shape = _factory.create("text")
     return shape(text=text, size=size, center=center, scale=scale, rotate=rotate, **params)
@@ -314,18 +314,18 @@ def asemic_glyph(
     rotate: tuple[float, float, float] = (0, 0, 0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """Generate abstract glyph-like shapes.
+    """抽象的なグリフ状の形状を生成します。
 
     Args:
-        complexity: Number of strokes (1-10)
-        seed: Random seed for reproducibility
-        center: Position offset (x, y, z)
-        scale: Scale factors (x, y, z)
-        rotate: Rotation angles in radians (x, y, z)
-        **params: Additional parameters
+        complexity: ストローク数 (1-10)
+        seed: 再現性のためのランダムシード
+        center: 位置オフセット (x, y, z)
+        scale: スケール係数 (x, y, z)
+        rotate: 回転角度（ラジアン） (x, y, z)
+        **params: 追加パラメータ
 
     Returns:
-        List of vertex arrays for glyph strokes
+        グリフストロークの頂点配列のリスト
     """
     shape = _factory.create("asemic_glyph")
     return shape(complexity=complexity, seed=seed, center=center, scale=scale, rotate=rotate, **params)
