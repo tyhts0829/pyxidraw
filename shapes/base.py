@@ -2,38 +2,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
-from numba import njit
 
-
-@njit(fastmath=True, cache=True)
-def apply_transformations(
-    vertices_list: Sequence[np.ndarray],
-    center: tuple[float, float, float] = (0, 0, 0),
-    scale: tuple[float, float, float] = (1, 1, 1),
-    rotate: tuple[float, float, float] = (0, 0, 0),
-) -> list[np.ndarray]:
-    center_np = np.array(center, dtype=np.float32)
-    scale_np = np.array(scale, dtype=np.float32)
-    rotate_np = np.array(rotate, dtype=np.float32)
-    transformed_list = []
-    for vertices in vertices_list:
-        sx = np.sin(rotate_np[0])
-        cx = np.cos(rotate_np[0])
-        sy = np.sin(rotate_np[1])
-        cy = np.cos(rotate_np[1])
-        sz = np.sin(rotate_np[2])
-        cz = np.cos(rotate_np[2])
-        Rx = np.array([[1.0, 0.0, 0.0], [0.0, cx, -sx], [0.0, sx, cx]], dtype=np.float32)
-        Ry = np.array([[cy, 0.0, sy], [0.0, 1.0, 0.0], [-sy, 0.0, cy]], dtype=np.float32)
-        Rz = np.array([[cz, -sz, 0.0], [sz, cz, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
-        R = Rz @ Ry @ Rx
-        rotated = vertices @ R.T
-        transformed = center_np + rotated * scale_np
-        transformed_list.append(transformed)
-    return transformed_list
+from effects.transform import apply_transformations
 
 
 class BaseShape(ABC):

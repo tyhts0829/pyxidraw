@@ -11,10 +11,12 @@ def draw(t, cc) -> list[np.ndarray]:
     # Demonstrate new shape and effect system
 
     # Use polygon shape with number of sides controlled by MIDI
-    n_sides = 3 + int(cc[1] * 10)  # 3-13 sides
+    n_sides = 3
     poly = shapes.polygon(n_sides=n_sides, center=(100, 100, 0), scale=(100, 100, 100))
-    polyh = shapes.polyhedron(polygon_type="dodeca", center=(100, 150, 0), scale=(80, 80, 80), rotate=(cc[2], 0, 0))
-    polyh = effects.filling(polyh, density=cc[3], angle=cc[4])
+    polyh = shapes.polyhedron(
+        polygon_type="dodeca", center=(100, 150, 0), scale=(80, 80, 80), rotate=(cc[1] * 5, cc[2] * 5, cc[3] * 5)
+    )
+    polyh = effects.filling(polyh, density=cc[4], angle=0)
     # polyとpolyhを組み合わせて描画
     ret = []
     ret.extend(poly)

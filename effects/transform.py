@@ -1,52 +1,51 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
+from numba import njit
 
 from .base import BaseEffect
 
 
+@njit(fastmath=True, cache=True)
+def apply_transformations(
+    vertices_list: Sequence[np.ndarray],
+    center: tuple[float, float, float] = (0, 0, 0),
+    scale: tuple[float, float, float] = (1, 1, 1),
+    rotate: tuple[float, float, float] = (0, 0, 0),
+) -> list[np.ndarray]:
+    center_np = np.array(center, dtype=np.float32)
+    scale_np = np.array(scale, dtype=np.float32)
+    rotate_np = np.array(rotate, dtype=np.float32)
+    transformed_list = []
+    for vertices in vertices_list:
+        sx = np.sin(rotate_np[0])
+        cx = np.cos(rotate_np[0])
+        sy = np.sin(rotate_np[1])
+        cy = np.cos(rotate_np[1])
+        sz = np.sin(rotate_np[2])
+        cz = np.cos(rotate_np[2])
+        Rx = np.array([[1.0, 0.0, 0.0], [0.0, cx, -sx], [0.0, sx, cx]], dtype=np.float32)
+        Ry = np.array([[cy, 0.0, sy], [0.0, 1.0, 0.0], [-sy, 0.0, cy]], dtype=np.float32)
+        Rz = np.array([[cz, -sz, 0.0], [sz, cz, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+        R = Rz @ Ry @ Rx
+        rotated = vertices @ R.T
+        transformed = center_np + rotated * scale_np
+        transformed_list.append(transformed)
+    return transformed_list
+
+
 class Transform(BaseEffect):
     """任意の変換行列を適用します。"""
-    
-    def apply(self, vertices_list: list[np.ndarray],
-             matrix: np.ndarray | None = None,
-             **params: Any) -> list[np.ndarray]:
-        """変換エフェクトを適用します。
-        
-        Args:
-            vertices_list: 入力适点配列
-            matrix: 4x4変換行列（または3x3）
-            **params: 追加パラメータ（無視される）
-            
-        Returns:
-            変換された頂点配列
-        """
-        if matrix is None:
-            return vertices_list
-        
-        new_vertices_list = []
-        
-        # Handle 3x3 or 4x4 matrices
-        if matrix.shape == (3, 3):
-            for vertices in vertices_list:
-                transformed = vertices @ matrix.T
-                new_vertices_list.append(transformed.astype(np.float32))
-        elif matrix.shape == (4, 4):
-            for vertices in vertices_list:
-                # Convert to homogeneous coordinates
-                ones = np.ones((len(vertices), 1), dtype=np.float32)
-                homogeneous = np.hstack([vertices, ones])
-                
-                # Apply transformation
-                transformed = homogeneous @ matrix.T
-                
-                # Convert back to 3D
-                transformed_3d = transformed[:, :3] / transformed[:, 3:4]
-                new_vertices_list.append(transformed_3d.astype(np.float32))
-        else:
-            # Invalid matrix shape
-            return vertices_list
-        
-        return new_vertices_list
+
+    def apply(
+        self,
+        vertices_list: list[np.ndarray],
+        center: tuple[float, float, float] = (0, 0, 0),
+        scale: tuple[float, float, float] = (1, 1, 1),
+        rotate: tuple[float, float, float] = (0, 0, 0),
+        **params: Any,
+    ) -> list[np.ndarray]:
+
+        return apply_transformations(vertices_list, center=center, scale=scale, rotate=rotate)
