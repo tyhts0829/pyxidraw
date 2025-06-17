@@ -9,7 +9,7 @@ from .base import BaseEffect
 
 
 @njit(fastmath=True, cache=True)
-def apply_transformations(
+def _apply_transformations(
     vertices_list: Sequence[np.ndarray],
     center: tuple[float, float, float] = (0, 0, 0),
     scale: tuple[float, float, float] = (1, 1, 1),
@@ -48,4 +48,4 @@ class Transform(BaseEffect):
         **params: Any,
     ) -> list[np.ndarray]:
 
-        return apply_transformations(vertices_list, center=center, scale=scale, rotate=rotate)
+        return _apply_transformations(vertices_list, center=center, scale=scale, rotate=rotate)

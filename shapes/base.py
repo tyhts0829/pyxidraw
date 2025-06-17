@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from effects.transform import apply_transformations
+from api import effects
 
 
 class BaseShape(ABC):
@@ -42,7 +42,7 @@ class BaseShape(ABC):
 
         # Apply transformations if any are non-default
         if center != (0, 0, 0) or scale != (1, 1, 1) or rotate != (0, 0, 0):
-            return apply_transformations(vertices_list, center, scale, rotate)
+            return effects.transform(vertices_list, center, scale, rotate)
         return vertices_list
 
     @lru_cache(maxsize=None)

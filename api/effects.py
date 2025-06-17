@@ -412,7 +412,13 @@ def collapse(
     return effect(vertices_list, center=center, factor=factor, **params)
 
 
-def transform(vertices_list: list[np.ndarray], matrix: np.ndarray | None = None, **params: Any) -> list[np.ndarray]:
+def transform(
+    vertices_list: list[np.ndarray],
+    center: tuple[float, float, float] = (0, 0, 0),
+    scale: tuple[float, float, float] = (1, 1, 1),
+    rotate: tuple[float, float, float] = (0, 0, 0),
+    **params: Any,
+) -> list[np.ndarray]:
     """Apply arbitrary transformation matrix.
 
     Args:
@@ -424,9 +430,7 @@ def transform(vertices_list: list[np.ndarray], matrix: np.ndarray | None = None,
         Transformed vertex arrays
     """
     effect = Transform()
-    if matrix is None:
-        matrix = np.eye(4)
-    return effect(vertices_list, matrix=matrix, **params)
+    return effect(vertices_list, center=center, scale=scale, rotate=rotate, **params)
 
 
 def buffer(
