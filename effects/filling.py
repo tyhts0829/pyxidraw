@@ -12,6 +12,9 @@ from .base import BaseEffect
 
 class Filling(BaseEffect):
     """閉じた形状をハッチングパターンで塗りつぶします。"""
+    
+    # 塗りつぶし線の最大密度（density=1.0のときの線間隔の係数）
+    MAX_FILL_LINES = 50  # density=1.0のときに最大50本の線を生成
 
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
         """塗りつぶしエフェクトを適用します。
@@ -69,8 +72,16 @@ class Filling(BaseEffect):
         min_x, min_y = np.min(coords_2d, axis=0)
         max_x, max_y = np.max(coords_2d, axis=0)
 
-        # Calculate spacing based on density
-        spacing = (max_y - min_y) * density / 10.0
+        # Calculate spacing based on density (inversed: 0=few lines, 1=many lines)
+        # density=1.0 -> MAX_FILL_LINES lines, density=0.0 -> very few lines
+        if density <= 0:
+            return []
+        
+        # Calculate spacing: smaller spacing = more lines
+        # At density=1.0, we want MAX_FILL_LINES lines in the bounding box
+        # At density=0.1, we want fewer lines
+        num_lines = max(2, int(self.MAX_FILL_LINES * density))
+        spacing = (max_y - min_y) / num_lines
         if spacing <= 0:
             return []
 
@@ -123,8 +134,15 @@ class Filling(BaseEffect):
         min_x, min_y = np.min(coords_2d, axis=0)
         max_x, max_y = np.max(coords_2d, axis=0)
 
-        # Calculate spacing
-        spacing = min(max_x - min_x, max_y - min_y) * density / 5.0
+        # Calculate spacing (inversed: 0=few dots, 1=many dots)
+        if density <= 0:
+            return []
+        
+        # Calculate spacing for dot grid
+        # At density=1.0, we want many dots (MAX_FILL_LINES x MAX_FILL_LINES grid)
+        # At density=0.1, we want fewer dots
+        grid_size = max(2, int(self.MAX_FILL_LINES * density))
+        spacing = min(max_x - min_x, max_y - min_y) / grid_size
         if spacing <= 0:
             return []
 

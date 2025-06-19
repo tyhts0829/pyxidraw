@@ -212,9 +212,9 @@ class TestFilling:
         result_mid = filling.apply([square_2d], pattern='lines', density=0.5)
         result_high = filling.apply([square_2d], pattern='lines', density=0.9)
         
-        # 密度が高いほど間隔が広がるため、実際には線の数が少なくなる
-        # spacing = (max_y - min_y) * density / 10.0 の実装に基づく
-        assert len(result_low) >= len(result_high)
+        # 密度が高いほど線の数が多くなる（新しい実装）
+        # density=0.1 -> 少ない線、density=0.9 -> 多い線
+        assert len(result_low) <= len(result_high)
         # 少なくとも塗りつぶし線が生成されている
         assert all(len(r) > 1 for r in [result_low, result_mid, result_high])
     
