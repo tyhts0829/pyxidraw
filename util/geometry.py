@@ -1,92 +1,106 @@
-"""Geometry utility functions for 3D transformations."""
+"""3D変換のためのジオメトリユーティリティ関数。"""
 
 from __future__ import annotations
 
 import numpy as np
+from numba import njit
 
 
+@njit(cache=True)
 def transform_to_xy_plane(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
-    """Transform vertices to lie on XY plane (z=0).
-    
-    Rotates the vertices so that their normal vector aligns with Z-axis,
-    then translates z-coordinates to 0.
-    
+    """頂点をXY平面（z=0）に変換する。
+
+    頂点の法線ベクトルがZ軸に沿うように回転させ、
+    その後z座標を0に平行移動する。
+
     Args:
-        vertices: (N, 3) array of 3D points
-        
+        vertices: (N, 3) 3D点の配列
+
     Returns:
-        tuple of:
-            - transformed_points: (N, 3) array on XY plane
-            - rotation_matrix: (3, 3) rotation matrix used
-            - z_offset: z translation amount
+        以下のタプル:
+            - transformed_points: (N, 3) XY平面上の配列
+            - rotation_matrix: (3, 3) 使用された回転行列
+            - z_offset: z方向の平行移動量
     """
-    if len(vertices) < 3:
-        return vertices.copy(), np.eye(3), 0.0
-    
+    if vertices.shape[0] < 3:
+        return vertices.astype(np.float64).copy(), np.eye(3), 0.0
+
+    # Ensure float64 type for calculations
+    vertices = vertices.astype(np.float64)
+
     # Calculate polygon normal vector
     v1 = vertices[1] - vertices[0]
     v2 = vertices[2] - vertices[0]
     normal = np.cross(v1, v2)
-    norm = np.linalg.norm(normal)
-    
+    norm = np.sqrt(normal[0] ** 2 + normal[1] ** 2 + normal[2] ** 2)
+
     if norm == 0:
         return vertices.copy(), np.eye(3), 0.0
-    
+
     normal = normal / norm  # normalize
-    
+
     # Calculate rotation axis (cross product with Z-axis)
-    z_axis = np.array([0, 0, 1])
+    z_axis = np.array([0.0, 0.0, 1.0])
     rotation_axis = np.cross(normal, z_axis)
-    
-    if np.linalg.norm(rotation_axis) == 0:
+
+    rotation_axis_norm = np.sqrt(rotation_axis[0] ** 2 + rotation_axis[1] ** 2 + rotation_axis[2] ** 2)
+    if rotation_axis_norm == 0:
         # Already aligned with Z-axis
         z_offset = vertices[0, 2]
         result = vertices.copy()
         result[:, 2] -= z_offset
         return result, np.eye(3), z_offset
-    
-    rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
-    
+
+    rotation_axis = rotation_axis / rotation_axis_norm
+
     # Calculate rotation angle
     cos_theta = np.dot(normal, z_axis)
-    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    # Manual clip for njit compatibility
+    if cos_theta < -1.0:
+        cos_theta = -1.0
+    elif cos_theta > 1.0:
+        cos_theta = 1.0
     angle = np.arccos(cos_theta)
-    
+
     # Create rotation matrix using Rodrigues' formula
-    K = np.array([
-        [0, -rotation_axis[2], rotation_axis[1]],
-        [rotation_axis[2], 0, -rotation_axis[0]],
-        [-rotation_axis[1], rotation_axis[0], 0]
-    ])
-    
+    # Create K matrix manually for njit compatibility
+    K = np.zeros((3, 3))
+    K[0, 1] = -rotation_axis[2]
+    K[0, 2] = rotation_axis[1]
+    K[1, 0] = rotation_axis[2]
+    K[1, 2] = -rotation_axis[0]
+    K[2, 0] = -rotation_axis[1]
+    K[2, 1] = rotation_axis[0]
+
     R = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.dot(K, K)
-    
+
     # Apply rotation
-    transformed_points = vertices @ R.T
-    
+    transformed_points = np.dot(vertices, R.T)
+
     # Get z-coordinate and align to z=0
     z_offset = transformed_points[0, 2]
     transformed_points[:, 2] -= z_offset
-    
+
     return transformed_points, R, z_offset
 
 
+@njit(cache=True)
 def transform_back(vertices: np.ndarray, rotation_matrix: np.ndarray, z_offset: float) -> np.ndarray:
-    """Transform vertices back to original orientation.
-    
-    Inverse of transform_to_xy_plane function.
-    
+    """頂点を元の向きに戻す。
+
+    transform_to_xy_plane関数の逆変換。
+
     Args:
-        vertices: (N, 3) array of transformed points
-        rotation_matrix: (3, 3) rotation matrix from transform_to_xy_plane
-        z_offset: z translation amount from transform_to_xy_plane
-        
+        vertices: (N, 3) 変換された点の配列
+        rotation_matrix: (3, 3) transform_to_xy_planeから得られた回転行列
+        z_offset: transform_to_xy_planeから得られたz方向の平行移動量
+
     Returns:
-        (N, 3) array of points in original orientation
+        (N, 3) 元の向きの点の配列
     """
     # Restore z-coordinate
     result = vertices.copy()
     result[:, 2] += z_offset
-    
+
     # Apply inverse rotation
-    return result @ rotation_matrix
+    return np.dot(result, rotation_matrix)
