@@ -3,87 +3,73 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import trimesh
 
+from api.effects import scaling
 from .base import BaseShape
 
 
 class Capsule(BaseShape):
-    """Capsule (stadium of revolution) shape generator."""
+    """trimeshを使用したカプセル（回転スタジアム）形状生成器。"""
     
-    def generate(self, radius: float = 0.2, height: float = 0.4,
-                segments: int = 32, **params: Any) -> list[np.ndarray]:
-        """Generate a capsule shape.
+    _cached_unit_capsules: dict[tuple[int, int], list[np.ndarray]] = {}
+    
+    @classmethod
+    def _generate_unit_capsule(cls, count: tuple[int, int]) -> list[np.ndarray]:
+        """指定されたcount値でユニットカプセル（半径=0.5、高さ=1.0）を生成してキャッシュする。"""
+        if count in cls._cached_unit_capsules:
+            return cls._cached_unit_capsules[count]
         
-        Args:
-            radius: Radius of the hemispheres
-            height: Height of the cylindrical section
-            segments: Number of segments for curves
-            **params: Additional parameters (ignored)
-            
-        Returns:
-            List of vertex arrays for capsule lines
-        """
+        # 高さ=1.0、半径=0.5のtrimeshカプセルを作成
+        mesh = trimesh.creation.capsule(height=1.0, radius=0.5, count=count)
+        
+        # ワイヤーフレームエッジを線として抽出
         vertices_list = []
         
-        # Generate profile lines (vertical)
-        for i in range(segments):
-            angle = 2 * np.pi * i / segments
-            x = radius * np.cos(angle)
-            y = radius * np.sin(angle)
-            
-            profile = []
-            
-            # Top hemisphere
-            for j in range(segments // 4 + 1):
-                phi = np.pi / 2 * j / (segments // 4)
-                z = height / 2 + radius * np.sin(phi)
-                r = radius * np.cos(phi)
-                profile.append([r * np.cos(angle), r * np.sin(angle), z])
-            
-            # Cylindrical section
-            profile.append([x, y, height / 2])
-            profile.append([x, y, -height / 2])
-            
-            # Bottom hemisphere
-            for j in range(segments // 4 + 1):
-                phi = np.pi / 2 * j / (segments // 4)
-                z = -height / 2 - radius * np.sin(phi)
-                r = radius * np.cos(phi)
-                profile.append([r * np.cos(angle), r * np.sin(angle), z])
-            
-            vertices_list.append(np.array(profile, dtype=np.float32))
+        # メッシュエッジを取得して線分に変換
+        edges = mesh.edges_unique
+        for edge in edges:
+            # このエッジの頂点を取得
+            v1 = mesh.vertices[edge[0]]
+            v2 = mesh.vertices[edge[1]]
+            # 線分を作成
+            line = np.array([v1, v2], dtype=np.float32)
+            vertices_list.append(line)
         
-        # Generate horizontal rings
-        # Top hemisphere rings
-        for j in range(1, segments // 4):
-            phi = np.pi / 2 * j / (segments // 4)
-            z = height / 2 + radius * np.sin(phi)
-            r = radius * np.cos(phi)
-            
-            ring = []
-            for i in range(segments + 1):
-                angle = 2 * np.pi * i / segments
-                ring.append([r * np.cos(angle), r * np.sin(angle), z])
-            vertices_list.append(np.array(ring, dtype=np.float32))
-        
-        # Middle rings
-        for z in [height / 2, -height / 2]:
-            ring = []
-            for i in range(segments + 1):
-                angle = 2 * np.pi * i / segments
-                ring.append([radius * np.cos(angle), radius * np.sin(angle), z])
-            vertices_list.append(np.array(ring, dtype=np.float32))
-        
-        # Bottom hemisphere rings
-        for j in range(1, segments // 4):
-            phi = np.pi / 2 * j / (segments // 4)
-            z = -height / 2 - radius * np.sin(phi)
-            r = radius * np.cos(phi)
-            
-            ring = []
-            for i in range(segments + 1):
-                angle = 2 * np.pi * i / segments
-                ring.append([r * np.cos(angle), r * np.sin(angle), z])
-            vertices_list.append(np.array(ring, dtype=np.float32))
-        
+        cls._cached_unit_capsules[count] = vertices_list
         return vertices_list
+    
+    def generate(self, radius: float = 0.2, height: float = 0.4,
+                segments: int = 32, latitude_segments: int = 16, **params: Any) -> list[np.ndarray]:
+        """カプセル形状を生成する。
+        
+        Args:
+            radius: 半球の半径
+            height: 円柱部分の高さ
+            segments: 経度方向のセグメント数（周方向の分割数）
+            latitude_segments: 緯度方向のセグメント数（半球の分割数）
+            **params: 追加パラメータ（無視される）
+            
+        Returns:
+            カプセル線の頂点配列リスト
+        """
+        # count値を設定（[経度, 緯度]）
+        count = (segments, latitude_segments)
+        
+        # キャッシュからユニットカプセルを取得
+        unit_capsule = self._generate_unit_capsule(count)
+        
+        # スケーリング係数を計算
+        # ユニットカプセルは半径=0.5、高さ=1.0
+        scale_xy = radius / 0.5  # 半径のスケール
+        scale_z = height / 1.0   # 高さのスケール
+        
+        # api.effectsを使用してスケーリングを適用
+        scaled_capsule = scaling(
+            unit_capsule,
+            scale_x=scale_xy,
+            scale_y=scale_xy,
+            scale_z=scale_z
+        )
+        
+        return scaled_capsule
