@@ -21,6 +21,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
 # Add parent directory to path for imports
@@ -368,7 +370,7 @@ class EffectBenchmark:
             "success_status": success_status,
         }
 
-    def _create_benchmark_charts(self, viz_data: Dict[str, List[Any]]) -> Tuple[plt.Figure, List[plt.Axes]]:
+    def _create_benchmark_charts(self, viz_data: Dict[str, List[Any]]) -> Tuple[Figure, List[Axes]]:
         """ベンチマークチャートを作成"""
         modules = viz_data["modules"]
         fig, axes = plt.subplots(1, 3, figsize=(18, max(8, len(modules) * 0.4)))
@@ -409,7 +411,7 @@ class EffectBenchmark:
 
         return fig, axes
 
-    def _save_chart(self, fig: plt.Figure, save_path: Optional[str] = None) -> None:
+    def _save_chart(self, fig: Figure, save_path: Optional[str] = None) -> None:
         """チャートを保存"""
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches="tight")
