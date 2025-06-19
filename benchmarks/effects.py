@@ -17,99 +17,106 @@ import time
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.typing import NDArray
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Define types for 3D coordinate data
-Vertices = np.ndarray  # Single array of shape (N, 3)
-VerticesList = List[np.ndarray]  # List of vertex arrays
+# Type aliases
+Vertices = NDArray[np.float32]  # Single array of shape (N, 3)
+VerticesList = List[NDArray[np.float32]]  # List of vertex arrays
+BenchmarkResult = Dict[str, Any]
+TimingData = Dict[str, List[float]]
+EffectFunction = Callable[[VerticesList], VerticesList]
 
 
 class EffectBenchmark:
     """エフェクトモジュール用ベンチマークシステム"""
 
-    def __init__(self, output_dir: str = "benchmark_results"):
+    def __init__(self, output_dir: str = "benchmark_results", warmup_runs: int = 5, benchmark_runs: int = 20) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self.effects_dir = self.output_dir / "effects"
         self.effects_dir.mkdir(exist_ok=True)
 
-        # Test data sizes - all as list[np.ndarray(N, 3)]
-        self.small_shape = [self._create_rectangle(1, 1)]  # Small: simple rectangle
-        self.medium_shape = [self._create_polygon(20)]  # Medium: 20-sided polygon
-        self.large_shape = self._create_large_shape()  # Large: complex shape (multiple arrays)
-
-        self.test_shapes = {"small": self.small_shape, "medium": self.medium_shape, "large": self.large_shape}
-
         # Benchmark parameters
-        self.warmup_runs = 5
-        self.benchmark_runs = 20
+        self.warmup_runs = warmup_runs
+        self.benchmark_runs = benchmark_runs
 
-    def _create_rectangle(self, width: float, height: float) -> Vertices:
+        # Initialize test shapes lazily
+        self._test_shapes: Optional[Dict[str, VerticesList]] = None
+
+    @property
+    def test_shapes(self) -> Dict[str, VerticesList]:
+        """テストデータの遅延初期化"""
+        if self._test_shapes is None:
+            self._test_shapes = {
+                "small": [self._create_rectangle(1, 1)],
+                "medium": [self._create_polygon(20)],
+                "large": self._create_large_shape(),
+            }
+        return self._test_shapes
+
+    @staticmethod
+    def _create_rectangle(width: float, height: float) -> Vertices:
         """シンプルな長方形を作成（3D座標）"""
         hw, hh = width / 2, height / 2
-        # Add z=0 coordinate for 3D
         return np.array(
             [[-hw, -hh, 0.0], [hw, -hh, 0.0], [hw, hh, 0.0], [-hw, hh, 0.0], [-hw, -hh, 0.0]], dtype=np.float32
         )
 
-    def _create_polygon(self, n: int) -> Vertices:
+    @staticmethod
+    def _create_polygon(n: int) -> Vertices:
         """n辺の正多角形を作成（3D座標）"""
         angles = np.linspace(0, 2 * np.pi, n + 1)
-        x = np.cos(angles)
-        y = np.sin(angles)
-        z = np.zeros_like(x)
-        return np.column_stack([x, y, z]).astype(np.float32)
+        return np.column_stack([np.cos(angles), np.sin(angles), np.zeros_like(angles)]).astype(np.float32)
 
-    def _create_circle(self, radius: float, segments: int = 64) -> Vertices:
+    @staticmethod
+    def _create_circle(radius: float, segments: int = 64) -> Vertices:
         """円を作成（3D座標）"""
         angles = np.linspace(0, 2 * np.pi, segments + 1)
-        x = radius * np.cos(angles)
-        y = radius * np.sin(angles)
-        z = np.zeros_like(x)
-        return np.column_stack([x, y, z]).astype(np.float32)
+        return np.column_stack([radius * np.cos(angles), radius * np.sin(angles), np.zeros_like(angles)]).astype(
+            np.float32
+        )
 
     def _create_large_shape(self) -> VerticesList:
         """ベンチマーク用の大きく複雑な形状を作成（複数の3D配列のリスト）"""
-        shapes = []
-        for i in range(10):
-            shapes.append(self._create_circle(1.0 + i * 0.1))
+        return [self._create_circle(1.0 + i * 0.1) for i in range(10)]
 
-        return shapes
-
-    def get_effect_modules(self) -> List[str]:
+    @staticmethod
+    def get_effect_modules() -> List[str]:
         """ベンチマーク対象のエフェクトモジュールリストを取得"""
         effects_path = Path("effects")
-        modules = []
+        excluded_files = {"__init__.py", "base.py", "pipeline.py"}
 
-        for file in effects_path.glob("*.py"):
-            if file.name.startswith("__") or file.name in ["base.py", "pipeline.py"]:
-                continue
-            modules.append(file.stem)
+        return sorted(
+            [
+                file.stem
+                for file in effects_path.glob("*.py")
+                if not file.name.startswith("__") and file.name not in excluded_files
+            ]
+        )
 
-        return sorted(modules)
-
-    def check_njit_usage(self, module_name: str) -> Dict[str, bool]:
+    @staticmethod
+    def check_njit_usage(module_name: str) -> Dict[str, bool]:
         """モジュール内の関数がnjitデコレータを使用しているかチェック"""
-        njit_info = {}
+        njit_info: Dict[str, bool] = {}
+        excluded_names = {"annotations", "np", "njit", "Any", "BaseEffect"}
 
         try:
             module = importlib.import_module(f"effects.{module_name}")
 
             for name, obj in inspect.getmembers(module):
-                # Check all members (including private functions starting with _)
-                # Skip imports and special attributes
-                if name.startswith("__") or name in ["annotations", "np", "njit", "Any", "BaseEffect"]:
+                if name.startswith("__") or name in excluded_names:
                     continue
-                    
+
                 # Check if it's a numba compiled function (CPUDispatcher)
                 is_njit = "numba.core.registry.CPUDispatcher" in str(type(obj))
-                
+
                 if is_njit or inspect.isfunction(obj):
                     njit_info[name] = is_njit
 
@@ -137,57 +144,19 @@ class EffectBenchmark:
             # Check njit usage
             results["njit_functions"] = self.check_njit_usage(module_name)
 
-            # Find the effect class (usually capitalized version of module name)
-            effect_class_name = module_name.capitalize()
-            effect_class = None
-
-            # Try to find the effect class
-            for name, obj in inspect.getmembers(module):
-                if inspect.isclass(obj) and name.lower() == module_name.lower():
-                    effect_class = obj
-                    break
-
-            if not effect_class:
-                # Try alternative naming patterns
-                for name, obj in inspect.getmembers(module):
-                    if inspect.isclass(obj) and hasattr(obj, "apply"):
-                        effect_class = obj
-                        break
-
-            if not effect_class:
-                results["error"] = f"No effect class found in {module_name}"
-                return results
-
-            # Create instance and get apply method
-            try:
-                effect_instance = effect_class()
-                effect_func = lambda shapes: effect_instance.apply(shapes)
-            except:
-                # If instantiation fails, try to use the class directly
-                results["error"] = f"Failed to instantiate effect class in {module_name}"
+            # Find and instantiate effect class
+            effect_func = self._get_effect_function(module, module_name)
+            if effect_func is None:
+                results["error"] = f"No effect class with apply method found in {module_name}"
                 return results
 
             # Benchmark for different data sizes
             for size_name, test_shapes in self.test_shapes.items():
-                times = []
+                times = self._benchmark_single_size(effect_func, test_shapes, size_name)
 
-                # Warmup
-                for _ in range(self.warmup_runs):
-                    try:
-                        _ = effect_func(test_shapes)
-                    except:
-                        pass
-
-                # Actual benchmark
-                for _ in range(self.benchmark_runs):
-                    try:
-                        start_time = time.perf_counter()
-                        _ = effect_func(test_shapes)
-                        end_time = time.perf_counter()
-                        times.append(end_time - start_time)
-                    except Exception as e:
-                        results["error"] = f"Error during benchmark: {str(e)}"
-                        break
+                if times is None:
+                    results["error"] = f"Error during benchmark for {size_name} size"
+                    break
 
                 if times:
                     results["timings"][size_name] = times
@@ -238,90 +207,16 @@ class EffectBenchmark:
 
         return str(filename)
 
-    def visualize_results(self, results: Dict[str, Dict], save_path: Optional[str] = None) -> None:
+    def visualize_results(self, results: BenchmarkResult, save_path: Optional[str] = None) -> None:
         """ベンチマーク結果の横棒グラフを作成"""
-        # Prepare data for visualization
-        modules: List[str] = []
-        small_times: List[float] = []
-        medium_times: List[float] = []
-        large_times: List[float] = []
-        has_njit: List[str] = []
-        success_status: List[str] = []
+        # Extract visualization data
+        viz_data = self._extract_visualization_data(results)
 
-        for module, data in sorted(results.items()):
-            modules.append(module)
+        # Create charts
+        fig, axes = self._create_benchmark_charts(viz_data)
 
-            if data["success"]:
-                small_times.append(data["average_times"].get("small", 0) * 1000)
-                medium_times.append(data["average_times"].get("medium", 0) * 1000)
-                large_times.append(data["average_times"].get("large", 0) * 1000)
-                success_status.append("◯")
-            else:
-                small_times.append(0)
-                medium_times.append(0)
-                large_times.append(0)
-                success_status.append("×")
-
-            # Check if any function uses njit
-            njit_funcs = data.get("njit_functions", {})
-            has_njit.append("◆" if any(njit_funcs.values()) else "◇")
-
-        # Create figure
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, max(8, len(modules) * 0.4)))
-
-        y_pos = np.arange(len(modules))
-
-        # Small data size chart
-        bars1 = ax1.barh(y_pos, small_times, color="lightblue")
-        ax1.set_yticks(y_pos)
-        ax1.set_yticklabels([f"{m} {s} {n}" for m, s, n in zip(modules, success_status, has_njit)])
-        ax1.set_xlabel("Time (ms)")
-        ax1.set_title("Small Data Size")
-        ax1.grid(axis="x", alpha=0.3)
-
-        # Medium data size chart
-        bars2 = ax2.barh(y_pos, medium_times, color="lightgreen")
-        ax2.set_yticks(y_pos)
-        ax2.set_yticklabels([f"{m} {s} {n}" for m, s, n in zip(modules, success_status, has_njit)])
-        ax2.set_xlabel("Time (ms)")
-        ax2.set_title("Medium Data Size")
-        ax2.grid(axis="x", alpha=0.3)
-
-        # Large data size chart
-        bars3 = ax3.barh(y_pos, large_times, color="lightcoral")
-        ax3.set_yticks(y_pos)
-        ax3.set_yticklabels([f"{m} {s} {n}" for m, s, n in zip(modules, success_status, has_njit)])
-        ax3.set_xlabel("Time (ms)")
-        ax3.set_title("Large Data Size")
-        ax3.grid(axis="x", alpha=0.3)
-
-        # Add value labels on bars
-        for bars in [bars1, bars2, bars3]:
-            for bar in bars:
-                width = bar.get_width()
-                if width > 0:
-                    bar.axes.text(
-                        width, bar.get_y() + bar.get_height() / 2, f"{width:.1f}", ha="left", va="center", fontsize=8
-                    )
-
-        plt.suptitle(f'Effect Module Benchmarks - {datetime.now().strftime("%Y-%m-%d %H:%M")}')
-        plt.tight_layout()
-
-        # Add legend
-        fig.text(0.5, 0.02, "◯ = Success, × = Failed, ◆ = Uses njit, ◇ = No njit", ha="center", fontsize=10)
-
-        if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        else:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_file = self.effects_dir / f"benchmark_chart_{timestamp}.png"
-            plt.savefig(save_file, dpi=150, bbox_inches="tight")
-
-            # Also save as latest
-            latest_chart = self.effects_dir / "latest_chart.png"
-            plt.savefig(latest_chart, dpi=150, bbox_inches="tight")
-
-        plt.close()
+        # Save chart
+        self._save_chart(fig, save_path)
 
     def compare_historical(self, num_recent: int = 5) -> None:
         """最近のベンチマーク結果を比較して、時間経過による改善を表示"""
@@ -391,8 +286,146 @@ class EffectBenchmark:
 
         print(f"Historical comparison saved to {comparison_file}")
 
+    def _get_effect_function(self, module: Any, module_name: str) -> Optional[EffectFunction]:
+        """エフェクトクラスを検索してインスタンス化"""
+        # Try to find effect class by name matching
+        for name, obj in inspect.getmembers(module):
+            if inspect.isclass(obj) and name.lower() == module_name.lower():
+                try:
+                    instance = obj()
+                    if hasattr(instance, "apply"):
+                        return lambda shapes: instance.apply(shapes)
+                except Exception:
+                    pass
 
-def main():
+        # Try any class with apply method
+        for name, obj in inspect.getmembers(module):
+            if inspect.isclass(obj) and hasattr(obj, "apply"):
+                try:
+                    instance = obj()
+                    return lambda shapes: instance.apply(shapes)
+                except Exception:
+                    pass
+
+        return None
+
+    def _benchmark_single_size(
+        self, effect_func: EffectFunction, test_shapes: VerticesList, size_name: str
+    ) -> Optional[List[float]]:
+        """単一サイズのデータでベンチマークを実行"""
+        # Warmup
+        for _ in range(self.warmup_runs):
+            try:
+                effect_func(test_shapes)
+            except Exception:
+                return None
+
+        # Benchmark
+        times: List[float] = []
+        for _ in range(self.benchmark_runs):
+            try:
+                start_time = time.perf_counter()
+                effect_func(test_shapes)
+                end_time = time.perf_counter()
+                times.append(end_time - start_time)
+            except Exception:
+                return None
+
+        return times
+
+    def _extract_visualization_data(self, results: BenchmarkResult) -> Dict[str, List[Any]]:
+        """可視化用のデータを抽出"""
+        modules: List[str] = []
+        small_times: List[float] = []
+        medium_times: List[float] = []
+        large_times: List[float] = []
+        has_njit: List[str] = []
+        success_status: List[str] = []
+
+        for module, data in sorted(results.items()):
+            modules.append(module)
+
+            if data["success"]:
+                small_times.append(data["average_times"].get("small", 0) * 1000)
+                medium_times.append(data["average_times"].get("medium", 0) * 1000)
+                large_times.append(data["average_times"].get("large", 0) * 1000)
+                success_status.append("◯")
+            else:
+                small_times.append(0)
+                medium_times.append(0)
+                large_times.append(0)
+                success_status.append("×")
+
+            njit_funcs = data.get("njit_functions", {})
+            has_njit.append("◆" if any(njit_funcs.values()) else "◇")
+
+        return {
+            "modules": modules,
+            "small_times": small_times,
+            "medium_times": medium_times,
+            "large_times": large_times,
+            "has_njit": has_njit,
+            "success_status": success_status,
+        }
+
+    def _create_benchmark_charts(self, viz_data: Dict[str, List[Any]]) -> Tuple[plt.Figure, List[plt.Axes]]:
+        """ベンチマークチャートを作成"""
+        modules = viz_data["modules"]
+        fig, axes = plt.subplots(1, 3, figsize=(18, max(8, len(modules) * 0.4)))
+        y_pos = np.arange(len(modules))
+
+        # Chart configurations
+        chart_configs = [
+            ("small_times", "lightblue", "Small Data Size"),
+            ("medium_times", "lightgreen", "Medium Data Size"),
+            ("large_times", "lightcoral", "Large Data Size"),
+        ]
+
+        # Create charts
+        for ax, (data_key, color, title) in zip(axes, chart_configs):
+            bars = ax.barh(y_pos, viz_data[data_key], color=color)
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(
+                [
+                    f"{m} {s} {n}"
+                    for m, s, n in zip(viz_data["modules"], viz_data["success_status"], viz_data["has_njit"])
+                ]
+            )
+            ax.set_xlabel("Time (ms)")
+            ax.set_title(title)
+            ax.grid(axis="x", alpha=0.3)
+
+            # Add value labels
+            for bar in bars:
+                width = bar.get_width()
+                if width > 0:
+                    ax.text(
+                        width, bar.get_y() + bar.get_height() / 2, f"{width:.1f}", ha="left", va="center", fontsize=8
+                    )
+
+        plt.suptitle(f'Effect Module Benchmarks - {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+        plt.tight_layout()
+        fig.text(0.5, 0.02, "◯ = Success, × = Failed, ◆ = Uses njit, ◇ = No njit", ha="center", fontsize=10)
+
+        return fig, axes
+
+    def _save_chart(self, fig: plt.Figure, save_path: Optional[str] = None) -> None:
+        """チャートを保存"""
+        if save_path:
+            plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_file = self.effects_dir / f"benchmark_chart_{timestamp}.png"
+            plt.savefig(save_file, dpi=150, bbox_inches="tight")
+
+            # Also save as latest
+            latest_chart = self.effects_dir / "latest_chart.png"
+            plt.savefig(latest_chart, dpi=150, bbox_inches="tight")
+
+        plt.close()
+
+
+def main() -> None:
     """メインのベンチマーク実行"""
     benchmark = EffectBenchmark()
 

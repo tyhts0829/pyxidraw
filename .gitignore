@@ -3,3 +3,4 @@ previous_design
 .DS_Store
 __pycache__
 **/*.pkl
+benchmark_results
