@@ -30,38 +30,43 @@ class Torus(BaseShape):
         Returns:
             List of vertex arrays for torus lines
         """
+        # Pre-calculate trigonometric values
+        theta_values = 2 * np.pi * np.arange(major_segments) / major_segments
+        phi_values = 2 * np.pi * np.arange(minor_segments) / minor_segments
+        
+        cos_theta = np.cos(theta_values)
+        sin_theta = np.sin(theta_values)
+        cos_phi = np.cos(phi_values)
+        sin_phi = np.sin(phi_values)
+
         vertices_list = []
 
-        # Generate lines along major circle
+        # Generate lines along major circle (meridians)
         for i in range(major_segments):
-            theta = 2 * np.pi * i / major_segments
-            ring = []
+            phi_extended = 2 * np.pi * np.arange(minor_segments + 1) / minor_segments
+            cos_phi_ext = np.cos(phi_extended)
+            sin_phi_ext = np.sin(phi_extended)
+            
+            r = major_radius + minor_radius * cos_phi_ext
+            x = r * cos_theta[i]
+            y = r * sin_theta[i]
+            z = minor_radius * sin_phi_ext
+            
+            vertices = np.column_stack([x, y, z]).astype(np.float32)
+            vertices_list.append(vertices)
 
-            for j in range(minor_segments + 1):
-                phi = 2 * np.pi * j / minor_segments
-
-                x = (major_radius + minor_radius * np.cos(phi)) * np.cos(theta)
-                y = (major_radius + minor_radius * np.cos(phi)) * np.sin(theta)
-                z = minor_radius * np.sin(phi)
-
-                ring.append([x, y, z])
-
-            vertices_list.append(np.array(ring, dtype=np.float32))
-
-        # Generate lines along minor circles
+        # Generate lines along minor circles (parallels)
         for j in range(minor_segments):
-            phi = 2 * np.pi * j / minor_segments
-            ring = []
-
-            for i in range(major_segments + 1):
-                theta = 2 * np.pi * i / major_segments
-
-                x = (major_radius + minor_radius * np.cos(phi)) * np.cos(theta)
-                y = (major_radius + minor_radius * np.cos(phi)) * np.sin(theta)
-                z = minor_radius * np.sin(phi)
-
-                ring.append([x, y, z])
-
-            vertices_list.append(np.array(ring, dtype=np.float32))
+            theta_extended = 2 * np.pi * np.arange(major_segments + 1) / major_segments
+            cos_theta_ext = np.cos(theta_extended)
+            sin_theta_ext = np.sin(theta_extended)
+            
+            r = major_radius + minor_radius * cos_phi[j]
+            x = r * cos_theta_ext
+            y = r * sin_theta_ext
+            z = np.full_like(x, minor_radius * sin_phi[j])
+            
+            vertices = np.column_stack([x, y, z]).astype(np.float32)
+            vertices_list.append(vertices)
 
         return vertices_list
