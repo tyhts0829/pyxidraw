@@ -92,8 +92,8 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = shapes.torus(
-        major_radius=20,
-        minor_radius=8,
+        major_radius=10,
+        minor_radius=4,
         rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
         center=(x, y, 0),
     )
