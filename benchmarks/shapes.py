@@ -85,9 +85,9 @@ class ShapeBenchmark:
                     {"a": 7, "b": 6, "samples": 500},  # Complex pattern
                 ],
                 "attractor": [
-                    {"type": "lorenz", "iterations": 1000},  # Low iterations
-                    {"type": "lorenz", "iterations": 5000},  # Medium iterations
-                    {"type": "lorenz", "iterations": 10000},  # High iterations
+                    {"attractor_type": "lorenz", "points": 1000},  # Low complexity
+                    {"attractor_type": "rossler", "points": 5000},  # Medium complexity
+                    {"attractor_type": "aizawa", "points": 10000},  # High complexity
                 ],
                 "capsule": [
                     {"radius": 0.5, "height": 1.0, "segments": 16},  # Low res
@@ -95,9 +95,9 @@ class ShapeBenchmark:
                     {"radius": 0.5, "height": 1.0, "segments": 64},  # High res
                 ],
                 "asemic_glyph": [
-                    {"complexity": 1},  # Low complexity
-                    {"complexity": 5},  # Medium complexity
-                    {"complexity": 10},  # High complexity
+                    {"region": (-0.5, -0.5, 0.5, 0.5), "random_seed": 42.0},  # Default size
+                    {"region": (-1.0, -1.0, 1.0, 1.0), "random_seed": 123.0},  # Larger size
+                    {"region": (-0.25, -0.25, 0.25, 0.25), "random_seed": 456.0},  # Smaller size
                 ],
                 "cone": [
                     {"segments": 8},   # Low res
