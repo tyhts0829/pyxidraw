@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Iterator, Optional
 
 import numpy as np
+from numba import njit
 from scipy.spatial import cKDTree
 
 from .base import BaseShape
@@ -27,9 +28,14 @@ class AsemicGlyphConfig:
     poisson_trials: int = 30
 
 
+@njit(fastmath=True, cache=True)
+def _distance_njit(px: float, py: float, qx: float, qy: float) -> float:
+    """njit化された2次元ユークリッド距離計算"""
+    return math.sqrt((px - qx) ** 2 + (py - qy) ** 2)
+
 def distance(p: Point3D, q: Point3D) -> float:
     """2次元ユークリッド距離を計算"""
-    return math.sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2)
+    return _distance_njit(p[0], p[1], q[0], q[1])
 
 
 def relative_neighborhood_graph(nodes: list[Point3D], config: AsemicGlyphConfig) -> tuple[list[tuple[int, int]], dict]:
@@ -144,6 +150,25 @@ def random_walk_strokes(nodes: list[Point3D], adjacency: dict, config: AsemicGly
     return list(random_walk_strokes_generator(nodes, adjacency, config, rng))
 
 
+@njit(fastmath=True, cache=True)
+def _snap_point_njit(last_x: float, last_y: float, point_x: float, point_y: float, snap_angle: float) -> tuple[float, float]:
+    """njit化された点スナップ処理"""
+    dx = point_x - last_x
+    dy = point_y - last_y
+    L = math.sqrt(dx**2 + dy**2)
+    
+    if L < 1e-10:
+        return last_x, last_y
+        
+    theta_deg = math.degrees(math.atan2(dy, dx))
+    snapped_theta_deg = round(theta_deg / snap_angle) * snap_angle
+    snapped_theta = math.radians(snapped_theta_deg)
+    
+    new_x = last_x + L * math.cos(snapped_theta)
+    new_y = last_y + L * math.sin(snapped_theta)
+    
+    return new_x, new_y
+
 def snap_stroke(original: list[Point3D], config: AsemicGlyphConfig) -> list[Point3D]:
     """
     各セグメントの方向を指定角度刻みにスナップする。
@@ -163,25 +188,38 @@ def snap_stroke(original: list[Point3D], config: AsemicGlyphConfig) -> list[Poin
     
     for point in original[1:]:
         last = snapped[-1]
-        dx = point[0] - last[0]
-        dy = point[1] - last[1]
-        L = math.sqrt(dx**2 + dy**2)
+        new_x, new_y = _snap_point_njit(last[0], last[1], point[0], point[1], snap_angle)
         
-        if L < 1e-10:  # ほぼ同じ点の場合はスキップ
+        # 元の点と変わらない場合はスキップ
+        if abs(new_x - last[0]) < 1e-10 and abs(new_y - last[1]) < 1e-10:
             continue
             
-        theta_deg = math.degrees(math.atan2(dy, dx))
-        snapped_theta_deg = round(theta_deg / snap_angle) * snap_angle
-        snapped_theta = math.radians(snapped_theta_deg)
-        
-        new_point = (
-            last[0] + L * math.cos(snapped_theta),
-            last[1] + L * math.sin(snapped_theta),
-            0,
-        )
+        new_point = (new_x, new_y, 0)
         snapped.append(new_point)
     return snapped
 
+
+@njit(fastmath=True, cache=True)
+def _compute_bezier_points_njit(
+    one_minus_t_squared: np.ndarray, 
+    one_minus_t: np.ndarray, 
+    t_values: np.ndarray, 
+    t_squared: np.ndarray,
+    A_prime: np.ndarray, 
+    B: np.ndarray, 
+    C_prime: np.ndarray
+) -> np.ndarray:
+    """njit化されたベジエ曲線点計算"""
+    num_points = len(t_values)
+    result = np.zeros((num_points, 3))
+    
+    for i in range(num_points):
+        for j in range(3):
+            result[i, j] = (one_minus_t_squared[i] * A_prime[j] + 
+                           2 * one_minus_t[i] * t_values[i] * B[j] + 
+                           t_squared[i] * C_prime[j])
+    
+    return result
 
 def smooth_polyline(polyline: list[Point3D], smoothing_radius: float, config: AsemicGlyphConfig) -> list[Point3D]:
     """
@@ -236,10 +274,11 @@ def smooth_polyline(polyline: list[Point3D], smoothing_radius: float, config: As
         one_minus_t = 1 - t_values
         one_minus_t_squared = one_minus_t ** 2
         
-        # ベクトル化されたベジエ曲線計算
-        bezier_points = (one_minus_t_squared[:, np.newaxis] * A_prime[np.newaxis, :] +
-                        2 * one_minus_t[:, np.newaxis] * t_values[:, np.newaxis] * B[np.newaxis, :] +
-                        t_squared[:, np.newaxis] * C_prime[np.newaxis, :])
+        # ベクトル化されたベジエ曲線計算（njit化）
+        bezier_points = _compute_bezier_points_njit(
+            one_minus_t_squared, one_minus_t, t_values, t_squared,
+            A_prime, B, C_prime
+        )
         
         for point in bezier_points:
             new_points.append(tuple(point))
@@ -385,101 +424,171 @@ def generate_nodes(region: Region, cell_margin: float, placement_mode: str, conf
     return nodes
 
 
+# njit化されたDiacriticFactoryヘルパー関数群
+@njit(fastmath=True, cache=True)
+def _create_circle_njit(cx: float, cy: float, radius: float) -> np.ndarray:
+    """njit化された円形アクセント生成"""
+    n_sides = 20
+    result = np.zeros((n_sides + 1, 3))
+    
+    for i in range(n_sides):
+        angle = 2 * math.pi * i / n_sides
+        result[i, 0] = cx + radius * math.cos(angle)
+        result[i, 1] = cy + radius * math.sin(angle)
+        result[i, 2] = 0.0
+    
+    # 閉じた形状にする
+    result[n_sides, 0] = result[0, 0]
+    result[n_sides, 1] = result[0, 1]
+    result[n_sides, 2] = result[0, 2]
+    
+    return result
+
+@njit(fastmath=True, cache=True)
+def _create_tilde_njit(cx: float, cy: float, radius: float) -> np.ndarray:
+    """njit化されたチルダアクセント生成"""
+    num_points = 10
+    result = np.zeros((num_points, 3))
+    length = radius * 2
+    amplitude = radius / 2
+    
+    for i in range(num_points):
+        t = i / (num_points - 1)
+        result[i, 0] = cx - radius + t * length
+        result[i, 1] = cy + amplitude * math.sin(math.pi * t)
+        result[i, 2] = 0.0
+    
+    return result
+
+@njit(fastmath=True, cache=True)
+def _create_grave_njit(cx: float, cy: float, radius: float) -> np.ndarray:
+    """njit化されたグレイブアクセント生成"""
+    result = np.zeros((2, 3))
+    result[0, 0] = cx
+    result[0, 1] = cy
+    result[0, 2] = 0.0
+    result[1, 0] = cx - radius * 0.8
+    result[1, 1] = cy + radius * 0.4
+    result[1, 2] = 0.0
+    return result
+
+@njit(fastmath=True, cache=True)
+def _create_acute_njit(cx: float, cy: float, radius: float) -> np.ndarray:
+    """njit化されたアキュートアクセント生成"""
+    result = np.zeros((2, 3))
+    result[0, 0] = cx - radius * 0.3
+    result[0, 1] = cy + radius * 0.2
+    result[0, 2] = 0.0
+    result[1, 0] = cx + radius * 0.3
+    result[1, 1] = cy + radius * 0.7
+    result[1, 2] = 0.0
+    return result
+
+@njit(fastmath=True, cache=True)
+def _create_circumflex_njit(cx: float, cy: float, radius: float) -> np.ndarray:
+    """njit化されたサーカムフレックスアクセント生成"""
+    result = np.zeros((3, 3))
+    result[0, 0] = cx - radius
+    result[0, 1] = cy
+    result[0, 2] = 0.0
+    result[1, 0] = cx
+    result[1, 1] = cy + radius
+    result[1, 2] = 0.0
+    result[2, 0] = cx + radius
+    result[2, 1] = cy
+    result[2, 2] = 0.0
+    return result
+
+@njit(fastmath=True, cache=True)
+def _create_caron_njit(cx: float, cy: float, radius: float) -> np.ndarray:
+    """njit化されたハチェクアクセント生成"""
+    result = np.zeros((3, 3))
+    result[0, 0] = cx - radius
+    result[0, 1] = cy + radius * 0.2
+    result[0, 2] = 0.0
+    result[1, 0] = cx
+    result[1, 1] = cy - radius * 0.2
+    result[1, 2] = 0.0
+    result[2, 0] = cx + radius
+    result[2, 1] = cy + radius * 0.2
+    result[2, 2] = 0.0
+    return result
+
+@njit(fastmath=True, cache=True)
+def _create_cedilla_njit(cx: float, cy: float, radius: float) -> np.ndarray:
+    """njit化されたセディーヤアクセント生成"""
+    num_points = 8
+    result = np.zeros((num_points, 3))
+    
+    start_x = cx - radius * 0.5
+    start_y = cy - radius * 0.2
+    end_x = cx + radius * 0.5
+    end_y = cy - radius * 0.2
+    control_x = cx
+    control_y = cy - radius * 0.8
+    
+    for i in range(num_points):
+        t = i / (num_points - 1)
+        one_minus_t = 1 - t
+        
+        # Quadratic Bezier curve
+        result[i, 0] = one_minus_t**2 * start_x + 2 * one_minus_t * t * control_x + t**2 * end_x
+        result[i, 1] = one_minus_t**2 * start_y + 2 * one_minus_t * t * control_y + t**2 * end_y
+        result[i, 2] = 0.0
+    
+    return result
+
+
 class DiacriticFactory:
     """ディアクリティカル（アクセント記号）生成のファクトリークラス"""
     
     @staticmethod
     def create_circle(center: Point3D, radius: float) -> np.ndarray:
         """円形アクセントを生成する。"""
-        n_sides = 20
-        angles = np.linspace(0, 2 * np.pi, n_sides, endpoint=False)
-        x_coords = center[0] + radius * np.cos(angles)
-        y_coords = center[1] + radius * np.sin(angles)
-        z_coords = np.zeros(n_sides)
-        
-        points = np.column_stack((x_coords, y_coords, z_coords))
-        # 閉じた形状にする
-        return np.vstack([points, points[0:1]])
+        return _create_circle_njit(center[0], center[1], radius)
     
     @staticmethod
     def create_tilde(center: Point3D, radius: float) -> np.ndarray:
         """チルダアクセントを生成する。"""
-        num_points = 10
-        t_values = np.linspace(0, 1, num_points)
-        length = radius * 2
-        amplitude = radius / 2
-        
-        x_coords = center[0] - radius + t_values * length
-        y_coords = center[1] + amplitude * np.sin(np.pi * t_values)
-        z_coords = np.zeros(num_points)
-        
-        return np.column_stack((x_coords, y_coords, z_coords))
+        return _create_tilde_njit(center[0], center[1], radius)
     
     @staticmethod
     def create_grave(center: Point3D, radius: float) -> np.ndarray:
         """グレイブアクセントを生成する。"""
-        start = np.array(center)
-        end = np.array([center[0] - radius * 0.8, center[1] + radius * 0.4, 0])
-        return np.array([start, end])
+        return _create_grave_njit(center[0], center[1], radius)
     
     @staticmethod
     def create_umlaut(center: Point3D, radius: float) -> list[np.ndarray]:
         """ウムラウトアクセントを生成する。"""
         dot_radius = radius * 0.3
-        n_sides = 8
         offsets = [(-radius * 0.5, 0), (radius * 0.5, 0)]
         dots = []
         
         for dx, dy in offsets:
             dot_center = (center[0] + dx, center[1] + dy, 0)
-            angles = np.linspace(0, 2 * np.pi, n_sides, endpoint=False)
-            x_coords = dot_center[0] + dot_radius * np.cos(angles)
-            y_coords = dot_center[1] + dot_radius * np.sin(angles)
-            z_coords = np.zeros(n_sides)
-            
-            points = np.column_stack((x_coords, y_coords, z_coords))
-            dots.append(np.vstack([points, points[0:1]]))
+            dots.append(_create_circle_njit(dot_center[0], dot_center[1], dot_radius))
         
         return dots
     
     @staticmethod
     def create_acute(center: Point3D, radius: float) -> np.ndarray:
         """アキュートアクセントを生成する。"""
-        start = np.array([center[0] - radius * 0.3, center[1] + radius * 0.2, 0])
-        end = np.array([center[0] + radius * 0.3, center[1] + radius * 0.7, 0])
-        return np.array([start, end])
+        return _create_acute_njit(center[0], center[1], radius)
     
     @staticmethod
     def create_circumflex(center: Point3D, radius: float) -> np.ndarray:
         """サーカムフレックスアクセントを生成する。"""
-        left = np.array([center[0] - radius, center[1], 0])
-        peak = np.array([center[0], center[1] + radius, 0])
-        right = np.array([center[0] + radius, center[1], 0])
-        return np.array([left, peak, right])
+        return _create_circumflex_njit(center[0], center[1], radius)
     
     @staticmethod
     def create_caron(center: Point3D, radius: float) -> np.ndarray:
         """ハチェクアクセントを生成する。"""
-        left = np.array([center[0] - radius, center[1] + radius * 0.2, 0])
-        bottom = np.array([center[0], center[1] - radius * 0.2, 0])
-        right = np.array([center[0] + radius, center[1] + radius * 0.2, 0])
-        return np.array([left, bottom, right])
+        return _create_caron_njit(center[0], center[1], radius)
     
     @staticmethod
     def create_cedilla(center: Point3D, radius: float) -> np.ndarray:
         """セディーヤアクセントを生成する。"""
-        num_points = 8
-        start = np.array([center[0] - radius * 0.5, center[1] - radius * 0.2, 0])
-        end = np.array([center[0] + radius * 0.5, center[1] - radius * 0.2, 0])
-        control = np.array([center[0], center[1] - radius * 0.8, 0])
-        
-        t_values = np.linspace(0, 1, num_points)
-        # Quadratic Bezier 曲線のベクトル化
-        points = ((1 - t_values[:, np.newaxis]) ** 2 * start[np.newaxis, :] +
-                 2 * (1 - t_values[:, np.newaxis]) * t_values[:, np.newaxis] * control[np.newaxis, :] +
-                 t_values[:, np.newaxis] ** 2 * end[np.newaxis, :])
-        
-        return points
+        return _create_cedilla_njit(center[0], center[1], radius)
     
     DIACRITIC_TYPES = {
         "circle": create_circle.__func__,
