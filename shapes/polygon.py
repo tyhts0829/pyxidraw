@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -9,12 +8,11 @@ import numpy as np
 from .base import BaseShape
 
 
-@lru_cache(maxsize=None)
 def _polygon_cached(n_sides: int) -> np.ndarray:
-    """Generate cached polygon vertices.
+    """Generate polygon vertices.
     
     Args:
-        n_sides: Number of sides (must be int for caching)
+        n_sides: Number of sides
         
     Returns:
         Array of vertices

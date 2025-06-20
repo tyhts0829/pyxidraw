@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pickle
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +9,8 @@ import numpy as np
 from .base import BaseShape
 
 
-@lru_cache(maxsize=None)
 def _sphere_cached(subdivisions: int) -> list[np.ndarray]:
-    """Generate cached sphere vertices.
+    """Generate sphere vertices.
     
     Args:
         subdivisions: Subdivision level (0-5)
@@ -51,9 +49,8 @@ def _sphere_cached(subdivisions: int) -> list[np.ndarray]:
     return vertices_list
 
 
-@lru_cache(maxsize=None)
 def _load_precomputed_sphere(subdivision: int) -> list[np.ndarray] | None:
-    """Load pre-computed sphere vertex data with caching.
+    """Load pre-computed sphere vertex data.
     
     Args:
         subdivision: Subdivision level
