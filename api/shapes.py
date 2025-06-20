@@ -229,6 +229,7 @@ def capsule(
     radius: float = 0.2,
     height: float = 0.4,
     segments: int = 32,
+    latitude_segments: int = 16,
     center: tuple[float, float, float] = (0, 0, 0),
     scale: tuple[float, float, float] = (1, 1, 1),
     rotate: tuple[float, float, float] = (0, 0, 0),
@@ -240,6 +241,7 @@ def capsule(
         radius: 半球の半径
         height: 円柱部分の高さ
         segments: 曲線のセグメント数
+        latitude_segments: 半球の緯度方向のセグメント数
         center: 位置オフセット (x, y, z)
         scale: スケール係数 (x, y, z)
         rotate: 回転角度（ラジアン） (x, y, z)
@@ -249,7 +251,16 @@ def capsule(
         カプセル線の頂点配列のリスト
     """
     shape = _factory.create("capsule")
-    return shape(radius=radius, height=height, segments=segments, center=center, scale=scale, rotate=rotate, **params)
+    return shape(
+        radius=radius,
+        height=height,
+        segments=segments,
+        latitude_segments=latitude_segments,
+        center=center,
+        scale=scale,
+        rotate=rotate,
+        **params,
+    )
 
 
 def attractor(

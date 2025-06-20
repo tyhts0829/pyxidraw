@@ -136,6 +136,8 @@ def draw(t, cc) -> list[np.ndarray]:
     shape = shapes.capsule(
         radius=12,
         height=25,
+        segments=32,
+        latitude_segments=32,
         rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
         center=(x, y, 0),
     )
@@ -200,6 +202,6 @@ if __name__ == "__main__":
     arc.start(midi=True)
 
     # Run the sketch
-    run_sketch(draw, canvas_size="A4_LANDSCAPE", render_scale=4, background=(1, 1, 1, 1))
+    run_sketch(draw, canvas_size="A4_LANDSCAPE", render_scale=8, background=(1, 1, 1, 1))
 
     arc.stop()
