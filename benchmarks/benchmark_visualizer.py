@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 BenchmarkResult = Dict[str, Any]
 
@@ -34,8 +36,7 @@ class BenchmarkVisualizer:
         # Save chart
         self._save_chart(fig, save_path)
 
-    def compare_historical(self, historical_data: Dict[str, Dict[str, BenchmarkResult]], 
-                          num_recent: int = 5) -> None:
+    def compare_historical(self, historical_data: Dict[str, Dict[str, BenchmarkResult]], num_recent: int = 5) -> None:
         """最近のベンチマーク結果を比較して、時間経過による改善を表示"""
         if len(historical_data) < 2:
             print("Not enough historical data for comparison")
@@ -63,8 +64,8 @@ class BenchmarkVisualizer:
                     avg_times = historical_data[ts][module]["average_times"]
                     if avg_times:
                         avg_time = np.mean(list(avg_times.values()))
-                        fps = 1.0 / avg_time if avg_time > 0 else float('inf')
-                        times.append(fps)
+                        fps = 1.0 / avg_time if avg_time > 0 else float("inf")
+                        times.append(float(fps))
                     else:
                         times.append(None)
                 else:
@@ -100,10 +101,10 @@ class BenchmarkVisualizer:
         large_times: List[float] = []
         has_njit: List[str] = []
         success_status: List[str] = []
-        
+
         for module, data in sorted(results.items()):
             modules.append(module)
-            
+
             if data["success"]:
                 small_time = data["average_times"].get("small", 0)
                 medium_time = data["average_times"].get("medium", 0)
@@ -117,59 +118,62 @@ class BenchmarkVisualizer:
                 medium_times.append(0)
                 large_times.append(0)
                 success_status.append("×")
-            
+
             njit_funcs = data.get("njit_functions", {})
             has_njit.append("◆" if any(njit_funcs.values()) else "◇")
-        
+
         return {
             "modules": modules,
             "small_times": small_times,
             "medium_times": medium_times,
             "large_times": large_times,
             "has_njit": has_njit,
-            "success_status": success_status
+            "success_status": success_status,
         }
 
-    def _create_benchmark_charts(self, viz_data: Dict[str, List[Any]]) -> Tuple[plt.Figure, List[plt.Axes]]:
+    def _create_benchmark_charts(self, viz_data: Dict[str, List[Any]]) -> Tuple[Figure, List[Axes]]:
         """ベンチマークチャートを作成"""
         modules = viz_data["modules"]
         fig, axes = plt.subplots(1, 3, figsize=(18, max(8, len(modules) * 0.4)))
         y_pos = np.arange(len(modules))
-        
+
         # Chart configurations
         chart_configs = [
             ("small_times", "lightblue", "Small Data Size"),
             ("medium_times", "lightgreen", "Medium Data Size"),
-            ("large_times", "lightcoral", "Large Data Size")
+            ("large_times", "lightcoral", "Large Data Size"),
         ]
-        
+
         # Create charts
         for ax, (data_key, color, title) in zip(axes, chart_configs):
             bars = ax.barh(y_pos, viz_data[data_key], color=color)
             ax.set_yticks(y_pos)
-            ax.set_yticklabels([
-                f"{m} {s} {n}" for m, s, n in 
-                zip(viz_data["modules"], viz_data["success_status"], viz_data["has_njit"])
-            ])
+            ax.set_yticklabels(
+                [
+                    f"{m} {s} {n}"
+                    for m, s, n in zip(viz_data["modules"], viz_data["success_status"], viz_data["has_njit"])
+                ]
+            )
             ax.set_xlabel("FPS")
             ax.set_title(title)
             ax.grid(axis="x", alpha=0.3)
-            
+
             # Add value labels
             for bar in bars:
                 width = bar.get_width()
                 if width > 0:
-                    ax.text(width, bar.get_y() + bar.get_height() / 2, 
-                           f"{width:.1f}", ha="left", va="center", fontsize=8)
-        
+                    ax.text(
+                        width, bar.get_y() + bar.get_height() / 2, f"{width:.1f}", ha="left", va="center", fontsize=8
+                    )
+
         plt.suptitle(f'Effect Module Benchmarks - {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+        plt.subplots_adjust(bottom=0.1)
         plt.tight_layout()
-        fig.text(0.5, 0.02, "◯ = Success, × = Failed, ◆ = Uses njit, ◇ = No njit", 
-                ha="center", fontsize=10)
-        
+        fig.text(0.5, 0.02, "◯ = Success, × = Failed, ◆ = Uses njit, ◇ = No njit", ha="center", fontsize=10)
+
         return fig, axes
 
-    def _save_chart(self, fig: plt.Figure, save_path: Optional[str] = None) -> None:
+    def _save_chart(self, fig: Figure, save_path: Optional[str] = None) -> None:
         """チャートを保存"""
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -177,9 +181,9 @@ class BenchmarkVisualizer:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             save_file = self.effects_dir / f"benchmark_chart_{timestamp}.png"
             plt.savefig(save_file, dpi=150, bbox_inches="tight")
-            
+
             # Also save as latest
             latest_chart = self.effects_dir / "latest_chart.png"
             plt.savefig(latest_chart, dpi=150, bbox_inches="tight")
-        
+
         plt.close()
