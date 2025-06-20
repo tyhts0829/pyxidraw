@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Iterator, Optional
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .base import BaseShape
 
@@ -13,102 +15,165 @@ Point3D = tuple[float, float, float]
 Region = tuple[float, float, float, float]
 
 
+@dataclass
+class AsemicGlyphConfig:
+    """アセミック文字生成の設定パラメータ"""
+    min_distance: float = 0.1
+    snap_angle_degrees: float = 60.0
+    smoothing_points: int = 5
+    walk_min_steps: int = 2
+    walk_max_steps: int = 4
+    poisson_radius_divisor: float = 8.0
+    poisson_trials: int = 30
+
+
 def distance(p: Point3D, q: Point3D) -> float:
     """2次元ユークリッド距離を計算"""
     return math.sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2)
 
 
-def relative_neighborhood_graph(nodes: list[Point3D]) -> tuple[list[tuple[int, int]], dict]:
+def relative_neighborhood_graph(nodes: list[Point3D], config: AsemicGlyphConfig) -> tuple[list[tuple[int, int]], dict]:
     """
-    RNG (Relative Neighborhood Graph) を構築する。
-
-    さらに、2つのノード間の距離が MIN_DISTANCE 未満の場合はエッジを引かないようにする。
+    RNG (Relative Neighborhood Graph) を構築する。KD-Treeを使用してO(n²log n)で最適化。
 
     Args:
         nodes: [(x, y, z), ...] の点のリスト
+        config: 設定パラメータ
 
     Returns:
         edges: (i, j) のタプルのリスト
         adjacency: 各ノード番号と隣接ノード番号のリストの辞書
     """
-    MIN_DISTANCE = 0.1  # ノード間の距離がこれより小さい場合はエッジを引かない
     n = len(nodes)
+    if n < 2:
+        return [], {i: [] for i in range(n)}
+    
+    # 2D座標のみを抽出してKD-Treeを構築
+    points_2d = np.array([(node[0], node[1]) for node in nodes])
+    tree = cKDTree(points_2d)
+    
     edges: list[tuple[int, int]] = []
     adjacency = {i: [] for i in range(n)}
 
     for i in range(n):
-        for j in range(i + 1, n):
-            dij = distance(nodes[i], nodes[j])
-            if dij < MIN_DISTANCE:
-                # ノード同士が近すぎる場合はエッジを引かない
+        # 近傍ノードを効率的に取得（最大距離で制限）
+        max_search_radius = max(abs(points_2d[:, 0].max() - points_2d[:, 0].min()),
+                               abs(points_2d[:, 1].max() - points_2d[:, 1].min()))
+        neighbors = tree.query_ball_point(points_2d[i], max_search_radius)
+        
+        for j in neighbors:
+            if j <= i:  # 重複を避ける
                 continue
+                
+            dij = distance(nodes[i], nodes[j])
+            if dij < config.min_distance:
+                continue
+                
+            # RNG条件チェック：より効率的な近傍探索
             edge_valid = True
-            for k in range(n):
+            # dijより小さい距離の点のみをチェック
+            potential_blockers = tree.query_ball_point(points_2d[i], dij)
+            
+            for k in potential_blockers:
                 if k == i or k == j:
                     continue
                 if distance(nodes[i], nodes[k]) < dij and distance(nodes[j], nodes[k]) < dij:
                     edge_valid = False
                     break
+                    
             if edge_valid:
                 edges.append((i, j))
                 adjacency[i].append(j)
                 adjacency[j].append(i)
+                
     return edges, adjacency
 
 
-def random_walk_strokes(nodes: list[Point3D], adjacency: dict) -> list[list[int]]:
+def random_walk_strokes_generator(nodes: list[Point3D], adjacency: dict, config: AsemicGlyphConfig, rng: Optional[random.Random] = None) -> Iterator[list[int]]:
     """
-    RNG上でランダムウォークによりストロークを生成する。
-    各ストロークはランダムな出発点から2〜4ステップのウォークで得られ、
-    一度使用されたエッジは削除される。
+    RNG上でランダムウォークによりストロークを生成する（ジェネレータ版）。
+    メモリ効率を向上させ、大きなグラフでも処理可能。
 
-    Returns:
-        各ストロークを構成するノードのインデックスリストのリスト
+    Args:
+        nodes: ノードリスト
+        adjacency: 隣接リスト
+        config: 設定パラメータ
+        rng: 乱数生成器（テスト用）
+
+    Yields:
+        各ストロークを構成するノードのインデックスリスト
     """
-    strokes: list[list[int]] = []
+    if rng is None:
+        rng = random
+        
     n = len(nodes)
-    # 隣接リストのコピー
-    adj = {i: list(neighbors) for i, neighbors in adjacency.items()}
+    # 隣接リストのコピー（メモリ効率を考慮してset使用）
+    adj = {i: set(neighbors) for i, neighbors in adjacency.items()}
+    
     while True:
+        # 利用可能なノードを効率的に検索
         candidates = [i for i in range(n) if adj[i]]
         if not candidates:
             break
-        start = random.choice(candidates)
+            
+        start = rng.choice(candidates)
         stroke = [start]
         current = start
-        steps = random.randint(2, 4)
+        steps = rng.randint(config.walk_min_steps, config.walk_max_steps)
+        
         for _ in range(steps):
             if not adj[current]:
                 break
-            next_node = random.choice(adj[current])
-            adj[current].remove(next_node)
-            if current in adj[next_node]:
-                adj[next_node].remove(current)
+            next_node = rng.choice(list(adj[current]))
+            
+            # エッジを削除（双方向）
+            adj[current].discard(next_node)
+            adj[next_node].discard(current)
+            
             stroke.append(next_node)
             current = next_node
-        strokes.append(stroke)
-    return strokes
+            
+        if len(stroke) >= 2:  # 最小長さのストロークのみ生成
+            yield stroke
 
 
-def snap_stroke(original: list[Point3D]) -> list[Point3D]:
+def random_walk_strokes(nodes: list[Point3D], adjacency: dict, config: AsemicGlyphConfig, rng: Optional[random.Random] = None) -> list[list[int]]:
     """
-    各セグメントの方向を60度刻みにスナップする。
+    互換性のためのラッパー関数
+    """
+    return list(random_walk_strokes_generator(nodes, adjacency, config, rng))
+
+
+def snap_stroke(original: list[Point3D], config: AsemicGlyphConfig) -> list[Point3D]:
+    """
+    各セグメントの方向を指定角度刻みにスナップする。
 
     Args:
         original: 元の頂点列
+        config: 設定パラメータ
 
     Returns:
         スナップ後の頂点列
     """
+    if len(original) < 2:
+        return original
+        
     snapped = [original[0]]
+    snap_angle = config.snap_angle_degrees
+    
     for point in original[1:]:
         last = snapped[-1]
         dx = point[0] - last[0]
         dy = point[1] - last[1]
         L = math.sqrt(dx**2 + dy**2)
+        
+        if L < 1e-10:  # ほぼ同じ点の場合はスキップ
+            continue
+            
         theta_deg = math.degrees(math.atan2(dy, dx))
-        snapped_theta_deg = round(theta_deg / 60.0) * 60.0
+        snapped_theta_deg = round(theta_deg / snap_angle) * snap_angle
         snapped_theta = math.radians(snapped_theta_deg)
+        
         new_point = (
             last[0] + L * math.cos(snapped_theta),
             last[1] + L * math.sin(snapped_theta),
@@ -118,45 +183,74 @@ def snap_stroke(original: list[Point3D]) -> list[Point3D]:
     return snapped
 
 
-def smooth_polyline(polyline: list[Point3D], smoothing_radius: float) -> list[Point3D]:
+def smooth_polyline(polyline: list[Point3D], smoothing_radius: float, config: AsemicGlyphConfig) -> list[Point3D]:
     """
     quadratic Bézier曲線により各内部コーナーを補間し、なめらかなポリラインを生成する。
+    NumPy配列を活用してベクトル演算を最適化。
 
     Args:
         polyline: 頂点列
         smoothing_radius: 補間用の最大オフセット距離
+        config: 設定パラメータ
 
     Returns:
         補間後の頂点列
     """
     if len(polyline) < 3:
         return polyline
+        
     new_points = [polyline[0]]
+    num_arc_points = config.smoothing_points
+    
+    # NumPy配列に変換してベクトル演算を効率化
+    points_array = np.array(polyline)
+    
     for i in range(1, len(polyline) - 1):
-        A = polyline[i - 1]
-        B = polyline[i]
-        C = polyline[i + 1]
-        dAB = distance(A, B)
-        dBC = distance(B, C)
+        A, B, C = points_array[i-1], points_array[i], points_array[i+1]
+        
+        # ベクトル計算を最適化
+        vec_BA = A - B
+        vec_BC = C - B
+        
+        dAB = np.linalg.norm(vec_BA)
+        dBC = np.linalg.norm(vec_BC)
+        
+        if dAB < 1e-10 or dBC < 1e-10:
+            continue
+            
         d = min(smoothing_radius, dAB / 2, dBC / 2)
-        uBA = ((B[0] - A[0]) / dAB, (B[1] - A[1]) / dAB, (B[2] - A[2]) / dAB) if dAB != 0 else (0, 0, 0)
-        uBC = ((C[0] - B[0]) / dBC, (C[1] - B[1]) / dBC, (C[2] - B[2]) / dBC) if dBC != 0 else (0, 0, 0)
-        A_prime = (B[0] - uBA[0] * d, B[1] - uBA[1] * d, B[2] - uBA[2] * d)
-        C_prime = (B[0] + uBC[0] * d, B[1] + uBC[1] * d, B[2] + uBC[2] * d)
-        if distance(new_points[-1], A_prime) > 0.1:
-            new_points.append(A_prime)
-        num_arc_points = 5
-        for t in np.linspace(0, 1, num_arc_points + 2)[1:-1]:
-            x = (1 - t) ** 2 * A_prime[0] + 2 * (1 - t) * t * B[0] + t**2 * C_prime[0]
-            y = (1 - t) ** 2 * A_prime[1] + 2 * (1 - t) * t * B[1] + t**2 * C_prime[1]
-            z = (1 - t) ** 2 * A_prime[2] + 2 * (1 - t) * t * B[2] + t**2 * C_prime[2]
-            new_points.append((x, y, z))
-        new_points.append(C_prime)
+        
+        # 正規化ベクトル
+        uBA = vec_BA / dAB
+        uBC = vec_BC / dBC
+        
+        A_prime = B + uBA * d
+        C_prime = B - uBC * d
+        
+        if distance(new_points[-1], tuple(A_prime)) > 0.1:
+            new_points.append(tuple(A_prime))
+            
+        # ベジエ曲線の点を効率的に計算
+        t_values = np.linspace(0, 1, num_arc_points + 2)[1:-1]
+        t_squared = t_values ** 2
+        one_minus_t = 1 - t_values
+        one_minus_t_squared = one_minus_t ** 2
+        
+        # ベクトル化されたベジエ曲線計算
+        bezier_points = (one_minus_t_squared[:, np.newaxis] * A_prime[np.newaxis, :] +
+                        2 * one_minus_t[:, np.newaxis] * t_values[:, np.newaxis] * B[np.newaxis, :] +
+                        t_squared[:, np.newaxis] * C_prime[np.newaxis, :])
+        
+        for point in bezier_points:
+            new_points.append(tuple(point))
+            
+        new_points.append(tuple(C_prime))
+        
     new_points.append(polyline[-1])
     return new_points
 
 
-def generate_nodes(region: Region, cell_margin: float, placement_mode: str) -> list[Point3D]:
+def generate_nodes(region: Region, cell_margin: float, placement_mode: str, config: Optional[AsemicGlyphConfig] = None) -> list[Point3D]:
     """
     指定された領域と余白、配置モードに応じてノードを生成する。
 
@@ -198,8 +292,10 @@ def generate_nodes(region: Region, cell_margin: float, placement_mode: str) -> l
         x_max = x1 - cell_margin
         y_min = y0 + cell_margin
         y_max = y1 - cell_margin
-        r = min(x_max - x_min, y_max - y_min) / 8.0  # rを大きくするとノード数が減る
-        k = 30  # 試行回数
+        if config is None:
+            config = AsemicGlyphConfig()
+        r = min(x_max - x_min, y_max - y_min) / config.poisson_radius_divisor  # rを大きくするとノード数が減る
+        k = config.poisson_trials  # 試行回数
         sample_points = []
         active_list = []
         p0 = (random.uniform(x_min, x_max), random.uniform(y_min, y_max))
@@ -289,17 +385,140 @@ def generate_nodes(region: Region, cell_margin: float, placement_mode: str) -> l
     return nodes
 
 
+class DiacriticFactory:
+    """ディアクリティカル（アクセント記号）生成のファクトリークラス"""
+    
+    @staticmethod
+    def create_circle(center: Point3D, radius: float) -> np.ndarray:
+        """円形アクセントを生成する。"""
+        n_sides = 20
+        angles = np.linspace(0, 2 * np.pi, n_sides, endpoint=False)
+        x_coords = center[0] + radius * np.cos(angles)
+        y_coords = center[1] + radius * np.sin(angles)
+        z_coords = np.zeros(n_sides)
+        
+        points = np.column_stack((x_coords, y_coords, z_coords))
+        # 閉じた形状にする
+        return np.vstack([points, points[0:1]])
+    
+    @staticmethod
+    def create_tilde(center: Point3D, radius: float) -> np.ndarray:
+        """チルダアクセントを生成する。"""
+        num_points = 10
+        t_values = np.linspace(0, 1, num_points)
+        length = radius * 2
+        amplitude = radius / 2
+        
+        x_coords = center[0] - radius + t_values * length
+        y_coords = center[1] + amplitude * np.sin(np.pi * t_values)
+        z_coords = np.zeros(num_points)
+        
+        return np.column_stack((x_coords, y_coords, z_coords))
+    
+    @staticmethod
+    def create_grave(center: Point3D, radius: float) -> np.ndarray:
+        """グレイブアクセントを生成する。"""
+        start = np.array(center)
+        end = np.array([center[0] - radius * 0.8, center[1] + radius * 0.4, 0])
+        return np.array([start, end])
+    
+    @staticmethod
+    def create_umlaut(center: Point3D, radius: float) -> list[np.ndarray]:
+        """ウムラウトアクセントを生成する。"""
+        dot_radius = radius * 0.3
+        n_sides = 8
+        offsets = [(-radius * 0.5, 0), (radius * 0.5, 0)]
+        dots = []
+        
+        for dx, dy in offsets:
+            dot_center = (center[0] + dx, center[1] + dy, 0)
+            angles = np.linspace(0, 2 * np.pi, n_sides, endpoint=False)
+            x_coords = dot_center[0] + dot_radius * np.cos(angles)
+            y_coords = dot_center[1] + dot_radius * np.sin(angles)
+            z_coords = np.zeros(n_sides)
+            
+            points = np.column_stack((x_coords, y_coords, z_coords))
+            dots.append(np.vstack([points, points[0:1]]))
+        
+        return dots
+    
+    @staticmethod
+    def create_acute(center: Point3D, radius: float) -> np.ndarray:
+        """アキュートアクセントを生成する。"""
+        start = np.array([center[0] - radius * 0.3, center[1] + radius * 0.2, 0])
+        end = np.array([center[0] + radius * 0.3, center[1] + radius * 0.7, 0])
+        return np.array([start, end])
+    
+    @staticmethod
+    def create_circumflex(center: Point3D, radius: float) -> np.ndarray:
+        """サーカムフレックスアクセントを生成する。"""
+        left = np.array([center[0] - radius, center[1], 0])
+        peak = np.array([center[0], center[1] + radius, 0])
+        right = np.array([center[0] + radius, center[1], 0])
+        return np.array([left, peak, right])
+    
+    @staticmethod
+    def create_caron(center: Point3D, radius: float) -> np.ndarray:
+        """ハチェクアクセントを生成する。"""
+        left = np.array([center[0] - radius, center[1] + radius * 0.2, 0])
+        bottom = np.array([center[0], center[1] - radius * 0.2, 0])
+        right = np.array([center[0] + radius, center[1] + radius * 0.2, 0])
+        return np.array([left, bottom, right])
+    
+    @staticmethod
+    def create_cedilla(center: Point3D, radius: float) -> np.ndarray:
+        """セディーヤアクセントを生成する。"""
+        num_points = 8
+        start = np.array([center[0] - radius * 0.5, center[1] - radius * 0.2, 0])
+        end = np.array([center[0] + radius * 0.5, center[1] - radius * 0.2, 0])
+        control = np.array([center[0], center[1] - radius * 0.8, 0])
+        
+        t_values = np.linspace(0, 1, num_points)
+        # Quadratic Bezier 曲線のベクトル化
+        points = ((1 - t_values[:, np.newaxis]) ** 2 * start[np.newaxis, :] +
+                 2 * (1 - t_values[:, np.newaxis]) * t_values[:, np.newaxis] * control[np.newaxis, :] +
+                 t_values[:, np.newaxis] ** 2 * end[np.newaxis, :])
+        
+        return points
+    
+    DIACRITIC_TYPES = {
+        "circle": create_circle.__func__,
+        "tilde": create_tilde.__func__,
+        "grave": create_grave.__func__,
+        "umlaut": create_umlaut.__func__,
+        "acute": create_acute.__func__,
+        "circumflex": create_circumflex.__func__,
+        "caron": create_caron.__func__,
+        "cedilla": create_cedilla.__func__,
+    }
+    
+    @classmethod
+    def create_random_diacritic(cls, center: Point3D, radius: float, rng: Optional[random.Random] = None) -> list[np.ndarray]:
+        """ランダムなディアクリティカルを生成する。"""
+        if rng is None:
+            rng = random
+            
+        diacritic_type = rng.choice(list(cls.DIACRITIC_TYPES.keys()))
+        result = cls.DIACRITIC_TYPES[diacritic_type](center, radius)
+        
+        # umlautは複数の形状を返す
+        if isinstance(result, list):
+            return result
+        else:
+            return [result]
+
+
 def add_diacritic(
     vertices_list: list[np.ndarray],
     nodes: list[Point3D],
     used_nodes: set,
     diacritic_probability: float,
     diacritic_radius: float,
+    rng: Optional[random.Random] = None,
 ) -> None:
     """
     使用されたノードの中から、一定の確率でディアクリティカル（アクセント記号）を追加する。
-    追加するディアクリティカルは、"circle", "tilde", "grave", "umlaut", "acute",
-    "circumflex", "caron", "cedilla" のいずれかの形状となる。
+    ファクトリーパターンでリファクタリングした版。
 
     Args:
         vertices_list: 既存の頂点リストに追加する
@@ -307,91 +526,21 @@ def add_diacritic(
         used_nodes: ストローク生成で使用されたノードのインデックス集合
         diacritic_probability: ディアクリティカルを追加する確率
         diacritic_radius: ディアクリティカルのサイズ
+        rng: 乱数生成器（テスト用）
     """
-    drawn_diacritic = False
+    if rng is None:
+        rng = random
+        
     for i in used_nodes:
-        if random.random() < diacritic_probability and not drawn_diacritic:
-            offset_x = random.uniform(-diacritic_radius, diacritic_radius)
-            offset_y = random.uniform(-diacritic_radius, diacritic_radius)
+        if rng.random() < diacritic_probability:
+            offset_x = rng.uniform(-diacritic_radius, diacritic_radius)
+            offset_y = rng.uniform(-diacritic_radius, diacritic_radius)
             diacritic_center = (nodes[i][0] + offset_x, nodes[i][1] + offset_y, 0)
-            diacritic_type = random.choice(
-                ["circle", "tilde", "grave", "umlaut", "acute", "circumflex", "caron", "cedilla"]
+            
+            diacritic_shapes = DiacriticFactory.create_random_diacritic(
+                diacritic_center, diacritic_radius, rng
             )
-            if diacritic_type == "circle":
-                # 円形アクセント（20角形で近似）
-                n_sides = 20
-                polygon_points = []
-                for j in range(n_sides):
-                    theta = 2 * math.pi * j / n_sides
-                    px = diacritic_center[0] + diacritic_radius * math.cos(theta)
-                    py = diacritic_center[1] + diacritic_radius * math.sin(theta)
-                    polygon_points.append((px, py, 0))
-                polygon_points.append(polygon_points[0])
-                vertices_list.append(np.array(polygon_points))
-            elif diacritic_type == "tilde":
-                # チルダ：サイン波状の曲線
-                tilde_points = []
-                num_points = 10
-                length = diacritic_radius * 2
-                amplitude = diacritic_radius / 2
-                start_x = diacritic_center[0] - diacritic_radius
-                for k in range(num_points):
-                    t = k / (num_points - 1)
-                    x = start_x + t * length
-                    y = diacritic_center[1] + amplitude * math.sin(math.pi * t)
-                    tilde_points.append((x, y, 0))
-                vertices_list.append(np.array(tilde_points))
-            elif diacritic_type == "grave":
-                # グレイブ：左上がりの短い線分
-                start = diacritic_center
-                end = (diacritic_center[0] - diacritic_radius * 0.8, diacritic_center[1] + diacritic_radius * 0.4, 0)
-                vertices_list.append(np.array([start, end]))
-            elif diacritic_type == "umlaut":
-                # ウムラウト：左右に配置した2つの小さい円（8角形で近似）
-                dot_radius = diacritic_radius * 0.3
-                n_sides_dot = 8
-                offsets = [(-diacritic_radius * 0.5, 0), (diacritic_radius * 0.5, 0)]
-                for dx, dy in offsets:
-                    center_dot = (diacritic_center[0] + dx, diacritic_center[1] + dy, 0)
-                    dot_points = []
-                    for j in range(n_sides_dot):
-                        theta = 2 * math.pi * j / n_sides_dot
-                        px = center_dot[0] + dot_radius * math.cos(theta)
-                        py = center_dot[1] + dot_radius * math.sin(theta)
-                        dot_points.append((px, py, 0))
-                    dot_points.append(dot_points[0])
-                    vertices_list.append(np.array(dot_points))
-            elif diacritic_type == "acute":
-                # アキュート：短い右上がりの斜線
-                start = (diacritic_center[0] - diacritic_radius * 0.3, diacritic_center[1] + diacritic_radius * 0.2, 0)
-                end = (diacritic_center[0] + diacritic_radius * 0.3, diacritic_center[1] + diacritic_radius * 0.7, 0)
-                vertices_list.append(np.array([start, end]))
-            elif diacritic_type == "circumflex":
-                # サーカムフレックス：左右の端と中央上部の3点で構成するキャレット型
-                left = (diacritic_center[0] - diacritic_radius, diacritic_center[1], 0)
-                peak = (diacritic_center[0], diacritic_center[1] + diacritic_radius, 0)
-                right = (diacritic_center[0] + diacritic_radius, diacritic_center[1], 0)
-                vertices_list.append(np.array([left, peak, right]))
-            elif diacritic_type == "caron":
-                # ハチェク（チェロン）：小さなV字型
-                left = (diacritic_center[0] - diacritic_radius, diacritic_center[1] + diacritic_radius * 0.2, 0)
-                bottom = (diacritic_center[0], diacritic_center[1] - diacritic_radius * 0.2, 0)
-                right = (diacritic_center[0] + diacritic_radius, diacritic_center[1] + diacritic_radius * 0.2, 0)
-                vertices_list.append(np.array([left, bottom, right]))
-            elif diacritic_type == "cedilla":
-                # セディーヤ：文字の下にフック状の曲線
-                num_points = 8
-                start = (diacritic_center[0] - diacritic_radius * 0.5, diacritic_center[1] - diacritic_radius * 0.2, 0)
-                end = (diacritic_center[0] + diacritic_radius * 0.5, diacritic_center[1] - diacritic_radius * 0.2, 0)
-                control = (diacritic_center[0], diacritic_center[1] - diacritic_radius * 0.8, 0)
-                cedilla_points = []
-                for t in np.linspace(0, 1, num_points):
-                    # Quadratic Bezier 曲線の計算
-                    x = (1 - t) ** 2 * start[0] + 2 * (1 - t) * t * control[0] + t**2 * end[0]
-                    y = (1 - t) ** 2 * start[1] + 2 * (1 - t) * t * control[1] + t**2 * end[1]
-                    cedilla_points.append((x, y, 0))
-                vertices_list.append(np.array(cedilla_points))
-            drawn_diacritic = True
+            vertices_list.extend(diacritic_shapes)
             break  # 1回だけ追加するのでループを抜ける
 
 
@@ -420,9 +569,11 @@ class AsemicGlyph(BaseShape):
         Returns:
             各ストローク・ディアクリティカルの頂点列を格納したリスト
         """
-        # 乱数状態の初期化
-        random.seed(int(random_seed))
+        # 乱数状態の初期化（テスト可能性のために分離）
+        rng = random.Random(int(random_seed))
+        config = AsemicGlyphConfig()
         vertices_list = []
+        
         x0, y0, x1, y1 = region
         cell_width = x1 - x0
         cell_height = y1 - y0
@@ -430,11 +581,16 @@ class AsemicGlyph(BaseShape):
 
         # ノード生成（配置モードを選択："grid", "hexagon", "poisson" など）
         placement_mode = "poisson"
-        nodes = generate_nodes(region, cell_margin, placement_mode)
+        # グローバルrandom状態を一時的に設定（generate_nodesがglobal randomを使用するため）
+        old_state = random.getstate()
+        random.setstate(rng.getstate())
+        nodes = generate_nodes(region, cell_margin, placement_mode, config)
+        rng.setstate(random.getstate())
+        random.setstate(old_state)
 
         # RNG の構築とランダムウォークによるストローク生成
-        _, adjacency = relative_neighborhood_graph(nodes)
-        strokes_indices = random_walk_strokes(nodes, adjacency)
+        _, adjacency = relative_neighborhood_graph(nodes, config)
+        strokes_indices = random_walk_strokes(nodes, adjacency, config, rng)
         used_nodes = {i for stroke in strokes_indices for i in stroke}
 
         # 各ストロークの生成（スナップ & スムージング）
@@ -442,11 +598,11 @@ class AsemicGlyph(BaseShape):
             if len(stroke) < 2:
                 continue
             original_stroke = [nodes[i] for i in stroke]
-            snapped_stroke = snap_stroke(original_stroke)
-            smoothed = smooth_polyline(snapped_stroke, smoothing_radius)
+            snapped_stroke = snap_stroke(original_stroke, config)
+            smoothed = smooth_polyline(snapped_stroke, smoothing_radius, config)
             vertices_list.append(np.array(smoothed))
 
         # ディアクリティカルの追加
-        add_diacritic(vertices_list, nodes, used_nodes, diacritic_probability, diacritic_radius)
+        add_diacritic(vertices_list, nodes, used_nodes, diacritic_probability, diacritic_radius, rng)
 
         return vertices_list
