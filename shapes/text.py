@@ -4,11 +4,115 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from numba import njit
 from fontPens.flattenPen import FlattenPen
 from fontTools.pens.recordingPen import RecordingPen
 from fontTools.ttLib import TTFont
 
 from .base import BaseShape
+
+
+@njit(fastmath=True, cache=True)
+def _get_initial_offset_fast(total_width: float, align_mode: int) -> float:
+    """Calculate initial offset based on alignment mode.
+    
+    Args:
+        total_width: Total width of text
+        align_mode: 0=left, 1=center, 2=right
+    """
+    if align_mode == 1:  # center
+        return -total_width / 2
+    elif align_mode == 2:  # right
+        return -total_width
+    return 0.0  # left alignment
+
+
+@njit(fastmath=True, cache=True)
+def _normalize_vertices_fast(vertices_array: np.ndarray, units_per_em: float) -> np.ndarray:
+    """Normalize vertices to unit coordinates using njit."""
+    # Create output array
+    normalized = vertices_array.copy()
+    
+    # Normalize to unit size
+    normalized[:, 0] = normalized[:, 0] / units_per_em
+    normalized[:, 1] = normalized[:, 1] / units_per_em
+    
+    # Center vertically and flip Y axis (fonts have baseline at y=0)
+    # Flip Y axis because font coordinates are bottom-to-top
+    normalized[:, 1] = -normalized[:, 1] + 0.5
+    
+    return normalized
+
+
+@njit(fastmath=True, cache=True)
+def _apply_text_transforms_fast(vertices: np.ndarray, x_offset: float, size: float) -> np.ndarray:
+    """Apply horizontal offset and scaling transformations."""
+    transformed = vertices.copy()
+    
+    # Apply horizontal offset
+    transformed[:, 0] += x_offset
+    
+    # Apply size scaling
+    transformed[:, 0] *= size
+    transformed[:, 1] *= size
+    transformed[:, 2] *= size
+    
+    return transformed
+
+
+@njit(fastmath=True, cache=True)
+def _process_vertices_batch_fast(vertices_batch: np.ndarray, x_offsets: np.ndarray, size: float) -> np.ndarray:
+    """Process multiple character vertices in batch."""
+    batch_size = vertices_batch.shape[0]
+    max_vertices = vertices_batch.shape[1]
+    
+    # Create output array
+    output = np.empty_like(vertices_batch)
+    
+    for i in range(batch_size):
+        for j in range(max_vertices):
+            # Apply offset and scaling
+            output[i, j, 0] = (vertices_batch[i, j, 0] + x_offsets[i]) * size
+            output[i, j, 1] = vertices_batch[i, j, 1] * size
+            output[i, j, 2] = vertices_batch[i, j, 2] * size
+    
+    return output
+
+
+@njit(fastmath=True, cache=True)
+def _convert_glyph_commands_to_vertices_fast(
+    move_points: np.ndarray, 
+    line_points: np.ndarray, 
+    close_flags: np.ndarray,
+    units_per_em: float
+) -> np.ndarray:
+    """Convert glyph command points to normalized vertices using njit."""
+    num_points = move_points.shape[0] + line_points.shape[0]
+    
+    if num_points == 0:
+        return np.empty((0, 3), dtype=np.float32)
+    
+    # Create vertices array
+    vertices = np.empty((num_points, 3), dtype=np.float32)
+    
+    # Add move points
+    move_count = move_points.shape[0]
+    for i in range(move_count):
+        vertices[i, 0] = move_points[i, 0]
+        vertices[i, 1] = move_points[i, 1]
+        vertices[i, 2] = 0.0
+    
+    # Add line points
+    line_count = line_points.shape[0]
+    for i in range(line_count):
+        vertices[move_count + i, 0] = line_points[i, 0]
+        vertices[move_count + i, 1] = line_points[i, 1]
+        vertices[move_count + i, 2] = 0.0
+    
+    # Normalize vertices
+    normalized = _normalize_vertices_fast(vertices, units_per_em)
+    
+    return normalized
 
 
 class TextRenderer:
@@ -172,33 +276,92 @@ class Text(BaseShape):
         # Get initial offset based on alignment
         x_offset = self._get_initial_offset(total_width, align)
 
-        # Render each character
+        # Collect all character data for batch processing
+        char_data = []
+        current_x_offset = x_offset
+        
         for char in text:
-            char_vertices = self._render_character(char, font, font_number, units_per_em)
-
-            # Apply horizontal offset and scale
-            for vertices in char_vertices:
-                if len(vertices) > 0:
-                    # Create a copy to avoid modifying the original
-                    vertices_copy = vertices.copy()
-                    # Apply offset
-                    vertices_copy[:, 0] += x_offset
-                    # Apply size scaling
-                    vertices_copy *= size
-                    vertices_list.append(vertices_copy)
-
+            if char != " ":  # Skip spaces for rendering but track offset
+                char_vertices = self._render_character(char, font, font_number, units_per_em)
+                for vertices in char_vertices:
+                    if len(vertices) > 0:
+                        char_data.append((vertices, current_x_offset))
+            
             # Update offset for next character
-            x_offset += self._get_char_advance(char, tt_font)
+            current_x_offset += self._get_char_advance(char, tt_font)
+        
+        # Batch process all character vertices
+        if char_data:
+            vertices_list = self._process_character_batch(char_data, size)
+        else:
+            vertices_list = []
 
         return vertices_list
 
     def _get_initial_offset(self, total_width: float, align: str) -> float:
         """Calculate initial offset based on alignment."""
+        # Convert alignment string to integer for njit function
+        align_mode = 0  # left
         if align == "center":
-            return -total_width / 2
+            align_mode = 1
         elif align == "right":
-            return -total_width
-        return 0.0  # left alignment
+            align_mode = 2
+        
+        return _get_initial_offset_fast(total_width, align_mode)
+
+    def _process_character_batch(self, char_data: list, size: float) -> list[np.ndarray]:
+        """Process multiple character vertices in batch for better performance."""
+        if not char_data:
+            return []
+        
+        # Try to use batch processing if data structure allows
+        if len(char_data) > 5:  # Use batch processing for longer texts
+            try:
+                return self._batch_process_vertices(char_data, size)
+            except:
+                # Fallback to individual processing if batch fails
+                pass
+        
+        # Individual processing (original method)
+        vertices_list = []
+        for vertices, x_offset in char_data:
+            transformed_vertices = _apply_text_transforms_fast(vertices, x_offset, size)
+            vertices_list.append(transformed_vertices)
+        
+        return vertices_list
+    
+    def _batch_process_vertices(self, char_data: list, size: float) -> list[np.ndarray]:
+        """Attempt to use njit batch processing for multiple characters."""
+        # Find maximum vertex count for padding
+        max_vertices = max(len(vertices) for vertices, _ in char_data)
+        
+        if max_vertices == 0:
+            return []
+        
+        # Create padded arrays for batch processing
+        batch_size = len(char_data)
+        vertices_batch = np.zeros((batch_size, max_vertices, 3), dtype=np.float32)
+        x_offsets = np.zeros(batch_size, dtype=np.float32)
+        vertex_counts = np.zeros(batch_size, dtype=np.int32)
+        
+        # Fill batch arrays
+        for i, (vertices, x_offset) in enumerate(char_data):
+            vertex_count = len(vertices)
+            vertices_batch[i, :vertex_count] = vertices
+            x_offsets[i] = x_offset
+            vertex_counts[i] = vertex_count
+        
+        # Process batch using njit function
+        processed_batch = _process_vertices_batch_fast(vertices_batch, x_offsets, size)
+        
+        # Extract results back to list format
+        vertices_list = []
+        for i in range(batch_size):
+            vertex_count = vertex_counts[i]
+            if vertex_count > 0:
+                vertices_list.append(processed_batch[i, :vertex_count].copy())
+        
+        return vertices_list
 
     def _get_char_advance(self, char: str, tt_font: TTFont) -> float:
         """Get horizontal advance width for a character."""
@@ -277,12 +440,6 @@ class Text(BaseShape):
     def _normalize_vertices(self, vertices: list, units_per_em: float) -> np.ndarray:
         """Normalize vertices to unit coordinates."""
         vertices_np = np.array(vertices, dtype=np.float32)
-
-        # Normalize to unit size
-        vertices_np[:, :2] = vertices_np[:, :2] / units_per_em
-
-        # Center vertically and flip Y axis (fonts have baseline at y=0)
-        # Flip Y axis because font coordinates are bottom-to-top
-        vertices_np[:, 1] = -vertices_np[:, 1] + 0.5
-
-        return vertices_np
+        
+        # Use njit-optimized function for normalization
+        return _normalize_vertices_fast(vertices_np, units_per_em)
