@@ -40,8 +40,10 @@ def draw(t, cc) -> list[np.ndarray]:
         shape = shapes.polygon(
             n_sides=n_sides, scale=(25, 25, 25), rotate=(0, 0, t * 0.5 + shape_index * 0.1), center=(x, y, 0)
         )
-
         all_vertices.extend(shape)
+
+        label = shapes.text(text=f"{n_sides}-gon", size=8, center=(x, y + 15, 0))
+        all_vertices.extend(label)
         shape_index += 1
 
     # Row 2: 3D shapes
@@ -58,8 +60,10 @@ def draw(t, cc) -> list[np.ndarray]:
             rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
             center=(x, y, 0),
         )
-
         all_vertices.extend(shape)
+
+        label = shapes.text(text=shape_type, size=8, center=(x, y + 15, 0))
+        all_vertices.extend(label)
         shape_index += 1
 
     # Add sphere to complete row 2
@@ -74,8 +78,10 @@ def draw(t, cc) -> list[np.ndarray]:
         rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
         center=(x, y, 0),
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="sphere", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Row 3: More 3D shapes
@@ -91,8 +97,10 @@ def draw(t, cc) -> list[np.ndarray]:
         rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
         center=(x, y, 0),
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="torus", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Cylinder
@@ -107,8 +115,10 @@ def draw(t, cc) -> list[np.ndarray]:
         rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
         center=(x, y, 0),
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="cylinder", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Cone
@@ -123,8 +133,10 @@ def draw(t, cc) -> list[np.ndarray]:
         rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
         center=(x, y, 0),
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="cone", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Capsule
@@ -141,8 +153,10 @@ def draw(t, cc) -> list[np.ndarray]:
         rotate=(t * 0.3 + shape_index * 0.05, t * 0.4 + shape_index * 0.07, t * 0.5 + shape_index * 0.1),
         center=(x, y, 0),
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="capsule", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Row 4: Special shapes
@@ -155,8 +169,10 @@ def draw(t, cc) -> list[np.ndarray]:
     shape = shapes.grid(
         n_divisions=(1, 1), scale=(25, 25, 25), rotate=(0, 0, t * 0.5 + shape_index * 0.1), center=(x, y, 0)
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="grid", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Lissajous
@@ -168,8 +184,10 @@ def draw(t, cc) -> list[np.ndarray]:
     shape = shapes.lissajous(
         freq_x=3, freq_y=2, points=500, scale=(25, 25, 25), rotate=(0, 0, t * 0.5 + shape_index * 0.1), center=(x, y, 0)
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="lissajous", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Text
@@ -179,8 +197,10 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = shapes.text(text="HI", size=25, rotate=(0, 0, t * 0.5 + shape_index * 0.1), center=(x, y, 0))
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="text", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
     shape_index += 1
 
     # Asemic glyph
@@ -192,8 +212,10 @@ def draw(t, cc) -> list[np.ndarray]:
     shape = shapes.asemic_glyph(
         complexity=5, seed=42, scale=(25, 25, 25), rotate=(0, 0, t * 0.5 + shape_index * 0.1), center=(x, y, 0)
     )
-
     all_vertices.extend(shape)
+
+    label = shapes.text(text="asemic", size=8, center=(x, y + 15, 0))
+    all_vertices.extend(label)
 
     return all_vertices
 
