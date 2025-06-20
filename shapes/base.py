@@ -6,8 +6,6 @@ from typing import Any
 
 import numpy as np
 
-from api import effects
-
 
 class BaseShape(ABC):
     """Base class for all shape generators with built-in caching support."""
@@ -42,6 +40,8 @@ class BaseShape(ABC):
 
         # Apply transformations if any are non-default
         if center != (0, 0, 0) or scale != (1, 1, 1) or rotate != (0, 0, 0):
+            # Lazy import to avoid circular dependency
+            from api import effects
             return effects.transform(vertices_list, center, scale, rotate)
         return vertices_list
 

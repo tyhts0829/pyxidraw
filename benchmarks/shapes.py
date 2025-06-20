@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+シェイプモジュールベンチマークスイート
+
+このスクリプトは、shapes/ディレクトリ内のすべてのシェイプモジュールをベンチマークし、
+実行時間の測定、キャッシュ使用状況の確認、失敗の追跡を行います。
+結果はタイムスタンプ付きで保存され、履歴比較が可能です。
 """
 
 import importlib
@@ -13,7 +18,7 @@ import time
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,6 +38,7 @@ ShapeFunction = Callable[..., VerticesList]
 
 
 class ShapeBenchmark:
+    """シェイプモジュール用ベンチマークシステム"""
 
     def __init__(self, output_dir: str = "benchmark_results", warmup_runs: int = 5, benchmark_runs: int = 20) -> None:
         self.output_dir = Path(output_dir)
@@ -44,11 +50,12 @@ class ShapeBenchmark:
         self.warmup_runs = warmup_runs
         self.benchmark_runs = benchmark_runs
 
-        # Initialize test parameters for different shapes
+        # Initialize test parameters lazily
         self._test_params: Optional[Dict[str, List[Dict[str, Any]]]] = None
 
     @property
     def test_params(self) -> Dict[str, List[Dict[str, Any]]]:
+        """テストパラメータの遅延初期化"""
         if self._test_params is None:
             self._test_params = {
                 # Common shape parameters with different complexity levels
@@ -82,6 +89,36 @@ class ShapeBenchmark:
                     {"type": "lorenz", "iterations": 5000},  # Medium iterations
                     {"type": "lorenz", "iterations": 10000},  # High iterations
                 ],
+                "capsule": [
+                    {"radius": 0.5, "height": 1.0, "segments": 16},  # Low res
+                    {"radius": 0.5, "height": 1.0, "segments": 32},  # Medium res
+                    {"radius": 0.5, "height": 1.0, "segments": 64},  # High res
+                ],
+                "asemic_glyph": [
+                    {"complexity": 1},  # Low complexity
+                    {"complexity": 5},  # Medium complexity
+                    {"complexity": 10},  # High complexity
+                ],
+                "cone": [
+                    {"segments": 8},   # Low res
+                    {"segments": 32},  # Medium res (default)
+                    {"segments": 128}, # High res
+                ],
+                "cylinder": [
+                    {"segments": 8},   # Low res
+                    {"segments": 32},  # Medium res (default)
+                    {"segments": 128}, # High res
+                ],
+                "polyhedron": [
+                    {"polygon_type": "tetrahedron"},  # Low complexity (6 edges)
+                    {"polygon_type": "hexahedron"},   # Medium complexity (12 edges)
+                    {"polygon_type": "icosahedron"},  # High complexity (30 edges)
+                ],
+                "text": [
+                    {"text": "A"},           # Low complexity
+                    {"text": "HELLO"},       # Medium complexity
+                    {"text": "HELLO WORLD"}, # High complexity
+                ],
                 # Default parameters for shapes without specific test params
                 "default": [
                     {},  # Default parameters
@@ -93,6 +130,7 @@ class ShapeBenchmark:
 
     @staticmethod
     def get_shape_modules() -> List[str]:
+        """ベンチマーク対象のシェイプモジュールリストを取得"""
         shapes_path = Path("shapes")
         excluded_files = {"__init__.py", "base.py", "factory.py"}
 
@@ -106,6 +144,7 @@ class ShapeBenchmark:
 
     @staticmethod
     def check_cache_usage(module_name: str) -> Dict[str, bool]:
+        """モジュール内の関数がlru_cacheデコレータを使用しているかチェック"""
         cache_info: Dict[str, bool] = {}
         excluded_names = {"annotations", "np", "lru_cache", "Any", "BaseShape"}
 
@@ -136,6 +175,7 @@ class ShapeBenchmark:
         return cache_info
 
     def benchmark_shape(self, module_name: str) -> Dict[str, Any]:
+        """単一のシェイプモジュールをベンチマーク"""
         results = {
             "module": module_name,
             "timestamp": datetime.now().isoformat(),
@@ -168,10 +208,10 @@ class ShapeBenchmark:
                 results["error"] = f"No shape class with generate method found in {module_name}"
                 return results
 
-            # Get test parameters for this shape
+            # Get test parameters for this shape (shape-specific or default)
             test_params_list = self.test_params.get(module_name, self.test_params["default"])
 
-            # Benchmark for different parameter sets
+            # Benchmark for different parameter sets to measure complexity scaling
             for i, params in enumerate(test_params_list):
                 param_name = f"params_{i}"
                 times, vertex_count = self._benchmark_single_params(shape_func, params, param_name)
@@ -215,7 +255,8 @@ class ShapeBenchmark:
 
         return all_results
 
-    def save_results(self, results: Dict[str, Dict]) -> str:
+    def save_results(self, results: Dict[str, Dict[str, Any]]) -> str:
+        """タイムスタンプ付きでベンチマーク結果を保存"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = self.shapes_dir / f"benchmark_{timestamp}.json"
 
@@ -230,16 +271,18 @@ class ShapeBenchmark:
         return str(filename)
 
     def visualize_results(self, results: BenchmarkResult, save_path: Optional[str] = None) -> None:
+        """ベンチマーク結果の横棒グラフを作成"""
         # Extract visualization data
         viz_data = self._extract_visualization_data(results)
 
         # Create charts
-        fig, axes = self._create_benchmark_charts(viz_data)
+        fig, _ = self._create_benchmark_charts(viz_data)
 
         # Save chart
         self._save_chart(fig, save_path)
 
     def compare_historical(self, num_recent: int = 5) -> None:
+        """最近のベンチマーク結果を比較して、時間経過による改善を表示"""
         # Get all benchmark files
         benchmark_files = sorted(self.shapes_dir.glob("benchmark_*.json"))
 
@@ -265,14 +308,14 @@ class ShapeBenchmark:
         modules: List[str] = sorted(modules_set)
 
         # Create comparison chart
-        fig, ax = plt.subplots(figsize=(14, max(8, len(modules) * 0.5)))
+        _, ax = plt.subplots(figsize=(14, max(8, len(modules) * 0.5)))
 
         timestamps = sorted(historical_data.keys())
         x = np.arange(len(timestamps))
         width = 0.8 / len(modules)
 
         for i, module in enumerate(modules):
-            times: List[Optional[float]] = []
+            times: List[Union[float, None]] = []
             for ts in timestamps:
                 if module in historical_data[ts] and historical_data[ts][module]["success"]:
                     # Use average of all parameter sets
@@ -307,13 +350,15 @@ class ShapeBenchmark:
         print(f"Historical comparison saved to {comparison_file}")
 
     def _get_shape_function(self, module: Any, module_name: str) -> Optional[ShapeFunction]:
+        """シェイプクラスを検索してインスタンス化"""
         # Try to find shape class by name matching
         for name, obj in inspect.getmembers(module):
             if inspect.isclass(obj) and name.lower() == module_name.lower():
                 try:
                     instance = obj()
                     if hasattr(instance, "generate") or hasattr(instance, "__call__"):
-                        return lambda **params: instance(**params) if hasattr(instance, "__call__") else instance.generate(**params)
+                        # Return instance directly for cache access
+                        return instance
                 except Exception:
                     pass
 
@@ -322,39 +367,61 @@ class ShapeBenchmark:
             if inspect.isclass(obj) and (hasattr(obj, "generate") or hasattr(obj, "__call__")):
                 try:
                     instance = obj()
-                    return lambda **params: instance(**params) if hasattr(instance, "__call__") else instance.generate(**params)
+                    # Return instance directly for cache access
+                    return instance
                 except Exception:
                     pass
 
         return None
 
     def _benchmark_single_params(
-        self, shape_func: ShapeFunction, params: Dict[str, Any], _param_name: str
+        self, shape_func: ShapeFunction, params: Dict[str, Any], param_name: str
     ) -> Tuple[Optional[List[float]], Optional[int]]:
+        """単一パラメータセットでベンチマークを実行"""
+        # shape_func is now the instance directly
+        shape_instance = shape_func
+        
         # Warmup
         vertex_count = None
         for _ in range(self.warmup_runs):
             try:
-                vertices_list = shape_func(**params)
+                # Call the instance directly or use generate method
+                if hasattr(shape_instance, "__call__"):
+                    vertices_list = shape_instance(**params)
+                else:
+                    vertices_list = shape_instance.generate(**params)
                 if vertex_count is None:
                     vertex_count = sum(len(v) for v in vertices_list)
             except Exception:
                 return None, None
+
+        # Clear cache after warmup to ensure benchmark measures actual computation
+        if hasattr(shape_instance, 'clear_cache'):
+            shape_instance.clear_cache()
 
         # Benchmark
         times: List[float] = []
         for _ in range(self.benchmark_runs):
             try:
                 start_time = time.perf_counter()
-                shape_func(**params)
+                # Call the instance directly or use generate method
+                if hasattr(shape_instance, "__call__"):
+                    shape_instance(**params)
+                else:
+                    shape_instance.generate(**params)
                 end_time = time.perf_counter()
                 times.append(end_time - start_time)
+                
+                # Clear cache after each run to measure actual computation time
+                if hasattr(shape_instance, 'clear_cache'):
+                    shape_instance.clear_cache()
             except Exception:
                 return None, None
 
         return times, vertex_count
 
     def _extract_visualization_data(self, results: BenchmarkResult) -> Dict[str, List[Any]]:
+        """可視化用のデータを抽出"""
         modules: List[str] = []
         param_0_times: List[float] = []
         param_1_times: List[float] = []
@@ -398,6 +465,7 @@ class ShapeBenchmark:
         }
 
     def _create_benchmark_charts(self, viz_data: Dict[str, List[Any]]) -> Tuple[Figure, List[Axes]]:
+        """ベンチマークチャートを作成"""
         modules = viz_data["modules"]
         fig, axes = plt.subplots(1, 3, figsize=(18, max(8, len(modules) * 0.4)))
         y_pos = np.arange(len(modules))
@@ -440,18 +508,19 @@ class ShapeBenchmark:
         return fig, axes
 
     def _save_chart(self, fig: Figure, save_path: Optional[str] = None) -> None:
+        """チャートを保存"""
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches="tight")
+            fig.savefig(save_path, dpi=150, bbox_inches="tight")
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             save_file = self.shapes_dir / f"benchmark_chart_{timestamp}.png"
-            plt.savefig(save_file, dpi=150, bbox_inches="tight")
+            fig.savefig(save_file, dpi=150, bbox_inches="tight")
 
             # Also save as latest
             latest_chart = self.shapes_dir / "latest_chart.png"
-            plt.savefig(latest_chart, dpi=150, bbox_inches="tight")
+            fig.savefig(latest_chart, dpi=150, bbox_inches="tight")
 
-        plt.close()
+        plt.close(fig)
 
 
 def main() -> None:

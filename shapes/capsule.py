@@ -5,7 +5,6 @@ from typing import Any
 import numpy as np
 import trimesh
 
-from api.effects import scaling
 from .base import BaseShape
 
 
@@ -63,6 +62,9 @@ class Capsule(BaseShape):
         # ユニットカプセルは半径=0.5、高さ=1.0
         scale_xy = radius / 0.5  # 半径のスケール
         scale_z = height / 1.0   # 高さのスケール
+        
+        # Lazy import to avoid circular dependency
+        from api.effects import scaling
         
         # api.effectsを使用してスケーリングを適用
         scaled_capsule = scaling(
