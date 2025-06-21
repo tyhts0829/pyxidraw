@@ -205,13 +205,8 @@ def draw(t, cc) -> list[np.ndarray]:
     x = start_x + col * spacing_x
     y = start_y + row * spacing_y
 
-    shape = [
-        np.array([[x - 10, y - 10, 0], [x + 10, y - 10, 0]]),
-        np.array([[x - 10, y + 10, 0], [x + 10, y + 10, 0]]),
-        np.array([[x - 10, y - 10, 0], [x - 10, y + 10, 0]]),
-        np.array([[x + 10, y - 10, 0], [x + 10, y + 10, 0]]),
-    ]
-    shape = effects.webify(shape, connection_probability=0.8, max_distance=30)
+    shape = base_shape(x, y)
+    shape = effects.webify(shape)
     all_vertices.extend(shape)
 
     label = shapes.text(text="webify", size=8, center=(x, y + 15, 0))

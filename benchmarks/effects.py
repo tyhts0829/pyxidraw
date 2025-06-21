@@ -373,7 +373,7 @@ class EffectBenchmark:
     def _create_benchmark_charts(self, viz_data: Dict[str, List[Any]]) -> Tuple[Figure, List[Axes]]:
         """ベンチマークチャートを作成"""
         modules = viz_data["modules"]
-        fig, axes = plt.subplots(1, 3, figsize=(18, max(8, len(modules) * 0.4)))
+        fig, axes = plt.subplots(2, 3, figsize=(18, max(12, len(modules) * 0.6)))
         y_pos = np.arange(len(modules))
 
         # Chart configurations
@@ -383,31 +383,71 @@ class EffectBenchmark:
             ("large_times", "lightcoral", "Large Data Size"),
         ]
 
-        # Create charts
-        for ax, (data_key, color, title) in zip(axes, chart_configs):
-            bars = ax.barh(y_pos, viz_data[data_key], color=color)
-            ax.set_yticks(y_pos)
-            ax.set_yticklabels(
+        # Create charts with linear and log scale
+        for col, (data_key, color, title) in enumerate(chart_configs):
+            times = viz_data[data_key]
+
+            # Linear scale chart (top row)
+            ax_linear = axes[0, col]
+            bars = ax_linear.barh(y_pos, times, color=color)
+            ax_linear.set_yticks(y_pos)
+            ax_linear.set_yticklabels(
                 [
                     f"{m} {s} {n}"
                     for m, s, n in zip(viz_data["modules"], viz_data["success_status"], viz_data["has_njit"])
                 ]
             )
-            ax.set_xlabel("Time (ms)")
-            ax.set_title(title)
-            ax.grid(axis="x", alpha=0.3)
+            ax_linear.set_xlabel("Time (ms)")
+            ax_linear.set_title(f"{title} - Linear Scale")
+            ax_linear.grid(axis="x", alpha=0.3)
 
-            # Add value labels
+            # Add value labels for linear scale
             for bar in bars:
                 width = bar.get_width()
                 if width > 0:
-                    ax.text(
-                        width, bar.get_y() + bar.get_height() / 2, f"{width:.1f}", ha="left", va="center", fontsize=8
+                    label = f"{width:.3f}" if width < 1000 else f"{width/1000:.3f}s"
+                    ax_linear.text(
+                        min(width, ax_linear.get_xlim()[1] * 0.95),
+                        bar.get_y() + bar.get_height() / 2,
+                        label,
+                        ha="left" if width < ax_linear.get_xlim()[1] * 0.9 else "right",
+                        va="center",
+                        fontsize=8,
+                    )
+
+            # Log scale chart (bottom row)
+            ax_log = axes[1, col]
+            # Replace zeros with small value for log scale
+            log_times = [max(t, 0.01) if t > 0 else 0.01 for t in times]
+            bars_log = ax_log.barh(y_pos, log_times, color=color)
+            ax_log.set_xscale("log")
+            ax_log.set_yticks(y_pos)
+            ax_log.set_yticklabels(
+                [
+                    f"{m} {s} {n}"
+                    for m, s, n in zip(viz_data["modules"], viz_data["success_status"], viz_data["has_njit"])
+                ]
+            )
+            ax_log.set_xlabel("Time (ms) - Log Scale")
+            ax_log.set_title(f"{title} - Log Scale")
+            ax_log.grid(axis="x", alpha=0.3, which="both")
+
+            # Add value labels for log scale
+            for bar, orig_time in zip(bars_log, times):
+                if orig_time > 0:
+                    label = f"{orig_time:.3f}" if orig_time < 1000 else f"{orig_time/1000:.3f}s"
+                    ax_log.text(
+                        bar.get_width() * 1.1,
+                        bar.get_y() + bar.get_height() / 2,
+                        label,
+                        ha="left",
+                        va="center",
+                        fontsize=8,
                     )
 
         plt.suptitle(f'Effect Module Benchmarks - {datetime.now().strftime("%Y-%m-%d %H:%M")}')
-        plt.tight_layout()
-        fig.text(0.5, 0.02, "◯ = Success, × = Failed, ◆ = Uses njit, ◇ = No njit", ha="center", fontsize=10)
+        plt.tight_layout(rect=[0, 0.02, 1, 0.96])
+        fig.text(0.5, 0.01, "◯ = Success, × = Failed, ◆ = Uses njit, ◇ = No njit", ha="center", fontsize=10)
 
         return fig, axes
 
