@@ -31,8 +31,8 @@ def draw(t, cc) -> list[np.ndarray]:
     def base_shape(x, y):
         return shapes.polyhedron(
             polygon_type=12,
-            scale=(15, 15, 15),
-            rotate=(t * 0.3, t * 0.4, t * 0.5),
+            scale=(20, 20, 20),
+            rotate=(2, 2, 2),
             center=(x, y, 0),
         )
 
@@ -206,7 +206,7 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = base_shape(x, y)
-    shape = effects.webify(shape)
+    shape = effects.webify(shape, connection_probability=0.005, max_distance=0.001)
     all_vertices.extend(shape)
 
     label = shapes.text(text="webify", size=8, center=(x, y + 15, 0))
