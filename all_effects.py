@@ -119,7 +119,7 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = base_shape(x, y)
-    shape = effects.noise(shape, amplitude=0.02, seed=42)
+    shape = effects.noise(shape, intensity=1, frequency=0.5, t=t * 0.1)
     all_vertices.extend(shape)
 
     label = shapes.text(text="noise", size=8, center=(x, y + 15, 0))

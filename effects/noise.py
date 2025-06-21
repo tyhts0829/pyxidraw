@@ -102,7 +102,7 @@ def _apply_noise(
         return vertices.astype(np.float32)
 
     # 係数調整
-    intensity = intensity * 0.1
+    intensity = intensity * 10
     t_offset = np.float32(t * 0.01 + 1000.0)
 
     # 入力をfloat32に変換
