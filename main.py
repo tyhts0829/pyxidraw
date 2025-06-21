@@ -21,8 +21,7 @@ def draw(t, cc) -> list[np.ndarray]:
         rotate=(math.sin(t / 10) * 5, math.sin(t / 10) * 5, math.sin(t / 10) * 5),
     )
     polyh = effects.filling(polyh, density=cc[4], angle=0)
-    polyh = effects.subdivision(polyh, n_divisions=0.8)
-    polyh = effects.noise(polyh, intensity=cc[1], frequency=(cc[2], cc[2], cc[2]), t=t * 0.1)
+    polyh = effects.boldify(polyh, boldness=1)
     # polyとpolyhを組み合わせて描画
     ret = []
     ret.extend(polyh)

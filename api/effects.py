@@ -31,9 +31,7 @@ from effects import (
 
 def boldify(
     vertices_list: list[np.ndarray],
-    offset: float = 1.0,
-    num_offset: tuple[float, float, float] = (0.5, 0.5, 0.5),
-    method: str = "normal",
+    boldness: float = 1.0,
     **params: Any,
 ) -> list[np.ndarray]:
     """平行線を追加してラインを太く見せます。
@@ -49,7 +47,7 @@ def boldify(
         太字化された頂点配列
     """
     effect = Boldify()
-    return effect(vertices_list, offset=offset, num_offset=num_offset, method=method, **params)
+    return effect(vertices_list, offset=boldness, **params)
 
 
 def connect(
@@ -151,11 +149,11 @@ def dashify(
 
 
 def noise(
-    vertices_list: list[np.ndarray], 
+    vertices_list: list[np.ndarray],
     intensity: float = 0.5,
     frequency: tuple | float = (0.5, 0.5, 0.5),
     t: float = 0.0,
-    **params: Any
+    **params: Any,
 ) -> list[np.ndarray]:
     """頂点にPerlinノイズを追加します。
 

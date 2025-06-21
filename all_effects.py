@@ -44,7 +44,7 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = base_shape(x, y)
-    shape = effects.boldify(shape, offset=0.5)
+    shape = effects.boldify(shape, boldness=0.5)
     all_vertices.extend(shape)
 
     label = shapes.text(text="boldify", size=8, center=(x, y + 15, 0))
