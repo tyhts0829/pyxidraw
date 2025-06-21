@@ -49,7 +49,7 @@ def perlin_noise_3d(x, y, z, perm_table, grad3_array):
 
     # Numba最適化：配列長は定数として扱う
     perm_len = perm_table.shape[0]
-    
+
     A = perm_table[X] + Y
     AA = perm_table[A & 511] + Z  # 511 = 2*256-1
     AB = perm_table[(A + 1) & 511] + Z
@@ -68,15 +68,14 @@ def perlin_noise_3d(x, y, z, perm_table, grad3_array):
     gBB1 = grad(perm_table[(BB + 1) & 511], x - 1, y - 1, z - 1, grad3_array)
 
     # trilinear補間
-    return lerp(lerp(lerp(gAA, gBA, u), lerp(gAB, gBB, u), v), 
-                lerp(lerp(gAA1, gBA1, u), lerp(gAB1, gBB1, u), v), w)
+    return lerp(lerp(lerp(gAA, gBA, u), lerp(gAB, gBB, u), v), lerp(lerp(gAA1, gBA1, u), lerp(gAB1, gBB1, u), v), w)
 
 
 @njit(fastmath=True, cache=True)
 def perlin_core(vertices: np.ndarray, frequency: tuple, perm_table: np.ndarray, grad3_array: np.ndarray):
     """コア Perlin ノイズ計算（3次元頂点専用）"""
     n = vertices.shape[0]
-    
+
     if n == 0:
         return np.zeros((0, 3), dtype=np.float32)
 
@@ -95,27 +94,27 @@ def perlin_core(vertices: np.ndarray, frequency: tuple, perm_table: np.ndarray, 
 
 
 @njit(fastmath=True, cache=True)
-def _apply_noise(vertices: np.ndarray, intensity: float, frequency: tuple, t: float, 
-                perm_table: np.ndarray, grad3_array: np.ndarray) -> np.ndarray:
+def _apply_noise(
+    vertices: np.ndarray, intensity: float, frequency: tuple, t: float, perm_table: np.ndarray, grad3_array: np.ndarray
+) -> np.ndarray:
     """頂点にPerlinノイズを適用します。"""
     if vertices.size == 0 or not intensity:
         return vertices.astype(np.float32)
 
     # 係数調整
     intensity = intensity * 0.1
-    freq_x = frequency[0] * 10.0
-    freq_y = frequency[1] * 10.0
-    freq_z = frequency[2] * 10.0
     t_offset = np.float32(t * 0.01 + 1000.0)
 
     # 入力をfloat32に変換
     vertices_f32 = vertices.astype(np.float32)
-    
+
     # オフセット付き頂点を作成
     offset_vertices = vertices_f32 + t_offset
 
     # Perlinノイズ計算
-    noise_offset = perlin_core(offset_vertices, (freq_x, freq_y, freq_z), perm_table, grad3_array)
+    noise_offset = perlin_core(
+        offset_vertices, (frequency[0] * 0.1, frequency[1] * 0.1, frequency[2] * 0.1), perm_table, grad3_array
+    )
 
     return vertices_f32 + noise_offset * np.float32(intensity)
 
@@ -158,22 +157,22 @@ class Noise(BaseEffect):
         # Apply Perlin noise to each vertex array
         new_vertices_list = []
         for i, vertices in enumerate(vertices_list):
-            try:
-                # 空配列の場合はそのまま返す
-                if vertices.size == 0:
-                    new_vertices_list.append(vertices.astype(np.float32))
-                else:
-                    # 入力検証
-                    if len(vertices.shape) != 2 or vertices.shape[1] != 3:
-                        print(f"Warning: Expected 3D vertices, got shape {vertices.shape}")
-                        new_vertices_list.append(vertices.astype(np.float32))
-                        continue
-                    
-                    noisy_vertices = _apply_noise(vertices, intensity, frequency, t, perm, grad3)
-                    new_vertices_list.append(noisy_vertices.astype(np.float32))
-            except Exception as e:
-                print(f"Warning: Failed to apply noise to vertices[{i}]: {e}")
-                # エラー時は元の頂点配列をそのまま返す
+            # try:
+            # 空配列の場合はそのまま返す
+            if vertices.size == 0:
                 new_vertices_list.append(vertices.astype(np.float32))
+            else:
+                # 入力検証
+                if len(vertices.shape) != 2 or vertices.shape[1] != 3:
+                    print(f"Warning: Expected 3D vertices, got shape {vertices.shape}")
+                    new_vertices_list.append(vertices.astype(np.float32))
+                    continue
+
+                noisy_vertices = _apply_noise(vertices, intensity, frequency, t, perm, grad3)
+                new_vertices_list.append(noisy_vertices.astype(np.float32))
+            # except Exception as e:
+            #     print(f"Warning: Failed to apply noise to vertices[{i}]: {e}")
+            #     # エラー時は元の頂点配列をそのまま返す
+            #     new_vertices_list.append(vertices.astype(np.float32))
 
         return new_vertices_list
