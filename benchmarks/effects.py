@@ -446,7 +446,7 @@ class EffectBenchmark:
                     )
 
         plt.suptitle(f'Effect Module Benchmarks - {datetime.now().strftime("%Y-%m-%d %H:%M")}')
-        plt.tight_layout(rect=[0, 0.02, 1, 0.96])
+        plt.tight_layout(rect=[0, 0.02, 1, 0.96])  # type: ignore
         fig.text(0.5, 0.01, "◯ = Success, × = Failed, ◆ = Uses njit, ◇ = No njit", ha="center", fontsize=10)
 
         return fig, axes
