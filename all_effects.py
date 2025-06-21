@@ -132,7 +132,7 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = base_shape(x, y)
-    shape = effects.wobble(shape, amplitude=0.03, frequency=8.0, phase=t, axis="y")
+    shape = effects.wobble(shape, amplitude=1, frequency=10, phase=t)
     all_vertices.extend(shape)
 
     label = shapes.text(text="wobble", size=8, center=(x, y + 15, 0))

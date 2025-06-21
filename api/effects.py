@@ -238,7 +238,7 @@ def wobble(
         ワブルした頂点配列
     """
     effect = Wobble()
-    return effect(vertices_list, amplitude=amplitude, frequency=frequency, phase=phase, axis=axis, **params)
+    return effect(vertices_list, amplitude=amplitude, frequency=frequency, phase=phase, **params)
 
 
 def array(
@@ -315,7 +315,7 @@ def extrude(
 
 
 def filling(
-    vertices_list: list[np.ndarray], pattern: str = "lines", density: float = 0.1, angle: float = 0.0, **params: Any
+    vertices_list: list[np.ndarray], pattern: str = "lines", density: float = 0.5, angle: float = 0.5, **params: Any
 ) -> list[np.ndarray]:
     """ハッチングパターンで閉じた形状を塗りつぶします。
 

@@ -12,9 +12,9 @@ from .base import BaseEffect
 
 class Filling(BaseEffect):
     """閉じた形状をハッチングパターンで塗りつぶします。"""
-    
+
     # 塗りつぶし線の最大密度（density=1.0のときの線間隔の係数）
-    MAX_FILL_LINES = 50  # density=1.0のときに最大50本の線を生成
+    MAX_FILL_LINES = 100  # density=1.0のときに最大50本の線を生成
 
     def apply(self, vertices_list: list[np.ndarray], **params: Any) -> list[np.ndarray]:
         """塗りつぶしエフェクトを適用します。
@@ -22,8 +22,8 @@ class Filling(BaseEffect):
         Args:
             vertices_list: 入力頂点配列（閉じた形状を形成する必要がある）
             pattern: 塗りつぶしパターン ("lines", "cross", "dots") - デフォルト "lines"
-            density: 塗りつぶし密度 (0.0-1.0) - デフォルト 0.1
-            angle: パターンの角度（ラジアン） - デフォルト 0.0
+            density: 塗りつぶし密度 (0.0-1.0)
+            angle: パターンの角度（ラジアン）
             **params: 追加パラメータ
 
         Returns:
@@ -84,7 +84,7 @@ class Filling(BaseEffect):
         # density=1.0 -> MAX_FILL_LINES lines, density=0.0 -> very few lines
         if density <= 0:
             return []
-        
+
         # Calculate spacing: smaller spacing = more lines
         # At density=1.0, we want MAX_FILL_LINES lines in the bounding box
         # At density=0.1, we want fewer lines
@@ -144,7 +144,7 @@ class Filling(BaseEffect):
         # Calculate spacing (inversed: 0=few dots, 1=many dots)
         if density <= 0:
             return []
-        
+
         # Calculate spacing for dot grid
         # At density=1.0, we want many dots (MAX_FILL_LINES x MAX_FILL_LINES grid)
         # At density=0.1, we want fewer dots

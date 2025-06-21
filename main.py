@@ -20,13 +20,9 @@ def draw(t, cc) -> list[np.ndarray]:
         scale=(80, 80, 80),
         # rotate=(math.sin(t / 10) * 5, math.sin(t / 10) * 5, math.sin(t / 10) * 5),
     )
-    # polyh = shapes.polygon(
-    #     n_sides=6,
-    #     center=(cw / 2, ch / 2, 0),
-    #     scale=(80, 80, 80),
-    # )
-
-    polyh = effects.webify(polyh)
+    polyh = effects.filling(polyh, density=1)
+    polyh = effects.subdivision(polyh, n_divisions=0.5)
+    polyh = effects.wobble(polyh, amplitude=0.5, frequency=0.5, phase=t)
     polyh = effects.rotation(polyh, center=(cw / 2, ch / 2, 0), rotate=(t * 0.1, t * 0.1, t * 0.1))
     # polyとpolyhを組み合わせて描画
     ret = []
