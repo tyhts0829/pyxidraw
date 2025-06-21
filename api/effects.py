@@ -72,10 +72,10 @@ def connect(
 
 
 def rotation(
-    vertices_list: list[np.ndarray], 
+    vertices_list: list[np.ndarray],
     center: tuple[float, float, float] = (0, 0, 0),
     rotate: tuple[float, float, float] = (0, 0, 0),
-    **params: Any
+    **params: Any,
 ) -> list[np.ndarray]:
     """指定した軸の周りで頂点を回転させます。
 
@@ -168,22 +168,19 @@ def noise(
     return effect(vertices_list, amplitude=amplitude, seed=seed, **params)
 
 
-def subdivision(
-    vertices_list: list[np.ndarray], subdivisions: int = 1, smoothing: float = 0.0, **params: Any
-) -> list[np.ndarray]:
+def subdivision(vertices_list: list[np.ndarray], n_divisions: float = 0.0, **params: Any) -> list[np.ndarray]:
     """中間点を追加して線を細分化します。
 
     Args:
         vertices_list: 入力頂点配列
-        subdivisions: 細分化の反復回数
-        smoothing: 平滑化係数 (0.0 = 線形、1.0 = 最大平滑化)
+        n_divisions: 細分化レベル (0.0 = 変化なし, 1.0 = 最大分割)
         **params: 追加パラメータ
 
     Returns:
         細分化された頂点配列
     """
     effect = Subdivision()
-    return effect(vertices_list, subdivisions=subdivisions, smoothing=smoothing, **params)
+    return effect(vertices_list, n_divisions=n_divisions, **params)
 
 
 def culling(
@@ -389,23 +386,21 @@ def desolve(
 
 def collapse(
     vertices_list: list[np.ndarray],
-    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    factor: float = 0.0,
+    intensity: float = 0.5,
+    n_divisions: float = 0.5,
     **params: Any,
 ) -> list[np.ndarray]:
     """頂点を中心点に向かって崩壊させます。
 
     Args:
         vertices_list: 入力頂点配列
-        center: 崩壊させる中心点
-        factor: 崩壊係数 (0.0 = 変化なし1.0 = 完全崩壊)
         **params: 追加パラメータ
 
     Returns:
         崩壊された頂点配列
     """
     effect = Collapse()
-    return effect(vertices_list, center=center, factor=factor, **params)
+    return effect(vertices_list, intensity=intensity, n_divisions=n_divisions, **params)
 
 
 def transform(

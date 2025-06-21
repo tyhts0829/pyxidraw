@@ -30,10 +30,7 @@ def draw(t, cc) -> list[np.ndarray]:
     # Base shape for effects demonstration
     def base_shape(x, y):
         return shapes.polyhedron(
-            polygon_type="cube", 
-            scale=(15, 15, 15), 
-            rotate=(t * 0.3, t * 0.4, t * 0.5),
-            center=(x, y, 0)
+            polygon_type="cube", scale=(15, 15, 15), rotate=(t * 0.3, t * 0.4, t * 0.5), center=(x, y, 0)
         )
 
     # Draw each effect in grid (4x4 = 16 effects total)
@@ -287,6 +284,6 @@ if __name__ == "__main__":
     arc.start(midi=True)
 
     # Run the sketch
-    run_sketch(draw, canvas_size="A4_LANDSCAPE", render_scale=4, background=(1, 1, 1, 1))
+    run_sketch(draw, canvas_size="A4_LANDSCAPE", render_scale=8, background=(1, 1, 1, 1))
 
     arc.stop()

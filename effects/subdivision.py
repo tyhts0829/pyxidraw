@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from .base import BaseEffect
 
@@ -10,76 +11,67 @@ from .base import BaseEffect
 class Subdivision(BaseEffect):
     """中間点を追加して線を細分化します。"""
     
-    def apply(self, vertices_list: list[np.ndarray],
-             subdivisions: int = 1,
-             smoothing: float = 0.0,
-             **params: Any) -> list[np.ndarray]:
+    MAX_DIVISIONS = 10  # 最大分割回数
+
+    def apply(self, vertices_list: list[np.ndarray], n_divisions: float = 0.0, **_params: Any) -> list[np.ndarray]:
         """細分化エフェクトを適用します。
         
         Args:
             vertices_list: 入力頂点配列
-            subdivisions: 細分化反復回数
-            smoothing: スムージング率 (0.0 = 線形、1.0 = 最大スムージング)
-            **params: 追加パラメータ（無視される）
+            n_divisions: 細分化レベル (0.0 = 変化なし, 1.0 = 最大分割)
+            **_params: 追加パラメータ（無視される）
             
         Returns:
             細分化された頂点配列
         """
-        new_vertices_list = []
+        if not vertices_list or n_divisions <= 0.0:
+            return vertices_list
         
+        # Convert 0.0-1.0 to 0-MAX_DIVISIONS
+        divisions = int(n_divisions * self.MAX_DIVISIONS)
+        if divisions <= 0:
+            return vertices_list
+        
+        # Convert to uniform dtype for Numba compatibility
+        result = []
         for vertices in vertices_list:
-            if len(vertices) < 2:
-                new_vertices_list.append(vertices)
-                continue
-            
-            # Apply subdivision iterations
-            result = vertices
-            for _ in range(subdivisions):
-                result = self._subdivide_once(result, smoothing)
-            
-            new_vertices_list.append(result)
+            if vertices.dtype != np.float64:
+                vertices = vertices.astype(np.float64)
+            result.append(_subdivide_core(vertices, divisions))
         
-        return new_vertices_list
+        return result
+
+
+@njit(fastmath=True, cache=True)
+def _subdivide_core(vertices: np.ndarray, n_divisions: int) -> np.ndarray:
+    """単一頂点配列の細分化処理（Numba最適化）"""
+    if len(vertices) < 2 or n_divisions <= 0:
+        return vertices
     
-    def _subdivide_once(self, vertices: np.ndarray, smoothing: float) -> np.ndarray:
-        """1回の細分化反復を実行します。"""
-        n = len(vertices)
-        if n < 2:
-            return vertices
+    # 最小長チェック - 短すぎる線分は分割しない
+    MIN_LENGTH = 0.01
+    if np.linalg.norm(vertices[0] - vertices[1]) < MIN_LENGTH:
+        return vertices
+    
+    # 分割回数制限 - フリーズ防止
+    MAX_DIVISIONS = 10
+    n_divisions = min(n_divisions, MAX_DIVISIONS)
+    
+    result = vertices.copy()
+    for _ in range(n_divisions):
+        n = len(result)
+        new_vertices = np.zeros((2 * n - 1, result.shape[1]), dtype=np.float64)
         
-        # Calculate new vertex count
-        new_n = 2 * n - 1
-        new_vertices = np.zeros((new_n, 3), dtype=np.float32)
+        # 偶数インデックスに元の頂点を配置
+        new_vertices[::2] = result
         
-        # Copy original vertices
-        new_vertices[::2] = vertices
+        # 奇数インデックスに中点を配置
+        new_vertices[1::2] = (result[:-1] + result[1:]) / 2
         
-        # Add midpoints
-        for i in range(n - 1):
-            if smoothing > 0 and i > 0 and i < n - 2:
-                # Catmull-Rom interpolation for smoothing
-                p0 = vertices[i - 1]
-                p1 = vertices[i]
-                p2 = vertices[i + 1]
-                p3 = vertices[i + 2]
-                
-                # Interpolate at t=0.5
-                t = 0.5
-                t2 = t * t
-                t3 = t2 * t
-                
-                midpoint = 0.5 * (
-                    (2 * p1) +
-                    (-p0 + p2) * t +
-                    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-                    (-p0 + 3 * p1 - 3 * p2 + p3) * t3
-                )
-                
-                # Blend between linear and smooth interpolation
-                linear_midpoint = 0.5 * (vertices[i] + vertices[i + 1])
-                new_vertices[2 * i + 1] = (1 - smoothing) * linear_midpoint + smoothing * midpoint
-            else:
-                # Simple linear interpolation at boundaries
-                new_vertices[2 * i + 1] = 0.5 * (vertices[i] + vertices[i + 1])
+        result = new_vertices
         
-        return new_vertices
+        # 再度最小長チェック
+        if len(result) >= 2 and np.linalg.norm(result[0] - result[1]) < MIN_LENGTH:
+            break
+    
+    return result
