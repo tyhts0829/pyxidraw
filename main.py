@@ -14,12 +14,18 @@ def draw(t, cc) -> list[np.ndarray]:
     # Demonstrate new shape and effect system
 
     # Use polygon shape with number of sides controlled by MIDI
-    polyh = shapes.polyhedron(
-        polygon_type="dodeca",
+    # polyh = shapes.polyhedron(
+    #     polygon_type="dodeca",
+    #     center=(cw / 2, ch / 2, 0),
+    #     scale=(80, 80, 80),
+    #     rotate=(math.sin(t / 10) * 5, math.sin(t / 10) * 5, math.sin(t / 10) * 5),
+    # )
+    polyh = shapes.polygon(
+        n_sides=6,
         center=(cw / 2, ch / 2, 0),
         scale=(80, 80, 80),
-        rotate=(math.sin(t / 10) * 5, math.sin(t / 10) * 5, math.sin(t / 10) * 5),
     )
+
     polyh = effects.webify(polyh)
     # polyとpolyhを組み合わせて描画
     ret = []
