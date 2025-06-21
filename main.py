@@ -21,6 +21,8 @@ def draw(t, cc) -> list[np.ndarray]:
         rotate=(math.sin(t / 10) * 5, math.sin(t / 10) * 5, math.sin(t / 10) * 5),
     )
     polyh = effects.filling(polyh, density=cc[4], angle=0)
+    polyh = effects.subdivision(polyh, n_divisions=0.5)
+    polyh = effects.wobble(polyh, amplitude=cc[1] * 10, frequency=0.1 * cc[2])
     # polyとpolyhを組み合わせて描画
     ret = []
     ret.extend(polyh)
