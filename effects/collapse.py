@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from .base import BaseEffect
 from .subdivision import _subdivide_core
@@ -20,8 +21,8 @@ class Collapse(BaseEffect):
 
         Args:
             vertices_list: 入力頂点配列
-            intensity: ノイズの強さ (デフォルト 0.1)
-            n_divisions: 細分化の度合い (デフォルト 0.2)
+            intensity: ノイズの強さ (デフォルト 0.5)
+            n_divisions: 細分化の度合い (デフォルト 0.5)
             **params: 追加パラメータ
 
         Returns:
@@ -31,46 +32,59 @@ class Collapse(BaseEffect):
         if not vertices_list:
             return []
 
-        # Numbaの型推論を助けるため、通常のPython関数で実装
-        return self._apply_collapse(vertices_list, intensity, n_divisions)
+        # Numba最適化された関数を呼び出し
+        return _apply_collapse_numba(vertices_list, intensity, n_divisions)
 
-    def _apply_collapse(
-        self, vertices_list: list[np.ndarray], intensity: float, n_divisions: float
-    ) -> list[np.ndarray]:
-        """内部実装：Numbaを使わずに処理"""
-        if intensity == 0:
-            return vertices_list.copy()
-        if not n_divisions:
-            return vertices_list.copy()
 
-        np.random.seed(0)
-        new_vertices_list = []
+@njit
+def _apply_collapse_numba(vertices_list, intensity, n_divisions):
+    """Numba最適化された崩壊エフェクト処理"""
+    new_vertices_list = []
 
-        # もし頂点列が１つしかない場合はそのまま返す
-        for vertices in vertices_list:
-            if len(vertices) < 2:
-                new_vertices_list.append(vertices)
-                continue
-
-            # ラインを細分化
-            # n_divisions is 0.0-1.0, convert to int divisions
-            divisions = int(n_divisions * 10)  # 最大10回分割
-            subdivided = _subdivide_core(vertices.astype(np.float64), divisions)
-
-            # 細分化したラインのリストにする
-            subdivided_vertices_list = [subdivided[i : i + 2] for i in range(len(subdivided) - 1)]
-            for subdivided_vertices in subdivided_vertices_list:
-                # メイン方向を求める（始点と終点から）
-                main_dir = subdivided_vertices[-1] - subdivided_vertices[0]
-                norm_main_dir = main_dir / (np.linalg.norm(main_dir) + 1e-12)
-                # ノイズベクトルを求める
-                noise_vector = np.random.randn(3) / 5
-                # ノイズをメイン方向と直交する方向に変換
-                ortho_dir = np.cross(norm_main_dir, noise_vector)
-                ortho_dir = ortho_dir / (np.linalg.norm(ortho_dir) + 1e-12)
-                # ノイズの強さを調整
-                noise = ortho_dir * intensity
-                # ノイズを加える
-                offseted_vertices = subdivided_vertices + noise
-                new_vertices_list.append(offseted_vertices)
+    if intensity == 0.0 or n_divisions == 0.0:
+        # 同じ型の新しいリストを返す
+        for i in range(len(vertices_list)):
+            new_vertices_list.append(vertices_list[i])
         return new_vertices_list
+
+    np.random.seed(0)
+    divisions = max(1, int(n_divisions * 10))
+
+    for i in range(len(vertices_list)):
+        vertices = vertices_list[i]
+        if len(vertices) < 2:
+            new_vertices_list.append(vertices)
+            continue
+
+        # ラインを細分化
+        subdivided = _subdivide_core(vertices, divisions)
+
+        # 細分化したラインのペアを処理
+        for j in range(len(subdivided) - 1):
+            subdivided_vertices = subdivided[j : j + 2]
+
+            # メイン方向を求める
+            main_dir = subdivided_vertices[1] - subdivided_vertices[0]
+            main_norm = np.linalg.norm(main_dir)
+            if main_norm < 1e-12:
+                new_vertices_list.append(subdivided_vertices)
+                continue
+            norm_main_dir = main_dir / main_norm
+
+            # ノイズベクトルを求める
+            noise_vector = np.random.randn(3) / 5.0
+
+            # ノイズをメイン方向と直交する方向に変換
+            ortho_dir = np.cross(norm_main_dir, noise_vector)
+            ortho_norm = np.linalg.norm(ortho_dir)
+            if ortho_norm < 1e-12:
+                new_vertices_list.append(subdivided_vertices)
+                continue
+            ortho_dir = ortho_dir / ortho_norm
+
+            # ノイズを加える（元の型を維持）
+            noise = (ortho_dir * intensity).astype(vertices.dtype)
+            offseted_vertices = subdivided_vertices + noise
+            new_vertices_list.append(offseted_vertices)
+
+    return new_vertices_list
