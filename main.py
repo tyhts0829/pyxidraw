@@ -20,8 +20,7 @@ def draw(t, cc) -> list[np.ndarray]:
         scale=(80, 80, 80),
         rotate=(math.sin(t / 10) * 5, math.sin(t / 10) * 5, math.sin(t / 10) * 5),
     )
-    polyh = effects.filling(polyh, density=cc[4], angle=0)
-    polyh = effects.boldify(polyh, boldness=1)
+    polyh = effects.webify(polyh)
     # polyとpolyhを組み合わせて描画
     ret = []
     ret.extend(polyh)

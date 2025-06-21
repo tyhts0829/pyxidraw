@@ -30,7 +30,10 @@ def draw(t, cc) -> list[np.ndarray]:
     # Base shape for effects demonstration
     def base_shape(x, y):
         return shapes.polyhedron(
-            polygon_type="cube", scale=(15, 15, 15), rotate=(t * 0.3, t * 0.4, t * 0.5), center=(x, y, 0)
+            polygon_type=12,
+            scale=(15, 15, 15),
+            rotate=(t * 0.3, t * 0.4, t * 0.5),
+            center=(x, y, 0),
         )
 
     # Draw each effect in grid (4x4 = 16 effects total)
@@ -44,27 +47,10 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = base_shape(x, y)
-    shape = effects.boldify(shape, boldness=0.5)
+    shape = effects.boldify(shape)
     all_vertices.extend(shape)
 
     label = shapes.text(text="boldify", size=8, center=(x, y + 15, 0))
-    all_vertices.extend(label)
-    effect_index += 1
-
-    # Connect
-    row = effect_index // cols
-    col = effect_index % cols
-    x = start_x + col * spacing_x
-    y = start_y + row * spacing_y
-
-    shape = [
-        shapes.polygon(n_sides=3, scale=(8, 8, 8), center=(x - 10, y - 10, 0))[0],
-        shapes.polygon(n_sides=4, scale=(8, 8, 8), center=(x + 10, y + 10, 0))[0],
-    ]
-    shape = effects.connect(shape, n_points=0.3, cyclic=False)
-    all_vertices.extend(shape)
-
-    label = shapes.text(text="connect", size=8, center=(x, y + 15, 0))
     all_vertices.extend(label)
     effect_index += 1
 
@@ -75,7 +61,7 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = base_shape(x, y)
-    shape = effects.rotation(shape, angle_z=t * 0.5 + effect_index * 0.1)
+    shape = effects.rotation(shape, center=(x, y, 0), rotate=(t * 0.5, t * 0.6, t * 0.7))
     all_vertices.extend(shape)
 
     label = shapes.text(text="rotation", size=8, center=(x, y + 15, 0))
@@ -89,8 +75,7 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = base_shape(x, y)
-    scale_factor = 0.5 + 0.5 * math.sin(t + effect_index)
-    shape = effects.scaling(shape, uniform_scale=scale_factor)
+    shape = effects.scaling(shape, center=(x, y, 0), scale=(1 + 0.2 * math.sin(t), 1 + 0.2 * math.cos(t), 1))
     all_vertices.extend(shape)
 
     label = shapes.text(text="scaling", size=8, center=(x, y + 15, 0))
