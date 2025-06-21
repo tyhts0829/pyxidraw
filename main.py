@@ -22,7 +22,7 @@ def draw(t, cc) -> list[np.ndarray]:
     )
     polyh = effects.filling(polyh, density=cc[4], angle=0)
     polyh = effects.subdivision(polyh, n_divisions=0.5)
-    polyh = effects.wobble(polyh, amplitude=cc[1] * 10, frequency=0.1 * cc[2])
+    polyh = effects.noise(polyh, intensity=cc[1] * 100, frequency=(cc[2], cc[2], cc[2]))
     # polyとpolyhを組み合わせて描画
     ret = []
     ret.extend(polyh)

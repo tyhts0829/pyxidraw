@@ -151,21 +151,26 @@ def dashify(
 
 
 def noise(
-    vertices_list: list[np.ndarray], amplitude: float = 0.01, seed: int | None = None, **params: Any
+    vertices_list: list[np.ndarray], 
+    intensity: float = 0.5,
+    frequency: tuple | float = (0.5, 0.5, 0.5),
+    t: float = 0.0,
+    **params: Any
 ) -> list[np.ndarray]:
-    """頂点にランダムノイズを追加します。
+    """頂点にPerlinノイズを追加します。
 
     Args:
         vertices_list: 入力頂点配列
-        amplitude: 最大変位振幅
-        seed: 再現性のためのランダムシード
+        intensity: ノイズの強度
+        frequency: ノイズの周波数（tuple or float）
+        t: 時間パラメータ
         **params: 追加パラメータ
 
     Returns:
-        ノイズを加えた頂点配列
+        Perlinノイズを加えた頂点配列
     """
     effect = Noise()
-    return effect(vertices_list, amplitude=amplitude, seed=seed, **params)
+    return effect.apply(vertices_list, intensity=intensity, frequency=frequency, t=t)
 
 
 def subdivision(vertices_list: list[np.ndarray], n_divisions: float = 0.0, **params: Any) -> list[np.ndarray]:
