@@ -47,5 +47,9 @@ class Transform(BaseEffect):
         rotate: tuple[float, float, float] = (0, 0, 0),
         **params: Any,
     ) -> list[np.ndarray]:
+        
+        # エッジケース: 空のリスト
+        if not vertices_list:
+            return []
 
         return _apply_transformations(vertices_list, center=center, scale=scale, rotate=rotate)

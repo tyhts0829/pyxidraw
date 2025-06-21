@@ -94,29 +94,23 @@ def rotation(
 
 def scaling(
     vertices_list: list[np.ndarray],
-    scale_x: float = 1.0,
-    scale_y: float = 1.0,
-    scale_z: float = 1.0,
-    uniform_scale: float | None = None,
+    center: tuple[float, float, float] = (0, 0, 0),
+    scale: tuple[float, float, float] = (1, 1, 1),
     **params: Any,
 ) -> list[np.ndarray]:
     """指定した軸に沿って頂点をスケールします。
 
     Args:
         vertices_list: 入力頂点配列
-        scale_x: X軸のスケール係数
-        scale_y: Y軸のスケール係数
-        scale_z: Z軸のスケール係数
-        uniform_scale: 指定された場合、個別のスケール係数を上書き
+        center: スケーリングの中心点 (x, y, z)
+        scale: 各軸のスケール係数 (x, y, z)
         **params: 追加パラメータ
 
     Returns:
         スケールされた頂点配列
     """
     effect = Scaling()
-    return effect(
-        vertices_list, scale_x=scale_x, scale_y=scale_y, scale_z=scale_z, uniform_scale=uniform_scale, **params
-    )
+    return effect(vertices_list, center=center, scale=scale, **params)
 
 
 def translation(
