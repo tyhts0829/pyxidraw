@@ -68,9 +68,17 @@ class Filling(BaseEffect):
         # Get 2D coordinates
         coords_2d = vertices_2d[:, :2]
 
+        # Apply rotation to polygon if angle is specified
+        if angle != 0.0:
+            cos_a, sin_a = np.cos(-angle), np.sin(-angle)  # Inverse rotation for polygon
+            center = np.mean(coords_2d, axis=0)
+            coords_2d_centered = coords_2d - center
+            rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+            coords_2d = coords_2d_centered @ rot_matrix.T + center
+
         # Calculate bounding box
-        min_x, min_y = np.min(coords_2d, axis=0)
-        max_x, max_y = np.max(coords_2d, axis=0)
+        _, min_y = np.min(coords_2d, axis=0)
+        _, max_y = np.max(coords_2d, axis=0)
 
         # Calculate spacing based on density (inversed: 0=few lines, 1=many lines)
         # density=1.0 -> MAX_FILL_LINES lines, density=0.0 -> very few lines
@@ -100,17 +108,16 @@ class Filling(BaseEffect):
                     x1, x2 = intersections_sorted[i], intersections_sorted[i + 1]
                     line_2d = np.array([[x1, y], [x2, y]])
 
-                    # Convert back to 3D
-                    line_3d = np.hstack([line_2d, np.zeros((2, 1))])
-
-                    # Apply rotation if needed
+                    # Apply forward rotation if needed
                     if angle != 0.0:
                         cos_a, sin_a = np.cos(angle), np.sin(angle)
-                        center = np.mean(coords_2d, axis=0)
+                        center = np.mean(vertices_2d[:, :2], axis=0)  # Use original center
                         line_2d_centered = line_2d - center
                         rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-                        line_2d_rotated = line_2d_centered @ rot_matrix.T + center
-                        line_3d[:, :2] = line_2d_rotated
+                        line_2d = line_2d_centered @ rot_matrix.T + center
+
+                    # Convert back to 3D
+                    line_3d = np.hstack([line_2d, np.zeros((2, 1))])
 
                     # Transform back to original orientation
                     line_final = transform_back(line_3d, rotation_matrix, z_offset)
