@@ -72,22 +72,24 @@ def connect(
 
 
 def rotation(
-    vertices_list: list[np.ndarray], angle_x: float = 0.0, angle_y: float = 0.0, angle_z: float = 0.0, **params: Any
+    vertices_list: list[np.ndarray], 
+    center: tuple[float, float, float] = (0, 0, 0),
+    rotate: tuple[float, float, float] = (0, 0, 0),
+    **params: Any
 ) -> list[np.ndarray]:
     """指定した軸の周りで頂点を回転させます。
 
     Args:
         vertices_list: 入力頂点配列
-        angle_x: X軸周りの回転角度（ラジアン）
-        angle_y: Y軸周りの回転角度（ラジアン）
-        angle_z: Z軸周りの回転角度（ラジアン）
+        center: 回転の中心点 (x, y, z)
+        rotate: 各軸周りの回転角度（ラジアン）(x, y, z)
         **params: 追加パラメータ
 
     Returns:
         回転した頂点配列
     """
     effect = Rotation()
-    return effect(vertices_list, angle_x=angle_x, angle_y=angle_y, angle_z=angle_z, **params)
+    return effect(vertices_list, center=center, rotate=rotate, **params)
 
 
 def scaling(
