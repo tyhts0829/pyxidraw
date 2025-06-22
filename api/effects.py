@@ -243,20 +243,21 @@ def wobble(
 
 def array(
     vertices_list: list[np.ndarray],
-    count_x: int = 1,
-    count_y: int = 1,
-    count_z: int = 1,
-    spacing_x: float = 1.0,
-    spacing_y: float = 1.0,
-    spacing_z: float = 1.0,
+    n_duplicates: float = 0.5,
+    intervals: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    rotate: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    scale: tuple[float, float, float] = (0.5, 0.5, 0.5),
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
     **params: Any,
 ) -> list[np.ndarray]:
-    """入力のコピーを配列作成します。
+    """入力のコピーを配列状に生成します。
 
     Args:
         vertices_list: 入力頂点配列
-        count_x, count_y, count_z: 各方向のコピー数
-        spacing_x, spacing_y, spacing_z: コピー間の間隔
+        n_duplicates: 複製数の係数（0.0-1.0、最大10個まで）
+        intervals: 各複製間のオフセット（x, y, z）
+        rotate: 各複製における回転角度の増分（x, y, z軸、ラジアン）
+        scale: 各複製におけるスケールの縮小率（1.0で縮小なし）
         **params: 追加パラメータ
 
     Returns:
@@ -265,12 +266,11 @@ def array(
     effect = Array()
     return effect(
         vertices_list,
-        count_x=count_x,
-        count_y=count_y,
-        count_z=count_z,
-        spacing_x=spacing_x,
-        spacing_y=spacing_y,
-        spacing_z=spacing_z,
+        n_duplicates=n_duplicates,
+        intervals=intervals,
+        rotate=rotate,
+        scale=scale,
+        center=center,
         **params,
     )
 

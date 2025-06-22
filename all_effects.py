@@ -147,7 +147,7 @@ def draw(t, cc) -> list[np.ndarray]:
     y = start_y + row * spacing_y
 
     shape = [shapes.polygon(n_sides=4, scale=(6, 6, 6), center=(x, y, 0))[0]]
-    shape = effects.array(shape, count_x=2, count_y=2, spacing_x=12, spacing_y=12)
+    shape = effects.array(shape)
     all_vertices.extend(shape)
 
     label = shapes.text(text="array", size=8, center=(x, y + 15, 0))
