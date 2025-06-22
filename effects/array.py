@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from .base import BaseEffect
 
@@ -50,19 +51,22 @@ class Array(BaseEffect):
         translated = translation(vertices_list, offset_x=-center[0], offset_y=-center[1], offset_z=-center[2])
 
         new_vertices_list = []
-        current_scale = (1.0, 1.0, 1.0)
+        current_scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+        scale_arr = np.array(scale, dtype=np.float32)
 
         for n in range(n_duplicates_int):
             # transformed = transform(vertices_list, center=center, scale=current_scale, rotate=rotate)
-            translated = transform(translated, center=offset, scale=current_scale, rotate=rotate)
+            translated = transform(translated, center=offset, scale=tuple(current_scale), rotate=rotate)
             # 等差的にスケールを適用
-            current_scale = (
-                current_scale[0] * scale[0],
-                current_scale[1] * scale[1],
-                current_scale[2] * scale[2],
-            )
+            current_scale = _update_scale(current_scale, scale_arr)
             new_vertices_list.extend(
                 translation(translated, offset_x=center[0], offset_y=center[1], offset_z=center[2])
             )
 
         return new_vertices_list
+
+
+@njit
+def _update_scale(current_scale: np.ndarray, scale: np.ndarray) -> np.ndarray:
+    """スケール値を更新します（JIT高速化）。"""
+    return current_scale * scale
