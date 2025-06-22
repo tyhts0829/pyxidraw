@@ -22,7 +22,8 @@ def draw(t, cc) -> list[np.ndarray]:
     )
     scale = (cc[1], cc[1], cc[1])  # Use MIDI CC to control scale
     rotate = (cc[2], cc[2], cc[2])  # Use MIDI CC to control rotation
-    polyh = effects.array(polyh, center=(cw / 2, ch / 2, 0), scale=scale, rotate=rotate)
+    offset = (cc[3] * 50, cc[3] * 50, cc[3] * 50)  # Use MIDI CC to control offset
+    polyh = effects.array(polyh, center=(cw / 2, ch / 2, 0), scale=scale, rotate=rotate, offset=offset)
     # polyとpolyhを組み合わせて描画
     ret = []
     ret.extend(polyh)

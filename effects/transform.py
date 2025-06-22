@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Sequence
 
 import numpy as np
@@ -39,6 +40,8 @@ def _apply_transformations(
 class Transform(BaseEffect):
     """任意の変換行列を適用します。"""
 
+    TAU = math.tau  # 全回転角度（2 * pi）
+
     def apply(
         self,
         vertices_list: list[np.ndarray],
@@ -47,9 +50,26 @@ class Transform(BaseEffect):
         rotate: tuple[float, float, float] = (0, 0, 0),
         **params: Any,
     ) -> list[np.ndarray]:
-        
+        """
+
+        Args:
+            vertices_list: 入力頂点配列
+            center: 変換の中心点 (x, y, z)
+            scale: スケール係数 (x, y, z)
+            rotate: 回転角度（ラジアン） (x, y, z) 入力は0.0-1.0の範囲を想定。内部でmath.tauを掛けてラジアンに変換される。
+            **params: 追加パラメータ（無視される）
+
+        """
+
         # エッジケース: 空のリスト
         if not vertices_list:
             return []
 
-        return _apply_transformations(vertices_list, center=center, scale=scale, rotate=rotate)
+        # tau
+        rotate_radians = (
+            rotate[0] * self.TAU,
+            rotate[1] * self.TAU,
+            rotate[2] * self.TAU,
+        )
+
+        return _apply_transformations(vertices_list, center=center, scale=scale, rotate=rotate_radians)

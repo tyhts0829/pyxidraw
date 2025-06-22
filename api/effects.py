@@ -244,7 +244,7 @@ def wobble(
 def array(
     vertices_list: list[np.ndarray],
     n_duplicates: float = 0.5,
-    intervals: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
     rotate: tuple[float, float, float] = (0.0, 0.0, 0.0),
     scale: tuple[float, float, float] = (0.5, 0.5, 0.5),
     center: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -267,7 +267,7 @@ def array(
     return effect(
         vertices_list,
         n_duplicates=n_duplicates,
-        intervals=intervals,
+        offset=offset,
         rotate=rotate,
         scale=scale,
         center=center,

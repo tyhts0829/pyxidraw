@@ -16,7 +16,7 @@ class Array(BaseEffect):
         self,
         vertices_list: list[np.ndarray],
         n_duplicates: float = 0.5,
-        intervals: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
         rotate: tuple[float, float, float] = (0.5, 0.5, 0.5),
         scale: tuple[float, float, float] = (0.5, 0.5, 0.5),
         center: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -27,9 +27,10 @@ class Array(BaseEffect):
         Args:
             vertices_list: 入力頂点配列
             n_duplicates: 複製数の係数（0.0-1.0、最大10個まで）
-            intervals: 各複製間のオフセット（x, y, z）
-            rotate: 各複製における回転角度の増分（x, y, z軸、ラジアン）
-            scale: 各複製におけるスケールの縮小率（1.0で縮小なし）
+            offset: 各複製間のオフセット（x, y, z）
+            rotate: 各複製における回転増分（0.0-1.0、0.5が中立）
+            scale: 各複製におけるスケール係数（0.0-1.0、0.5が中立）
+            center: 配列の中心点（x, y, z）
             **params: 追加パラメータ
 
         Returns:
@@ -37,9 +38,9 @@ class Array(BaseEffect):
 
         Note:
             n_duplicatesが0の場合、元のvertices_listをそのまま返します。
-            スケールは各複製において等差的に縮小されます。
+            各複製では前の複製に対して累積的にtransformが適用されます。
         """
-        from api.effects import rotation, scaling, transform, translation
+        from api.effects import transform, translation
 
         n_duplicates_int = int(n_duplicates * self.MAX_DUPLICATES)
         if not n_duplicates_int:
@@ -53,7 +54,7 @@ class Array(BaseEffect):
 
         for n in range(n_duplicates_int):
             # transformed = transform(vertices_list, center=center, scale=current_scale, rotate=rotate)
-            translated = transform(translated, center=intervals, scale=current_scale, rotate=rotate)
+            translated = transform(translated, center=offset, scale=current_scale, rotate=rotate)
             # 等差的にスケールを適用
             current_scale = (
                 current_scale[0] * scale[0],
