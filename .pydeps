@@ -1,0 +1,18 @@
+[pydeps]
+max_bacon = 0
+cluster = True
+exclude =
+    numpy
+    numba
+    icecream
+    scipy
+    yaml
+    shapely
+    pyglet
+    moderngl
+    psutil
+    fontTools
+    fontPens
+    mido
+    vnoise
+    trimesh

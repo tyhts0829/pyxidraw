@@ -1,0 +1,166 @@
+# PyxiDraw ベンチマークシステム デフォルト設定
+# このファイルは benchmarks/core/config.py で読み込まれます
+
+benchmark:
+  # 基本実行設定
+  warmup_runs: 5
+  measurement_runs: 20
+  timeout_seconds: 30.0
+  output_dir: "benchmark_results"
+  
+  # エラーハンドリング
+  continue_on_error: true
+  max_errors: 10
+  
+  # 並列実行設定（Phase 2で実装予定）
+  parallel: false
+  max_workers: null  # nullの場合はCPUコア数を使用
+  
+  # 可視化設定
+  generate_charts: true
+  chart_format: "png"  # png, svg, pdf, html
+  chart_dpi: 150
+
+# ベンチマーク対象設定
+targets:
+  effects:
+    enabled: true
+    variations:
+      transform:
+        - name: "identity"
+          params: {}
+        - name: "scale_2x"
+          params: {scale: [2, 2, 2]}
+        - name: "rotate_45"
+          params: {rotate: [45, 0, 0]}
+        - name: "complex"
+          params: {scale: [1.5, 1.5, 1.5], rotate: [30, 45, 60]}
+      
+      scale:
+        - name: "uniform_2x"
+          params: {scale: [2, 2, 2]}
+        - name: "non_uniform"
+          params: {scale: [2, 0.5, 1]}
+        - name: "tiny"
+          params: {scale: [0.1, 0.1, 0.1]}
+      
+      translate:
+        - name: "x_10"
+          params: {translate: [10, 0, 0]}
+        - name: "y_20"
+          params: {translate: [0, 20, 0]}
+        - name: "xyz"
+          params: {translate: [10, 20, 30]}
+      
+      rotate:
+        - name: "x_90"
+          params: {rotate: [90, 0, 0]}
+        - name: "y_45"
+          params: {rotate: [0, 45, 0]}
+        - name: "z_180"
+          params: {rotate: [0, 0, 180]}
+        - name: "xyz"
+          params: {rotate: [30, 45, 60]}
+      
+      noise:
+        - name: "low_intensity"
+          params: {intensity: 0.1, frequency: 1.0}
+        - name: "medium_intensity"
+          params: {intensity: 0.5, frequency: 1.0}
+        - name: "high_intensity"
+          params: {intensity: 1.0, frequency: 1.0}
+        - name: "high_frequency"
+          params: {intensity: 0.5, frequency: 3.0}
+      
+      subdivision:
+        - name: "level_1"
+          params: {level: 1}
+        - name: "level_2"  
+          params: {level: 2}
+        - name: "level_3"
+          params: {level: 3}
+      
+      extrude:
+        - name: "depth_10"
+          params: {depth: 10.0}
+        - name: "depth_50"
+          params: {depth: 50.0}
+        - name: "depth_100"
+          params: {depth: 100.0}
+      
+      filling:
+        - name: "spacing_5"
+          params: {spacing: 5.0}
+        - name: "spacing_10"
+          params: {spacing: 10.0}
+        - name: "angle_45"
+          params: {spacing: 10.0, angle: 45.0}
+      
+      buffer:
+        - name: "distance_2"
+          params: {distance: 2.0}
+        - name: "distance_5"
+          params: {distance: 5.0}
+        - name: "distance_10"
+          params: {distance: 10.0}
+      
+      array:
+        - name: "grid_2x2"
+          params: {count_x: 2, count_y: 2, spacing_x: 20.0, spacing_y: 20.0}
+        - name: "grid_3x3"
+          params: {count_x: 3, count_y: 3, spacing_x: 15.0, spacing_y: 15.0}
+        - name: "linear_5"
+          params: {count_x: 5, count_y: 1, spacing_x: 10.0, spacing_y: 0.0}
+
+  shapes:
+    enabled: true
+    variations:
+      polygon:
+        - name: "triangle"
+          params: {n_sides: 3}
+        - name: "hexagon"
+          params: {n_sides: 6}
+        - name: "circle_20"
+          params: {n_sides: 20}
+        - name: "circle_50"
+          params: {n_sides: 50}
+      
+      sphere:
+        - name: "low_res"
+          params: {subdivisions: 0}
+        - name: "medium_res"
+          params: {subdivisions: 0.5}
+        - name: "high_res"
+          params: {subdivisions: 1}
+      
+      grid:
+        - name: "small_5x5"
+          params: {rows: 5, cols: 5}
+        - name: "medium_10x10"
+          params: {rows: 10, cols: 10}
+        - name: "large_20x20"
+          params: {rows: 20, cols: 20}
+      
+      cylinder:
+        - name: "default"
+          params: {}
+        - name: "tall"
+          params: {height: 2}
+        - name: "wide"
+          params: {radius: 1.5}
+      
+      cone:
+        - name: "default"
+          params: {}
+        - name: "sharp"
+          params: {height: 2, radius: 0.5}
+        - name: "flat"
+          params: {height: 0.5, radius: 1.5}
+      
+      torus:
+        - name: "default"
+          params: {}
+        - name: "thick"
+          params: {major_radius: 1, minor_radius: 0.5}
+        - name: "thin"
+          params: {major_radius: 1, minor_radius: 0.1}
