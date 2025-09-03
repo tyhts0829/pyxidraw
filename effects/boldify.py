@@ -5,8 +5,8 @@ from typing import Any
 import numpy as np
 from numba import njit
 
-from .base import BaseEffect
 from .registry import effect
+from engine.core.geometry import Geometry
 
 
 @njit(fastmath=True, cache=True)
@@ -134,42 +134,11 @@ def _boldify_coords_with_offsets(
     return combined_coords, combined_offsets
 
 
-@effect
-class Boldify(BaseEffect):
-    """平行線を追加して線を太く見せるエフェクト。
-    
-    ベクトルグラフィックスにおいて、単一の線分を太く見せるために
-    元の線の両側に平行線を追加。ペンプロッターでの描画において
-    実際の線の太さを制御できない場合に特に有効。
-    
-    固定太さの平行線を両側に1本ずつ追加（計3本の線）。
-    """
-
-    BOLDNESS_COEF = 0.6  # 太さ係数のデフォルト値
-
-    def apply(
-        self,
-        coords: np.ndarray,
-        offsets: np.ndarray,
-        boldness: float = 0.5,
-        **_: Any,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """太線化エフェクトを適用。
-
-        線分の両側に平行線を追加することで太線効果を実現。
-        固定太さの平行線を両側に1本ずつ追加し、計3本の線で太線効果を実現。
-
-        Args:
-            coords: 3D座標配列 (N, 3)
-            offsets: オフセット配列 (M,)
-            boldness: 太さ係数（0.0-1.0）。BOLDNESS_COEFで内部的にスケーリング
-
-        Returns:
-            (boldified_coords, boldified_offsets): 太線化された座標とオフセット。
-            元の線 + 平行線が含まれる
-        """
-        if boldness <= 0:
-            return coords.copy(), offsets.copy()
-
-        boldness = boldness * self.BOLDNESS_COEF
-        return _boldify_coords_with_offsets(coords, offsets, boldness)
+@effect()
+def boldify(g: Geometry, *, boldness: float = 0.5, **_: Any) -> Geometry:
+    """平行線を追加して線を太く見せる（純関数）。"""
+    coords, offsets = g.as_arrays(copy=False)
+    if boldness <= 0:
+        return Geometry(coords.copy(), offsets.copy())
+    new_coords, new_offsets = _boldify_coords_with_offsets(coords, offsets, float(boldness))
+    return Geometry(new_coords, new_offsets)

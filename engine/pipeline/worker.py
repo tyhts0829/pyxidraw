@@ -1,9 +1,10 @@
 import itertools
+import logging
 import multiprocessing as mp
 from queue import Full
 from typing import Callable, Mapping
 
-from api.geometry_api import GeometryAPI
+from engine.core.geometry import Geometry
 
 from ..core.tickable import Tickable
 from .packet import RenderPacket
@@ -17,7 +18,7 @@ class _WorkerProcess(mp.Process):
         self,
         task_q: mp.Queue,
         result_q: mp.Queue,
-        draw_callback: Callable[[float, Mapping[int, int]], GeometryAPI],
+        draw_callback: Callable[[float, Mapping[int, int]], Geometry],
     ):
         super().__init__(daemon=True)
         self.task_q, self.result_q = task_q, result_q
@@ -25,6 +26,7 @@ class _WorkerProcess(mp.Process):
 
     def run(self) -> None:
         """頂点データとフレームIDを持つ RenderPacket を生成し、結果キューに送る。"""
+        logger = logging.getLogger(__name__)
         for task in iter(self.task_q.get, None):  # None = sentinel
             try:
                 geometry = self.draw_callback(task.t, task.cc_state)
@@ -33,7 +35,7 @@ class _WorkerProcess(mp.Process):
                 # デバッグ用：より詳細なエラー情報を追加
                 import traceback
                 error_msg = f"Worker error in draw_callback: {e}\nTraceback: {traceback.format_exc()}"
-                print(error_msg)
+                logger.exception(error_msg)
                 self.result_q.put(e)
 
 
@@ -43,7 +45,7 @@ class WorkerPool(Tickable):
     def __init__(
         self,
         fps: int,
-        draw_callback: Callable[[float, Mapping[int, int]], GeometryAPI],
+        draw_callback: Callable[[float, Mapping[int, int]], Geometry],
         cc_snapshot,
         num_workers: int = 4,
     ):

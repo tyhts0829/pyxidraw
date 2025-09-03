@@ -6,13 +6,26 @@
 BaseShapeクラスの継承とレジストリパターンの使用。
 """
 
+import os
+import logging
+import sys
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+try:
+    while REPO_ROOT in sys.path:
+        sys.path.remove(REPO_ROOT)
+except ValueError:
+    pass
+sys.path.insert(0, REPO_ROOT)
+
 import numpy as np
-from api import G
+from api import G, E
 from api.runner import run_sketch
-from api.geometry_api import GeometryAPI
+from engine.core.geometry import Geometry
 from shapes.base import BaseShape
 from shapes.registry import shape
 from util.constants import CANVAS_SIZES
+from common.logging import setup_default_logging
 
 
 @shape
@@ -36,10 +49,10 @@ class Star(BaseShape):
         星形の頂点と線を生成
         
         Returns:
-            GeometryAPI: 星形のジオメトリ
+            Geometry: 星形のジオメトリ
         """
         vertices = []
-        lines = []
+        polylines: list[np.ndarray] = []
         
         # 角度の計算
         angle_step = 2 * np.pi / (self.points * 2)
@@ -61,24 +74,20 @@ class Star(BaseShape):
             
             vertices.append([x, y, z])
         
-        # 線を生成（星の輪郭）
+        # 輪郭線（閉ループ）
+        outline = []
         for i in range(self.points * 2):
-            next_i = (i + 1) % (self.points * 2)
-            lines.append([i, next_i])
+            outline.append(vertices[i])
+        outline.append(vertices[0])
+        polylines.append(np.array(outline, dtype=np.float32))
         
         # 中心から各頂点への線も追加（オプション）
-        center_index = len(vertices)
-        vertices.append([0, 0, 0])  # 中心点
-        
-        for i in range(0, self.points * 2, 2):  # 外側の頂点のみ
-            lines.append([center_index, i])
-        
-        # NumPy配列に変換
-        vertices = np.array(vertices, dtype=np.float32)
-        lines = np.array(lines, dtype=np.int32)
-        
-        # GeometryAPIオブジェクトを作成
-        return GeometryAPI.from_vertices_and_faces(vertices, lines)
+        # 中心から放射線
+        center = np.array([[0, 0, 0]], dtype=np.float32)
+        for i in range(0, self.points * 2, 2):
+            polylines.append(np.vstack([center, np.array([vertices[i]], dtype=np.float32)]))
+
+        return Geometry.from_lines(polylines)
 
 
 @shape
@@ -108,10 +117,9 @@ class Spiral(BaseShape):
             if i > 0:
                 lines.append([i - 1, i])
 
-        vertices = np.array(vertices, dtype=np.float32)
-        lines = np.array(lines, dtype=np.int32)
-
-        return GeometryAPI.from_vertices_and_faces(vertices, lines)
+        # ラインチェーンに変換
+        polyline = np.array(vertices, dtype=np.float32)
+        return Geometry.from_lines([polyline])
 
 
 def draw(t, cc):
@@ -122,37 +130,40 @@ def draw(t, cc):
     
     # 1. カスタム星形を生成
     star5 = G.star(points=5, inner_radius=0.4)\
-        .size(80, 80, 80)\
-        .at(150, 150, 0)
-    combined = combined.add(star5)
+        .scale(80, 80, 80)\
+        .translate(150, 150, 0)
+    combined = combined + star5
     
     # 2. 8頂点の星
     star8 = G.star(points=8, inner_radius=0.6)\
-        .size(60, 60, 60)\
-        .at(250, 150, 0)
-    combined = combined.add(star8)
+        .scale(60, 60, 60)\
+        .translate(250, 150, 0)
+    combined = combined + star8
     
     # 3. 螺旋形状
     spiral = G.spiral(turns=4, points_per_turn=30, height=100)\
-        .size(100, 100, 100)\
-        .at(200, 250, 0)
-    
-    # 螺旋に回転を適用
-    from api import E
-    spiral = E.add(spiral).rotate(x=30, y=t * 0.5).result()
-    combined = combined.add(spiral)
+        .scale(100, 100, 100)\
+        .translate(200, 250, 0)
+    spiral = (
+        E.pipeline
+        .rotation(rotate=(30/360.0, (t * 0.5)/360.0, 0.0))
+        .build()
+    )(spiral)
+    combined = combined + spiral
     
     return combined
 
 
 def main():
     """メイン実行関数"""
-    print("=== チュートリアル 04: カスタム形状の作成 ===")
-    print("独自の形状を定義して使用します：")
-    print("- Star: クラスベースのカスタム形状")
-    print("- Spiral: クラスベースのカスタム形状")
-    print("\nカスタム形状は G.star() や G.spiral() として利用可能")
-    print("\n終了するには Ctrl+C を押してください")
+    setup_default_logging()
+    logger = logging.getLogger(__name__)
+    logger.info("=== チュートリアル 04: カスタム形状の作成 ===")
+    logger.info("独自の形状を定義して使用します：")
+    logger.info("- Star: クラスベースのカスタム形状")
+    logger.info("- Spiral: クラスベースのカスタム形状")
+    logger.info("カスタム形状は G.star() や G.spiral() として利用可能")
+    logger.info("終了するには Ctrl+C を押してください")
     
     import argparse, os
     parser = argparse.ArgumentParser()
@@ -162,12 +173,10 @@ def main():
 
     if headless:
         g = draw(0, {})
-        print("Headless OK: points=", len(g.coords), "lines=", len(g.offsets) - 1)
+        c, o = g.as_arrays()
+        logger.info("Headless OK: points=%d, lines=%d", c.shape[0], max(0, o.shape[0]-1))
     else:
-        import arc
-        arc.start(midi=False)
-        run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_400"])
-        arc.stop()
+        run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
 
 
 if __name__ == "__main__":

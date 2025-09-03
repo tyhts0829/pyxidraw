@@ -4,6 +4,7 @@
 UnifiedBenchmarkRunnerから分離されたチャート・レポート生成処理
 """
 import os
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,7 @@ class BenchmarkVisualizationGenerator:
         if not self.config.generate_charts:
             return
         
+        logger = logging.getLogger(__name__)
         try:
             with benchmark_operation("generating visualizations"):
                 # チャート生成
@@ -30,12 +32,11 @@ class BenchmarkVisualizationGenerator:
                 
                 # レポート生成
                 self._generate_reports(results, chart_paths)
-                
-                print(f"📊 Generated {len(chart_paths)} charts and reports in {self.config.output_dir}")
+                logger.info("📊 Generated %d charts and reports in %s", len(chart_paths), self.config.output_dir)
                 
         except Exception as e:
             error_msg = f"Failed to generate visualizations: {e}"
-            print(f"⚠️  {error_msg}")
+            logger.warning("⚠️  %s", error_msg)
             self.error_collector.add_error(e)
     
     def _generate_charts(self, results: Dict[str, BenchmarkResult]) -> List[str]:
@@ -62,9 +63,9 @@ class BenchmarkVisualizationGenerator:
                 chart_paths.append(complexity_chart)
             
         except ImportError:
-            print("⚠️  Chart generation libraries not available")
+            logging.getLogger(__name__).warning("⚠️  Chart generation libraries not available")
         except Exception as e:
-            print(f"⚠️  Chart generation failed: {e}")
+            logging.getLogger(__name__).warning("⚠️  Chart generation failed: %s", e)
             self.error_collector.add_error(e)
         
         return chart_paths
@@ -79,7 +80,7 @@ class BenchmarkVisualizationGenerator:
             self._generate_markdown_report(results, chart_paths)
             
         except Exception as e:
-            print(f"⚠️  Report generation failed: {e}")
+            logging.getLogger(__name__).warning("⚠️  Report generation failed: %s", e)
             self.error_collector.add_error(e)
     
     def _generate_timing_chart(self, results: Dict[str, BenchmarkResult], chart_generator) -> Optional[str]:
@@ -113,7 +114,7 @@ class BenchmarkVisualizationGenerator:
             return str(output_path)
             
         except Exception as e:
-            print(f"⚠️  Timing chart generation failed: {e}")
+            logging.getLogger(__name__).warning("⚠️  Timing chart generation failed: %s", e)
             return None
     
     def _generate_success_rate_chart(self, results: Dict[str, BenchmarkResult], chart_generator) -> Optional[str]:
@@ -154,7 +155,7 @@ class BenchmarkVisualizationGenerator:
             return str(output_path)
             
         except Exception as e:
-            print(f"⚠️  Success rate chart generation failed: {e}")
+            logging.getLogger(__name__).warning("⚠️  Success rate chart generation failed: %s", e)
             return None
     
     def _generate_complexity_chart(self, results: Dict[str, BenchmarkResult], chart_generator) -> Optional[str]:
@@ -187,7 +188,7 @@ class BenchmarkVisualizationGenerator:
             return str(output_path)
             
         except Exception as e:
-            print(f"⚠️  Complexity chart generation failed: {e}")
+            logging.getLogger(__name__).warning("⚠️  Complexity chart generation failed: %s", e)
             return None
     
     def _generate_html_report(self, results: Dict[str, BenchmarkResult], chart_paths: List[str]) -> None:
@@ -204,12 +205,12 @@ class BenchmarkVisualizationGenerator:
                 chart_paths=chart_paths
             )
             
-            print(f"📄 HTML report generated: {output_path}")
+            logging.getLogger(__name__).info("📄 HTML report generated: %s", output_path)
             
         except ImportError:
-            print("⚠️  HTML report generation libraries not available")
+            logging.getLogger(__name__).warning("⚠️  HTML report generation libraries not available")
         except Exception as e:
-            print(f"⚠️  HTML report generation failed: {e}")
+            logging.getLogger(__name__).warning("⚠️  HTML report generation failed: %s", e)
     
     def _generate_markdown_report(self, results: Dict[str, BenchmarkResult], chart_paths: List[str]) -> None:
         """Markdownレポートを生成"""
@@ -225,12 +226,12 @@ class BenchmarkVisualizationGenerator:
                 include_charts=True
             )
             
-            print(f"📄 Markdown report generated: {output_path}")
+            logging.getLogger(__name__).info("📄 Markdown report generated: %s", output_path)
             
         except ImportError:
-            print("⚠️  Markdown report generation libraries not available")
+            logging.getLogger(__name__).warning("⚠️  Markdown report generation libraries not available")
         except Exception as e:
-            print(f"⚠️  Markdown report generation failed: {e}")
+            logging.getLogger(__name__).warning("⚠️  Markdown report generation failed: %s", e)
 
 
 class ChartDataProcessor:

@@ -5,8 +5,9 @@ from typing import Any
 import numpy as np
 from numba import njit
 
-from .base import BaseEffect
 from .registry import effect
+from engine.core.geometry import Geometry
+from common.param_utils import ensure_vec3, norm_to_int, norm_to_rad
 
 
 @njit(fastmath=True, cache=True)
@@ -54,94 +55,58 @@ def _update_scale(current_scale: np.ndarray, scale: np.ndarray) -> np.ndarray:
     return current_scale * scale
 
 
-@effect
-class Array(BaseEffect):
-    """入力のコピーを配列状に生成します。"""
+MAX_DUPLICATES = 10
 
-    MAX_DUPLICATES = 10
-    TAU = 2 * np.pi  # 全回転角度
 
-    def apply(
-        self,
-        coords: np.ndarray,
-        offsets: np.ndarray,
-        n_duplicates: float = 0.5,
-        offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
-        rotate: tuple[float, float, float] = (0.5, 0.5, 0.5),
-        scale: tuple[float, float, float] = (0.5, 0.5, 0.5),
-        center: tuple[float, float, float] = (0.0, 0.0, 0.0),
-        **params: Any,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """配列エフェクトを適用します。
+@effect()
+def array(
+    g: Geometry,
+    *,
+    n_duplicates: float = 0.5,
+    offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    rotate: tuple[float, float, float] = (0.5, 0.5, 0.5),
+    scale: tuple[float, float, float] = (0.5, 0.5, 0.5),
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Geometry:
+    """入力のコピーを配列状に生成（純関数）。"""
+    coords, offsets = g.as_arrays(copy=False)
+    # 0..1 → 0..MAX_DUPLICATES（整数）
+    n_int = norm_to_int(float(n_duplicates), 0, MAX_DUPLICATES)
+    if n_int <= 0 or coords.size == 0 or offsets.size <= 1:
+        return Geometry(coords.copy(), offsets.copy())
 
-        Args:
-            coords: 入力座標配列
-            offsets: 入力オフセット配列
-            n_duplicates: 複製数の係数（0.0-1.0、最大10個まで）
-            offset: 各複製間のオフセット（x, y, z）
-            rotate: 各複製における回転増分（0.0-1.0、0.5が中立）
-            scale: 各複製におけるスケール係数（0.0-1.0、0.5が中立）
-            center: 配列の中心点（x, y, z）
-            **params: 追加パラメータ
+    center_np = np.array(center, dtype=np.float32)
+    offset_np = np.array(offset, dtype=np.float32)
+    scale_np = np.array(scale, dtype=np.float32)
 
-        Returns:
-            (array_coords, array_offsets): 配列化された座標配列とオフセット配列
+    # 0..1 正規化入力 → ラジアン（0..2π）
+    rx, ry, rz = ensure_vec3(rotate)
+    rotate_radians = np.array([norm_to_rad(rx), norm_to_rad(ry), norm_to_rad(rz)], dtype=np.float32)
 
-        Note:
-            n_duplicatesが0の場合、元のデータをそのまま返します。
-            各複製では前の複製に対して累積的にtransformが適用されます。
-        """
-        n_duplicates_int = int(n_duplicates * self.MAX_DUPLICATES)
-        if not n_duplicates_int:
-            return coords.copy(), offsets.copy()
+    # 生成する線のリスト（Geometry.from_lines で正しい offsets を構築）
+    lines: list[np.ndarray] = []
 
-        # エッジケース: 空の座標配列
-        if len(coords) == 0:
-            return coords.copy(), offsets.copy()
+    # 元の線を追加
+    for i in range(len(offsets) - 1):
+        lines.append(coords[offsets[i] : offsets[i + 1]].copy())
 
-        # NumPy配列に変換
-        center_np = np.array(center, dtype=np.float32)
-        offset_np = np.array(offset, dtype=np.float32)
-        scale_np = np.array(scale, dtype=np.float32)
-        
-        # 回転を0.5が中立となるように調整し、ラジアンに変換
-        rotate_adjusted = tuple((r - 0.5) for r in rotate)
-        rotate_radians = np.array([
-            rotate_adjusted[0] * self.TAU,
-            rotate_adjusted[1] * self.TAU,
-            rotate_adjusted[2] * self.TAU,
-        ], dtype=np.float32)
+    current_coords = coords.copy()
+    current_scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
-        # 結果を格納するリスト
-        all_coords = []
-        all_offsets = []
+    for n in range(n_int):
+        current_scale = _update_scale(current_scale, scale_np)
+        current_coords = _apply_transform_to_coords(
+            current_coords,
+            center_np,
+            current_scale,
+            rotate_radians * (n + 1),
+            offset_np * (n + 1),
+        )
+        # 複製後の各線を追加
+        for i in range(len(offsets) - 1):
+            lines.append(current_coords[offsets[i] : offsets[i + 1]].copy())
 
-        # 元のデータも含める
-        all_coords.append(coords)
-        all_offsets.append(offsets)
+    return Geometry.from_lines(lines)
 
-        # 累積的な変換のための変数
-        current_coords = coords.copy()
-        current_scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
-        for n in range(n_duplicates_int):
-            # 累積的にスケールを更新
-            current_scale = _update_scale(current_scale, scale_np)
-            
-            # 変換を適用
-            current_coords = _apply_transform_to_coords(
-                current_coords,
-                center_np,
-                current_scale,
-                rotate_radians * (n + 1),  # 回転は線形に増加
-                offset_np * (n + 1),  # オフセットも線形に増加
-            )
-            
-            all_coords.append(current_coords.copy())
-            all_offsets.append(offsets.copy())
-
-        # すべての座標とオフセットを結合
-        combined_coords = np.vstack(all_coords)
-        combined_offsets = np.concatenate(all_offsets)
-
-        return combined_coords, combined_offsets
+# 後方互換クラスは廃止（関数APIのみ）

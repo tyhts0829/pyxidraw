@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from common.cacheable_base import LRUCacheable
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 
 
 class BaseShape(LRUCacheable, ABC):
@@ -14,15 +14,15 @@ class BaseShape(LRUCacheable, ABC):
         super().__init__(maxsize=maxsize)
 
     @abstractmethod
-    def generate(self, **params: Any) -> GeometryData:
+    def generate(self, **params: Any) -> Geometry:
         """形状の頂点を生成します。
 
         Returns:
-            GeometryData: 形状データを含むオブジェクト
+            Geometry: 形状データを含むオブジェクト
         """
         pass
 
-    def _execute(self, **params: Any) -> GeometryData:
+    def _execute(self, **params: Any) -> Geometry:
         """実際の処理を実行（キャッシング用）"""
         # transformパラメータを分離
         center = params.pop("center", (0, 0, 0))
@@ -46,7 +46,7 @@ class BaseShape(LRUCacheable, ABC):
         scale: tuple[float, float, float] = (1, 1, 1),
         rotate: tuple[float, float, float] = (0, 0, 0),
         **params: Any,
-    ) -> GeometryData:
+    ) -> Geometry:
         """キャッシング機能付きで形状を生成"""
         # すべてのパラメータを結合してキャッシング
         all_params = {"center": center, "scale": scale, "rotate": rotate, **params}

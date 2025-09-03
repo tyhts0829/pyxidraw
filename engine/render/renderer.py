@@ -22,7 +22,7 @@ from typing import Sequence
 import moderngl as mgl
 import numpy as np
 
-from api.geometry_api import GeometryAPI
+from engine.core.geometry import Geometry
 from util.constants import PRIMITIVE_RESTART_INDEX
 
 from ..core.tickable import Tickable
@@ -91,7 +91,7 @@ class LineRenderer(Tickable):
     # --------------------------------------------------------------------- #
     # Internal helpers                                                      #
     # --------------------------------------------------------------------- #
-    def _upload_geometry(self, geometry: GeometryAPI | None) -> None:
+    def _upload_geometry(self, geometry: Geometry | None) -> None:
         """
         front バッファの `geometry` を 1 つの VBO/IBO に統合し GPU へ。
         データが空のときは index_count=0 にして draw() をスキップ。
@@ -106,11 +106,11 @@ class LineRenderer(Tickable):
 
 # ---------- utility -------------------------------------------------------- #
 def _geometry_to_vertices_indices(
-    geometry: GeometryAPI,
+    geometry: Geometry,
     prim_restart_idx: int,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    GeometryAPI オブジェクトを VBO/IBO に変換。
+    Geometry オブジェクトを VBO/IBO に変換。
     GPUは多数のデータを個別に扱うよりも、大きなデータを一括で送った方が高速。
     そのため、この関数でデータをまとめて効率よくGPUに渡す。"""
     coords = geometry.coords.astype(np.float32)

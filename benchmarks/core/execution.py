@@ -4,6 +4,7 @@
 UnifiedBenchmarkRunnerから分離されたベンチマーク実行の詳細処理
 """
 import time
+import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -301,16 +302,18 @@ class BenchmarkResultProcessor:
     @staticmethod
     def display_execution_status(plugin_name: str, results: List[BenchmarkResult]) -> None:
         """実行ステータスを表示"""
+        logger = logging.getLogger(__name__)
         successful = len([r for r in results if r.success])
         total = len(results)
         
         status_icon = "✅" if successful == total else "⚠️" if successful > 0 else "❌"
-        print(f"{status_icon} {plugin_name}: {successful}/{total} targets completed")
+        level = logging.INFO if successful == total else logging.WARNING if successful > 0 else logging.ERROR
+        logger.log(level, "%s %s: %d/%d targets completed", status_icon, plugin_name, successful, total)
         
         # 失敗したターゲットの詳細
         failed_results = [r for r in results if not r.success]
         if failed_results:
             for result in failed_results[:3]:  # 最初の3個まで表示
-                print(f"   ❌ {result.target_name}: {result.error_message}")
+                logger.warning("   ❌ %s: %s", result.target_name, result.error_message)
             if len(failed_results) > 3:
-                print(f"   ... and {len(failed_results) - 3} more failures")
+                logger.warning("   ... and %d more failures", len(failed_results) - 3)

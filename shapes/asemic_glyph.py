@@ -11,7 +11,7 @@ from scipy.spatial import cKDTree
 
 from .registry import shape
 from .base import BaseShape
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 
 # 型エイリアス
 Point3D = tuple[float, float, float]
@@ -667,7 +667,7 @@ class AsemicGlyph(BaseShape):
         diacritic_radius: float = 0.04,
         random_seed: float = 42.0,
         **_params: Any
-    ) -> GeometryData:
+    ) -> Geometry:
         """アセミック文字形状を生成する。
         
         Args:
@@ -679,7 +679,7 @@ class AsemicGlyph(BaseShape):
             **_params: 追加パラメータ（無視される）
             
         Returns:
-            GeometryData object containing アセミック文字
+            Geometry object containing アセミック文字
         """
         # 乱数状態の初期化（テスト可能性のために分離）
         rng = random.Random(int(random_seed))
@@ -717,4 +717,4 @@ class AsemicGlyph(BaseShape):
         # ディアクリティカルの追加
         add_diacritic(vertices_list, nodes, used_nodes, diacritic_probability, diacritic_radius, rng)
 
-        return GeometryData.from_lines(vertices_list)
+        return Geometry.from_lines(vertices_list)

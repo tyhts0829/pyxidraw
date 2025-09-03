@@ -4,7 +4,7 @@ effects.transform モジュールのテスト
 import numpy as np
 import pytest
 
-from effects.transform import Transform
+from effects.transform import transform
 from engine.core.geometry import Geometry
 
 
@@ -19,15 +19,9 @@ def simple_geometry():
 
 
 class TestTransform:
-    def test_init(self):
-        """Transformクラスの初期化テスト"""
-        effect = Transform()
-        assert effect is not None
-
     def test_identity_transform(self, simple_geometry):
         """恒等変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(1, 1, 1),
@@ -39,8 +33,7 @@ class TestTransform:
 
     def test_scale_only_transform(self, simple_geometry):
         """スケールのみ変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(2, 2, 2),
@@ -53,8 +46,7 @@ class TestTransform:
 
     def test_rotate_only_transform(self, simple_geometry):
         """回転のみ変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(1, 1, 1),
@@ -64,8 +56,7 @@ class TestTransform:
 
     def test_combined_transform(self, simple_geometry):
         """複合変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0.5, 0.5, 0),
             scale=(2, 1.5, 1),
@@ -75,9 +66,8 @@ class TestTransform:
 
     def test_center_transform(self, simple_geometry):
         """中心点指定変換テスト"""
-        effect = Transform()
         center = (1.0, 1.0, 0.5)
-        result = effect(
+        result = transform(
             simple_geometry,
             center=center,
             scale=(2, 2, 2),
@@ -87,8 +77,7 @@ class TestTransform:
 
     def test_non_uniform_scale(self, simple_geometry):
         """非均一スケール変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(3, 0.5, 2),
@@ -98,8 +87,7 @@ class TestTransform:
 
     def test_multi_axis_rotation(self, simple_geometry):
         """多軸回転変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(1, 1, 1),
@@ -109,8 +97,7 @@ class TestTransform:
 
     def test_negative_scale(self, simple_geometry):
         """負のスケール変換テスト（反転）"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(-1, 1, 1),
@@ -120,8 +107,7 @@ class TestTransform:
 
     def test_zero_scale(self, simple_geometry):
         """ゼロスケール変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(0, 1, 1),
@@ -131,8 +117,7 @@ class TestTransform:
 
     def test_large_scale(self, simple_geometry):
         """大きなスケール変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(100, 100, 100),
@@ -142,8 +127,7 @@ class TestTransform:
 
     def test_full_rotation(self, simple_geometry):
         """1回転変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(0, 0, 0),
             scale=(1, 1, 1),
@@ -155,8 +139,7 @@ class TestTransform:
 
     def test_complex_center(self, simple_geometry):
         """複雑な中心点変換テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(10, -5, 3),
             scale=(1.5, 0.8, 2.0),
@@ -166,8 +149,7 @@ class TestTransform:
 
     def test_preserves_structure(self, simple_geometry):
         """構造保持テスト"""
-        effect = Transform()
-        result = effect(
+        result = transform(
             simple_geometry,
             center=(1, 2, 3),
             scale=(2, 3, 0.5),

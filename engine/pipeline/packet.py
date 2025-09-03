@@ -1,13 +1,13 @@
 import time
 from dataclasses import dataclass
 
-from api.geometry_api import GeometryAPI
+from engine.core.geometry import Geometry
 
 
 @dataclass(slots=True, frozen=True)
 class RenderPacket:
     """ワーカ → メインスレッドへ渡す描画データのコンテナ。"""
 
-    geometry: GeometryAPI
+    geometry: Geometry
     frame_id: int  # ワーカ側で連番付与
     timestamp: float = time.time()

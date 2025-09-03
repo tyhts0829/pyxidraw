@@ -1,30 +1,25 @@
 """
-PyxiDraw 次期API（2025-06版）
-
-形状チェーンとエフェクトチェーンを分離し、キャッシュと拡張性を両立。
+PyxiDraw 次期API（関数・パイプライン・Geometry統一）
 
 Usage:
-    from api import G, E
-    
-    # 形状チェーン
-    sphere = (G.sphere(subdivisions=0.5)
-                .size(100, 100, 100)
-                .at(100, 100, 0))
-    
-    # エフェクトチェーン
-    result = (E.add(sphere)
-                .noise(intensity=0.3)
-                .filling(density=0.5)
-                .result())
+    from api import G, E, Geometry
+
+    g = G.sphere(subdivisions=0.5)
+    g = g.scale(100, 100, 100).translate(100, 100, 0)
+
+    pipeline = (E.pipeline
+                  .noise(intensity=0.3)
+                  .filling(density=0.5)
+                  .build())
+    result = pipeline(g)
 """
 
-# 主要なAPIクラスをエクスポート
-from .geometry_api import GeometryAPI
+# 主要API
 from .shape_factory import G, ShapeFactory
-from .effect_chain import E, EffectFactory, EffectChain
+from .pipeline import E
 
-# コアクラスもエクスポート（高度な使用のため）
-from engine.core.geometry_data import GeometryData
+# コアクラス（高度な使用）
+from engine.core.geometry import Geometry
 
 __all__ = [
     # メインAPI
@@ -32,21 +27,17 @@ __all__ = [
     "E",           # エフェクトファクトリ
     
     # クラス（高度な使用）
-    "GeometryAPI", 
     "ShapeFactory",
-    "EffectFactory",
-    "EffectChain",
-    "GeometryData",
+    "Geometry",
 ]
 
 # バージョン情報
-__version__ = "2025.06"
-__api_version__ = "2.0"
+__version__ = "2025.09"
+__api_version__ = "3.0"
 
-# 互換性情報
+# 互換性情報（破壊的変更）
 __breaking_changes__ = [
-    "形状生成APIがG.*に変更",
-    "エフェクトチェーンがE.add().*に変更", 
-    "GeometryAPIによるメソッドチェーン形式",
-    "後方互換性なし（完全リファクタリング）"
+    "エフェクトは関数ベースに統一 (Geometry -> Geometry)",
+    "パイプラインは E.pipeline（単層キャッシュ）",
+    "GeometryData を Geometry に統合",
 ]

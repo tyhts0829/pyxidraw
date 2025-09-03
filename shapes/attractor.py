@@ -7,7 +7,7 @@ import numpy as np
 
 from .registry import shape
 from .base import BaseShape
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 
 
 @shape
@@ -16,7 +16,7 @@ class Attractor(BaseShape):
 
     def generate(
         self, attractor_type: str = "aizawa", points: int = 10000, dt: float = 0.01, scale: float = 1.0, **params: Any
-    ) -> GeometryData:
+    ) -> Geometry:
         """Generate a strange attractor.
 
         Args:
@@ -27,7 +27,7 @@ class Attractor(BaseShape):
             **params: Additional parameters passed to specific attractors
 
         Returns:
-            GeometryData object containing attractor trajectory
+            Geometry object containing attractor trajectory
         """
         if attractor_type == "lorenz":
             attractor = LorenzAttractor(dt=dt, steps=points, scale=scale, **params)
@@ -49,7 +49,7 @@ class Attractor(BaseShape):
         if scale == 1.0:
             vertices = self._normalize_vertices(vertices)
 
-        return GeometryData.from_lines([vertices])
+        return Geometry.from_lines([vertices])
 
     def _normalize_vertices(self, vertices: np.ndarray) -> np.ndarray:
         """Normalize vertices to fit in unit cube centered at origin."""

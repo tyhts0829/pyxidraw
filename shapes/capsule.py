@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 from numba import njit
 
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 
 from .base import BaseShape
 from .registry import shape
@@ -225,7 +225,7 @@ class Capsule(BaseShape):
 
     def generate(
         self, radius: float = 0.4, height: float = 0.8, segments: int = 32, latitude_segments: int = 16, **params: Any
-    ) -> GeometryData:
+    ) -> Geometry:
         """カプセル形状を生成する。
 
         Args:
@@ -236,7 +236,7 @@ class Capsule(BaseShape):
             **params: 追加パラメータ（無視される）
 
         Returns:
-            GeometryData object containing カプセル線
+            Geometry object containing カプセル線
         """
         # スケーリング係数を計算
         # ユニットカプセルは半径=0.5、高さ=1.0
@@ -249,4 +249,4 @@ class Capsule(BaseShape):
         # numpy配列のリストに変換（互換性のため）
         lines = [scaled_lines_array[i] for i in range(scaled_lines_array.shape[0])]
 
-        return GeometryData.from_lines(lines)
+        return Geometry.from_lines(lines)

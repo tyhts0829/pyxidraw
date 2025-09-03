@@ -5,6 +5,7 @@ CLI コマンド実装
 """
 import json
 import sys
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -21,6 +22,7 @@ class CommandExecutor:
     def __init__(self, args):
         self.args = args
         self.verbose = getattr(args, 'verbose', False)
+        self.logger = logging.getLogger(__name__)
     
     def load_config(self):
         """コマンドライン引数から設定を読み込み"""
@@ -57,7 +59,7 @@ class CommandExecutor:
     def print_verbose(self, message: str):
         """詳細出力"""
         if self.verbose:
-            print(message)
+            self.logger.debug(message)
 
 
 class RunCommand(CommandExecutor):
@@ -76,7 +78,7 @@ class RunCommand(CommandExecutor):
             results = self._run_benchmarks(runner)
             
             if not results:
-                print("No benchmarks were executed")
+                self.logger.warning("No benchmarks were executed")
                 return 1
             
             # 結果の保存
@@ -88,7 +90,7 @@ class RunCommand(CommandExecutor):
             return 0
             
         except Exception as e:
-            print(f"Error running benchmarks: {e}", file=sys.stderr)
+            self.logger.exception("Error running benchmarks: %s", e)
             return 1
     
     def _run_benchmarks(self, runner: UnifiedBenchmarkRunner) -> List[BenchmarkResult]:
@@ -117,7 +119,7 @@ class RunCommand(CommandExecutor):
             results_dict = {result.target_name: result for result in results}
             result_manager = BenchmarkResultManager(str(config.output_dir))
             saved_file = result_manager.save_results(results_dict)
-            print(f"\nResults saved to: {saved_file}")
+            self.logger.info("Results saved to: %s", saved_file)
     
     def _analyze_and_display_results(self, results: List[BenchmarkResult]):
         """結果を分析して表示"""
@@ -134,7 +136,7 @@ class RunCommand(CommandExecutor):
             validation = analysis["validation"]
             self._display_validation(validation)
         except Exception as e:
-            print(f"Error in result analysis: {e}", file=sys.stderr)
+            self.logger.exception("Error in result analysis: %s", e)
             import traceback
             traceback.print_exc()
             raise
@@ -184,7 +186,7 @@ class ListCommand(CommandExecutor):
             return 0
             
         except Exception as e:
-            print(f"Error listing targets: {e}", file=sys.stderr)
+            self.logger.exception("Error listing targets: %s", e)
             return 1
     
     def _display_targets(self, targets: List[str], format_type: str):
@@ -210,7 +212,7 @@ class ValidateCommand(CommandExecutor):
             results_file = self.args.results_file
             
             if not results_file.exists():
-                print(f"Results file not found: {results_file}", file=sys.stderr)
+                self.logger.error("Results file not found: %s", results_file)
                 return 1
             
             # 結果を読み込み
@@ -238,7 +240,7 @@ class ValidateCommand(CommandExecutor):
             return 0 if validation_result.is_valid else 1
             
         except Exception as e:
-            print(f"Error validating results: {e}", file=sys.stderr)
+            self.logger.exception("Error validating results: %s", e)
             return 1
     
     def _display_validation_result(self, result: Dict[str, Any]):
@@ -268,7 +270,7 @@ class ValidateCommand(CommandExecutor):
         with open(report_path, 'w') as f:
             json.dump(report_content, f, indent=2)
         
-        print(f"Validation report saved to: {report_path}")
+        self.logger.info("Validation report saved to: %s", report_path)
 
 
 class CompareCommand(CommandExecutor):
@@ -281,11 +283,11 @@ class CompareCommand(CommandExecutor):
             current_file = self.args.current
             
             if not baseline_file.exists():
-                print(f"Baseline file not found: {baseline_file}", file=sys.stderr)
+                self.logger.error("Baseline file not found: %s", baseline_file)
                 return 1
             
             if not current_file.exists():
-                print(f"Current file not found: {current_file}", file=sys.stderr)
+                self.logger.error("Current file not found: %s", current_file)
                 return 1
             
             # 結果を読み込み
@@ -307,13 +309,13 @@ class CompareCommand(CommandExecutor):
             regressions = [c for c in comparison if c.get('performance_change', 0) < threshold]
             
             if regressions:
-                print(f"\n⚠️  Performance regressions detected: {len(regressions)}")
+                self.logger.warning("⚠️  Performance regressions detected: %d", len(regressions))
                 return 1
             
             return 0
             
         except Exception as e:
-            print(f"Error comparing results: {e}", file=sys.stderr)
+            self.logger.exception("Error comparing results: %s", e)
             return 1
     
     def _display_comparison_result(self, comparison: List[Dict[str, Any]]):
@@ -347,11 +349,11 @@ class ConfigCommand(CommandExecutor):
             elif action == 'show':
                 return self._show_config()
             else:
-                print("No config action specified", file=sys.stderr)
+                self.logger.error("No config action specified")
                 return 1
                 
         except Exception as e:
-            print(f"Error in config command: {e}", file=sys.stderr)
+            self.logger.exception("Error in config command: %s", e)
             return 1
     
     def _create_template(self) -> int:
@@ -364,13 +366,13 @@ class ConfigCommand(CommandExecutor):
         with open(output_file, 'w') as f:
             f.write(template)
         
-        print(f"Configuration template created: {output_file}")
+        self.logger.info("Configuration template created: %s", output_file)
         return 0
     
     def _show_config(self) -> int:
         """現在の設定を表示"""
         config = self.load_config()
-        print("Current configuration:")
+        self.logger.info("Current configuration:")
         print(json.dumps(config.__dict__, indent=2, default=str))
         return 0
 
@@ -388,7 +390,7 @@ COMMAND_MAP = {
 def execute_command(command: str, args) -> int:
     """指定されたコマンドを実行"""
     if command not in COMMAND_MAP:
-        print(f"Unknown command: {command}", file=sys.stderr)
+        logging.getLogger(__name__).error("Unknown command: %s", command)
         return 1
     
     command_class = COMMAND_MAP[command]

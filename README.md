@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ## 基本的な使用方法
 
-### シンプルな例
+### シンプルな例（関数エフェクト + 新パイプライン）
 
 ```python
 import arc
@@ -31,9 +31,9 @@ from util.constants import CANVAS_SIZES
 
 def draw(t, cc):
     # 球体を生成してエフェクトを適用
-    sphere = G.sphere(subdivisions=0.5).size(80, 80, 80).at(100, 100, 0)
-    sphere = E.add(sphere).noise(intensity=0.3).result()
-    return sphere
+    sphere = G.sphere(subdivisions=0.5).scale(80, 80, 80).translate(100, 100, 0)
+    pipeline = E.pipeline.noise(intensity=0.3).build()
+    return pipeline(sphere)
 
 if __name__ == "__main__":
     arc.start()
@@ -44,20 +44,19 @@ if __name__ == "__main__":
 ### 複雑な例（main.py）
 
 ```python
-# カスタムエフェクトの登録（名前省略で関数名が登録名になる）
-@E.register()
-def swirl(g, strength=1.0):
-    """スワール効果 - 各頂点を個別に回転"""
-    # 実装詳細は main.py を参照
+# 関数エフェクトと新パイプライン（詳細は main.py を参照）
 
 # 複数の形状とエフェクトを組み合わせ
 def draw(t, cc):
-    sphere = G.sphere(subdivisions=cc[1]).size(80, 80, 80).at(50, 50, 0)
-    polygon = G.polygon(n_sides=int(cc[3] * 8 + 3)).size(60, 60, 60).at(150, 50, 0)
+    sphere = G.sphere(subdivisions=cc[1]).scale(80, 80, 80).translate(50, 50, 0)
+    polygon = G.polygon(n_sides=int(cc[3] * 8 + 3)).scale(60, 60, 60).translate(150, 50, 0)
     
-    # エフェクトチェーンの適用
-    sphere_with_effects = E.add(sphere).noise(intensity=cc[5] * 0.5).filling(density=cc[6] * 0.8).result()
-    polygon_with_swirl = E.add(polygon).swirl(strength=cc[7] * 2.0).wave(amplitude=cc[8] * 20.0).result()
+    # エフェクトパイプラインの適用
+    sphere_with_effects = (E.pipeline
+                            .noise(intensity=cc[5] * 0.5)
+                            .filling(density=cc[6] * 0.8)
+                            .build())(sphere)
+    polygon_with_swirl = polygon  # 例の簡略化
     
     return sphere_with_effects + polygon_with_swirl
 
@@ -66,10 +65,8 @@ def draw(t, cc):
 `Extrude` は標準のエフェクトチェーンに統合されています。座標配列（coords）とオフセット配列（offsets）に対して動作し、元のライン、押し出し側のライン、両者を結ぶ側面エッジを生成します。
 
 ```python
-shape = G.polygon(n_sides=6).size(80, 80, 80)
-with_extrusion = E.add(shape)\
-    .extrude(distance=0.2, direction=(0, 0, 1), scale=0.4)\
-    .result()
+shape = G.polygon(n_sides=6).scale(80, 80, 80)
+# TODO: extrude は関数化対応予定です
 ```
 パラメータ:
 - direction: 押し出し方向ベクトル（x, y, z）

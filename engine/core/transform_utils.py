@@ -1,13 +1,17 @@
 """
-エンジン層の変換ユーティリティ関数群。
-API層への依存なし、純粋な数学的変換を提供。
+エンジン層の変換ユーティリティ関数群（Geometry 統一版）。
+Geometry のみを受け取り、Geometry を返す純関数。
 """
 
+from __future__ import annotations
+
+from typing import Tuple
+
 import numpy as np
-from .geometry_data import GeometryData
+from .geometry import Geometry
 
 
-def translate(g: GeometryData, dx: float, dy: float, dz: float = 0) -> GeometryData:
+def translate(g: Geometry, dx: float, dy: float, dz: float = 0) -> Geometry:
     """平行移動変換を適用。
     
     Args:
@@ -19,10 +23,10 @@ def translate(g: GeometryData, dx: float, dy: float, dz: float = 0) -> GeometryD
     """
     vec = np.array([dx, dy, dz], dtype=np.float32)
     new_coords = g.coords + vec
-    return GeometryData(new_coords, g.offsets.copy())
+    return Geometry(new_coords, g.offsets.copy())
 
 
-def scale_uniform(g: GeometryData, factor: float, center=(0, 0, 0)) -> GeometryData:
+def scale_uniform(g: Geometry, factor: float, center=(0, 0, 0)) -> Geometry:
     """一様スケーリング変換を適用。
     
     Args:
@@ -36,7 +40,7 @@ def scale_uniform(g: GeometryData, factor: float, center=(0, 0, 0)) -> GeometryD
     return scale(g, factor, factor, factor, center)
 
 
-def scale(g: GeometryData, sx: float, sy: float, sz: float = 1.0, center=(0, 0, 0)) -> GeometryData:
+def scale(g: Geometry, sx: float, sy: float, sz: float = 1.0, center=(0, 0, 0)) -> Geometry:
     """非一様スケーリング変換を適用。
     
     Args:
@@ -57,10 +61,10 @@ def scale(g: GeometryData, sx: float, sy: float, sz: float = 1.0, center=(0, 0, 
     new_coords *= scale_vec
     new_coords += center_vec
     
-    return GeometryData(new_coords, g.offsets.copy())
+    return Geometry(new_coords, g.offsets.copy())
 
 
-def rotate_z(g: GeometryData, angle_rad: float, center=(0, 0, 0)) -> GeometryData:
+def rotate_z(g: Geometry, angle_rad: float, center=(0, 0, 0)) -> Geometry:
     """Z軸周りの回転変換を適用。
     
     Args:
@@ -91,10 +95,10 @@ def rotate_z(g: GeometryData, angle_rad: float, center=(0, 0, 0)) -> GeometryDat
     new_coords[:, 1] += cy
     new_coords[:, 2] += cz
     
-    return GeometryData(new_coords, g.offsets.copy())
+    return Geometry(new_coords, g.offsets.copy())
 
 
-def rotate_x(g: GeometryData, angle_rad: float, center=(0, 0, 0)) -> GeometryData:
+def rotate_x(g: Geometry, angle_rad: float, center=(0, 0, 0)) -> Geometry:
     """X軸周りの回転変換を適用。"""
     c, s = np.cos(angle_rad), np.sin(angle_rad)
     cx, cy, cz = center
@@ -114,10 +118,10 @@ def rotate_x(g: GeometryData, angle_rad: float, center=(0, 0, 0)) -> GeometryDat
     new_coords[:, 1] += cy
     new_coords[:, 2] += cz
     
-    return GeometryData(new_coords, g.offsets.copy())
+    return Geometry(new_coords, g.offsets.copy())
 
 
-def rotate_y(g: GeometryData, angle_rad: float, center=(0, 0, 0)) -> GeometryData:
+def rotate_y(g: Geometry, angle_rad: float, center=(0, 0, 0)) -> Geometry:
     """Y軸周りの回転変換を適用。"""
     c, s = np.cos(angle_rad), np.sin(angle_rad)
     cx, cy, cz = center
@@ -137,10 +141,10 @@ def rotate_y(g: GeometryData, angle_rad: float, center=(0, 0, 0)) -> GeometryDat
     new_coords[:, 1] += cy
     new_coords[:, 2] += cz
     
-    return GeometryData(new_coords, g.offsets.copy())
+    return Geometry(new_coords, g.offsets.copy())
 
 
-def rotate_xyz(g: GeometryData, rx: float, ry: float, rz: float, center=(0, 0, 0)) -> GeometryData:
+def rotate_xyz(g: Geometry, rx: float, ry: float, rz: float, center=(0, 0, 0)) -> Geometry:
     """XYZ軸周りの連続回転変換を適用。
     
     Args:
@@ -151,7 +155,7 @@ def rotate_xyz(g: GeometryData, rx: float, ry: float, rz: float, center=(0, 0, 0
     Returns:
         変換後の新しいGeometryData
     """
-    result = g
+    result: Geometry = g
     if rx != 0:
         result = rotate_x(result, rx, center)
     if ry != 0:
@@ -161,7 +165,12 @@ def rotate_xyz(g: GeometryData, rx: float, ry: float, rz: float, center=(0, 0, 0
     return result
 
 
-def transform_combined(g: GeometryData, center=(0, 0, 0), scale_factors=(1, 1, 1), rotate_angles=(0, 0, 0)) -> GeometryData:
+def transform_combined(
+    g: Geometry,
+    center=(0, 0, 0),
+    scale_factors=(1, 1, 1),
+    rotate_angles=(0, 0, 0),
+) -> Geometry:
     """複合変換：スケール → 回転 → 移動を順次適用。
     
     Args:
@@ -173,7 +182,7 @@ def transform_combined(g: GeometryData, center=(0, 0, 0), scale_factors=(1, 1, 1
     Returns:
         変換後の新しいGeometryData
     """
-    result = g
+    result: Geometry = g
     
     # 1. スケール変換（原点中心）
     sx, sy, sz = scale_factors
@@ -189,5 +198,5 @@ def transform_combined(g: GeometryData, center=(0, 0, 0), scale_factors=(1, 1, 1
     cx, cy, cz = center
     if cx != 0 or cy != 0 or cz != 0:
         result = translate(result, cx, cy, cz)
-    
+
     return result

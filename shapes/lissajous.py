@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 
 from .base import BaseShape
 from .registry import shape
@@ -28,7 +28,7 @@ class Lissajous(BaseShape):
         phase_z: float = 0.0,
         points: int = 1000,
         **params: Any,
-    ) -> GeometryData:
+    ) -> Geometry:
         """Generate a 2D/3D Lissajous curve.
 
         Args:
@@ -42,7 +42,7 @@ class Lissajous(BaseShape):
             **params: Additional parameters (ignored)
 
         Returns:
-            GeometryData object containing the curve vertices as a single polyline
+            Geometry object containing the curve vertices as a single polyline
         """
         # Sample parameter over one full cycle
         t = np.linspace(0, 2 * np.pi, points)
@@ -60,4 +60,4 @@ class Lissajous(BaseShape):
 
         vertices = np.stack([x, y, z], axis=1).astype(np.float32)
 
-        return GeometryData.from_lines([vertices])
+        return Geometry.from_lines([vertices])

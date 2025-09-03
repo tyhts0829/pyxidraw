@@ -17,8 +17,8 @@ def _get_cached_module(module_name: str, function_name: Optional[str] = None):
     cache_key = f"{module_name}.{function_name}" if function_name else module_name
     
     if cache_key not in _cached_modules:
-        if module_name == "api.effect_chain":
-            from api.effect_chain import E
+        if module_name == "api.pipeline":
+            from api.pipeline import E
             if function_name:
                 _cached_modules[cache_key] = getattr(E, function_name)
             else:
@@ -39,13 +39,13 @@ def init_worker():
     """ProcessPoolExecutorのワーカー初期化時に呼ばれる関数"""
     # よく使われるモジュールを事前にインポート
     try:
-        from api.effect_chain import E
+        from api.pipeline import E
         from api.shape_factory import G
-        _cached_modules['api.effect_chain'] = E
+        _cached_modules['api.pipeline'] = E
         _cached_modules['api.shape_factory'] = G
         
         # エフェクトメソッドもキャッシュ（Eはメソッドチェーン形式）
-        _cached_modules['api.effect_chain.E'] = E
+        _cached_modules['api.pipeline.E'] = E
         
         for func_name in ['polygon', 'grid', 'sphere', 'cylinder', 'cone', 'torus']:
             _cached_modules[f'api.shape_factory.{func_name}'] = getattr(G, func_name)
@@ -76,34 +76,27 @@ class SerializableEffectTarget:
             rotate = self.params.get("rotate", (0, 0, 0))
             return geom.rotate(rotate[0], rotate[1], rotate[2])
         elif self.effect_type == "noise":
-            E = _get_cached_module("api.effect_chain")
+            E = _get_cached_module("api.pipeline")
             intensity = self.params.get("intensity", 0.5)
             frequency = self.params.get("frequency", 1.0)
-            return E.add(geom).noise(intensity=intensity, frequency=frequency).result()
-        elif self.effect_type == "subdivision":
-            E = _get_cached_module("api.effect_chain")
-            level = self.params.get("level", 1)
-            return E.add(geom).subdivision(n_divisions=level).result()
-        elif self.effect_type == "extrude":
-            E = _get_cached_module("api.effect_chain")
-            distance = self.params.get("depth", 10.0)
-            return E.add(geom).extrude(distance=distance).result()
+            pipeline = E.pipeline.noise(intensity=intensity, frequency=frequency).build()
+            return pipeline(geom)
         elif self.effect_type == "filling":
-            E = _get_cached_module("api.effect_chain")
-            density = self.params.get("spacing", 10.0) / 20.0  # spacing to density conversion
+            E = _get_cached_module("api.pipeline")
+            density = self.params.get("spacing", 10.0) / 20.0  # spacing → density 変換の暫定
             angle = self.params.get("angle", 0.0)
-            return E.add(geom).filling(density=density, angle=angle).result()
-        elif self.effect_type == "buffer":
-            E = _get_cached_module("api.effect_chain")
-            distance = self.params.get("distance", 5.0) / 10.0  # normalize to 0.0-1.0
-            return E.add(geom).buffer(distance=distance).result()
+            pipeline = E.pipeline.filling(density=density, angle=angle).build()
+            return pipeline(geom)
         elif self.effect_type == "array":
-            E = _get_cached_module("api.effect_chain")
+            E = _get_cached_module("api.pipeline")
             count_total = self.params.get("count_x", 2) * self.params.get("count_y", 2)
             n_duplicates = min(count_total / 10.0, 1.0)  # normalize to 0.0-1.0
             spacing_x = self.params.get("spacing_x", 10.0)
             spacing_y = self.params.get("spacing_y", 10.0)
-            return E.add(geom).array(n_duplicates=n_duplicates, offset=(spacing_x, spacing_y, 0)).result()
+            pipeline = E.pipeline.array(n_duplicates=n_duplicates, offset=(spacing_x, spacing_y, 0)).build()
+            return pipeline(geom)
+        elif self.effect_type in {"subdivision", "extrude", "buffer"}:
+            raise NotImplementedError(f"Effect '{self.effect_type}' is not available in the new architecture yet.")
         else:
             raise ValueError(f"Unknown effect type: {self.effect_type}")
 

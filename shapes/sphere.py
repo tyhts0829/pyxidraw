@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 
 from .base import BaseShape
 from .registry import shape
@@ -289,7 +289,7 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 class Sphere(BaseShape):
     """Sphere shape generator with multiple drawing styles."""
 
-    def generate(self, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any) -> "GeometryData":
+    def generate(self, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any) -> Geometry:
         """Generate a sphere with radius 1.
 
         Args:
@@ -303,7 +303,7 @@ class Sphere(BaseShape):
             **params: Additional parameters (ignored)
 
         Returns:
-            GeometryData object containing sphere geometry
+            Geometry object containing sphere geometry
         """
         MIN_SUBDIVISIONS = 0
         MAX_SUBDIVISIONS = 5
@@ -325,4 +325,4 @@ class Sphere(BaseShape):
         else:
             vertices_list = _sphere_latlon(subdivisions_int)
 
-        return GeometryData.from_lines(vertices_list)
+        return Geometry.from_lines(vertices_list)

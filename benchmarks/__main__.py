@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from benchmarks.cli.commands import execute_command
+from common.logging import setup_default_logging
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -113,6 +114,7 @@ def main() -> int:
     """メイン関数"""
     parser = create_parser()
     args = parser.parse_args()
+    setup_default_logging("DEBUG" if getattr(args, "verbose", False) else "INFO")
     
     if not args.command:
         parser.print_help()

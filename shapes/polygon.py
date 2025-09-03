@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 from .registry import shape
 from .base import BaseShape
 
@@ -37,7 +37,7 @@ def _polygon_cached(n_sides: int) -> np.ndarray:
 class Polygon(BaseShape):
     """Regular polygon shape generator."""
     
-    def generate(self, n_sides: int | float = 3, **params: Any) -> "GeometryData":
+    def generate(self, n_sides: int | float = 3, **params: Any) -> Geometry:
         """Generate a regular polygon inscribed in a circle of diameter 1.
         
         Args:
@@ -45,7 +45,7 @@ class Polygon(BaseShape):
             **params: Additional parameters (ignored)
             
         Returns:
-            GeometryData object containing the polygon vertices
+            Geometry object containing the polygon vertices
         """
         MIN_SIDES = 3
         MAX_SIDES = 100 - MIN_SIDES
@@ -60,7 +60,7 @@ class Polygon(BaseShape):
         # Use cached generation
         vertices = _polygon_cached(n_sides)
         
-        return GeometryData.from_lines([vertices])
+        return Geometry.from_lines([vertices])
     
     @staticmethod
     def _nonlinear_map_exp(value: float, N: int, a: float = 100.0) -> int:

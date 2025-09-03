@@ -4,7 +4,7 @@ effects/ と対称性を保った @shape デコレータの実装。
 
 改善点:
 - 名前省略可: `@shape` や `@shape()` でクラス名から自動推論（例: `Sphere` -> `sphere`）。
-- エイリアス対応: `@shape("new", aliases=["old"])` で移行しやすく。
+  エイリアスはサポートしません（明示名のみ）。
 """
 
 from typing import Dict, Type, Callable, Any

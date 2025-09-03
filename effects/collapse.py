@@ -5,8 +5,8 @@ from typing import Any
 import numpy as np
 from numba import njit
 
-from .base import BaseEffect
 from .registry import effect
+from engine.core.geometry import Geometry
 
 
 @njit(fastmath=True, cache=True)
@@ -127,41 +127,18 @@ def _apply_collapse_to_coords(
     return combined_coords, combined_offsets
 
 
-@effect
-class Collapse(BaseEffect):
-    """線分を細分化してノイズで変形するエフェクト。"""
-
-    def apply(
-        self,
-        coords: np.ndarray,
-        offsets: np.ndarray,
-        intensity: float = 0.5,
-        subdivisions: float = 0.5,
-        **params: Any
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """崩壊エフェクトを適用します。
-
-        線分を細分化し、始点-終点方向と直交する方向にノイズを加えて変形します。
-
-        Args:
-            coords: 入力座標配列
-            offsets: 入力オフセット配列
-            intensity: ノイズの強さ (デフォルト 0.5)
-            subdivisions: 細分化の度合い (デフォルト 0.5)
-            **params: 追加パラメータ
-
-        Returns:
-            (collapsed_coords, collapsed_offsets): 変形された座標配列とオフセット配列
-        """
-        # エッジケース: 空の座標配列
-        if len(coords) == 0:
-            return coords.copy(), offsets.copy()
-        
-        # intensity または subdivisions が0の場合は早期リターン
-        if intensity == 0.0 or subdivisions == 0.0:
-            return coords.copy(), offsets.copy()
-        
-        # subdivisionsを整数に変換（最大10分割）
-        divisions = max(1, int(subdivisions * 10))
-        
-        return _apply_collapse_to_coords(coords, offsets, intensity, divisions)
+@effect()
+def collapse(
+    g: Geometry,
+    *,
+    intensity: float = 0.5,
+    subdivisions: float = 0.5,
+    **_params: Any,
+) -> Geometry:
+    """線分を細分化してノイズで変形（純関数）。"""
+    coords, offsets = g.as_arrays(copy=False)
+    if len(coords) == 0 or intensity == 0.0 or subdivisions == 0.0:
+        return Geometry(coords.copy(), offsets.copy())
+    divisions = max(1, int(subdivisions * 10))
+    new_coords, new_offsets = _apply_collapse_to_coords(coords, offsets, float(intensity), divisions)
+    return Geometry(new_coords, new_offsets)

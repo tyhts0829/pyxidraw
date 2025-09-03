@@ -1,46 +1,34 @@
-# @effectデコレータ（仕様書準拠）
-from .array import Array
-from .base import BaseEffect
-from .boldify import Boldify
-from .buffer import Buffer
-from .collapse import Collapse
-from .dashify import Dashify
-from .extrude import Extrude
-from .filling import Filling
-from .noise import Noise
-from .pipeline import EffectPipeline
+"""
+effects パッケージ（関数ベース）
+
+このモジュールの import 副作用で関数エフェクトを登録します。
+"""
+
 from .registry import effect, get_effect, list_effects
-from .rotation import Rotation
-from .scaling import Scaling
-from .subdivision import Subdivision
-from .transform import Transform
-from .translation import Translation
-from .trimming import Trimming
-from .webify import Webify
-from .wobble import Wobble
+
+# 関数エフェクトを登録（必要最小限）
+from . import translation  # noqa: F401
+from . import rotation  # noqa: F401
+from . import scaling  # noqa: F401
+from . import noise  # noqa: F401
+from . import filling  # noqa: F401
+from . import array  # noqa: F401
+from . import subdivision  # noqa: F401
+from . import buffer  # noqa: F401
+from . import transform  # noqa: F401
+from . import extrude  # noqa: F401
+from . import boldify  # noqa: F401
+from . import collapse  # noqa: F401
+from . import dashify  # noqa: F401
+from . import wave  # noqa: F401
+from . import wobble  # noqa: F401
+from . import explode  # noqa: F401
+from . import twist  # noqa: F401
+from . import trimming  # noqa: F401
+from . import webify  # noqa: F401
 
 __all__ = [
-    # デコレータ
     "effect",
     "get_effect",
     "list_effects",
-    # エフェクトクラス
-    "BaseEffect",
-    "EffectPipeline",
-    "Boldify",
-    "Rotation",
-    "Scaling",
-    "Translation",
-    "Dashify",
-    "Noise",
-    "Subdivision",
-    "Wobble",
-    "Array",
-    "Extrude",
-    "Filling",
-    "Trimming",
-    "Webify",
-    "Collapse",
-    "Transform",
-    "Buffer",
 ]

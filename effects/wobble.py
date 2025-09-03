@@ -6,8 +6,8 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 
-from .base import BaseEffect
 from .registry import effect
+from common.param_utils import ensure_vec3
 
 
 def _wobble_vertices(
@@ -33,82 +33,33 @@ def _wobble_vertices(
     return new_vertices_list
 
 
-@effect
-class Wobble(BaseEffect):
-    """線にウォブル/波の歪みを追加します。
+@effect()
+def wobble(
+    g: Geometry,
+    *,
+    amplitude: float = 1.0,
+    frequency: float | tuple[float, float, float] = (0.1, 0.1, 0.1),
+    phase: float = 0.0,
+    **_params: Any,
+) -> Geometry:
+    """線にウォブル/波の歪みを追加（純関数）。"""
+    coords, offsets = g.as_arrays(copy=False)
 
-    各頂点の座標値に基づいてサイン波による変位を加えます。
-    """
+    # frequency をタプルに正規化（係数スケーリングは廃止）
+    if isinstance(frequency, (int, float)):
+        f = float(frequency)
+        freq_tuple = (f, f, f)
+    elif isinstance(frequency, (list, tuple)):
+        fx, fy, fz = ensure_vec3(tuple(float(x) for x in frequency))
+        freq_tuple = (fx, fy, fz)
+    else:
+        freq_tuple = (0.1, 0.1, 0.1)
 
-    AMPLITUDE_COEF = 5
-    FREQUENCY_COEF = 0.05
-    PHASE_COEF = 5
+    if len(coords) == 0:
+        return Geometry(coords.copy(), offsets.copy())
 
-    def apply(
-        self,
-        coords: np.ndarray,
-        offsets: np.ndarray,
-        amplitude: float = 1.0,
-        frequency: float | tuple[float, float, float] = (0.1, 0.1, 0.1),
-        phase: float = 0.0,
-        **params: Any,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """ウォブルエフェクトを適用します。
-
-        Args:
-            coords: 入力座標配列
-            offsets: 入力オフセット配列
-            amplitude: ゆらぎの大きさ
-            frequency: 各軸 (x, y, z) に対する周波数。
-                      float の場合は全軸に同じ値を使用。
-                      tuple の場合は各軸に個別の周波数を指定。
-            phase: 位相オフセット（全体に同じオフセットを付与）
-            **params: 追加パラメータ（無視される）
-
-        Returns:
-            (wobbled_coords, offsets): ウォブルが適用された座標配列とオフセット配列
-        """
-        # frequency を tuple に変換
-        freq_tuple: tuple[float, float, float]
-        if isinstance(frequency, (int, float)):
-            frequency = self.FREQUENCY_COEF * frequency
-            freq_tuple = (float(frequency), float(frequency), float(frequency))
-        elif isinstance(frequency, (list, tuple)):
-            if len(frequency) == 3:
-                freq_tuple = (
-                    float(frequency[0]) * self.FREQUENCY_COEF,
-                    float(frequency[1]) * self.FREQUENCY_COEF,
-                    float(frequency[2]) * self.FREQUENCY_COEF,
-                )
-            else:
-                # 不正な長さの場合はデフォルト値を使用
-                df = 0.5 * self.FREQUENCY_COEF
-                freq_tuple = (df, df, df)
-        else:
-            df = 0.5 * self.FREQUENCY_COEF
-            freq_tuple = (df, df, df)
-
-        # エッジケース: 空の座標配列
-        if len(coords) == 0:
-            return coords.copy(), offsets.copy()
-
-        # 座標配列をGeometryに変換してから頂点リストに変換
-        geometry = Geometry(coords, offsets)
-        vertices_list = []
-        for i in range(len(geometry.offsets) - 1):
-            start_idx = geometry.offsets[i]
-            end_idx = geometry.offsets[i + 1]
-            line = geometry.coords[start_idx:end_idx]
-            vertices_list.append(line)
-
-        # wobble 関数を呼び出し
-        wobbled_vertices = _wobble_vertices(
-            vertices_list, float(amplitude * self.AMPLITUDE_COEF), freq_tuple, float(phase * self.PHASE_COEF)
-        )
-
-        # 結果をGeometryに変換してから座標とオフセットに戻す
-        if not wobbled_vertices:
-            return coords.copy(), offsets.copy()
-        
-        result_geometry = Geometry.from_lines(wobbled_vertices)
-        return result_geometry.coords, result_geometry.offsets
+    vertices_list = [coords[offsets[i] : offsets[i + 1]] for i in range(len(offsets) - 1)]
+    wobbled_vertices = _wobble_vertices(vertices_list, float(amplitude), freq_tuple, float(phase))
+    if not wobbled_vertices:
+        return Geometry(coords.copy(), offsets.copy())
+    return Geometry.from_lines(wobbled_vertices)

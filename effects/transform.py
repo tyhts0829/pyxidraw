@@ -6,8 +6,8 @@ from typing import Any
 import numpy as np
 from numba import njit
 
-from .base import BaseEffect
 from .registry import effect
+from engine.core.geometry import Geometry
 
 
 @njit(fastmath=True, cache=True)
@@ -42,54 +42,31 @@ def _apply_combined_transform(
     return transformed
 
 
-@effect
-class Transform(BaseEffect):
-    """任意の変換行列を適用します。"""
+@effect()
+def transform(
+    g: Geometry,
+    *,
+    center: tuple[float, float, float] = (0, 0, 0),
+    scale: tuple[float, float, float] = (1, 1, 1),
+    rotate: tuple[float, float, float] = (0, 0, 0),
+    **_params: Any,
+) -> Geometry:
+    """任意の変換（スケール→回転→移動）を適用する純関数エフェクト。"""
+    coords, offsets = g.as_arrays(copy=False)
 
-    TAU = math.tau  # 全回転角度（2 * pi）
+    if len(coords) == 0:
+        return Geometry(coords.copy(), offsets.copy())
 
-    def apply(
-        self,
-        coords: np.ndarray,
-        offsets: np.ndarray,
-        center: tuple[float, float, float] = (0, 0, 0),
-        scale: tuple[float, float, float] = (1, 1, 1),
-        rotate: tuple[float, float, float] = (0, 0, 0),
-        **params: Any,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """変換エフェクトを適用します。
+    if (center == (0, 0, 0) and scale == (1, 1, 1) and abs(rotate[0]) < 1e-10 and abs(rotate[1]) < 1e-10 and abs(rotate[2]) < 1e-10):
+        return Geometry(coords.copy(), offsets.copy())
 
-        Args:
-            coords: 入力座標配列
-            offsets: 入力オフセット配列
-            center: 変換の中心点 (x, y, z)
-            scale: スケール係数 (x, y, z)
-            rotate: 回転角度（ラジアン） (x, y, z) 入力は0.0-1.0の範囲を想定。内部でmath.tauを掛けてラジアンに変換される。
-            **params: 追加パラメータ（無視される）
+    center_np = np.array(center, dtype=np.float32)
+    scale_np = np.array(scale, dtype=np.float32)
+    rotate_radians = np.array([
+        rotate[0] * math.tau,
+        rotate[1] * math.tau,
+        rotate[2] * math.tau,
+    ], dtype=np.float32)
 
-        Returns:
-            (transformed_coords, offsets): 変換された座標配列とオフセット配列
-        """
-
-        # エッジケース: 空の座標配列
-        if len(coords) == 0:
-            return coords.copy(), offsets.copy()
-
-        # エッジケース: 変換がない場合
-        if (center == (0, 0, 0) and scale == (1, 1, 1) and 
-            abs(rotate[0]) < 1e-10 and abs(rotate[1]) < 1e-10 and abs(rotate[2]) < 1e-10):
-            return coords.copy(), offsets.copy()
-
-        # NumPy配列に変換
-        center_np = np.array(center, dtype=np.float32)
-        scale_np = np.array(scale, dtype=np.float32)
-        rotate_radians = np.array([
-            rotate[0] * self.TAU,
-            rotate[1] * self.TAU,
-            rotate[2] * self.TAU,
-        ], dtype=np.float32)
-
-        # 全頂点に組み合わせ変換を一度に適用
-        transformed_coords = _apply_combined_transform(coords, center_np, scale_np, rotate_radians)
-        
-        return transformed_coords, offsets.copy()
+    transformed_coords = _apply_combined_transform(coords, center_np, scale_np, rotate_radians)
+    return Geometry(transformed_coords, offsets.copy())

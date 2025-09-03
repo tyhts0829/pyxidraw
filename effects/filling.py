@@ -6,85 +6,17 @@ import numpy as np
 from numba import njit
 
 from util.geometry import transform_back, transform_to_xy_plane
+from common.param_utils import norm_to_int
 
-from .base import BaseEffect
 from .registry import effect
+from engine.core.geometry import Geometry
 
 
-@effect
-class Filling(BaseEffect):
-    """閉じた形状をハッチングパターンで塗りつぶします。"""
+# 塗りつぶし線の最大密度（density=1.0のときの線間隔の係数）
+MAX_FILL_LINES = 100  # density=1.0のときに最大100本の線を生成
 
-    # 塗りつぶし線の最大密度（density=1.0のときの線間隔の係数）
-    MAX_FILL_LINES = 100  # density=1.0のときに最大100本の線を生成
 
-    def apply(
-        self, 
-        coords: np.ndarray, 
-        offsets: np.ndarray,
-        pattern: str = "lines",
-        density: float = 0.5,
-        angle: float = 0.0,
-        **params: Any
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """塗りつぶしエフェクトを適用します。
-
-        Args:
-            coords: 入力座標配列
-            offsets: 入力オフセット配列（閉じた形状を形成する必要がある）
-            pattern: 塗りつぶしパターン ("lines", "cross", "dots") - デフォルト "lines"
-            density: 塗りつぶし密度 (0.0-1.0) - デフォルト 0.5
-            angle: パターンの角度（ラジアン） - デフォルト 0.0
-            **params: 追加パラメータ
-
-        Returns:
-            (new_coords, new_offsets): 元の形状と塗りつぶし線を含む座標配列とオフセット配列
-        """
-
-        if density <= 0:
-            return coords.copy(), offsets.copy()
-
-        filled_results = []
-        
-        # 既存の線を追加
-        for i in range(len(offsets) - 1):
-            vertices = coords[offsets[i]:offsets[i+1]]
-            if len(vertices) < 3:
-                filled_results.append(vertices)
-                continue
-
-            # 元の形状を追加
-            filled_results.append(vertices)
-
-            # 塗りつぶし線を生成
-            if pattern == "lines":
-                fill_lines = self._generate_line_fill(vertices, density, angle)
-            elif pattern == "cross":
-                fill_lines = self._generate_cross_fill(vertices, density, angle)
-            elif pattern == "dots":
-                fill_lines = self._generate_dot_fill(vertices, density)
-            else:
-                fill_lines = self._generate_line_fill(vertices, density, angle)
-
-            filled_results.extend(fill_lines)
-
-        # 結果を純粋なnumpy配列として構築
-        if not filled_results:
-            return coords.copy(), offsets.copy()
-        
-        # 全線を連結
-        all_coords = np.vstack(filled_results)
-        
-        # 新しいオフセット配列を構築
-        new_offsets = [0]
-        current_offset = 0
-        for line in filled_results:
-            current_offset += len(line)
-            new_offsets.append(current_offset)
-        
-        return all_coords, np.array(new_offsets, dtype=np.int32)
-
-    def _generate_line_fill(self, vertices: np.ndarray, density: float, angle: float = 0.0) -> list[np.ndarray]:
+def _generate_line_fill(vertices: np.ndarray, density: float, angle: float = 0.0) -> list[np.ndarray]:
         """平行線塗りつぶしパターンを生成します。"""
         # Transform to XY plane for easier processing
         vertices_2d, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
@@ -112,7 +44,7 @@ class Filling(BaseEffect):
         # Calculate spacing: smaller spacing = more lines
         # At density=1.0, we want MAX_FILL_LINES lines in the bounding box
         # At density=0.1, we want fewer lines
-        num_lines = max(2, int(self.MAX_FILL_LINES * density))
+        num_lines = max(2, norm_to_int(float(density), 0, MAX_FILL_LINES))
         spacing = (max_y - min_y) / num_lines
         if spacing <= 0:
             return []
@@ -149,13 +81,13 @@ class Filling(BaseEffect):
 
         return fill_lines
 
-    def _generate_cross_fill(self, vertices: np.ndarray, density: float, angle: float = 0.0) -> list[np.ndarray]:
+def _generate_cross_fill(vertices: np.ndarray, density: float, angle: float = 0.0) -> list[np.ndarray]:
         """クロスハッチ塗りつぶしパターンを生成します。"""
-        lines1 = self._generate_line_fill(vertices, density, angle)
-        lines2 = self._generate_line_fill(vertices, density, angle + np.pi / 2)
+        lines1 = _generate_line_fill(vertices, density, angle)
+        lines2 = _generate_line_fill(vertices, density, angle + np.pi / 2)
         return lines1 + lines2
 
-    def _generate_dot_fill(self, vertices: np.ndarray, density: float) -> list[np.ndarray]:
+def _generate_dot_fill(vertices: np.ndarray, density: float) -> list[np.ndarray]:
         """ドット塗りつぶしパターンを生成します。"""
         # Transform to XY plane
         vertices_2d, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
@@ -172,7 +104,7 @@ class Filling(BaseEffect):
         # Calculate spacing for dot grid
         # At density=1.0, we want many dots (MAX_FILL_LINES x MAX_FILL_LINES grid)
         # At density=0.1, we want fewer dots
-        grid_size = max(2, int(self.MAX_FILL_LINES * density))
+        grid_size = max(2, norm_to_int(float(density), 0, MAX_FILL_LINES))
         spacing = min(max_x - min_x, max_y - min_y) / grid_size
         if spacing <= 0:
             return []
@@ -193,16 +125,60 @@ class Filling(BaseEffect):
 
         return dots
 
-    def _find_line_intersections(self, polygon: np.ndarray, y: float) -> list[float]:
-        """水平線とポリゴンエッジの交点を検索します。"""
-        intersections_array = find_line_intersections_njit(polygon, y)
-        # Convert back to list and remove invalid values (-1)
-        return [x for x in intersections_array if x != -1]
+def _find_line_intersections(polygon: np.ndarray, y: float) -> list[float]:
+    """水平線とポリゴンエッジの交点を検索します。"""
+    intersections_array = find_line_intersections_njit(polygon, y)
+    # Convert back to list and remove invalid values (-1)
+    return [x for x in intersections_array if x != -1]
 
-    def _point_in_polygon(self, polygon: np.ndarray, point: list[float]) -> bool:
-        """レイキャスティングアルゴリズムを使用して点がポリゴン内部にあるかをチェックします。"""
-        x, y = point
-        return point_in_polygon_njit(polygon, x, y)
+def _point_in_polygon(polygon: np.ndarray, point: list[float]) -> bool:
+    """レイキャスティングアルゴリズムを使用して点がポリゴン内部にあるかをチェックします。"""
+    x, y = point
+    return point_in_polygon_njit(polygon, x, y)
+
+
+@effect()
+def filling(
+    g: Geometry,
+    *,
+    pattern: str = "lines",
+    density: float = 0.5,
+    angle: float = 0.0,
+    **_params: Any,
+) -> Geometry:
+    """閉じた形状をハッチング/ドットで塗りつぶし（純関数）。"""
+    coords, offsets = g.as_arrays(copy=False)
+    if density <= 0 or offsets.size <= 1:
+        return Geometry(coords.copy(), offsets.copy())
+
+    filled_results: list[np.ndarray] = []
+
+    for i in range(len(offsets) - 1):
+        vertices = coords[offsets[i] : offsets[i + 1]]
+        if len(vertices) < 3:
+            filled_results.append(vertices)
+            continue
+
+        filled_results.append(vertices)
+
+        if pattern == "lines":
+            fill_lines = _generate_line_fill(vertices, density, angle)
+        elif pattern == "cross":
+            fill_lines = _generate_cross_fill(vertices, density, angle)
+        elif pattern == "dots":
+            fill_lines = _generate_dot_fill(vertices, density)
+        else:
+            fill_lines = _generate_line_fill(vertices, density, angle)
+
+        filled_results.extend(fill_lines)
+
+    if not filled_results:
+        return Geometry(coords.copy(), offsets.copy())
+
+    return Geometry.from_lines(filled_results)
+
+
+# 後方互換クラスは廃止（関数APIのみ）
 
 
 # Numba-compiled functions for performance

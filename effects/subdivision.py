@@ -6,48 +6,29 @@ import numpy as np
 from numba import njit
 
 from engine.core.geometry import Geometry
-
-from .base import BaseEffect
+from common.param_utils import norm_to_int
 from .registry import effect
 
 
-@effect
-class Subdivision(BaseEffect):
-    """中間点を追加して線を細分化します。"""
+@effect()
+def subdivision(g: Geometry, *, subdivisions: float = 0.5, **_params: Any) -> Geometry:
+    """中間点を追加して線を細分化（純関数）。"""
+    coords, offsets = g.as_arrays(copy=False)
+    if subdivisions <= 0.0:
+        return Geometry(coords.copy(), offsets.copy())
 
-    MAX_DIVISIONS = 10  # 最大分割回数
+    MAX_DIVISIONS = 10
+    divisions = norm_to_int(float(subdivisions), 0, MAX_DIVISIONS)
+    if divisions <= 0:
+        return Geometry(coords.copy(), offsets.copy())
 
-    def apply(self, coords: np.ndarray, offsets: np.ndarray, subdivisions: float = 0.5, **_params: Any) -> tuple[np.ndarray, np.ndarray]:
-        """細分化エフェクトを適用します。
+    result = []
+    for i in range(len(offsets) - 1):
+        vertices = coords[offsets[i] : offsets[i + 1]]
+        subdivided = _subdivide_core(vertices, divisions)
+        result.append(subdivided)
 
-        Args:
-            coords: 入力座標配列
-            offsets: 入力オフセット配列
-            subdivisions: 細分化レベル (0.0 = 変化なし, 1.0 = 最大分割) - デフォルト 0.5
-            **_params: 追加パラメータ（無視される）
-
-        Returns:
-            (new_coords, new_offsets): 細分化された座標配列とオフセット配列
-        """
-        if subdivisions <= 0.0:
-            return coords.copy(), offsets.copy()
-
-        # Convert 0.0-1.0 to 0-MAX_DIVISIONS
-        divisions = int(subdivisions * self.MAX_DIVISIONS)
-        if divisions <= 0:
-            return coords.copy(), offsets.copy()
-
-        # 既存の線を取得し、細分化を適用
-        result = []
-        
-        for i in range(len(offsets) - 1):
-            vertices = coords[offsets[i]:offsets[i+1]]
-            subdivided = _subdivide_core(vertices, divisions)
-            result.append(subdivided)
-
-        # 結果をGeometryに変換してから配列を取得
-        result_geometry = Geometry.from_lines(result)
-        return result_geometry.coords, result_geometry.offsets
+    return Geometry.from_lines(result)
 
 
 @njit(fastmath=True, cache=True)

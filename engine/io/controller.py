@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -107,8 +108,9 @@ class MidiController:
 
     @staticmethod
     def handle_invalid_port_name(port_name: str) -> None:
-        print(f"Invalid port name: {port_name}")
-        print("Available ports are:", mido.get_input_names())  # type: ignore
+        logger = logging.getLogger(__name__)
+        logger.error("Invalid port name: %s", port_name)
+        logger.info("Available ports are: %s", mido.get_input_names())  # type: ignore
         exit(1)
 
     def process_midi_message(self, msg: mido.Message) -> Optional[dict]:
@@ -169,9 +171,10 @@ class MidiController:
 
     @staticmethod
     def show_available_ports() -> None:
-        print("Available ports:")
-        print("  input: ", mido.get_input_names())  # type: ignore
-        print("  output: ", mido.get_output_names())  # type: ignore
+        logger = logging.getLogger(__name__)
+        logger.info("Available ports:")
+        logger.info("  input: %s", mido.get_input_names())  # type: ignore
+        logger.info("  output: %s", mido.get_output_names())  # type: ignore
 
     def iter_pending(self) -> mido.Message:
         """MIDIメッセージをイテレータとして返す。"""

@@ -16,7 +16,8 @@ from __future__ import annotations
 import math
 from typing import Mapping
 
-from api import E, G, GeometryAPI
+from api import E, G
+from engine.core.geometry import Geometry
 from api.runner import run_sketch
 from util.constants import CANVAS_SIZES
 
@@ -39,7 +40,7 @@ def _grid_layout(n_items: int, canvas_w: float, canvas_h: float) -> tuple[int, i
     return cols, rows, cell_w, cell_h, cell_size
 
 
-def draw(t: float, cc: Mapping[int, float]) -> GeometryAPI:
+def draw(t: float, cc: Mapping[int, float]) -> Geometry:
     # Canvas setup
     canvas_w, canvas_h = CANVAS_SIZES["SQUARE_300"]
 
@@ -55,7 +56,7 @@ def draw(t: float, cc: Mapping[int, float]) -> GeometryAPI:
 
     cols, rows, cell_w, cell_h, cell_size = _grid_layout(len(shape_names), canvas_w, canvas_h)
 
-    combined: GeometryAPI | None = None
+    combined: Geometry | None = None
     for idx, name in enumerate(shape_names):
         # Cell center
         col = idx % cols
@@ -70,10 +71,14 @@ def draw(t: float, cc: Mapping[int, float]) -> GeometryAPI:
             # Skip unexposed shapes
             continue
 
-        g = shape_fn().size(cell_size, cell_size, cell_size).at(cx, cy, 0)
+        g = shape_fn().scale(cell_size, cell_size, cell_size).translate(cx, cy, 0)
 
         # Rotate around each shape's own center using effect (0..1 → tau)
-        rotated = E.add(g).rotation(center=(cx, cy, 0), rotate=(rx, ry, rz)).result()
+        rotated = (
+            E.pipeline
+            .rotation(center=(cx, cy, 0), rotate=(rx, ry, rz))
+            .build()
+        )(g)
 
         combined = rotated if combined is None else (combined + rotated)
 
@@ -84,6 +89,6 @@ if __name__ == "__main__":
     run_sketch(
         draw,
         canvas_size=CANVAS_SIZES["SQUARE_300"],
-        render_scale=4,
+        render_scale=6,
         background=(1, 1, 1, 1),
     )

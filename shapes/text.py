@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 from typing import Any
 
 import numpy as np
@@ -9,10 +10,12 @@ from fontTools.pens.recordingPen import RecordingPen
 from fontTools.ttLib import TTFont
 from numba import njit
 
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 
 from .base import BaseShape
 from .registry import shape
+
+logger = logging.getLogger(__name__)
 
 
 @njit(fastmath=True, cache=True)
@@ -181,7 +184,7 @@ class TextRenderer:
                 return cls._fonts[cache_key]
 
             # Default to system font
-            print(f"Font '{font_name}' not found, using default font")
+            logger.warning("Font '%s' not found, using default font", font_name)
             default_font = Path("/System/Library/Fonts/Helvetica.ttc")
             cls._fonts[cache_key] = TTFont(default_font, fontNumber=0)
 
@@ -208,14 +211,14 @@ class TextRenderer:
                     # Try with glyph name directly
                     glyph_name = char
                 else:
-                    print(f"Character '{char}' (U+{ord(char):04X}) not found in font '{font_name}'.")
+                    logger.warning("Character '%s' (U+%04X) not found in font '%s'.", char, ord(char), font_name)
                     cls._glyph_cache[cache_key] = tuple()
                     return cls._glyph_cache[cache_key]
 
             glyph_set = tt_font.getGlyphSet()
             glyph = glyph_set.get(glyph_name)
             if glyph is None:
-                print(f"Glyph '{glyph_name}' not found in font '{font_name}'.")
+                logger.warning("Glyph '%s' not found in font '%s'.", glyph_name, font_name)
                 cls._glyph_cache[cache_key] = tuple()
                 return cls._glyph_cache[cache_key]
 
@@ -249,7 +252,7 @@ class Text(BaseShape):
         font_number: int = 0,
         align: str = "center",
         **params: Any,
-    ) -> GeometryData:
+    ) -> Geometry:
         """Generate text as line segments from font outlines.
 
         Args:
@@ -261,7 +264,7 @@ class Text(BaseShape):
             **params: Additional parameters (ignored)
 
         Returns:
-            GeometryData object containing text outlines
+            Geometry object containing text outlines
         """
         vertices_list = []
 
@@ -297,7 +300,7 @@ class Text(BaseShape):
         else:
             vertices_list = []
 
-        return GeometryData.from_lines(vertices_list)
+        return Geometry.from_lines(vertices_list)
 
     def _get_initial_offset(self, total_width: float, align: str) -> float:
         """Calculate initial offset based on alignment."""

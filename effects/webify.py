@@ -9,68 +9,47 @@ from numba.typed import List
 
 from util.geometry import transform_back, transform_to_xy_plane
 
-from .base import BaseEffect
 from .registry import effect
+from engine.core.geometry import Geometry
+from common.param_utils import norm_to_int, norm_to_range
 
 
-@effect
-class Webify(BaseEffect):
-    """形状にウェブ状のストリング構造を追加します。"""
-
+@effect()
+def webify(
+    g: Geometry,
+    *,
+    num_candidate_lines: float = 0.5,
+    relaxation_iterations: float = 0.5,
+    step: float = 0.5,
+    **_params: Any,
+) -> Geometry:
+    """形状にウェブ状のストリング構造を追加（純関数）。"""
     MAX_NUM_CANDIDATE_LINES = 500
     MAX_RELAXATION_ITERATIONS = 50
     MAX_STEP = 0.5
 
-    def apply(
-        self,
-        vertices_list: list[np.ndarray],
-        num_candidate_lines: float = 0.5,
-        relaxation_iterations: float = 0.5,
-        step: float = 0.5,
-        **_params: Any,
-    ) -> list[np.ndarray]:
-        """複数の閉曲線にウェブ構造を適用します。
+    coords, offsets = g.as_arrays(copy=False)
+    result_lines: list[np.ndarray] = []
+    num_lines = norm_to_int(float(num_candidate_lines), 0, MAX_NUM_CANDIDATE_LINES)
+    iterations = norm_to_int(float(relaxation_iterations), 0, MAX_RELAXATION_ITERATIONS)
+    step_size = norm_to_range(float(step), 0.0, MAX_STEP)
 
-        入力が3次元の場合、まず transform_to_xy_plane でXY平面に変換し、
-        create_web で処理後、transform_back で元の座標系に戻します。
+    for i in range(len(offsets) - 1):
+        vertices = coords[offsets[i] : offsets[i + 1]]
+        if len(vertices) < 3:
+            result_lines.append(vertices)
+            continue
+        transformed, R, z = transform_to_xy_plane(vertices)
+        polylines_xy = create_web(
+            transformed, num_candidate_lines=num_lines, relaxation_iterations=iterations, step=step_size
+        )
+        for poly in polylines_xy:
+            poly_back = transform_back(poly, R, z)
+            result_lines.append(poly_back)
 
-        Args:
-            vertices_list: 各要素は (N,3) の頂点配列
-            num_candidate_lines: 候補線の数（0.0-1.0、デフォルト0.5）
-            relaxation_iterations: 弾性平衡シミュレーションの反復回数（0.0-1.0、デフォルト0.5）
-            step: シミュレーションのステップサイズ（0.0-1.0、デフォルト0.5）
-            **_params: 追加パラメータ（無視される）
-
-        Returns:
-            ウェブ構造を追加された頂点配列のリスト
-        """
-        if not vertices_list:
-            return vertices_list
-
-        # パラメータをスケーリング
-        num_lines = int(num_candidate_lines * self.MAX_NUM_CANDIDATE_LINES)
-        iterations = int(relaxation_iterations * self.MAX_RELAXATION_ITERATIONS)
-        step_size = step * self.MAX_STEP
-
-        result = []
-        for vertices in vertices_list:
-            # 3次元入力の場合、まずXY平面に変換する
-            transformed, R, z = transform_to_xy_plane(vertices)
-
-            # XY平面上の閉曲線として create_web を実行
-            polylines_xy = create_web(
-                transformed,
-                num_candidate_lines=num_lines,
-                relaxation_iterations=iterations,
-                step=step_size,
-            )
-
-            # 生成された各ポリラインを元の座標系に戻す
-            for poly in polylines_xy:
-                poly_back = transform_back(poly, R, z)
-                result.append(poly_back)
-
-        return result
+    if not result_lines:
+        return Geometry(coords.copy(), offsets.copy())
+    return Geometry.from_lines(result_lines)
 
 
 @njit(fastmath=True, cache=True)

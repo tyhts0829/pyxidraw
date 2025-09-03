@@ -7,7 +7,7 @@ from typing import Mapping
 import numpy as np
 import psutil
 
-from api.geometry_api import GeometryAPI
+from engine.core.geometry import Geometry
 
 from ..core.tickable import Tickable
 from ..pipeline.buffer import SwapBuffer
@@ -39,7 +39,7 @@ class MetricSampler(Tickable):
 
     # -------- helpers --------
     @staticmethod
-    def _vertex_count(geometry: GeometryAPI | None) -> int:
+    def _vertex_count(geometry: Geometry | None) -> int:
         return 0 if geometry is None else len(geometry.coords)
 
     @staticmethod

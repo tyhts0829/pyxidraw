@@ -4,22 +4,23 @@ from typing import Callable, Mapping
 
 import numpy as np
 
-from api.geometry_api import GeometryAPI
+from engine.core.geometry import Geometry
 from util.constants import CANVAS_SIZES
 
 
 def run_sketch(
-    user_draw: Callable[[float, Mapping[int, int]], GeometryAPI],
+    user_draw: Callable[[float, Mapping[int, int]], Geometry],
     *,
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: int = 4,
     fps: int = 60,
     background: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     workers: int = 4,
+    use_midi: bool = False,
 ) -> None:
     """
     user_draw :
-        ``t [sec], cc_dict → GeometryAPI`` を返す関数。
+        ``t [sec], cc_dict → Geometry`` を返す関数。
     canvas_size :
         既定キー("A4","A5"...）または ``(width, height)`` mm。
     render_scale :
@@ -54,12 +55,26 @@ def run_sketch(
     window_width, window_height = int(canvas_width * render_scale), int(canvas_height * render_scale)
 
     # ---- ② MIDI ---------------------------------------------------
-    midi_manager = connect_midi_controllers()
-    midi_service = MidiService(midi_manager)
+    if use_midi:
+        midi_manager = connect_midi_controllers()
+        midi_service = MidiService(midi_manager)
+        cc_snapshot_fn = midi_service.snapshot
+    else:
+        midi_manager = None
+        # ダミーのスナップショット（常に空のCC）
+        class _NullMidi:
+            def snapshot(self):
+                return {}
+
+            def tick(self, dt: float) -> None:
+                return None
+
+        midi_service = _NullMidi()
+        cc_snapshot_fn = midi_service.snapshot
 
     # ---- ③ SwapBuffer + Worker/Receiver ---------------------------
     swap_buffer = SwapBuffer()
-    worker_pool = WorkerPool(fps=fps, draw_callback=user_draw, cc_snapshot=midi_service.snapshot, num_workers=workers)
+    worker_pool = WorkerPool(fps=fps, draw_callback=user_draw, cc_snapshot=cc_snapshot_fn, num_workers=workers)
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)
 
     # ---- ④ Window & ModernGL --------------------------------------
@@ -102,7 +117,8 @@ def run_sketch(
     @rendering_window.event
     def on_close():  # noqa: ANN001
         worker_pool.close()
-        midi_manager.save_cc()
+        if use_midi and midi_manager is not None:
+            midi_manager.save_cc()
         line_renderer.release()
         pyglet.app.exit()
 

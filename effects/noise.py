@@ -5,8 +5,8 @@ from numba import njit
 
 from util.constants import NOISE_CONST
 
-from .base import BaseEffect
 from .registry import effect
+from engine.core.geometry import Geometry
 
 
 @njit(fastmath=True, cache=True)
@@ -129,17 +129,14 @@ def _apply_noise_to_coords(
     if coords.size == 0 or not intensity:
         return coords.copy()
 
-    # 係数調整
-    intensity = intensity * 10
+    # 係数調整（提案5: 強度の意図的な倍率を廃止して素直に反映）
     t_offset = np.float32(time * 10 + 1000.0)
 
     # オフセット付き頂点を作成
     offset_coords = coords + t_offset
 
     # Perlinノイズ計算
-    noise_offset = perlin_core(
-        offset_coords, (frequency[0] * 0.1, frequency[1] * 0.1, frequency[2] * 0.1), perm_table, grad3_array
-    )
+    noise_offset = perlin_core(offset_coords, frequency, perm_table, grad3_array)
 
     return coords + noise_offset * np.float32(intensity)
 
@@ -152,44 +149,26 @@ perm = np.concatenate([perm, perm])  # 0-255までの順列を2回連結
 grad3 = np.array(NOISE_CONST["GRAD3"], dtype=np.float32)
 
 
-@effect
-class Noise(BaseEffect):
-    """3次元頂点にPerlinノイズを追加します。"""
+@effect()
+def noise(
+    g: Geometry,
+    *,
+    intensity: float = 0.5,
+    frequency: tuple | float = (0.5, 0.5, 0.5),
+    time: float = 0.0,
+    **_params,
+) -> Geometry:
+    """3次元頂点にPerlinノイズを追加（純関数）。"""
+    coords, offsets = g.as_arrays(copy=False)
 
-    def apply(
-        self,
-        coords_or_geometry,
-        offsets: np.ndarray | None = None,
-        intensity: float = 0.5,
-        frequency: tuple | float = (0.5, 0.5, 0.5),
-        time: float = 0.0,
-        **params,
-    ):
-        """Perlinノイズエフェクトを適用。
+    # 周波数の正規化
+    if isinstance(frequency, (int, float)):
+        frequency = (frequency, frequency, frequency)
+    elif len(frequency) == 1:
+        frequency = (frequency[0], frequency[0], frequency[0])
 
-        呼び出し互換性:
-        - Geometry を受け取った場合は Geometry を返す（tests 用）
-        - (coords, offsets) を受け取った場合は (new_coords, new_offsets) を返す（EffectChain 用）
-        """
-        # Geometryパス
-        if offsets is None and hasattr(coords_or_geometry, "as_arrays"):
-            geometry = coords_or_geometry
-            coords, off = geometry.as_arrays(copy=False)
-            new_coords, new_off = self.apply(coords, off, intensity=intensity, frequency=frequency, time=time, **params)
-            from engine.core.geometry_data import GeometryData
-            from engine.core.geometry import Geometry
-            return Geometry.from_data(GeometryData(new_coords, new_off))
+    new_coords = _apply_noise_to_coords(coords, float(intensity), frequency, float(time), perm, grad3)
+    return Geometry(new_coords, offsets.copy())
 
-        coords = coords_or_geometry
-        off = offsets  # type: ignore[assignment]
 
-        # 周波数の正規化
-        if isinstance(frequency, (int, float)):
-            frequency = (frequency, frequency, frequency)
-        elif len(frequency) == 1:
-            frequency = (frequency[0], frequency[0], frequency[0])
-
-        # 座標にノイズを適用
-        new_coords = _apply_noise_to_coords(coords, intensity, frequency, time, perm, grad3)
-
-        return new_coords, off.copy()  # type: ignore[union-attr]
+# 後方互換クラスは廃止（関数APIのみ）

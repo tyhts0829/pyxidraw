@@ -1,79 +1,65 @@
 """
-エフェクトレジストリ - 統一されたレジストリシステム
-shapes/ と対称性を保った @effect デコレータの実装。
+関数ベースのエフェクトレジストリ。
 
-改善点:
-- 名前省略可: `@effect` や `@effect()` でクラス名から自動推論（例: `Noise` -> `noise`）。
-- エイリアス対応: `@effect("new", aliases=["old"])` で移行しやすく。
+@effect デコレータで `Geometry -> Geometry` な関数を登録します。
+（必要なら BaseEffect サブクラスもラップ対応します。）
+エイリアスはサポートしません（明示名のみ）。
 """
 
-from typing import Dict, Type, Callable, Any
-from .base import BaseEffect
-from common.base_registry import BaseRegistry
+from __future__ import annotations
+
+from inspect import isclass
+from typing import Any, Callable, Dict
+
+from engine.core.geometry import Geometry
 
 
-# 統一されたレジストリシステム
-_effect_registry = BaseRegistry()
+EffectFn = Callable[[Geometry], Geometry]
+_REGISTRY: Dict[str, Callable[..., Geometry]] = {}
 
 
-def effect(arg: str | Type[BaseEffect] | None = None):  # type: ignore[name-defined]
-    """エフェクトをレジストリに登録するデコレータ。
+def _normalize_key(name: str) -> str:
+    return name.replace("-", "_").lower()
+
+
+def effect(arg: Any | None = None, /, name: str | None = None):
+    """関数/クラスをエフェクトとして登録するデコレータ（エイリアス非対応）。
 
     使い方:
-    - 省略名で登録: `@effect` または `@effect()` -> クラス名から推論（`Noise` -> `noise`）
-    - 明示名で登録: `@effect("noise")` も可能（必要な場合のみ）
+    - `@effect`                -> obj.__name__ で登録
+    - `@effect()`              -> obj.__name__ で登録
+    - `@effect("custom")`     -> "custom" 名で登録
+    - 関数/クラスいずれも可（クラスはインスタンス化して __call__ を使うラッパ登録）
     """
-    if callable(arg):
-        return _effect_registry.register(None)(arg)  # type: ignore[arg-type]
-    name = arg if isinstance(arg, str) else None
-    return _effect_registry.register(name)
+
+    def _register(obj):
+        key = _normalize_key(name or obj.__name__)
+        if isclass(obj):
+            def wrapped(g: Geometry, **params: Any) -> Geometry:
+                return obj()(g, **params)  # type: ignore[misc]
+            _REGISTRY[key] = wrapped
+        else:
+            _REGISTRY[key] = obj
+        return obj
+
+    # 直付け (@effect) の場合
+    if callable(arg) and name is None:
+        return _register(arg)
+
+    # 引数付き (@effect() / @effect("name")) の場合
+    return _register
 
 
-def get_effect(name: str) -> Type[BaseEffect]:
-    """登録されたエフェクトクラスを取得。
-    
-    Args:
-        name: エフェクト名
-        
-    Returns:
-        エフェクトクラス
-        
-    Raises:
-        KeyError: エフェクトが登録されていない場合
-    """
-    return _effect_registry.get(name)
+def get_effect(name: str) -> Callable[..., Geometry]:
+    key = _normalize_key(name)
+    if key not in _REGISTRY:
+        raise KeyError(f"effect '{name}' is not registered")
+    return _REGISTRY[key]
 
 
 def list_effects() -> list[str]:
-    """登録されているエフェクトの一覧を取得。
-    
-    Returns:
-        エフェクト名のリスト
-    """
-    return _effect_registry.list_all()
+    return sorted(_REGISTRY.keys())
 
 
-def is_effect_registered(name: str) -> bool:
-    """エフェクトが登録されているかチェック。
-    
-    Args:
-        name: エフェクト名
-        
-    Returns:
-        登録されている場合True
-    """
-    return _effect_registry.is_registered(name)
-
-
-def clear_registry():
-    """レジストリをクリア（テスト用）。"""
-    _effect_registry.clear()
-
-
-def get_registry() -> BaseRegistry:
-    """レジストリインスタンスを取得（ファクトリクラス用）。
-    
-    Returns:
-        レジストリインスタンス
-    """
-    return _effect_registry
+def clear_registry() -> None:
+    _REGISTRY.clear()

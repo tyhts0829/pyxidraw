@@ -206,7 +206,7 @@ class BenchmarkResultManager:
                     continue
             
             logger.info(f"Cleaned up {deleted_count} old benchmark files")
-            print(f"Moved {deleted_count} old benchmark files to backup")
+            logger.info("Moved %d old benchmark files to backup", deleted_count)
             return deleted_count
             
         except Exception as e:

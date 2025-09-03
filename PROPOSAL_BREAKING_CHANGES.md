@@ -4,6 +4,16 @@
 
 ---
 
+## 進捗ステータス（2025-09-03 更新）
+- [x] 提案1 Geometry 統一（GeometryData/GeometryAPI 撤廃）
+- [x] 提案2 エフェクト関数化（BaseEffect 撤廃）
+- [x] 提案3 パイプライン一本化（`E.pipeline` のみ）
+- [x] 提案4 単層キャッシュ（Pipeline のみ）
+- [~] 提案5 命名/型/0–1 写像の共通化（主要エフェクトへ適用拡大中：rotation/noise/array/wobble 反映）
+- [x] 提案6 シリアライズ/検証の簡素化（Pipeline to_spec/from_spec 実装、pickle→npz 変換スクリプト同梱）
+- [~] 提案7 ログ/例外の logging 統一（engine/pipeline/worker と engine/io/controller に適用、残りは段階適用）
+- [ ] 提案8 ディレクトリ再編（未）
+
 ## 背景と目標
 - 目的: 学習コストの削減、責務の明確化、抽象の重複解消、単純で予測可能なキャッシュ戦略、命名/単位/型の一貫性。
 - 現状の課題:
@@ -30,7 +40,8 @@
   - 既存のサンプル・テスト多数の更新が必要。
 
 - 影響範囲/移行:
-  - `api/geometry_api.py` と `engine/core/geometry_data.py` を統合し、`engine/core/geometry.py` に集約。
+  - `api/geometry_api.py` と `engine/core/geometry_data.py` を廃止し、`engine/core/geometry.py` に集約。（実装済み）
+  - `shapes/*` の戻り値型を `Geometry` に統一（実装済み）。
   - 置換ガイド: `size→scale`, `at→translate`, `spin→rotate(z=deg2rad)`, `move→translate`, `grow→scale`。
 
 ---
@@ -51,7 +62,8 @@
   - 将来エフェクト固有の状態管理が必要になった場合、関数型では表現工夫が必要。
 
 - 影響範囲/移行:
-  - 暫定ブリッジ: 旧クラスが新関数を内部呼び出し（段階移行時）、最終的にクラス削除。
+  - `effects/base.py` を削除し、関数エフェクトに一本化（実装済み）。
+  - エフェクトは `@effect()` 登録の `Geometry -> Geometry` 関数のみ（実装済み）。
 
 ---
 
@@ -70,7 +82,7 @@
   - Chain ベースの表現に依存した既存デモ/チュートリアルの更新。
 
 - 影響範囲/移行:
-  - 暫定互換: `E.add(g)...result()` は内部で `E...build()(g)` を呼ぶ薄い互換実装に一時対応。
+  - `E.add(...).result()` は撤廃し、`E.pipeline...build()(g)` のみを採用（実装済み）。
 
 ---
 
@@ -89,7 +101,7 @@
   - ハッシュ計算コストが入力サイズに依存（大規模データでは注意）。
 
 - 影響範囲/移行:
-  - `EffectChain` のキャッシュ削除、`common/cacheable_base.py` の利用縮小/撤廃。
+  - `EffectChain` のキャッシュ削除（実装済み）。`common/cacheable_base.py` の利用は段階的縮小予定。
 
 ---
 
@@ -230,5 +242,157 @@ class Pipeline:
 
 ---
 
+## 実装ログ（進捗・検証結果）
+
+本提案のうち、互換性を考慮せず「美しく・シンプル・読みやすく」を優先した範囲で以下を実装・確認済み。
+
+- 実施サマリ:
+  - Geometry 統合: `engine/core/geometry.py` を単一データクラス化。最小 API は `translate/scale/rotate/concat/from_lines/as_arrays`。純粋・新インスタンス返却。
+  - GeometryData 統合: `engine/core/geometry_data.py` は暫定的に `GeometryData = Geometry` として公開（GUID 等の複雑さを撤廃）。将来的に `GeometryData` 参照は完全撤去予定。
+  - 変換ユーティリティ: `engine/core/transform_utils.py` は実質 `Geometry` 前提に簡素化（入力型と同型で返却）。
+  - エフェクト関数化: `effects/noise.py`, `effects/filling.py`, `effects/array.py`, `effects/translation.py`, `effects/rotation.py`, `effects/scaling.py` を関数ベースへ（`@effect` 登録、`Geometry -> Geometry`）。
+  - レジストリ: `effects/registry.py` を関数レジストリ化（明示名のみ、エイリアス非対応）。
+  - パイプライン: `api/pipeline.py` で `E.pipeline` を提供。単層キャッシュ（`(geometry_hash, pipeline_hash)`）。
+    - geometry_hash: `coords/offsets` を blake2b でハッシュ。
+    - pipeline_hash: ステップ名 + 正規化パラメータ + 関数バージョン（`__code__.co_code` のダイジェスト）。
+  - API エクスポート: `api/__init__.py` は `E.pipeline` と `Geometry` を公開（`E` はシングルトン）。
+
+- new_tests に追加/更新:
+  - `new_tests/test_unified_geometry.py`: Geometry 基本 API とノイズ関数の統合テスト（関数版に更新）。
+  - `new_tests/test_transform_utils_geometry.py`: transform_utils が Geometry を受け取り Geometry を返すことを確認。
+  - `new_tests/test_translation_geometry_path.py`: `translation(g, ...) -> Geometry` の確認。
+  - `new_tests/test_effects_functions_fill_array.py`: `filling/array` が Geometry を返し、線数/重複数が期待通り変化することを確認。
+  - `new_tests/run_unified_geometry_check.py`: pytest 不要の最小ランナー（依存が乏しい環境向け）。
+
+- サニティ実行（`new_main.py`）:
+  - 追加: `new_main.py`（`noise -> filling -> array` の関数パイプライン確認用）。
+  - 実行例（ユーザー環境の実測）:
+    - `[base] points=5, lines=1, bbox=(-30.0, -30.0, 0.0)->(30.0, 30.0, 0.0)`
+    - `[out1] points=220, lines=104, bbox≈(-30.38, -30.03, -0.27)->(330.02, 30.20, 0.35)`
+    - `[out2] points=220, lines=104, bboxは out1 と同一（キャッシュヒット）`
+
+- 既知の制約/今後の作業:
+  - 旧 `EffectChain`/`GeometryAPI` 系は破壊的変更により未対応（使用停止前提）。
+  - 残りの主要エフェクトの関数化（`subdivision/extrude/buffer/...`）、旧 API/クラスの完全撤去、サンプル・ドキュメント更新。
+  - `shapes/` の戻り値の明示的な `Geometry` 型統一（実体は統一済みだが命名の整備）。
+
+### 追補（GUI ランタイムの移行・旧 API 撤去）
+
+- ランタイム/レンダラを Geometry 化:
+  - `api/runner.py`: `user_draw: (t, cc) -> Geometry` に統一。
+  - `engine/pipeline/{buffer, worker, packet}`: バッファ/ワーカー/パケットを `Geometry` 型に移行。
+  - `engine/monitor/sampler.py`: 頂点数計測を `Geometry` ベースに変更。
+  - `engine/render/renderer.py`: VBO/IBO 変換を `Geometry.coords/offsets` から直接生成。
+
+- デモの移行（動作確認済み）:
+  - `main.py`: `E.pipeline` + 関数エフェクト（noise/filling/rotation）に全面移行（GUI起動確認済み）。
+  - `shapes_grid_cc.py`: `.size/.at` → `.scale/.translate`、回転は `E.pipeline.rotation(...).build()(g)` に変更。
+  - `simple.py`: 最小サンプルを `Geometry` + `E.pipeline` 化（統計のみ出力）。
+
+- 形状ファクトリの統一:
+  - `api/shape_factory.py`: 返り値を `Geometry` に統一。`G.from_lines/G.empty` も `Geometry` を返却。
+
+- ベンチマークの暫定対応:
+  - `benchmarks/plugins/serializable_targets.py`: `api.effect_chain` → `api.pipeline`。`noise/filling/array` は新パイプラインで適用。
+  - `subdivision/extrude/buffer` は未関数化のため `NotImplementedError` を明示（後続で対応）。
+
+- チュートリアルの更新（部分）:
+  - `tutorials/01_basic_shapes.py`: `.scale/.translate` に更新、Geometry 出力へ。
+  - `tutorials/README.md`: `E.pipeline` と Geometry 変換 API（`.scale/.translate`）に沿って記述を更新。
+  - `tutorials/02_multiple_shapes.py`: `.size/.at` と `.add()` を `.scale/.translate` と `+` に置換。
+  - `tutorials/03_basic_effects.py`: `E.add()` のチェーンを `E.pipeline` に置換。未実装の細分化は削除。
+  - `tutorials/04_custom_shapes.py`: `GeometryAPI` 依存を排し、`GeometryData.from_lines` でカスタム形状を構築。
+  - `tutorials/05_custom_effects.py`: `@E.register()` を `effects.registry.effect` に置換。関数エフェクト化（wave/explode/twist/gradient）。
+  - `tutorials/06_advanced_pipeline.py`: 諸所の `E.add()` を `E.pipeline` に置換。未実装エフェクトは代替で構成。
+
+- 旧 API の撤去（破壊的変更）:
+  - 削除: `api/geometry_api.py`, `api/effect_chain.py`, `api/effect_pipeline.py`。
+
+- 既知の影響/残タスク:
+  - 旧 API を参照するテストやチュートリアルの残存箇所はエラーとなる（段階的に新 API へ移行予定）。
+  - ベンチ対象の `subdivision/extrude/buffer` の関数化と登録。
+  - `AGENTS.md` などドキュメントの旧 API 記載の更新・整理。
+
+---
+
 この設計は「型 1・関数・単一パイプライン・単一キャッシュ」という最小構成を核に、読みやすさ・保守性・拡張性のバランスを最適化することを狙います。採用可否や優先順位のフィードバックをいただければ、段階実装の計画に落とし込みます。
 
+---
+
+## ここまでのまとめ（完了事項）
+
+- Geometry 統一
+  - `engine/core/geometry.py`: 統合 Geometry（translate/scale/rotate/concat/from_lines/as_arrays）。
+  - `engine/core/geometry_data.py`: 削除（`GeometryData` 互換は撤廃済み）。
+  - `shapes/*`: すべて `Geometry` を返却するよう統一。
+
+- エフェクトの関数化（登録は effects/__init__ の副作用で実行）
+  - 標準: translation / rotation / scaling / noise / filling / array / subdivision / transform / extrude / buffer / dashify / wobble / boldify / collapse / trimming / webify（すべて関数）。
+  - `effects/registry.py`: 関数レジストリ（@effect / @effect() / @effect("name") 対応、エイリアス非対応）。
+  - パイプライン: `api/pipeline.py` に単層キャッシュ Pipeline（`E.pipeline...build()(g)`）。
+  - 削除: `effects/base.py`（BaseEffect）, `effects/pipeline.py`。
+
+- 形状 API の単純化
+  - `api/shape_factory.py`: `G.*` が `Geometry` を直接返却。`G.from_lines/G.empty` も `Geometry`。
+
+- 旧 API の撤去（破壊的変更）
+  - 削除: `api/geometry_api.py`, `api/effect_chain.py`, `api/effect_pipeline.py`, `effects/base.py`, `effects/pipeline.py`。
+
+- サンプル/チュートリアル/README の更新
+  - `main.py`: 新パイプラインに全面移行（GUI起動確認済み）。
+  - `shapes_grid_cc.py`: `.scale/.translate` と `E.pipeline.rotation` に置換。
+  - tutorials: 01–06 を新 API・非MIDI化・`SQUARE_300` に統一。
+  - `README.md`: 例を `Geometry + E.pipeline` に刷新。
+
+- ベンチの対応
+  - `benchmarks/plugins/serializable_targets.py`: `api.pipeline` を使用。主要エフェクトの関数化に追随済み。
+
+- 新規テストと手動確認
+  - `new_tests/` に Geometry と関数エフェクトの検証を追加（サンドボックスでは実行せず、ローカルで pytest/簡易ランナー可）。
+  - `new_main.py` によるパイプライン sanity（キャッシュヒット確認済み）。
+
+---
+
+## 再開時の TODO（次にやること）
+
+- 旧表記/旧APIの残滓の整理（ドキュメント）
+  - [ ] `AGENTS.md` の GeometryAPI/EffectChain 記述を更新。
+  - [ ] README/チュートリアルの細部（用語・コメント）を新API前提で統一。
+
+- テストスイートの刷新
+  - [ ] 旧API依存のテキスト/コメントの掃除。必要に応じて追加ケースを拡充。
+
+- 型/設計の仕上げ
+  - [ ] `shapes/` 戻り値注釈の再点検（`Geometry` で統一済みだが表記揺れを解消）。
+  - [ ] 可能なら `common/cacheable_base.py` 依存の段階的縮小（過剰なキャッシュ層の廃止）。
+
+- 命名/型/0–1 写像の共通化（提案5の仕上げ）
+  - [ ] `common/param_utils.py` の横断適用（全エフェクトで一貫仕様へ）。
+
+- シリアライズ/検証（提案6）
+  - [ ] `[{name, params}]` 形式のシリアライザ/バリデータ追加。未知名・不正型の早期失敗。
+  - [ ] 旧 pickle 資産 → json/npz 変換スクリプトの同梱。
+
+- ログ/例外（提案7）
+  - [ ] `print` を `logging` に統一（特に engine/io, pipeline/worker）。
+
+- ディレクトリ再編（提案8）
+  - [ ] 最終フェーズで物理移動・インポート整理。
+
+- ベンチ/最適化
+  - [ ] ベンチマークを `E.pipeline` 前提に整理し、性能特性を再計測。
+  - [ ] `geometry_hash` の最適化（必要なら近似/要約ハッシュを追加検討）。
+
+---
+
+## 参考メモ
+
+- 方針の原則
+  - 型は `Geometry` の 1 本化。
+  - エフェクトは「純関数（Geometry -> Geometry）」に統一。
+  - パイプラインは 1 本・単層キャッシュのみ（予測可能性重視）。
+  - レジストリはエイリアス非対応（明示名のみ）。
+
+- 運用ノート
+  - チュートリアルはすべて MIDI/arc なしで動作（runner がダミー CC を供給）。
+  - GUI 経路（pyglet/moderngl）は Geometry 直処理。例外時は worker -> receiver 経由でメインへ再送。

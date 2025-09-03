@@ -8,6 +8,7 @@
 """
 
 import pickle
+import logging
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -45,6 +46,7 @@ class UnifiedBenchmarkRunner:
         self.plugin_manager = create_plugin_manager(self.config)
         self.error_handler = get_error_handler()
         self.error_collector = get_error_collector()
+        self.logger = logging.getLogger(__name__)
         
         # 新しい分離されたコンポーネント
         self.executor = BenchmarkExecutor(self.config, self.error_handler, self.error_collector)
@@ -114,23 +116,22 @@ class UnifiedBenchmarkRunner:
     def run_all_benchmarks(self) -> Dict[str, Dict[str, BenchmarkResult]]:
         """すべてのプラグインのベンチマークを実行"""
         all_results: Dict[str, Dict[str, BenchmarkResult]] = {}
-        
-        print(f"Starting unified benchmark run at {datetime.now()}")
-        print("=" * 60)
+        self.logger.info("Starting unified benchmark run at %s", datetime.now())
+        self.logger.info("%s", "=" * 60)
         
         # すべてのプラグインからターゲットを取得
         all_targets = self.plugin_manager.get_all_targets()
         
         total_targets = sum(len(targets) for targets in all_targets.values())
-        print(f"Found {total_targets} benchmark targets across {len(all_targets)} plugins")
+        self.logger.info("Found %d benchmark targets across %d plugins", total_targets, len(all_targets))
         
         # プラグイン別にベンチマーク実行
         for plugin_name, targets in all_targets.items():
             if not targets:
-                print(f"\nSkipping {plugin_name}: no targets found")
+                self.logger.info("Skipping %s: no targets found", plugin_name)
                 continue
             
-            print(f"\n--- Benchmarking {plugin_name} ({len(targets)} targets) ---")
+            self.logger.info("--- Benchmarking %s (%d targets) ---", plugin_name, len(targets))
             
             if self.config.parallel:
                 plugin_results = self._run_plugin_parallel(plugin_name, targets)
@@ -141,13 +142,13 @@ class UnifiedBenchmarkRunner:
         
         # エラー要約を表示
         if self.error_collector.has_errors() or self.error_collector.has_warnings():
-            print("\n" + "=" * 60)
-            print("ERROR SUMMARY")
-            print("=" * 60)
-            print(self.error_collector.generate_report())
+            self.logger.error("%s", "=" * 60)
+            self.logger.error("ERROR SUMMARY")
+            self.logger.error("%s", "=" * 60)
+            self.logger.error("%s", self.error_collector.generate_report())
         
-        print(f"\nBenchmark completed at {datetime.now()}")
-        print(f"Total results: {sum(len(v) for v in all_results.values())}")
+        self.logger.info("Benchmark completed at %s", datetime.now())
+        self.logger.info("Total results: %d", sum(len(v) for v in all_results.values()))
         
         # 自動ビジュアライゼーション
         if all_results and self.config.generate_charts:
@@ -166,7 +167,7 @@ class UnifiedBenchmarkRunner:
         results = {}
         
         for i, target in enumerate(targets, 1):
-            print(f"  [{i}/{len(targets)}] {target.name}...", end=" ", flush=True)
+            self.logger.info("  [%d/%d] %s...", i, len(targets), target.name)
             
             try:
                 result = self.benchmark_target(target)
@@ -176,14 +177,14 @@ class UnifiedBenchmarkRunner:
                     avg_time = result.timing_data.average_time if result.timing_data.average_time > 0 else 0
                     if avg_time > 0:
                         fps = 1.0 / avg_time
-                        print(f"✓ ({fps:.1f} fps)")
+                        self.logger.info("✓ (%.1f fps)", fps)
                     else:
-                        print("✓ (instant)")
+                        self.logger.info("✓ (instant)")
                 else:
-                    print(f"✗ ({result.error_message or 'unknown error'})")
+                    self.logger.warning("✗ (%s)", result.error_message or "unknown error")
                     
             except Exception as e:
-                print(f"✗ (exception: {e})")
+                self.logger.exception("✗ (exception: %s)", e)
                 # エラーを収集
                 error = BenchmarkError(f"Unhandled exception in {target.name}: {e}", module_name=target.name)
                 self.error_collector.add_error(error)
@@ -200,7 +201,7 @@ class UnifiedBenchmarkRunner:
         # CPUバウンドの単純作業のため、ターゲット数に合わせてワーカー数を設定
         max_workers = len(targets)
         
-        print(f"  Running {len(targets)} targets in parallel (max_workers={max_workers})")
+        self.logger.info("  Running %d targets in parallel (max_workers=%d)", len(targets), max_workers)
         
         # 環境制約により、常にスレッドプールを使用（セマフォ未許可環境対策）
         executor_class = ThreadPoolExecutor
@@ -387,20 +388,20 @@ class UnifiedBenchmarkRunner:
                     selected_targets.append(target)
         
         if not selected_targets:
-            print(f"No targets found matching: {target_names}")
+            self.logger.warning("No targets found matching: %s", target_names)
             return {}
         
-        print(f"Running {len(selected_targets)} specific targets")
+        self.logger.info("Running %d specific targets", len(selected_targets))
         
         # 順次実行
         results = {}
         for target in selected_targets:
-            print(f"Benchmarking {target.name}...", end=" ", flush=True)
+            self.logger.info("Benchmarking %s...", target.name)
             result = self.benchmark_target(target)
             results[target.name] = result
             
             status = "✓" if result.success else "✗"
-            print(status)
+            self.logger.info("%s", status)
         
         # 自動ビジュアライゼーション
         if results and self.config.generate_charts:

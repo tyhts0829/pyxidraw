@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from .base import BaseShape
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 from .registry import shape
 
 
@@ -44,20 +44,35 @@ class Polyhedron(BaseShape):
         if cls._vertices_cache is None:
             cls._vertices_cache = {}
             data_dir = Path(__file__).parents[1] / "data" / "regular_polyhedron"
-            
+
             # Check if data directory exists
             if not data_dir.exists():
                 cls._vertices_cache = None
                 return
-            
+
             polyhedrons = ["tetrahedron", "hexahedron", "octahedron", "dodecahedron", "icosahedron"]
             for polyhedron in polyhedrons:
+                # Prefer new npz format
+                npz_file = data_dir / f"{polyhedron}_vertices_list.npz"
+                if npz_file.exists():
+                    with np.load(npz_file) as data:
+                        # Accept either 'arr_i' keys or 'arrays' list
+                        if 'arrays' in data.files:
+                            arrays = data['arrays']
+                            cls._vertices_cache[polyhedron] = [np.array(a, dtype=np.float32) for a in arrays]
+                        else:
+                            # Gather arr_0, arr_1... in order
+                            keys = sorted([k for k in data.files if k.startswith('arr_')], key=lambda k: int(k.split('_')[1]))
+                            cls._vertices_cache[polyhedron] = [data[k].astype(np.float32) for k in keys]
+                    continue
+
+                # Legacy pickle (deprecated). Kept for transitional use.
                 pkl_file = data_dir / f"{polyhedron}_vertices_list.pkl"
                 if pkl_file.exists():
                     with open(pkl_file, "rb") as f:
                         cls._vertices_cache[polyhedron] = pickle.load(f)
     
-    def generate(self, polygon_type: str | int = "tetrahedron", **params: Any) -> GeometryData:
+    def generate(self, polygon_type: str | int = "tetrahedron", **params: Any) -> Geometry:
         """Generate a regular polyhedron.
         
         Args:
@@ -65,7 +80,7 @@ class Polyhedron(BaseShape):
             **params: Additional parameters (ignored)
             
         Returns:
-            GeometryData object containing polyhedron edges
+            Geometry object containing polyhedron edges
         """
         if polygon_type not in self._TYPE_MAP:
             raise ValueError(f"Invalid polygon_type: {polygon_type}")
@@ -80,11 +95,11 @@ class Polyhedron(BaseShape):
             # Convert to list of numpy arrays if needed
             if isinstance(vertices_list, list):
                 converted_list = [np.array(v, dtype=np.float32) for v in vertices_list]
-                return GeometryData.from_lines(converted_list)
-            return GeometryData.from_lines(vertices_list)
+                return Geometry.from_lines(converted_list)
+            return Geometry.from_lines(vertices_list)
         
         # Fallback: generate simple polyhedron
-        return GeometryData.from_lines(self._generate_simple_polyhedron(shape_name))
+        return Geometry.from_lines(self._generate_simple_polyhedron(shape_name))
     
     def _generate_simple_polyhedron(self, shape_name: str) -> list[np.ndarray]:
         """Generate simple polyhedron vertices."""

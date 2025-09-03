@@ -6,7 +6,7 @@ import numpy as np
 from numba import njit
 
 from .base import BaseShape
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 from .registry import shape
 
 
@@ -67,7 +67,7 @@ class Torus(BaseShape):
         major_segments: int = 32,
         minor_segments: int = 16,
         **params: Any,
-    ) -> GeometryData:
+    ) -> Geometry:
         """Generate a torus.
 
         Args:
@@ -78,7 +78,7 @@ class Torus(BaseShape):
             **params: Additional parameters (ignored)
 
         Returns:
-            GeometryData object containing torus lines
+            Geometry object containing torus lines
         """
         # Pre-calculate trigonometric values
         theta_values = 2 * np.pi * np.arange(major_segments) / major_segments
@@ -101,4 +101,4 @@ class Torus(BaseShape):
             vertices = _generate_parallel_line(major_radius, minor_radius, major_segments, cos_phi[j], sin_phi[j])
             vertices_list.append(vertices)
 
-        return GeometryData.from_lines(vertices_list)
+        return Geometry.from_lines(vertices_list)

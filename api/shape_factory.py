@@ -1,6 +1,9 @@
 """
-G - 形状ファクトリクラス（次期API仕様）
-高性能キャッシュ付きの形状生成API。
+G - 形状ファクトリ（関数・Geometryベース）
+
+レジストリに登録されたシェイプ生成器を呼び出し、`Geometry` を返す。
+従来の `GeometryAPI` 依存やチェーンは廃止し、変換は `Geometry` の
+`translate/scale/rotate` または `E.pipeline` を利用する。
 """
 
 from __future__ import annotations
@@ -24,9 +27,7 @@ import shapes.polyhedron
 import shapes.sphere
 import shapes.text
 import shapes.torus
-from engine.core.geometry_data import GeometryData
-
-from .geometry_api import GeometryAPI
+from engine.core.geometry import Geometry
 from .shape_registry import get_shape_generator, list_registered_shapes
 
 
@@ -41,8 +42,12 @@ class ShapeFactoryMeta(type):
             # 動的にクラスメソッドを生成
             def shape_method(**params):
                 params_tuple = cls._params_to_tuple(**params)
-                data = ShapeFactory._cached_shape(name, params_tuple)
-                return GeometryAPI(data)
+                geom = ShapeFactory._cached_shape(name, params_tuple)
+                # 生成器は Geometry を返す前提。必要なら from_lines で包む。
+                if isinstance(geom, Geometry):
+                    return geom
+                # 互換: もし ndarray タプル等なら from_lines で構築
+                return Geometry.from_lines(geom)
 
             return shape_method
         except ValueError:
@@ -60,7 +65,7 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
 
     @staticmethod
     @lru_cache(maxsize=128)
-    def _cached_shape(shape_name: str, params_tuple: tuple) -> GeometryData:
+    def _cached_shape(shape_name: str, params_tuple: tuple) -> Geometry:
         """内部キャッシュ機能。パラメータのタプルでキャッシュ。"""
         params_dict = dict(params_tuple)
 
@@ -70,7 +75,11 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
         # get_shape_generatorはBaseShapeクラス（Type[BaseShape]）を返す
         # クラスをインスタンス化して、generateメソッドを呼び出す
         instance = generator()
-        return instance.generate(**params_dict)
+        data = instance.generate(**params_dict)
+        # 生成器は GeometryData (= Geometry) を返す前提
+        if isinstance(data, Geometry):
+            return data
+        return Geometry.from_lines(data)
 
     @staticmethod
     def _params_to_tuple(**params) -> tuple:
@@ -94,25 +103,25 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
     # === ユーザー拡張 ===
 
     @staticmethod
-    def from_lines(lines: Sequence[Union[np.ndarray, List]]) -> GeometryAPI:
+    def from_lines(lines: Sequence[Union[np.ndarray, List]]) -> Geometry:
         """線分リストから形状を作成。
 
         Args:
             lines: 線分のリスト
 
         Returns:
-            GeometryAPI: 作成された形状
+            Geometry: 作成された形状
         """
-        return GeometryAPI.from_lines(lines)
+        return Geometry.from_lines(lines)
 
     @staticmethod
-    def empty() -> GeometryAPI:
+    def empty() -> Geometry:
         """空の形状を作成。
 
         Returns:
-            GeometryAPI: 空の形状
+            Geometry: 空の形状
         """
-        return GeometryAPI.empty()
+        return Geometry.from_lines([])
 
     def __getattr__(self, name: str):
         """動的属性アクセスでレジストリの形状を呼び出し可能にする。"""
@@ -123,8 +132,10 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
             # 動的にメソッドを生成
             def shape_method(**params):
                 params_tuple = self._params_to_tuple(**params)
-                data = self._cached_shape(name, params_tuple)
-                return GeometryAPI(data)
+                geom = self._cached_shape(name, params_tuple)
+                if isinstance(geom, Geometry):
+                    return geom
+                return Geometry.from_lines(geom)
 
             return shape_method
         except ValueError:

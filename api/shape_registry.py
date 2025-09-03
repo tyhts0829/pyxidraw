@@ -8,11 +8,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, List, Type, Union
 
-from engine.core.geometry_data import GeometryData
+from engine.core.geometry import Geometry
 from shapes.registry import shape, get_shape, list_shapes, is_shape_registered, clear_registry
 
 
-# 互換性のためのエイリアス
 register_shape = shape
 
 
@@ -40,14 +39,14 @@ class CustomShape(ABC):
     """ユーザー定義形状の基底クラス。"""
     
     @abstractmethod
-    def generate(self, **params) -> GeometryData:
+    def generate(self, **params) -> Geometry:
         """形状を生成する抽象メソッド。
         
         Args:
             **params: 形状生成パラメータ
             
         Returns:
-            GeometryData: 生成された形状データ
+            Geometry: 生成された形状データ
         """
         pass
 
@@ -70,11 +69,11 @@ class ValidatedCustomShape(CustomShape):
         """パラメータ検証ロジック（サブクラスでオーバーライド可能）。"""
         pass
     
-    def generate(self, **params) -> GeometryData:
+    def generate(self, **params) -> Geometry:
         validated_params = self.validate_params(**params)
         return self._generate_impl(**validated_params)
     
     @abstractmethod
-    def _generate_impl(self, **params) -> GeometryData:
+    def _generate_impl(self, **params) -> Geometry:
         """実際の生成ロジック（サブクラスで実装）。"""
         pass
