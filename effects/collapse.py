@@ -7,6 +7,7 @@ from numba import njit
 
 from .registry import effect
 from engine.core.geometry import Geometry
+from common.param_utils import norm_to_int
 
 
 @njit(fastmath=True, cache=True)
@@ -139,6 +140,7 @@ def collapse(
     coords, offsets = g.as_arrays(copy=False)
     if len(coords) == 0 or intensity == 0.0 or subdivisions == 0.0:
         return Geometry(coords.copy(), offsets.copy())
-    divisions = max(1, int(subdivisions * 10))
+    MAX_DIV = 10
+    divisions = max(1, norm_to_int(float(subdivisions), 0, MAX_DIV))
     new_coords, new_offsets = _apply_collapse_to_coords(coords, offsets, float(intensity), divisions)
     return Geometry(new_coords, new_offsets)

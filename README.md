@@ -1,6 +1,6 @@
-# PyxiDraw3
+# PyxiDraw4
 
-PyxiDraw3は、MIDIコントローラーを使用してリアルタイムで3Dジオメトリを生成・操作できるクリエイティブコーディングフレームワークです。
+PyxiDraw4 は、MIDIコントローラーを使用してリアルタイムで 3D ジオメトリを生成・操作できるクリエイティブコーディングフレームワークです。
 
 ## 特徴
 
@@ -9,24 +9,25 @@ PyxiDraw3は、MIDIコントローラーを使用してリアルタイムで3D�
 - **エフェクトパイプライン**: ノイズ、回転、スケーリング、細分化などの豊富なエフェクト
 - **カスタムエフェクト**: 独自のエフェクトを簡単に登録・使用可能
 - **ベンチマーク機能**: パフォーマンス測定と可視化機能を内蔵
-- **柔軟なAPI**: 直感的なメソッドチェーンによる操作
+- **柔軟なAPI**: `E.pipeline` による関数エフェクトの組み立て
 
 ## インストール
 
+依存関係は固定の requirements.txt を設けていません（提案に基づく最小依存）。以下は最小構成の例です。
+
 ```bash
-git clone https://github.com/tyhts0829/pyxidraw3.git
-cd pyxidraw3
-pip install -r requirements.txt
+git clone <this-repo>
+cd pyxidraw4
+pip install numpy numba pyglet moderngl psutil pyyaml
 ```
 
 ## 基本的な使用方法
 
-### シンプルな例（関数エフェクト + 新パイプライン）
+### シンプルな例（関数エフェクト + パイプライン）
 
 ```python
 import arc
-from api import E, G
-from api.runner import run_sketch
+from api import E, G, run
 from util.constants import CANVAS_SIZES
 
 def draw(t, cc):
@@ -37,9 +38,15 @@ def draw(t, cc):
 
 if __name__ == "__main__":
     arc.start()
-    run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_200"])
+    run(draw, canvas_size=CANVAS_SIZES["SQUARE_200"]) 
     arc.stop()
 ```
+
+### 角度・スケールの取り扱い（指針）
+
+- 角度入力は 0..1 を基本とし、内部で 0..2π に正規化（`effects.rotation/transform`）。
+- `translation` は物理単位（mm）を直接指定。
+- `scaling` は `(sx, sy, sz)` の倍率指定。スカラー/1要素/3要素を受け付けます。
 
 ### 複雑な例（main.py）
 
@@ -62,18 +69,20 @@ def draw(t, cc):
 
 ### 押し出し（Extrude）
 
-`Extrude` は標準のエフェクトチェーンに統合されています。座標配列（coords）とオフセット配列（offsets）に対して動作し、元のライン、押し出し側のライン、両者を結ぶ側面エッジを生成します。
+`effects.extrude` は関数エフェクトとして実装済みです。座標配列（coords）とオフセット配列（offsets）に対して動作し、元のライン、押し出し側のライン、両者を結ぶ側面エッジを生成します。
 
 ```python
-shape = G.polygon(n_sides=6).scale(80, 80, 80)
-# TODO: extrude は関数化対応予定です
+from api import E, G
+base = G.polygon(n_sides=6).scale(80, 80, 80)
+out = (E.pipeline
+         .extrude(direction=(0, 0, 1), distance=0.5, scale=1.0, subdivisions=0.3)
+         .build())(base)
 ```
-パラメータ:
+主なパラメータ:
 - direction: 押し出し方向ベクトル（x, y, z）
 - distance: 押し出し距離係数（0.0–1.0）
 - scale: 押し出し側スケール係数（0.0–1.0）
 - subdivisions: 細分化係数（0.0–1.0）
-```
 
 ## 主要なコンポーネント
 
@@ -85,12 +94,20 @@ shape = G.polygon(n_sides=6).scale(80, 80, 80)
 - `text.py` - テキスト形状
 
 ### エフェクト (effects/)
-- `noise.py` - ノイズエフェクト
-- `rotation.py` - 回転変換
+- `noise.py` - ノイズ
+- `rotation.py` - 回転
+- `translation.py` - 平行移動
 - `scaling.py` - スケーリング
-- `subdivision.py` - 細分化
-- `extrude.py` - 押し出し
-- `filling.py` - 充填
+- `transform.py` - 複合変換
+- `filling.py` - 充填（ハッチ/ドット）
+- `array.py` `dashify.py` `extrude.py` `twist.py` `explode.py` `wobble.py` など
+
+パラメータ指針（抜粋）:
+- 正規化系: 0..1 を受け取り内部でレンジに写像
+  - 例: `rotation.rotate`（0..1→2π）, `extrude.distance/subdivisions`（0..1→上限レンジ）, `buffer.distance/resolution`
+- 物理/実値系: 座標単位（mm相当）・そのままの値
+  - 例: `translation.offset_*`, `dashify.dash_length/gap_length`, `wave.amplitude`, `wobble.amplitude`
+- 空間周波数: `wave/wobble.frequency` は「座標1あたりの周期数 [cycles per unit]」
 
 ### エンジン (engine/)
 - `core/` - 基本的な幾何学処理とレンダリング
@@ -117,6 +134,21 @@ midi_devices:
     controller_name: "arc"
 ```
 
+## パイプラインのシリアライズ/検証
+
+`to_spec` と `from_spec` でパイプラインを保存/復元できます。`validate_spec` で事前検証も可能です。
+
+```python
+from api import E, to_spec, from_spec, validate_spec
+
+pipeline = (E.pipeline.rotation(rotate=(0.25,0,0)).noise(intensity=0.2).build())
+spec = to_spec(pipeline)
+validate_spec(spec)     # 構造/登録名/パラメータ検証（例外が出なければOK）
+pipeline2 = from_spec(spec)
+```
+
+効果のパラメータ仕様は `docs/effects_cheatsheet.md` を参照してください。
+
 ## テスト
 
 ```bash
@@ -125,6 +157,89 @@ python -m pytest
 
 # ベンチマークを実行
 python -m benchmarks
+```
+
+## キャッシュ制御（開発向け）
+
+形状生成の LRU キャッシュは環境変数で制御できます。
+
+```bash
+# キャッシュ無効化
+export PXD_CACHE_DISABLED=1
+
+# キャッシュサイズ上書き（デフォルト128）
+export PXD_CACHE_MAXSIZE=64
+```
+
+### 登録済みエフェクトの確認（開発向け）
+
+現在レジストリに登録されているエフェクト名を一覧できます。
+
+```python
+>>> from effects.registry import list_effects
+>>> list_effects()[:8]
+['array', 'boldify', 'buffer', 'collapse', 'dashify', 'explode', 'extrude', 'filling']
+```
+
+スクリプト内からの防御的プログラミングにも利用できます（未登録名の早期検出など）。
+
+## ベンチマーク ワークフロー（基準化）
+
+結果を保存して比較する最小フロー例:
+
+```bash
+# 基準（baseline）を保存
+python -m benchmarks run -o benchmark_results/baseline
+
+# 変更後の結果を保存
+python -m benchmarks run -o benchmark_results/current
+
+# 差分を比較
+python -m benchmarks compare benchmark_results/baseline/latest.json benchmark_results/current/latest.json
+```
+
+高速なスモーク実行（保存/チャート無効）:
+
+```bash
+python -m benchmarks run --warmup 0 --runs 1 --timeout 15 --no-charts --no-save
+```
+
+## データ移行（polyhedron: pickle → npz）
+
+正多面体データは順次 `.npz` 形式へ移行しています（`shapes/polyhedron.py` は `.npz` を優先読み込み）。
+既存の `data/regular_polyhedron/*_vertices_list.pkl` を一括変換するには次のスクリプトを使用します。
+
+```bash
+# 変換（dry-run）
+python scripts/convert_polyhedron_pickle_to_npz.py --dry-run --verbose
+
+# 実変換（上書きしない）
+python scripts/convert_polyhedron_pickle_to_npz.py --verbose
+
+# 変換後に .pkl を削除
+python scripts/convert_polyhedron_pickle_to_npz.py --delete-original --verbose
+
+# 既存の .npz を上書き
+python scripts/convert_polyhedron_pickle_to_npz.py --force
+```
+
+なぜ npz?:
+- 安全性（pickleは任意コード実行リスク、npzは純データ）
+- 互換性（環境非依存で将来の移行が容易）
+- 再現性（dtype/shape/順序が決定的）
+- 単純化（ローダ/実装が簡潔）
+
+備考:
+- 何度実行しても安全です（既存 `.npz` は既定では上書きしません）。
+- 変換後は `.pkl` を削除して構いません（`--delete-original` で自動削除可）。
+- 詳細な判断理由は `PROPOSAL_BREAKING_CHANGES.md` の「決定記録」および
+  ADR: `docs/adr/0001-npz-over-pickle.md` を参照してください。
+
+移行完了チェック:
+```bash
+# .npz が存在し .pkl が無いことを確認
+ls data/regular_polyhedron/*_vertices_list.npz
+rg "_vertices_list\\.pkl" -n data/regular_polyhedron || echo "OK: no .pkl files"
 ```
 
 ## ライセンス

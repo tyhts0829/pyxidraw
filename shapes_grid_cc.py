@@ -1,25 +1,32 @@
 """
-Arrange all registered shapes on a grid and rotate each by MIDI CC.
+MIDI CC で各シェイプを回転させつつ、登録済みシェイプをグリッド配置して表示。
 
 - CC 1: rotate X (0.0–1.0 → 0–2π)
 - CC 2: rotate Y (0.0–1.0 → 0–2π)
 - CC 3: rotate Z (0.0–1.0 → 0–2π)
 
-Run:
-    python shapes_grid_cc.py
+使い方（APIファースト、CLIなし）:
+    from api import run
+    run(draw, canvas_size=(300,300), render_scale=6, use_midi=False)
 
-Use `--no-midi` in your environment or switch devices if MIDI is unavailable.
+備考:
+- 破壊的変更後のアーキテクチャに準拠（Geometry 統一 / E.pipeline）。
+- MIDI 未接続環境ではデフォルトで無効。環境変数 `PYXIDRAW_USE_MIDI=1` で有効化可能。
 """
 
 from __future__ import annotations
 
+import logging
 import math
+import os
 from typing import Mapping
 
-from api import E, G
+from api import E, G, run
+from common.logging import setup_default_logging
 from engine.core.geometry import Geometry
-from api.runner import run_sketch
 from util.constants import CANVAS_SIZES
+
+logger = logging.getLogger(__name__)
 
 
 def _clamp01(v: float) -> float:
@@ -41,6 +48,7 @@ def _grid_layout(n_items: int, canvas_w: float, canvas_h: float) -> tuple[int, i
 
 
 def draw(t: float, cc: Mapping[int, float]) -> Geometry:
+    logger.debug("CC: %s", cc)
     # Canvas setup
     canvas_w, canvas_h = CANVAS_SIZES["SQUARE_300"]
 
@@ -68,17 +76,23 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         try:
             shape_fn = getattr(G, name)
         except AttributeError:
-            # Skip unexposed shapes
+            # 未公開/未登録シェイプはスキップ
             continue
 
-        g = shape_fn().scale(cell_size, cell_size, cell_size).translate(cx, cy, 0)
+        # 既定引数なしで生成できないシェイプはスキップ
+        try:
+            base = shape_fn()
+        except TypeError:
+            # 必須引数がある場合
+            continue
+        except Exception:
+            # 生成に失敗した場合
+            continue
+
+        g = base.scale(cell_size, cell_size, cell_size).translate(cx, cy, 0)
 
         # Rotate around each shape's own center using effect (0..1 → tau)
-        rotated = (
-            E.pipeline
-            .rotation(center=(cx, cy, 0), rotate=(rx, ry, rz))
-            .build()
-        )(g)
+        rotated = (E.pipeline.rotation(center=(cx, cy, 0), rotate=(rx, ry, rz)).build())(g)
 
         combined = rotated if combined is None else (combined + rotated)
 
@@ -86,9 +100,9 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
 
 
 if __name__ == "__main__":
-    run_sketch(
-        draw,
-        canvas_size=CANVAS_SIZES["SQUARE_300"],
-        render_scale=6,
-        background=(1, 1, 1, 1),
-    )
+    setup_default_logging()
+    # デフォルト定数（チューニングしやすく）
+    CANVAS = CANVAS_SIZES["SQUARE_300"]
+    SCALE = 6
+    USE_MIDI = os.environ.get("PYXIDRAW_USE_MIDI") == "1"
+    run(draw, canvas_size=CANVAS, render_scale=SCALE, background=(1, 1, 1, 1), use_midi=USE_MIDI)

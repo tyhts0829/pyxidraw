@@ -15,6 +15,23 @@ instructions = "Think in English, answer in Japanese."
   result = (E.pipeline.noise(intensity=0.3).filling(density=0.5).build())(g)
   ```
 
+### パイプライン仕様のシリアライズ/検証
+
+- `to_spec(pipeline)`: `[{"name": str, "params": dict}]` に変換
+- `from_spec(spec)`: 検証済み spec から `Pipeline` を生成
+- `validate_spec(spec)`: 仕様を事前に検証（未登録名/不正パラメータを早期失敗）
+
+```python
+from api import E, to_spec, from_spec, validate_spec
+
+pipeline = (E.pipeline.rotation(rotate=(0.25,0,0))
+                      .noise(intensity=0.2)
+                      .build())
+spec = to_spec(pipeline)
+validate_spec(spec)     # 例外が出なければOK
+pipeline2 = from_spec(spec)
+```
+
 ## プロジェクト構成とモジュールの整理
 
 - `api/`: 高レベル API サーフェス — `E`（エフェクト）、`G`（シェイプ）、`runner.py`。
@@ -34,6 +51,11 @@ instructions = "Think in English, answer in Japanese."
 - カバレッジ: `python -m pytest --cov=. --cov-report=term`。
 - ベンチマーク: `python -m benchmarks run`（`benchmarks/__main__.py` を参照）。
 - 依存関係: README を参照（固定の `requirements.txt` はありません）。
+
+### 開発向け Tips
+- 形状生成の LRU キャッシュを無効化/調整:
+  - `export PXD_CACHE_DISABLED=1`
+  - `export PXD_CACHE_MAXSIZE=64`
 
 ## コーディングスタイルと命名規則
 

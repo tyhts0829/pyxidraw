@@ -1,203 +1,71 @@
-# 破壊的変更前提の簡素化提案（2025-09-01）
+# 破壊的変更 提案ダイジェスト（2025-09-04 更新）
 
-本ドキュメントは「既存 API 互換を気にせず、コードベースを美しく・シンプルに・読みやすく」するための破壊的変更案をまとめたものです。各提案ごとにメリット・デメリット・影響範囲/移行メモを併記します。
+この文書は「現状把握と残課題の一覧」に特化した短縮版です。詳細な背景/メリデメはコミットメッセージと各モジュールの docstring を参照してください。
 
----
+## 現状サマリ（達成状況）
+- [x] 提案1: Geometry 統一（`engine/core/geometry.py`）
+- [x] 提案2: エフェクト関数化（`effects/*` は `@effect` 関数のみ。`effects/registry.py` は関数以外を拒否）
+- [x] 提案3: パイプライン一本化（`api/pipeline.py` の `E.pipeline...build()(g)`）
+- [x] 提案4: 単層キャッシュ（`Pipeline` の `(geometry_hash, pipeline_key)` のみ）
+- [x] 提案5: 命名/型/0–1 写像の共通化（Vec3 適用・0..1→レンジ写像/角度正規化の統一、Doc/README 反映完了）
+- [x] 提案6: シリアライズ/検証簡素化（`Pipeline.to_spec/from_spec`。polyhedron データは npz のみ）
+- [x] 提案7: ログ/例外の標準化（エンジン層は logging に統一。CLI/ベンチは仕様上の print を維持）
+- [ ] 提案8: ディレクトリ再編（構成は大枠達成済みだが最終リネーム/掃除は未）
 
-## 進捗ステータス（2025-09-03 更新）
-- [x] 提案1 Geometry 統一（GeometryData/GeometryAPI 撤廃）
-- [x] 提案2 エフェクト関数化（BaseEffect 撤廃）
-- [x] 提案3 パイプライン一本化（`E.pipeline` のみ）
-- [x] 提案4 単層キャッシュ（Pipeline のみ）
-- [~] 提案5 命名/型/0–1 写像の共通化（主要エフェクトへ適用拡大中：rotation/noise/array/wobble 反映）
-- [x] 提案6 シリアライズ/検証の簡素化（Pipeline to_spec/from_spec 実装、pickle→npz 変換スクリプト同梱）
-- [~] 提案7 ログ/例外の logging 統一（engine/pipeline/worker と engine/io/controller に適用、残りは段階適用）
-- [ ] 提案8 ディレクトリ再編（未）
+## 直近で完了した主な変更
+- 互換層とレガシー清掃
+  - `old/` ディレクトリ削除。`E.add(...).result()` 系の痕跡除去。
+  - `effects/registry.py` を関数専用に簡素化（クラス登録不可）。
+  - `tutorials` の誤 API（`.result()` 等）修正、ログ文の `E.pipeline` 表記統一。
+- ベンチマークの新 API 対応
+  - `benchmarks/plugins/serializable_targets.py` を `E.pipeline` ベースに統一。
+  - `subdivision/extrude/buffer` を新パラメータにマッピングし実行可能化。
+  - 全体実行成功（52 targets, 100% success）。
+- ドキュメント刷新
+  - README を PyxiDraw4 表記・最新 API に更新。チュートリアル README も更新。
 
-## 背景と目標
-- 目的: 学習コストの削減、責務の明確化、抽象の重複解消、単純で予測可能なキャッシュ戦略、命名/単位/型の一貫性。
-- 現状の課題:
-  - Geometry の重複（GeometryData / Geometry / GeometryAPI）。
-  - EffectChain と EffectPipeline の二重系統・キャッシュ多層化。
-  - エフェクトがクラス＋キャッシュ抽象に依存し理解コストが高い。
-  - 命名・パラメータ・型表現が箇所により揺れる。
+## 未消化/保留（やることリスト）
+- 提案5（命名/スケール/型の統一）は完了
+- 提案7（logging 統一）の仕上げ
+  - `engine/render/*`, `effects/*` の一部メッセージ出力の体裁統一（レベル/文面）。
+  - `engine/render/renderer.py` に debug ログを追加（アップロードサイズ/描画スキップ等）。
+  - CLI/ベンチの `print` は仕様上維持。エンジン層のみ `logging` へ統一。
+- 提案8（ディレクトリ再編）
+  - 最終的なフォルダ整理と import パスの固定化（現状でも動作は安定）。
+  - `new_tests/` は削除済み。ミニランナーは `scripts/` へ移設。
+- polyhedron データの完全移行
+  - アセットは `.npz` へ移行済み。最終段: `shapes/polyhedron.py` の pickle フォールバック撤去。
 
----
+### 決定記録: polyhedron データ形式（pickle → npz）採用理由（2025-09-04）
 
-## 提案 1: Geometry を 1 型に統合
+- 安全性: pickle はロード時に任意コード実行のリスクがある一方、npz は `allow_pickle=False` 前提で純データのみを扱える。
+- 互換性: pickle は Python 実装/バージョン/クラス定義に依存が強い。npz は環境非依存で将来の移行コストが低い。
+- 再現性: dtype(`float32`)/shape/配列順を明示でき、`arr_0, arr_1, ...` 規約で決定的ロードが可能。
+- 単純化: 読み込みが「配列を開く」だけになり、互換クラスやラッパ不要。`shapes/polyhedron.py` のローダが簡潔。
+- 配布効率: zip 圧縮でサイズ削減・配布容易（CI アーティファクト/キャッシュとの相性が良い）。
+- 運用整合: 本プロジェクトの設計方針（データはデータ形式、ロジックはコード）および `Pipeline.to_spec/from_spec` の方針と一貫。
 
-- 提案概要:
-  - `GeometryData`/`Geometry`/`GeometryAPI` を廃し、`Geometry`（データクラス）に統一。
-  - 変換 API は `translate/scale/rotate/concat` の最小セットだけ提供し、純粋に新インスタンスを返す。
+補足:
+- 互換期間は終了。`.npz` のみを使用（`shapes/polyhedron.py` の pickle フォールバックを撤去）。
+  一括移行用に `scripts/convert_polyhedron_pickle_to_npz.py` を提供。
+ - 関連 ADR: `docs/adr/0001-npz-over-pickle.md`
 
-- メリット:
-  - レイヤ/概念の重複が解消され、読みやすさ向上。
-  - 変換の副作用がなく、推論・テストが容易。
-  - API 表面積が縮小し、ドキュメント/チュートリアルが簡潔に。
+## マイグレーション・チートシート（主要置換）
+- 変換 API: `size→scale`, `at→translate`, `spin→rotate(z: 0..1→2π)`, `move→translate`, `grow→scale`。
+- エフェクト: クラス継承は禁止。`effects.registry.effect` で登録する関数のみ（`Geometry -> Geometry`）。
+- パイプライン: `E.pipeline ... .build()(g)` に統一（単層キャッシュ）。
 
-- デメリット:
-  - 既存の `GeometryAPI` 連鎖（`size/at/spin` 等）を置換する必要。
-  - 既存のサンプル・テスト多数の更新が必要。
-
-- 影響範囲/移行:
-  - `api/geometry_api.py` と `engine/core/geometry_data.py` を廃止し、`engine/core/geometry.py` に集約。（実装済み）
-  - `shapes/*` の戻り値型を `Geometry` に統一（実装済み）。
-  - 置換ガイド: `size→scale`, `at→translate`, `spin→rotate(z=deg2rad)`, `move→translate`, `grow→scale`。
-
----
-
-## 提案 2: エフェクトを関数ベースに（クラス/キャッシュ抽象を撤廃）
-
-- 提案概要:
-  - `effects/*.py` の `BaseEffect` 継承＋`apply` をやめ、`@effect` 登録の純粋関数に統一（`Geometry -> Geometry`）。
-  - 各エフェクト内で入力コピー・出力返却を徹底（副作用なし）。
-
-- メリット:
-  - 概念が「関数」に一本化され、理解しやすい。
-  - `LRUCacheable` 等の抽象を削減し、実装/依存の見通しが良くなる。
-  - テストがシンプル（直接 `effects.noise.noise(geom, ...)`）。
-
-- デメリット:
-  - 既存のクラス API を使用するコード/テストの全面置換が必要。
-  - 将来エフェクト固有の状態管理が必要になった場合、関数型では表現工夫が必要。
-
-- 影響範囲/移行:
-  - `effects/base.py` を削除し、関数エフェクトに一本化（実装済み）。
-  - エフェクトは `@effect()` 登録の `Geometry -> Geometry` 関数のみ（実装済み）。
+## 参照ポイント（実装の所在）
+- Geometry: `engine/core/geometry.py`（純関数 `translate/scale/rotate/concat`）
+- パイプライン: `api/pipeline.py`（`Pipeline/PipelineBuilder` と to_spec/from_spec）
+- エフェクト: `effects/*`（`@effect` 関数。rotation/translation/scaling/transform/noise/...）
+- レジストリ: `effects/registry.py`, `shapes/registry.py`
+- 形状 API: `api/shape_factory.py`（`G.*` は `Geometry` を返却）
+- ベンチ: `benchmarks/plugins/*`, `benchmarks/core/*`（CLI: `python -m benchmarks`）
 
 ---
 
-## 提案 3: パイプラインは 1 本に統合（EffectChain 撤廃）
-
-- 提案概要:
-  - `EffectChain` を廃し、`E ... .build() -> Pipeline` だけに統一。
-  - `Pipeline.__call__(geometry)` が順次適用するだけの単純モデルに。
-
-- メリット:
-  - 表現が一貫し、ドキュメント/学習コストを削減。
-  - キャッシュ/最適化の適用位置が明確（Pipeline のみ）。
-
-- デメリット:
-  - `E.add(g).xxx().result()` の使用感が変わる（互換層で一時吸収可）。
-  - Chain ベースの表現に依存した既存デモ/チュートリアルの更新。
-
-- 影響範囲/移行:
-  - `E.add(...).result()` は撤廃し、`E.pipeline...build()(g)` のみを採用（実装済み）。
-
----
-
-## 提案 4: キャッシュはパイプライン単層のみ
-
-- 提案概要:
-  - ステップキャッシュ/チェーンキャッシュ/エフェクト内 LRU をすべて撤廃し、`Pipeline` の `(geometry_hash, pipeline_hash)` のみでキャッシュ。
-  - `geometry_hash` は `coords/offsets` のバイト列から安定ハッシュ（GUID 依存をやめる）。
-
-- メリット:
-  - キャッシュの挙動が予測可能、デバッグ容易。
-  - 設計/実装が簡素化し、バグ発生点が減る。
-
-- デメリット:
-  - ステップ単位の再利用最適化は失われる（ただし単純で十分速いケースが多い）。
-  - ハッシュ計算コストが入力サイズに依存（大規模データでは注意）。
-
-- 影響範囲/移行:
-  - `EffectChain` のキャッシュ削除（実装済み）。`common/cacheable_base.py` の利用は段階的縮小予定。
-
----
-
-## 提案 5: 命名・型・スケールの一貫化
-
-- 提案概要:
-  - 変換 API 名を `translate/scale/rotate` に統一。
-  - `common/types.py` に `Vec2/Vec3` 型別名を定義し、API シグネチャで採用。
-  - 0–1 正規化パラメータ→実数/整数の写像を `common/param_utils.py` に集約（線形/指数など選択可能）。
-  - `noise` の `intensity *= 10` を廃止し、仕様としてレンジ/単位を明記（例: `strength: 0..1` を素直に反映）。
-
-- メリット:
-  - 横断的な読みやすさ・推測可能性が向上。
-  - UI（MIDI）とコアのスケール変換が共有化され、重複とバグが減る。
-
-- デメリット:
-  - 一時的にレンジが変わることで既存アートの見え方が変わる可能性。
-
-- 影響範囲/移行:
-  - サンプル/チュートリアルのパラメータ調整、`tests/` の期待値更新。
-
----
-
-## 提案 6: シリアライズ/検証の簡素化
-
-- 提案概要:
-  - `SerializablePipeline` は `[{name: str, params: dict}]` の配列に簡素化。ロード時に未登録名/不正型は即例外（早期失敗）。
-  - `shapes/polyhedron.py` の事前計算データを `npz/json` に移行（`pickle` 廃止）。
-
-- メリット:
-  - フォーマットが人間可読・差分フレンドリー・安全。
-  - エラーの早期検出で運用事故を減らす。
-
-- デメリット:
-  - 旧ファイル資産（pickle）の再生成/移行が必要。
-
-- 影響範囲/移行:
-  - 変換スクリプトを一時同梱（pickle→npz/json）。ロードは新形式に一本化。
-
----
-
-## 提案 7: ログ/例外の一貫化（標準 logging）
-
-- 提案概要:
-  - ランタイムメッセージ/例外通知の `print` を `logging` に統一。子プロセス例外は親側で整形し、ポリシー（継続/停止）を明示。
-
-- メリット:
-  - 本番/開発の切替・粒度制御が標準手段で可能。
-  - エラー追跡性が向上。
-
-- デメリット:
-  - 初期はログ設定の標準化コスト（フォーマッタ/ハンドラ定義）。
-
-- 影響範囲/移行:
-  - `engine/pipeline/worker.py`, `engine/io/controller.py`, `effects/buffer.py` などの出力箇所置換。
-
----
-
-## 提案 8: ディレクトリ構成のシンプル化（案）
-
-- 提案概要:
-  - `api/`: `pipeline.py`（E ビルダー＋Pipeline）, `__init__.py`（E, G, Geometry 再エクスポート）
-  - `engine/core/`: `geometry.py`（統合）, `transform_utils.py`, `render_window.py`, ...
-  - `effects/`: 関数実装＋`registry.py`（クラス撤廃）
-  - `shapes/`: 生成器（関数/最小限クラス）＋`registry.py`
-  - `common/`: `types.py`, `param_utils.py`, `base_registry.py`
-
-- メリット:
-  - レイヤの責務が構造に反映され、探索性が高い。
-
-- デメリット:
-  - 既存ファイル移動に伴うインポートパス修正が広範囲。
-
-- 影響範囲/移行:
-  - リネーム/移動は最後に実行し、段階移行の最終フェーズで適用。
-
----
-
-## 段階的移行ロードマップ（推奨順）
-1) Geometry 統合（`GeometryAPI`/`GeometryData` の置換）
-2) エフェクトを関数化（旧クラス→新関数ブリッジ、一時互換）
-3) Pipeline 導入と EffectChain 撤廃（`E.add(...).result()` は暫定互換で中継）
-4) キャッシュ単層化（Pipeline のみ、GUID 依存排除）
-5) 命名/型/0–1 写像の共通化（`types.py`/`param_utils.py`）
-6) シリアライズ/検証の簡素化（pickle 廃止、未知名は即例外）
-7) ログ/例外の logging 統一
-8) ディレクトリ再編（最終段階）
-
----
-
-## リスクと緩和策
-- 大規模な破壊的変更により短期的にテストが赤くなる → フェーズごとに PR を分割し、互換ブリッジで段差を小さくする。
-- パラメータレンジの変更で描画結果が変わる → サンプル/スクリーンショットを更新し、CHANGELOG に「見た目が変わる」旨を明記。
-- キャッシュ戦略の変更で性能特性が変わる → ベンチマークを併走し、必要ならパイプライン鍵生成を調整（例: 近似ハッシュ/サマリーハッシュ）。
-
----
+この文書は、提案の「進捗と残課題」を常に最新へ短く保つことを目的としています。詳細な議論・根拠は各 PR/コミットに付随する記述を参照してください。
 
 ## 採用優先度（コスト/効果の目安）
 1) Geometry 統合（高効果・中コスト）
@@ -257,19 +125,12 @@ class Pipeline:
     - pipeline_hash: ステップ名 + 正規化パラメータ + 関数バージョン（`__code__.co_code` のダイジェスト）。
   - API エクスポート: `api/__init__.py` は `E.pipeline` と `Geometry` を公開（`E` はシングルトン）。
 
-- new_tests に追加/更新:
-  - `new_tests/test_unified_geometry.py`: Geometry 基本 API とノイズ関数の統合テスト（関数版に更新）。
-  - `new_tests/test_transform_utils_geometry.py`: transform_utils が Geometry を受け取り Geometry を返すことを確認。
-  - `new_tests/test_translation_geometry_path.py`: `translation(g, ...) -> Geometry` の確認。
-  - `new_tests/test_effects_functions_fill_array.py`: `filling/array` が Geometry を返し、線数/重複数が期待通り変化することを確認。
-  - `new_tests/run_unified_geometry_check.py`: pytest 不要の最小ランナー（依存が乏しい環境向け）。
+- テスト整備（現行）:
+  - テストは `tests/` に集約（v3 スイート）。
+  - pytest 非依存の最小ランナーは `scripts/run_unified_geometry_check.py` に移設。
 
-- サニティ実行（`new_main.py`）:
-  - 追加: `new_main.py`（`noise -> filling -> array` の関数パイプライン確認用）。
-  - 実行例（ユーザー環境の実測）:
-    - `[base] points=5, lines=1, bbox=(-30.0, -30.0, 0.0)->(30.0, 30.0, 0.0)`
-    - `[out1] points=220, lines=104, bbox≈(-30.38, -30.03, -0.27)->(330.02, 30.20, 0.35)`
-    - `[out2] points=220, lines=104, bboxは out1 と同一（キャッシュヒット）`
+- サニティ実行（最小ランナー）:
+  - `scripts/run_unified_geometry_check.py` を用意（pytest不要、コア動作の最低限の確認に利用）。
 
 - 既知の制約/今後の作業:
   - 旧 `EffectChain`/`GeometryAPI` 系は破壊的変更により未対応（使用停止前提）。
@@ -347,31 +208,34 @@ class Pipeline:
 - ベンチの対応
   - `benchmarks/plugins/serializable_targets.py`: `api.pipeline` を使用。主要エフェクトの関数化に追随済み。
 
-- 新規テストと手動確認
-  - `new_tests/` に Geometry と関数エフェクトの検証を追加（サンドボックスでは実行せず、ローカルで pytest/簡易ランナー可）。
-  - `new_main.py` によるパイプライン sanity（キャッシュヒット確認済み）。
+- 新規テストと手動確認（現行）
+  - テストは `tests/` に集約済み（v3 スイート）。
+  - 最小ランナー `scripts/run_unified_geometry_check.py` を提供（pytest 非依存で一部確認）。
 
 ---
 
 ## 再開時の TODO（次にやること）
 
 - 旧表記/旧APIの残滓の整理（ドキュメント）
-  - [ ] `AGENTS.md` の GeometryAPI/EffectChain 記述を更新。
-  - [ ] README/チュートリアルの細部（用語・コメント）を新API前提で統一。
+  - [x] `AGENTS.md` の GeometryAPI/EffectChain 記述を更新（最新仕様に同期済み）。
+  - [x] README/チュートリアルの細部（語彙・角度0..1→2πの指針）を明記・統一。
 
 - テストスイートの刷新
   - [ ] 旧API依存のテキスト/コメントの掃除。必要に応じて追加ケースを拡充。
+  - [x] 暫定の `new_tests/` は整理済み（内容は `tests/` に統合、残置物を削除）。
 
 - 型/設計の仕上げ
   - [ ] `shapes/` 戻り値注釈の再点検（`Geometry` で統一済みだが表記揺れを解消）。
   - [ ] 可能なら `common/cacheable_base.py` 依存の段階的縮小（過剰なキャッシュ層の廃止）。
+    - [x] 環境変数で LRU キャッシュの無効化/サイズ指定を可能化（`PXD_CACHE_DISABLED`, `PXD_CACHE_MAXSIZE`）。
 
 - 命名/型/0–1 写像の共通化（提案5の仕上げ）
   - [ ] `common/param_utils.py` の横断適用（全エフェクトで一貫仕様へ）。
+    - [x] `buffer/explode/transform/trimming/collapse` に適用。ドキュメントを更新（README/Docstring）。
 
 - シリアライズ/検証（提案6）
-  - [ ] `[{name, params}]` 形式のシリアライザ/バリデータ追加。未知名・不正型の早期失敗。
-  - [ ] 旧 pickle 資産 → json/npz 変換スクリプトの同梱。
+  - [x] `[{name, params}]` 形式のシリアライザ/バリデータ追加（`api.pipeline.validate_spec`）。未知名・不正型（非JSON様式/未定義パラメータ※kwargs未対応エフェクトのみ）を早期失敗。
+  - [x] 旧 pickle 資産 → npz 変換スクリプトを `scripts/convert_polyhedron_pickle_to_npz.py` として同梱（削除オプション付き）。
 
 - ログ/例外（提案7）
   - [ ] `print` を `logging` に統一（特に engine/io, pipeline/worker）。

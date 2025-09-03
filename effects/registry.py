@@ -1,14 +1,14 @@
 """
 関数ベースのエフェクトレジストリ。
 
-@effect デコレータで `Geometry -> Geometry` な関数を登録します。
-（必要なら BaseEffect サブクラスもラップ対応します。）
+@effect デコレータで `Geometry -> Geometry` な関数のみを登録します。
+クラス継承や互換ラッパは廃止しました（提案に基づく簡素化）。
 エイリアスはサポートしません（明示名のみ）。
 """
 
 from __future__ import annotations
 
-from inspect import isclass
+from inspect import isfunction
 from typing import Any, Callable, Dict
 
 from engine.core.geometry import Geometry
@@ -23,23 +23,19 @@ def _normalize_key(name: str) -> str:
 
 
 def effect(arg: Any | None = None, /, name: str | None = None):
-    """関数/クラスをエフェクトとして登録するデコレータ（エイリアス非対応）。
+    """関数をエフェクトとして登録するデコレータ（エイリアス非対応）。
 
     使い方:
-    - `@effect`                -> obj.__name__ で登録
-    - `@effect()`              -> obj.__name__ で登録
-    - `@effect("custom")`     -> "custom" 名で登録
-    - 関数/クラスいずれも可（クラスはインスタンス化して __call__ を使うラッパ登録）
+    - `@effect`            -> obj.__name__ で登録
+    - `@effect()`          -> obj.__name__ で登録
+    - `@effect("custom")` -> "custom" 名で登録
     """
 
     def _register(obj):
+        if not isfunction(obj):
+            raise TypeError("@effect は関数のみ登録可能です（クラス/インスタンスは不可）")
         key = _normalize_key(name or obj.__name__)
-        if isclass(obj):
-            def wrapped(g: Geometry, **params: Any) -> Geometry:
-                return obj()(g, **params)  # type: ignore[misc]
-            _REGISTRY[key] = wrapped
-        else:
-            _REGISTRY[key] = obj
+        _REGISTRY[key] = obj
         return obj
 
     # 直付け (@effect) の場合

@@ -7,13 +7,14 @@ import numpy as np
 from .registry import effect
 from engine.core.geometry import Geometry
 from common.param_utils import norm_to_int, norm_to_range
+from common.types import Vec3
 
 
 @effect()
 def extrude(
     g: Geometry,
     *,
-    direction: tuple[float, float, float] = (0.0, 0.0, 1.0),
+    direction: Vec3 = (0.0, 0.0, 1.0),
     distance: float = 0.5,
     scale: float = 0.5,
     subdivisions: float = 0.5,

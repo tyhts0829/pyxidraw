@@ -4,6 +4,7 @@ shapes/ と effects/ の両方で使用する統一されたキャッシング�
 """
 
 import hashlib
+import os
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from typing import Any, Dict, Optional, Tuple
@@ -76,7 +77,17 @@ class LRUCacheable(CacheableBase):
 
     def __init__(self, maxsize: int = 128):
         super().__init__()
+        # 環境変数で既定サイズや無効化を制御可能に
+        # PXD_CACHE_DISABLED=1 で無効化、PXD_CACHE_MAXSIZE で上書き
+        disabled = os.getenv("PXD_CACHE_DISABLED", "0")
+        override = os.getenv("PXD_CACHE_MAXSIZE")
+        if override is not None:
+            try:
+                maxsize = max(0, int(override))
+            except ValueError:
+                pass
         self._cache_size = maxsize
+        self._cache_enabled = disabled not in ("1", "true", "TRUE", "True")
         self._setup_lru_cache()
 
     def _setup_lru_cache(self) -> None:

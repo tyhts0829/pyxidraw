@@ -7,6 +7,7 @@ import numpy as np
 from engine.core.geometry import Geometry
 
 from .registry import effect
+from common.param_utils import clamp01
 
 
 def _interpolate_at_distance(vertices: np.ndarray, distances: list[float], target_dist: float) -> np.ndarray | None:
@@ -53,8 +54,8 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
 
 @effect()
 def trimming(g: Geometry, *, start_param: float = 0.0, end_param: float = 1.0, **_params: Any) -> Geometry:
-    start_param = max(0.0, min(1.0, float(start_param)))
-    end_param = max(0.0, min(1.0, float(end_param)))
+    start_param = clamp01(float(start_param))
+    end_param = clamp01(float(end_param))
     coords, offsets = g.as_arrays(copy=False)
     if start_param >= end_param or len(coords) == 0:
         return Geometry(coords.copy(), offsets.copy())

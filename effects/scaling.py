@@ -4,14 +4,15 @@ from typing import Tuple
 
 from .registry import effect
 from engine.core.geometry import Geometry
+from common.types import Vec3
 
 
 @effect()
 def scaling(
     g: Geometry,
     *,
-    center: Tuple[float, float, float] = (0.0, 0.0, 0.0),
-    scale: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+    center: Vec3 = (0.0, 0.0, 0.0),
+    scale: Vec3 = (1.0, 1.0, 1.0),
 ) -> Geometry:
     sx, sy, sz = scale
     return g.scale(sx, sy, sz, center=center)

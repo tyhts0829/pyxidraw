@@ -15,11 +15,11 @@ def translate(g: Geometry, dx: float, dy: float, dz: float = 0) -> Geometry:
     """平行移動変換を適用。
     
     Args:
-        g: 変換対象のGeometryData
+        g: 変換対象のGeometry
         dx, dy, dz: 移動ベクトル
         
     Returns:
-        変換後の新しいGeometryData
+        変換後の新しいGeometry
     """
     vec = np.array([dx, dy, dz], dtype=np.float32)
     new_coords = g.coords + vec
@@ -30,12 +30,12 @@ def scale_uniform(g: Geometry, factor: float, center=(0, 0, 0)) -> Geometry:
     """一様スケーリング変換を適用。
     
     Args:
-        g: 変換対象のGeometryData
+        g: 変換対象のGeometry
         factor: スケール係数
         center: スケールの中心点
         
     Returns:
-        変換後の新しいGeometryData
+        変換後の新しいGeometry
     """
     return scale(g, factor, factor, factor, center)
 
@@ -44,12 +44,12 @@ def scale(g: Geometry, sx: float, sy: float, sz: float = 1.0, center=(0, 0, 0)) 
     """非一様スケーリング変換を適用。
     
     Args:
-        g: 変換対象のGeometryData
+        g: 変換対象のGeometry
         sx, sy, sz: 各軸のスケール係数
         center: スケールの中心点
         
     Returns:
-        変換後の新しいGeometryData
+        変換後の新しいGeometry
     """
     cx, cy, cz = center
     center_vec = np.array([cx, cy, cz], dtype=np.float32)
@@ -68,12 +68,12 @@ def rotate_z(g: Geometry, angle_rad: float, center=(0, 0, 0)) -> Geometry:
     """Z軸周りの回転変換を適用。
     
     Args:
-        g: 変換対象のGeometryData
+        g: 変換対象のGeometry
         angle_rad: 回転角度（ラジアン）
         center: 回転の中心点
         
     Returns:
-        変換後の新しいGeometryData
+        変換後の新しいGeometry
     """
     c, s = np.cos(angle_rad), np.sin(angle_rad)
     cx, cy, cz = center
@@ -148,12 +148,12 @@ def rotate_xyz(g: Geometry, rx: float, ry: float, rz: float, center=(0, 0, 0)) -
     """XYZ軸周りの連続回転変換を適用。
     
     Args:
-        g: 変換対象のGeometryData
+        g: 変換対象のGeometry
         rx, ry, rz: 各軸の回転角度（ラジアン）
         center: 回転の中心点
         
     Returns:
-        変換後の新しいGeometryData
+        変換後の新しいGeometry
     """
     result: Geometry = g
     if rx != 0:
@@ -174,13 +174,13 @@ def transform_combined(
     """複合変換：スケール → 回転 → 移動を順次適用。
     
     Args:
-        g: 変換対象のGeometryData
+        g: 変換対象のGeometry
         center: 最終的な中心位置
         scale_factors: (sx, sy, sz) スケール係数
         rotate_angles: (rx, ry, rz) 回転角度（ラジアン）
         
     Returns:
-        変換後の新しいGeometryData
+        変換後の新しいGeometry
     """
     result: Geometry = g
     

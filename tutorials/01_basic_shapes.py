@@ -18,8 +18,7 @@ except ValueError:
     pass
 sys.path.insert(0, REPO_ROOT)
 
-from api import G
-from api.runner import run_sketch
+from api import G, run
 from util.constants import CANVAS_SIZES
 from common.logging import setup_default_logging
 
@@ -47,19 +46,16 @@ def draw(t, cc):
 
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--headless", action="store_true")
-    args = parser.parse_args()
     setup_default_logging()
     logger = logging.getLogger(__name__)
+    headless = os.environ.get("PYXIDRAW_HEADLESS") == "1"
 
-    if args.headless or os.environ.get("PYXIDRAW_HEADLESS") == "1":
+    if headless:
         g = draw(0, {})
         c, o = g.as_arrays()
         logger.info("Headless OK: points=%d, lines=%d", c.shape[0], max(0, o.shape[0] - 1))
     else:
-        run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_300"])
+        run(draw, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
 
 
 if __name__ == "__main__":

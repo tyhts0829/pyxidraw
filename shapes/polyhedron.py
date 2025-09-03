@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +39,7 @@ class Polyhedron(BaseShape):
     
     @classmethod
     def _load_vertices_data(cls):
-        """Load pre-computed polyhedron vertex data."""
+        """Load pre-computed polyhedron vertex data (.npz only)."""
         if cls._vertices_cache is None:
             cls._vertices_cache = {}
             data_dir = Path(__file__).parents[1] / "data" / "regular_polyhedron"
@@ -52,7 +51,7 @@ class Polyhedron(BaseShape):
 
             polyhedrons = ["tetrahedron", "hexahedron", "octahedron", "dodecahedron", "icosahedron"]
             for polyhedron in polyhedrons:
-                # Prefer new npz format
+                # Authoritative npz format
                 npz_file = data_dir / f"{polyhedron}_vertices_list.npz"
                 if npz_file.exists():
                     with np.load(npz_file) as data:
@@ -65,12 +64,6 @@ class Polyhedron(BaseShape):
                             keys = sorted([k for k in data.files if k.startswith('arr_')], key=lambda k: int(k.split('_')[1]))
                             cls._vertices_cache[polyhedron] = [data[k].astype(np.float32) for k in keys]
                     continue
-
-                # Legacy pickle (deprecated). Kept for transitional use.
-                pkl_file = data_dir / f"{polyhedron}_vertices_list.pkl"
-                if pkl_file.exists():
-                    with open(pkl_file, "rb") as f:
-                        cls._vertices_cache[polyhedron] = pickle.load(f)
     
     def generate(self, polygon_type: str | int = "tetrahedron", **params: Any) -> Geometry:
         """Generate a regular polyhedron.

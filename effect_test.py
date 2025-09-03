@@ -1,7 +1,6 @@
 import arc
 
-from api import E, G
-from api.runner import run_sketch
+from api import E, G, run
 from util.constants import CANVAS_SIZES
 
 
@@ -29,5 +28,5 @@ def draw(t, cc):
 
 if __name__ == "__main__":
     arc.start(midi=False)  # MIDIを無効化してテスト
-    run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_200"], render_scale=8, background=(1, 1, 1, 1))
+    run(draw, canvas_size=CANVAS_SIZES["SQUARE_200"], render_scale=8, background=(1, 1, 1, 1))
     arc.stop()

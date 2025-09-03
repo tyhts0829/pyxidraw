@@ -19,8 +19,7 @@ except ValueError:
 sys.path.insert(0, REPO_ROOT)
 
 import numpy as np
-from api import E, G
-from api.runner import run_sketch
+from api import E, G, run
 from engine.core.geometry import Geometry
 from util.constants import CANVAS_SIZES
 import time
@@ -245,7 +244,7 @@ def midi_controlled_pipeline(t, cc):
             scale_factor,
         )
     
-    return result.result()
+    return result
 
 
 def main():
@@ -256,19 +255,15 @@ def main():
     logger.info("3秒ごとにエフェクトモードが切り替わります")
     logger.info("終了するには Ctrl+C を押してください")
     
-    import argparse, os
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--headless", action="store_true")
-    args = parser.parse_args()
-    headless = args.headless or os.environ.get("PYXIDRAW_HEADLESS") == "1"
+    headless = os.environ.get("PYXIDRAW_HEADLESS") == "1"
 
     if headless:
         g = create_complex_scene(0, {})
         c, o = g.as_arrays()
         logger.info("Headless OK: points=%d, lines=%d", c.shape[0], max(0, o.shape[0]-1))
     else:
-        run_sketch(create_complex_scene, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
-        # run_sketch(midi_controlled_pipeline, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
+        run(create_complex_scene, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
+        # run(midi_controlled_pipeline, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
 
 
 if __name__ == "__main__":

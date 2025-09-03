@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Sequence, Tuple
+import inspect
 
 import numpy as np
 
@@ -85,21 +86,8 @@ class Pipeline:
     @staticmethod
     def from_spec(spec: Sequence[Dict[str, Any]]) -> "Pipeline":
         """Create a Pipeline from a spec. Raises on invalid shape or effect name."""
-        if not isinstance(spec, (list, tuple)):
-            raise TypeError("spec must be a list/tuple of steps")
-        steps: List[Step] = []
-        for i, entry in enumerate(spec):
-            if not isinstance(entry, dict):
-                raise TypeError(f"spec[{i}] must be a dict, got {type(entry).__name__}")
-            name = entry.get("name")
-            params = entry.get("params", {})
-            if not isinstance(name, str):
-                raise TypeError(f"spec[{i}]['name'] must be str")
-            if not isinstance(params, dict):
-                raise TypeError(f"spec[{i}]['params'] must be dict")
-            # Validate registration early
-            get_effect(name)
-            steps.append(Step(name, params))
+        validate_spec(spec)
+        steps: List[Step] = [Step(str(entry["name"]), dict(entry.get("params", {}))) for entry in spec]  # type: ignore[arg-type]
         return Pipeline(steps)
 
 
@@ -141,3 +129,72 @@ def to_spec(pipeline: Pipeline) -> List[Dict[str, Any]]:
 
 def from_spec(spec: Sequence[Dict[str, Any]]) -> Pipeline:
     return Pipeline.from_spec(spec)
+
+
+# ---- Spec validation (Proposal 6) -----------------------------------------
+def _is_json_like(value: Any) -> bool:
+    """Heuristic check whether a value is JSON-like (serializable)."""
+    if value is None:
+        return True
+    if isinstance(value, (bool, int, float, str)):
+        return True
+    if isinstance(value, (list, tuple)):
+        return all(_is_json_like(v) for v in value)
+    if isinstance(value, dict):
+        return all(isinstance(k, str) and _is_json_like(v) for k, v in value.items())
+    return False
+
+
+def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
+    """Validate a pipeline spec. Raises TypeError/KeyError on failure.
+
+    Rules:
+    - spec is a list/tuple of {"name": str, "params": dict}
+    - effect name must be registered
+    - params must be dict and JSON-like (numbers/strings/bools/None, nested lists/dicts)
+    - parameter names are checked against function signature when possible
+      (unknown keys are allowed if the function accepts **kwargs)
+    """
+    if not isinstance(spec, (list, tuple)):
+        raise TypeError("spec must be a list or tuple of steps")
+
+    for i, entry in enumerate(spec):
+        if not isinstance(entry, dict):
+            raise TypeError(f"spec[{i}] must be a dict, got {type(entry).__name__}")
+        name = entry.get("name")
+        params = entry.get("params", {})
+        if not isinstance(name, str):
+            raise TypeError(f"spec[{i}]['name'] must be str")
+        if not isinstance(params, dict):
+            raise TypeError(f"spec[{i}]['params'] must be dict")
+
+        # Validate effect registration
+        fn = get_effect(name)  # raises KeyError if not registered
+
+        # Validate params JSON-likeness
+        for k, v in params.items():
+            if not isinstance(k, str):
+                raise TypeError(f"spec[{i}]['params'] key must be str: {k!r}")
+            if not _is_json_like(v):
+                raise TypeError(f"spec[{i}]['params']['{k}'] is not JSON-serializable-like: {type(v).__name__}")
+
+        # Validate parameter names against signature if possible
+        try:
+            sig = inspect.signature(fn)
+            has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+            if not has_var_kw:
+                # allowed keywords are those after the first positional 'g' argument
+                allowed = {p.name for p in sig.parameters.values() if p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)}
+                if 'g' in allowed:
+                    allowed.remove('g')
+                unknown = [k for k in params.keys() if k not in allowed]
+                if unknown:
+                    allowed_sorted = sorted(allowed)
+                    raise TypeError(
+                        "spec[{}] has unknown params for effect '{}': {}. Allowed: {}".format(
+                            i, name, unknown, allowed_sorted
+                        )
+                    )
+        except ValueError:
+            # Builtins or objects without signature: skip strict check
+            pass

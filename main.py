@@ -1,11 +1,15 @@
+from __future__ import annotations
+
+import os
+import logging
 from typing import Mapping
 
 import numpy as np
 
-from api import E, G
-from api.runner import run_sketch
+from api import E, G, run
 from engine.core.geometry import Geometry
 from util.constants import CANVAS_SIZES
+from common.logging import setup_default_logging
 
 
 def draw(t: float, cc: Mapping[int, float]) -> Geometry:
@@ -50,5 +54,27 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
     return combined
 
 
+def _parse_canvas(size_str: str):
+    if isinstance(size_str, str) and "x" in size_str.lower():
+        w, h = size_str.lower().split("x")
+        return int(w), int(h)
+    return CANVAS_SIZES.get(size_str.upper(), CANVAS_SIZES["SQUARE_200"])
+
+
 if __name__ == "__main__":
-    run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_200"], render_scale=8, background=(1, 1, 1, 1))
+    import argparse
+
+    setup_default_logging()
+    logger = logging.getLogger(__name__)
+
+    parser = argparse.ArgumentParser(description="PyxiDraw demo launcher (API-first, thin CLI)")
+    parser.add_argument("--size", default="SQUARE_200", help="キャンバスサイズキーまたは 'WxH'（例: 300x300）")
+    parser.add_argument("--scale", type=int, default=8, help="レンダリング拡大率")
+    parser.add_argument("--midi", action="store_true", help="MIDI を有効化する")
+    args = parser.parse_args()
+
+    canvas = _parse_canvas(args.size)
+    use_midi = args.midi or os.environ.get("PYXIDRAW_USE_MIDI") == "1"
+
+    logger.info("Launching demo: size=%s, scale=%d, midi=%s", str(canvas), args.scale, use_midi)
+    run(draw, canvas_size=canvas, render_scale=args.scale, background=(1, 1, 1, 1), use_midi=use_midi)

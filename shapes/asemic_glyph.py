@@ -12,9 +12,10 @@ from scipy.spatial import cKDTree
 from .registry import shape
 from .base import BaseShape
 from engine.core.geometry import Geometry
+from common.types import Vec3
 
-# 型エイリアス
-Point3D = tuple[float, float, float]
+# 型エイリアス（共通定義を使用）
+Point3D = Vec3
 Region = tuple[float, float, float, float]
 
 

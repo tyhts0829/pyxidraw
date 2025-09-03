@@ -7,6 +7,7 @@ from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
 from util.geometry import transform_back, transform_to_xy_plane
+from common.param_utils import norm_to_int, norm_to_range
 
 from .registry import effect
 from engine.core.geometry import Geometry
@@ -23,12 +24,14 @@ def buffer(
 ) -> Geometry:
     """Shapely を使用したバッファ/オフセット（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
-    actual_distance = distance * 25.0
+    # 0..1 → 実距離（mm）へ写像（提案5: 一貫写像）
+    MAX_DISTANCE = 25.0
+    actual_distance = norm_to_range(float(distance), 0.0, MAX_DISTANCE)
     if actual_distance == 0:
         return Geometry(coords.copy(), offsets.copy())
 
-    join_style_str = _determine_join_style(join_style)
-    resolution_int = max(1, min(10, int(resolution * 10)))
+    join_style_str = _determine_join_style(float(join_style))
+    resolution_int = max(1, norm_to_int(float(resolution), 1, 10))
 
     vertices_list = []
     for i in range(len(offsets) - 1):

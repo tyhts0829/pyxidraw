@@ -63,18 +63,38 @@ class SerializableEffectTarget:
     
     def __call__(self, geom):
         """エフェクトを適用"""
+        # Pipeline builder（E.pipeline）を使った関数エフェクト適用に統一
         if self.effect_type == "transform":
-            return geom.transform(**self.params)
+            # rotate は度指定が来る想定 → 0..1 に正規化
+            E = _get_cached_module("api.pipeline")
+            params = dict(self.params)
+            rotate = params.get("rotate", (0, 0, 0))
+            if isinstance(rotate, (list, tuple)):
+                rotate = tuple(float(v) / 360.0 for v in rotate)
+                params["rotate"] = rotate
+            pipeline = E.pipeline.transform(**params).build()
+            return pipeline(geom)
         elif self.effect_type == "scale":
+            E = _get_cached_module("api.pipeline")
             scale = self.params.get("scale", (1, 1, 1))
             center = self.params.get("center", (0, 0, 0))
-            return geom.scale(scale[0], scale[1], scale[2], center=center)
+            pipeline = E.pipeline.scaling(scale=tuple(scale), center=tuple(center)).build()
+            return pipeline(geom)
         elif self.effect_type == "translate":
+            E = _get_cached_module("api.pipeline")
             translate = self.params.get("translate", (0, 0, 0))
-            return geom.translate(translate[0], translate[1], translate[2])
+            tx, ty, tz = (translate + (0, 0, 0))[:3] if isinstance(translate, tuple) else (
+                translate[0], translate[1], translate[2]
+            )
+            pipeline = E.pipeline.translation(offset_x=float(tx), offset_y=float(ty), offset_z=float(tz)).build()
+            return pipeline(geom)
         elif self.effect_type == "rotate":
+            E = _get_cached_module("api.pipeline")
             rotate = self.params.get("rotate", (0, 0, 0))
-            return geom.rotate(rotate[0], rotate[1], rotate[2])
+            # 度 → 0..1 正規化
+            rotate = tuple(float(v) / 360.0 for v in rotate)
+            pipeline = E.pipeline.rotation(rotate=tuple(rotate)).build()
+            return pipeline(geom)
         elif self.effect_type == "noise":
             E = _get_cached_module("api.pipeline")
             intensity = self.params.get("intensity", 0.5)
@@ -95,8 +115,27 @@ class SerializableEffectTarget:
             spacing_y = self.params.get("spacing_y", 10.0)
             pipeline = E.pipeline.array(n_duplicates=n_duplicates, offset=(spacing_x, spacing_y, 0)).build()
             return pipeline(geom)
-        elif self.effect_type in {"subdivision", "extrude", "buffer"}:
-            raise NotImplementedError(f"Effect '{self.effect_type}' is not available in the new architecture yet.")
+        elif self.effect_type == "subdivision":
+            E = _get_cached_module("api.pipeline")
+            # level(1..3) → subdivisions(0..1) に粗変換
+            level = float(self.params.get("level", 1))
+            subdivisions = max(0.0, min(level / 3.0, 1.0))
+            pipeline = E.pipeline.subdivision(subdivisions=subdivisions).build()
+            return pipeline(geom)
+        elif self.effect_type == "extrude":
+            E = _get_cached_module("api.pipeline")
+            # depth(mm) を 0..1 に正規化（100mm を 1.0 と仮定）
+            depth = float(self.params.get("depth", 10.0))
+            distance = max(0.0, min(depth / 100.0, 1.0))
+            pipeline = E.pipeline.extrude(direction=(0, 0, 1), distance=distance, scale=1.0, subdivisions=0.0).build()
+            return pipeline(geom)
+        elif self.effect_type == "buffer":
+            E = _get_cached_module("api.pipeline")
+            # distance(mm) → 0..1（effects.buffer 内部で *25mm）
+            dist_mm = float(self.params.get("distance", 2.0))
+            distance = max(0.0, min(dist_mm / 25.0, 1.0))
+            pipeline = E.pipeline.buffer(distance=distance).build()
+            return pipeline(geom)
         else:
             raise ValueError(f"Unknown effect type: {self.effect_type}")
 

@@ -16,7 +16,8 @@ Usage:
 
 # 主要API
 from .shape_factory import G, ShapeFactory
-from .pipeline import E
+from .pipeline import E, to_spec, from_spec, validate_spec
+from .runner import run_sketch as run_sketch, run_sketch as run
 
 # コアクラス（高度な使用）
 from engine.core.geometry import Geometry
@@ -25,10 +26,16 @@ __all__ = [
     # メインAPI
     "G",           # 形状ファクトリ
     "E",           # エフェクトファクトリ
+    "run_sketch",  # 実行（詳細指定）
+    "run",         # 実行（エイリアス、簡易）
     
     # クラス（高度な使用）
     "ShapeFactory",
     "Geometry",
+    # シリアライズ補助
+    "to_spec",
+    "from_spec",
+    "validate_spec",
 ]
 
 # バージョン情報

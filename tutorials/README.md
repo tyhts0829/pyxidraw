@@ -1,12 +1,12 @@
-# PyxiDraw3 チュートリアル
+# PyxiDraw4 チュートリアル
 
-PyxiDraw3の機能を段階的に学習するためのチュートリアルセットです。
+PyxiDraw4 の機能を段階的に学習するためのチュートリアルセットです。
 基礎から応用まで、6つのステップで学習できます。
 
 ## チュートリアル一覧
 
 ### 01. 基本的な形状の生成 (`01_basic_shapes.py`)
-- PyxiDraw3の基本的な使い方
+- フレームワークの基本的な使い方
 - 球体の生成とサイズ・位置の設定
 - `run_sketch`関数の使用方法
 
@@ -89,12 +89,7 @@ python tutorials/01_basic_shapes.py
 
 ## 依存関係
 
-各チュートリアルを実行する前に、必要なパッケージをインストールしてください：
-
-```bash
-pip install numpy pyyaml matplotlib
-# arc ライブラリは別途インストールが必要
-```
+固定の requirements.txt はありません。最小構成の例：`pip install numpy numba pyglet moderngl psutil pyyaml`
 
 ## トラブルシューティング
 

@@ -13,9 +13,10 @@ API 方針:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Tuple
+from typing import Iterable
 
 import numpy as np
+from common.types import Vec3
 
 
 @dataclass(slots=True)
@@ -65,7 +66,7 @@ class Geometry:
         new_coords = self.coords + vec
         return Geometry(new_coords, self.offsets.copy())
 
-    def scale(self, sx: float, sy: float | None = None, sz: float | None = None, center=(0.0, 0.0, 0.0)) -> "Geometry":
+    def scale(self, sx: float, sy: float | None = None, sz: float | None = None, center: Vec3 = (0.0, 0.0, 0.0)) -> "Geometry":
         if sy is None:
             sy = sx
         if sz is None:
@@ -90,7 +91,7 @@ class Geometry:
         x: float = 0.0,
         y: float = 0.0,
         z: float = 0.0,
-        center: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        center: Vec3 = (0.0, 0.0, 0.0),
     ) -> "Geometry":
         if self.coords.size == 0 or (x == 0 and y == 0 and z == 0):
             return Geometry(self.coords.copy(), self.offsets.copy())

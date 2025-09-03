@@ -8,10 +8,11 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 from common.param_utils import ensure_vec3
+from common.types import Vec3
 
 
 def _wobble_vertices(
-    vertices_list: list[np.ndarray], amplitude: float, frequency: tuple[float, float, float], phase: float
+    vertices_list: list[np.ndarray], amplitude: float, frequency: Vec3, phase: float
 ) -> list[np.ndarray]:
     """各頂点に対してサイン波によるゆらぎ（wobble）を加える内部関数。"""
     new_vertices_list = []
@@ -38,11 +39,17 @@ def wobble(
     g: Geometry,
     *,
     amplitude: float = 1.0,
-    frequency: float | tuple[float, float, float] = (0.1, 0.1, 0.1),
+    frequency: float | Vec3 = (0.1, 0.1, 0.1),
     phase: float = 0.0,
     **_params: Any,
 ) -> Geometry:
-    """線にウォブル/波の歪みを追加（純関数）。"""
+    """線にウォブル/波の歪みを追加（純関数）。
+
+    Notes:
+        - amplitude は座標単位（mm 相当）。0..1 正規化ではありません。
+        - frequency は空間周波数 [cycles per unit]。float なら全軸同一、タプルは (fx, fy, fz)。
+        - phase はラジアン。
+    """
     coords, offsets = g.as_arrays(copy=False)
 
     # frequency をタプルに正規化（係数スケーリングは廃止）

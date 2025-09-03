@@ -21,6 +21,7 @@ from typing import Sequence
 
 import moderngl as mgl
 import numpy as np
+import logging
 
 from engine.core.geometry import Geometry
 from util.constants import PRIMITIVE_RESTART_INDEX
@@ -49,6 +50,7 @@ class LineRenderer(Tickable):
         """
         self.ctx = mgl_context
         self.double_buffer = double_buffer
+        self._logger = logging.getLogger(__name__)
 
         # シェーダ初期化
         self.line_program = Shader.create_shader(mgl_context)
@@ -79,6 +81,10 @@ class LineRenderer(Tickable):
         """GPUに送ったデータを画面に描画"""
         if self.gpu.index_count > 0:
             self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
+        else:
+            # Debug only: nothing to draw this frame
+            if self._logger.isEnabledFor(logging.DEBUG):
+                self._logger.debug("LineRenderer.draw(): no indices (skipped)")
 
     def clear(self, color: Sequence[float]) -> None:
         """画面を指定色でクリア"""
@@ -101,6 +107,11 @@ class LineRenderer(Tickable):
             return
 
         verts, inds = _geometry_to_vertices_indices(geometry, self.gpu.prim_restart_idx)
+        if self._logger.isEnabledFor(logging.DEBUG):
+            self._logger.debug(
+                "Uploading geometry: verts=%d (%.1f KB), inds=%d (%.1f KB)",
+                len(verts), verts.nbytes / 1024.0, len(inds), inds.nbytes / 1024.0
+            )
         self.gpu.upload(verts, inds)
 
 

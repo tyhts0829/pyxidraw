@@ -8,6 +8,7 @@ from numba import njit
 from .registry import effect
 from engine.core.geometry import Geometry
 from common.param_utils import ensure_vec3, norm_to_int, norm_to_rad
+from common.types import Vec3
 
 
 @njit(fastmath=True, cache=True)
@@ -63,10 +64,10 @@ def array(
     g: Geometry,
     *,
     n_duplicates: float = 0.5,
-    offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    rotate: tuple[float, float, float] = (0.5, 0.5, 0.5),
-    scale: tuple[float, float, float] = (0.5, 0.5, 0.5),
-    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    offset: Vec3 = (0.0, 0.0, 0.0),
+    rotate: Vec3 = (0.5, 0.5, 0.5),
+    scale: Vec3 = (0.5, 0.5, 0.5),
+    center: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
     """入力のコピーを配列状に生成（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)

@@ -5,6 +5,7 @@ from typing import Any
 
 from common.cacheable_base import LRUCacheable
 from engine.core.geometry import Geometry
+from common.types import Vec3
 
 
 class BaseShape(LRUCacheable, ABC):
@@ -42,9 +43,9 @@ class BaseShape(LRUCacheable, ABC):
 
     def __call__(
         self,
-        center: tuple[float, float, float] = (0, 0, 0),
-        scale: tuple[float, float, float] = (1, 1, 1),
-        rotate: tuple[float, float, float] = (0, 0, 0),
+        center: Vec3 = (0.0, 0.0, 0.0),
+        scale: Vec3 = (1.0, 1.0, 1.0),
+        rotate: Vec3 = (0.0, 0.0, 0.0),
         **params: Any,
     ) -> Geometry:
         """キャッシング機能付きで形状を生成"""

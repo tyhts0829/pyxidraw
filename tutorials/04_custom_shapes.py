@@ -19,8 +19,7 @@ except ValueError:
 sys.path.insert(0, REPO_ROOT)
 
 import numpy as np
-from api import G, E
-from api.runner import run_sketch
+from api import G, E, run
 from engine.core.geometry import Geometry
 from shapes.base import BaseShape
 from shapes.registry import shape
@@ -165,18 +164,14 @@ def main():
     logger.info("カスタム形状は G.star() や G.spiral() として利用可能")
     logger.info("終了するには Ctrl+C を押してください")
     
-    import argparse, os
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--headless", action="store_true")
-    args = parser.parse_args()
-    headless = args.headless or os.environ.get("PYXIDRAW_HEADLESS") == "1"
+    headless = os.environ.get("PYXIDRAW_HEADLESS") == "1"
 
     if headless:
         g = draw(0, {})
         c, o = g.as_arrays()
         logger.info("Headless OK: points=%d, lines=%d", c.shape[0], max(0, o.shape[0]-1))
     else:
-        run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
+        run(draw, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
 
 
 if __name__ == "__main__":

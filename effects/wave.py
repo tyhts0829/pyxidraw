@@ -4,6 +4,7 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 from .registry import effect
+from common.types import Vec3
 
 
 @effect()
@@ -11,15 +12,15 @@ def wave(
     g: Geometry,
     *,
     amplitude: float = 0.1,
-    frequency: float | tuple[float, float, float] = (0.1, 0.1, 0.1),
+    frequency: float | Vec3 = (0.1, 0.1, 0.1),
     phase: float = 0.0,
 ) -> Geometry:
     """座標値に基づくサイン波ゆらぎ（ウォブル）を各軸に適用する純関数エフェクト。
 
     Args:
         g: 入力ジオメトリ
-        amplitude: 変位の大きさ
-        frequency: 周波数（float なら全軸に同一値、タプルなら (fx, fy, fz)）
+        amplitude: 変位の大きさ（座標単位, mm 相当）。0..1 正規化ではありません。
+        frequency: 空間周波数 [cycles per unit]。float なら全軸に同一値、タプルなら (fx, fy, fz)。
         phase: 位相オフセット（ラジアン）
 
     Returns:
@@ -50,4 +51,3 @@ def wave(
         out[:, 2] += amplitude * np.sin(two_pi * fz * coords[:, 2] + phase)
 
     return Geometry(out, offsets.copy())
-

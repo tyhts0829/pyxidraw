@@ -18,8 +18,7 @@ except ValueError:
     pass
 sys.path.insert(0, REPO_ROOT)
 
-from api import E, G
-from api.runner import run_sketch
+from api import E, G, run
 from util.constants import CANVAS_SIZES
 from common.logging import setup_default_logging
 
@@ -86,20 +85,16 @@ def main():
     logger.info("- 細分化：滑らかな表面に変換")
     logger.info("終了するには Ctrl+C を押してください")
     
-    import argparse, os
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--headless", action="store_true")
-    args = parser.parse_args()
-    headless = args.headless or os.environ.get("PYXIDRAW_HEADLESS") == "1"
+    headless = os.environ.get("PYXIDRAW_HEADLESS") == "1"
 
     if headless:
         g = draw(0, {})
         c, o = g.as_arrays()
         logger.info("Headless OK: points=%d, lines=%d", c.shape[0], max(0, o.shape[0]-1))
     else:
-        run_sketch(draw, canvas_size=CANVAS_SIZES["SQUARE_300"])  
+        run(draw, canvas_size=CANVAS_SIZES["SQUARE_300"])  
         # 比較表示も可能（コメントを外して実行）
-        # run_sketch(draw_comparison, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
+        # run(draw_comparison, canvas_size=CANVAS_SIZES["SQUARE_300"]) 
 
 
 if __name__ == "__main__":

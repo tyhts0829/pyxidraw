@@ -7,6 +7,7 @@ from util.constants import NOISE_CONST
 
 from .registry import effect
 from engine.core.geometry import Geometry
+from common.types import Vec3
 
 
 @njit(fastmath=True, cache=True)
@@ -154,7 +155,7 @@ def noise(
     g: Geometry,
     *,
     intensity: float = 0.5,
-    frequency: tuple | float = (0.5, 0.5, 0.5),
+    frequency: float | Vec3 = (0.5, 0.5, 0.5),
     time: float = 0.0,
     **_params,
 ) -> Geometry:

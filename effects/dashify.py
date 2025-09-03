@@ -40,7 +40,12 @@ def dashify(
     gap_length: float = 0.05,
     **_params: Any,
 ) -> Geometry:
-    """連続線を破線に変換（純関数）。"""
+    """連続線を破線に変換（純関数）。
+
+    Notes:
+        - dash_length/gap_length は座標単位（mm 相当）。0..1 正規化ではありません。
+        - 線長に応じて端部のダッシュは補間されます。
+    """
     coords, offsets = g.as_arrays(copy=False)
     if len(coords) == 0:
         return Geometry(coords.copy(), offsets.copy())

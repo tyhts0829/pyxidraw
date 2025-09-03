@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from engine.core.geometry import Geometry
+from common.param_utils import norm_to_range
 from .registry import effect
 
 
@@ -27,6 +28,8 @@ def explode(g: Geometry, *, factor: float = 0.2) -> Geometry:
     lengths = np.linalg.norm(direction, axis=1, keepdims=True)
     safe = np.where(lengths > 1e-9, lengths, 1.0)
     unit = direction / safe
-    out = coords + unit * float(factor) * 50.0  # 視覚的に分かりやすいスケール
+    # 0..1 → mm スケールへ写像（線形）。等価: factor*MAX_OFFSET
+    MAX_OFFSET = 50.0
+    amount = norm_to_range(float(factor), 0.0, MAX_OFFSET)
+    out = coords + unit * amount
     return Geometry(out.astype(np.float32, copy=False), offsets.copy())
-

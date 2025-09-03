@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional
 
 import mido
-from icecream import ic
 
 from .helpers import DualKeyDict
 
@@ -30,6 +29,7 @@ class MidiController:
 
         self.sync_grid_knob_values()
         self.enable_debug = False
+        self._logger = logging.getLogger(__name__)
 
     def __repr__(self):
         return f"MidiController(port_name={self.port_name}, mode={self.mode})"
@@ -97,7 +97,7 @@ class MidiController:
             cc_number = result["CC number"]
             self.cc[cc_number] = result["value"]
             if self.enable_debug:
-                ic(self.cc)
+                self._logger.debug("CC updated: %s", dict(self.cc))
 
     @staticmethod
     def validate_and_open_port(port_name):

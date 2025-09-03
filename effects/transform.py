@@ -8,6 +8,8 @@ from numba import njit
 
 from .registry import effect
 from engine.core.geometry import Geometry
+from common.param_utils import ensure_vec3, norm_to_rad
+from common.types import Vec3
 
 
 @njit(fastmath=True, cache=True)
@@ -46,9 +48,9 @@ def _apply_combined_transform(
 def transform(
     g: Geometry,
     *,
-    center: tuple[float, float, float] = (0, 0, 0),
-    scale: tuple[float, float, float] = (1, 1, 1),
-    rotate: tuple[float, float, float] = (0, 0, 0),
+    center: Vec3 = (0.0, 0.0, 0.0),
+    scale: Vec3 = (1.0, 1.0, 1.0),
+    rotate: Vec3 = (0.0, 0.0, 0.0),
     **_params: Any,
 ) -> Geometry:
     """任意の変換（スケール→回転→移動）を適用する純関数エフェクト。"""
@@ -62,11 +64,9 @@ def transform(
 
     center_np = np.array(center, dtype=np.float32)
     scale_np = np.array(scale, dtype=np.float32)
-    rotate_radians = np.array([
-        rotate[0] * math.tau,
-        rotate[1] * math.tau,
-        rotate[2] * math.tau,
-    ], dtype=np.float32)
+    # 0..1 正規化角度 → ラジアンへ統一
+    rx, ry, rz = ensure_vec3(rotate)
+    rotate_radians = np.array([norm_to_rad(rx), norm_to_rad(ry), norm_to_rad(rz)], dtype=np.float32)
 
     transformed_coords = _apply_combined_transform(coords, center_np, scale_np, rotate_radians)
     return Geometry(transformed_coords, offsets.copy())
