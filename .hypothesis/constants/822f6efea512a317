@@ -1,4 +1,0 @@
-# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/visualization/charts/base.py
-# hypothesis_version: 6.131.18
-
-[0.0, 0.3, 300, 1000, '#2ecc71', '#e74c3c', '#f39c12', '--', 'average_time', 'baseline_time', 'bbox_inches', 'benchmark_results', 'bold', 'both', 'change_ratio', 'current_time', 'default', 'dpi', 'edgecolor', 'facecolor', 'husl', 'improvement', 'major', 'max', 'max_time', 'mean', 'measurements', 'median', 'min', 'min_time', 'none', 'plugin', 'q25', 'q75', 'seaborn-v0_8', 'std', 'std_dev', 'target', 'tight', 'white']

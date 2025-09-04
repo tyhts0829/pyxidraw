@@ -1,4 +1,0 @@
-# file: /Users/tyhts0829/Documents/ArcController/arc/controller/controller.py
-# hypothesis_version: 6.131.18
-
-[0.2, '*', 'Arc disconnected', 'Arc ready', 'Unknown state: %s', '_on_arc_disconnect', '_on_arc_ready', 'dest', 'long_press', 'press', 'release', 'source', 'trigger']

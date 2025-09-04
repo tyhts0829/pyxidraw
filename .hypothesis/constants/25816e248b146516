@@ -1,4 +1,0 @@
-# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/visualization/charts/bar_charts.py
-# hypothesis_version: 6.131.18
-
-[0.01, 0.05, 0.35, 0.5, 0.7, 0.8, 1.15, 100, '#2ecc71', '#3498db', '#e74c3c', '#f39c12', '--', 'Baseline', 'Benchmark Targets', 'Current', 'Execution Time (ms)', 'Fair (70%)', 'Good (90%)', 'Plugins', 'Success Rate (%)', 'average_time', 'baseline_time', 'black', 'bold', 'bottom', 'center', 'change_ratio', 'chart_type', 'color', 'comparison', 'comparison_chart.png', 'current_time', 'figsize', 'filename', 'green', 'none', 'orange', 'plugin', 'right', 'std_dev', 'success_rate', 'successful', 'target', 'tight', 'timing', 'timing_chart.png', 'title', 'total', 'unknown', 'upper right', 'xlabel', 'ylabel', '↑', '↓']

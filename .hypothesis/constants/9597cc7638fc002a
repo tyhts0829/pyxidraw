@@ -1,4 +1,0 @@
-# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/visualization/charts/scatter_charts.py
-# hypothesis_version: 6.131.18
-
-[0.05, 0.5, 0.6, 0.7, 0.8, 0.95, 100, 150, 300, 400, '#3498db', 'Execution Time (ms)', 'Geometry Complexity', 'alpha', 'black', 'bold', 'bubble_chart.png', 'chart_type', 'color', 'complexity', 'complexity_vs_time', 'correlation', 'correlation_plot.png', 'execution_time', 'figsize', 'filename', 'gray', 'offset points', 'plugin', 'r--', 'round,pad=0.3', 'show_labels', 'show_regression', 'size', 'size_column', 'target', 'tight', 'title', 'top', 'unknown', 'upper left', 'vertices_count', 'white', 'x_column', 'xlabel', 'y_column', 'ylabel']

@@ -1,4 +1,0 @@
-# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/visualization/charts/box_charts.py
-# hypothesis_version: 6.131.18
-
-[0.7, 0.8, 0.9, 1.05, 1.5, 'Benchmark Targets', 'Execution Time (ms)', 'Mean', 'Plugins', 'bodies', 'bold', 'bottom', 'boxes', 'center', 'chart_type', 'figsize', 'filename', 'means', 'measurements', 'plugin', 'plugin_comparison', 'q25', 'q75', 'red', 'right', 'round,pad=0.3', 'target', 'timing_distribution', 'timing_violin.png', 'title', 'top', 'unknown', 'upper right', 'white']

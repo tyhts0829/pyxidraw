@@ -1,4 +1,0 @@
-# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/core/types.py
-# hypothesis_version: 6.131.18
-
-[0.0, 30.0, 150, '1.0', 'Geometry', 'average_times', 'bar', 'benchmark_results', 'box', 'complex', 'csv', 'error', 'failed', 'has_cache', 'has_njit', 'heatmap', 'html', 'json', 'line', 'markdown', 'medium', 'metrics', 'module', 'pdf', 'png', 'scatter', 'simple', 'status', 'success', 'svg', 'timeout', 'timestamp', 'timings', 'unknown', 'yaml']

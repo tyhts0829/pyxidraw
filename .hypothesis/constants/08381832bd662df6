@@ -1,4 +1,0 @@
-# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/plugins/shapes.py
-# hypothesis_version: 6.131.18
-
-[0.3, 0.7, 100, '.', 'cols', 'complex', 'enabled', 'grid', 'has_njit', 'high_res', 'medium', 'metadata', 'n_sides', 'name', 'params', 'polygon', 'polyhedron', 'rows', 'shape_type', 'shapes', 'simple', 'sphere', 'subdivisions', 'targets', 'triangle', 'unknown', 'variations']
