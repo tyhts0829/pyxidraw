@@ -106,7 +106,7 @@ class LineRenderer(Tickable):
             self.gpu.index_count = 0
             return
 
-        verts, inds = _geometry_to_vertices_indices(geometry, self.gpu.prim_restart_idx)
+        verts, inds = _geometry_to_vertices_indices(geometry, self.gpu.primitive_restart_index)
         if self._logger.isEnabledFor(logging.DEBUG):
             self._logger.debug(
                 "Uploading geometry: verts=%d (%.1f KB), inds=%d (%.1f KB)",
@@ -118,7 +118,7 @@ class LineRenderer(Tickable):
 # ---------- utility -------------------------------------------------------- #
 def _geometry_to_vertices_indices(
     geometry: Geometry,
-    prim_restart_idx: int,
+    primitive_restart_index: int,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Geometry オブジェクトを VBO/IBO に変換。
@@ -141,7 +141,7 @@ def _geometry_to_vertices_indices(
 
         indices[cursor : cursor + line_length] = np.arange(start_idx, end_idx, dtype=np.uint32)
         cursor += line_length
-        indices[cursor] = prim_restart_idx
+        indices[cursor] = primitive_restart_index
         cursor += 1
 
     return coords, indices

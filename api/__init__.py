@@ -8,8 +8,8 @@ Usage:
     g = g.scale(100, 100, 100).translate(100, 100, 0)
 
     pipeline = (E.pipeline
-                  .noise(intensity=0.3)
-                  .filling(density=0.5)
+                  .displace(intensity=0.3)
+                  .fill(density=0.5)
                   .build())
     result = pipeline(g)
 """

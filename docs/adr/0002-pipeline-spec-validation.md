@@ -21,6 +21,21 @@
 ## 代替案
 実行時にのみ例外を投げる方式はデバッグコストが高く却下。
 
-## 将来拡張
-任意の `__param_meta__`（型/範囲/選択肢）を関数側に宣言できる仕組みを導入し、`validate_spec` が尊重する（数値域検証の拡張）。
+## 拡張: パラメータメタデータによる検証（採用済）
 
+各エフェクト関数は任意で `__param_meta__` を公開できる。`validate_spec()` は存在時に以下を検証する。
+
+- `type`: "number" | "integer" | "string"（ゆるい実行時型チェック）
+- `min` / `max`: 数値域チェック（含む）
+- `choices`: 列挙候補のチェック
+
+例（fill）:
+
+```python
+fill.__param_meta__ = {
+  "mode":    {"type": "string", "choices": ["lines", "cross", "dots"]},
+  "density": {"type": "number", "min": 0.0, "max": 1.0},
+}
+```
+
+エラー時のメッセージは実値と許容範囲/候補を含む（例: `density=1.1 exceeds max 1.0`）。

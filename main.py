@@ -33,8 +33,8 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
     # 新パイプライン（関数エフェクト）
     sphere2 = (
         E.pipeline
-        .noise(intensity=cc.get(5, 0.3))
-        .filling(density=cc.get(6, 0.6))
+        .displace(intensity=cc.get(5, 0.3))
+        .fill(density=cc.get(6, 0.6))
         .build()
     )(sphere)
 
@@ -47,7 +47,7 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
     rz = cc.get(9, 0.0)
     combined = (
         E.pipeline
-        .rotation(center=(150, 100, 0), rotate=(rx, ry, rz))
+        .rotate(center=(150, 100, 0), rotate=(rx, ry, rz))
         .build()
     )(combined)
 

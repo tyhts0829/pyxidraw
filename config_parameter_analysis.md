@@ -80,17 +80,17 @@ shapes:
 
 ```yaml
 effects:
-  noise:
-    default_frequency: [0.5, 0.5, 0.5]  # effects/noise.py:164
-    intensity_multiplier: 10             # effects/noise.py:133
-    time_offset_coefficient: 0.01        # effects/noise.py:134
-    time_base_offset: 1000.0            # effects/noise.py:134
+  displace:
+    default_spatial_freq: [0.5, 0.5, 0.5]  # effects/noise.py:164
+    amplitude_scale: 10                   # effects/noise.py:133 相当（内部倍率の名寄せ）
+    time_offset_coefficient: 0.01         # effects/noise.py:134
+    time_base_offset: 1000.0             # effects/noise.py:134
     component_separation_offsets: [100.0, 200.0]  # effects/noise.py:115-116
-    frequency_adjustment: 0.1            # effects/noise.py:141
+    spatial_freq_adjustment: 0.1          # effects/noise.py:141
   
-  wave:
-    default_amplitude: 10.0              # main.py:25
-    default_frequency: 0.1               # main.py:25
+  ripple:
+    default_amplitude: 10.0               # main.py:25 相当
+    default_spatial_freq: 0.1             # main.py:25 相当
   
   swirl:
     angle_coefficient: 0.01              # main.py:16

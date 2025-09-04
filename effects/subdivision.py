@@ -11,7 +11,7 @@ from .registry import effect
 
 
 @effect()
-def subdivision(g: Geometry, *, subdivisions: float = 0.5, **_params: Any) -> Geometry:
+def subdivide(g: Geometry, *, subdivisions: float = 0.5) -> Geometry:
     """中間点を追加して線を細分化（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
     if subdivisions <= 0.0:
@@ -29,6 +29,10 @@ def subdivision(g: Geometry, *, subdivisions: float = 0.5, **_params: Any) -> Ge
         result.append(subdivided)
 
     return Geometry.from_lines(result)
+
+subdivide.__param_meta__ = {
+    "subdivisions": {"type": "number", "min": 0.0, "max": 1.0},
+}
 
 
 @njit(fastmath=True, cache=True)

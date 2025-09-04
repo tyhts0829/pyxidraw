@@ -14,7 +14,10 @@ from common.param_utils import norm_to_int
 def _subdivide_line(start: np.ndarray, end: np.ndarray, divisions: int) -> np.ndarray:
     """線分を指定された分割数で細分化します。"""
     if divisions <= 1:
-        return np.array([start, end])
+        points = np.empty((2, 3), dtype=np.float32)
+        points[0] = start
+        points[1] = end
+        return points
     
     # 細分化されたポイントを生成
     t_values = np.linspace(0, 1, divisions + 1)
@@ -27,7 +30,6 @@ def _subdivide_line(start: np.ndarray, end: np.ndarray, divisions: int) -> np.nd
     return points
 
 
-@njit(fastmath=True, cache=True)
 def _apply_collapse_to_coords(
     coords: np.ndarray,
     offsets: np.ndarray,
@@ -90,7 +92,7 @@ def _apply_collapse_to_coords(
                 norm_main_dir = main_dir / main_norm
                 
                 # ノイズベクトルを生成
-                noise_vector = np.random.randn(3) / 5.0
+                noise_vector = np.random.randn(3).astype(np.float32) / np.float32(5.0)
                 
                 # ノイズをメイン方向と直交する方向に変換
                 ortho_dir = np.cross(norm_main_dir, noise_vector)
@@ -103,11 +105,11 @@ def _apply_collapse_to_coords(
                 ortho_dir = ortho_dir / ortho_norm
                 
                 # ノイズを加える
-                noise = ortho_dir * intensity
+                noise = (ortho_dir * np.float32(intensity)).astype(np.float32)
                 
                 # 変形された線分を追加
-                noisy_start = seg_start + noise
-                noisy_end = seg_end + noise
+                noisy_start = (seg_start + noise).astype(np.float32)
+                noisy_end = (seg_end + noise).astype(np.float32)
                 polyline_coords.append(noisy_start)
                 polyline_coords.append(noisy_end)
         
@@ -134,7 +136,6 @@ def collapse(
     *,
     intensity: float = 0.5,
     subdivisions: float = 0.5,
-    **_params: Any,
 ) -> Geometry:
     """線分を細分化してノイズで変形（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
@@ -144,3 +145,8 @@ def collapse(
     divisions = max(1, norm_to_int(float(subdivisions), 0, MAX_DIV))
     new_coords, new_offsets = _apply_collapse_to_coords(coords, offsets, float(intensity), divisions)
     return Geometry(new_coords, new_offsets)
+
+collapse.__param_meta__ = {
+    "intensity": {"type": "number", "min": 0.0},
+    "subdivisions": {"type": "number", "min": 0.0, "max": 1.0},
+}

@@ -25,13 +25,12 @@ from common.param_utils import norm_to_int, norm_to_range
 
 
 @effect()
-def webify(
+def weave(
     g: Geometry,
     *,
     num_candidate_lines: float = 0.5,
     relaxation_iterations: float = 0.5,
     step: float = 0.5,
-    **_params: Any,
 ) -> Geometry:
     """形状にウェブ状のストリング構造を追加（純関数）。"""
     MAX_NUM_CANDIDATE_LINES = 500
@@ -57,6 +56,12 @@ def webify(
     if not result_lines:
         return Geometry(coords.copy(), offsets.copy())
     return Geometry.from_lines(result_lines)
+
+weave.__param_meta__ = {
+    "num_candidate_lines": {"type": "number", "min": 0.0, "max": 1.0},
+    "relaxation_iterations": {"type": "number", "min": 0.0, "max": 1.0},
+    "step": {"type": "number", "min": 0.0, "max": 1.0},
+}
 
 
 def _webify_single_polygon(

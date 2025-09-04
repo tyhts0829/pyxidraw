@@ -24,8 +24,8 @@ class TestPipeline:
     def test_basic_pipeline(self, simple_geometry):
         pipeline = (
             E.pipeline
-            .rotation(rotate=(0, 0, 0.1))
-            .scaling(scale=(1.5, 1.5, 1.5))
+            .rotate(rotate=(0, 0, 0.1))
+            .scale(scale=(1.5, 1.5, 1.5))
             .build()
         )
         out = pipeline(simple_geometry)
@@ -34,9 +34,9 @@ class TestPipeline:
     def test_translation_rotation_scaling(self, simple_geometry):
         out = (
             E.pipeline
-            .translation(offset_x=10, offset_y=20, offset_z=0)
-            .rotation(center=(0, 0, 0), rotate=(0, 0, 0.25))
-            .scaling(center=(0, 0, 0), scale=(2, 2, 2))
+            .translate(offset_x=10, offset_y=20, offset_z=0)
+            .rotate(center=(0, 0, 0), rotate=(0, 0, 0.25))
+            .scale(center=(0, 0, 0), scale=(2, 2, 2))
             (simple_geometry)
         )
         assert isinstance(out, Geometry)
@@ -44,8 +44,8 @@ class TestPipeline:
     def test_noise_and_filling(self, simple_geometry):
         out = (
             E.pipeline
-            .noise(intensity=0.3, frequency=(0.2, 0.2, 0.2), time=0.0)
-            .filling(pattern="lines", density=0.5, angle=0.0)
+            .displace(intensity=0.3, frequency=(0.2, 0.2, 0.2), time=0.0)
+            .fill(pattern="lines", density=0.5, angle=0.0)
             (simple_geometry)
         )
         assert isinstance(out, Geometry)
@@ -53,10 +53,10 @@ class TestPipeline:
     def test_complex_pipeline(self, complex_geometry):
         out = (
             E.pipeline
-            .rotation(rotate=(0.1, 0.1, 0.1))
-            .scaling(scale=(1.2, 1.2, 1.2))
-            .subdivision(subdivisions=0.6)
-            .noise(intensity=0.2, time=0.5, frequency=0.3)
+            .rotate(rotate=(0.1, 0.1, 0.1))
+            .scale(scale=(1.2, 1.2, 1.2))
+            .subdivide(subdivisions=0.6)
+            .displace(intensity=0.2, time=0.5, frequency=0.3)
             (complex_geometry)
         )
         assert isinstance(out, Geometry)
@@ -64,8 +64,8 @@ class TestPipeline:
     def test_pipeline_cache(self, simple_geometry):
         builder = (
             E.pipeline
-            .rotation(rotate=(0, 0, 0.1))
-            .scaling(scale=(1.5, 1.5, 1.5))
+            .rotate(rotate=(0, 0, 0.1))
+            .scale(scale=(1.5, 1.5, 1.5))
         )
         p = builder.build()
         r1 = p(simple_geometry)

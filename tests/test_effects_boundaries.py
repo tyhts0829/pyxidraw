@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 
 from engine.core.geometry import Geometry
-from effects.filling import filling
-from effects.subdivision import subdivision
-from effects.buffer import buffer as buffer_effect
+from effects.filling import fill
+from effects.subdivision import subdivide
+from effects.buffer import offset as buffer_effect
 
 
 def _square(size=1.0):
@@ -17,7 +17,7 @@ def _square(size=1.0):
 class TestBoundaryValues:
     def test_filling_density_zero_is_identity(self):
         g = _square()
-        out = filling(g, density=0.0)
+        out = fill(g, density=0.0)
         c0, o0 = g.as_arrays()
         c1, o1 = out.as_arrays()
         np.testing.assert_allclose(c0, c1)
@@ -25,14 +25,14 @@ class TestBoundaryValues:
 
     def test_filling_density_one_adds_elements(self):
         g = _square()
-        out = filling(g, density=1.0, pattern="lines")
+        out = fill(g, density=1.0, pattern="lines")
         c0, _ = g.as_arrays()
         c1, _ = out.as_arrays()
         assert c1.shape[0] >= c0.shape[0]
 
     def test_subdivision_zero_is_identity(self):
         g = _square()
-        out = subdivision(g, subdivisions=0.0)
+        out = subdivide(g, subdivisions=0.0)
         c0, o0 = g.as_arrays()
         c1, o1 = out.as_arrays()
         np.testing.assert_allclose(c0, c1)
@@ -40,7 +40,7 @@ class TestBoundaryValues:
 
     def test_subdivision_increases_points(self):
         g = _square()
-        out = subdivision(g, subdivisions=0.5)
+        out = subdivide(g, subdivisions=0.5)
         c0, _ = g.as_arrays()
         c1, _ = out.as_arrays()
         assert c1.shape[0] > c0.shape[0]

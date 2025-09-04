@@ -12,8 +12,10 @@ API 方針:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable
+import os
+import hashlib
 
 import numpy as np
 from common.types import Vec3
@@ -23,6 +25,7 @@ from common.types import Vec3
 class Geometry:
     coords: np.ndarray  # (N, 3) float32
     offsets: np.ndarray  # (M+1,) int32
+    _digest: bytes | None = field(default=None, repr=False, compare=False, init=False)
 
     # ── ファクトリ ───────────────────
     @classmethod
@@ -42,14 +45,20 @@ class Geometry:
         if not np_lines:
             coords = np.empty((0, 3), dtype=np.float32)
             offsets = np.array([0], dtype=np.int32)
-            return cls(coords, offsets)
+            obj = cls(coords, offsets)
+            if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+                obj._digest = obj._compute_digest()
+            return obj
 
         offsets = np.empty(len(np_lines) + 1, dtype=np.int32)
         offsets[0] = 0
         for i, arr in enumerate(np_lines, start=1):
             offsets[i] = offsets[i - 1] + arr.shape[0]
         coords = np.concatenate(np_lines, axis=0)
-        return cls(coords.astype(np.float32, copy=False), offsets.astype(np.int32, copy=False))
+        obj = cls(coords.astype(np.float32, copy=False), offsets.astype(np.int32, copy=False))
+        if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+            obj._digest = obj._compute_digest()
+        return obj
 
     # 旧 GeometryData アダプタは撤廃（Geometry 統一）
 
@@ -59,12 +68,38 @@ class Geometry:
             return self.coords.copy(), self.offsets.copy()
         return self.coords, self.offsets
 
+    # ---- ダイジェスト（スナップショット） ---------------------------------
+    def _compute_digest(self) -> bytes:
+        """coords/offsets から決定的なダイジェストを計算（blake2b-128）。"""
+        c = np.ascontiguousarray(self.coords).view(np.uint8)
+        o = np.ascontiguousarray(self.offsets).view(np.uint8)
+        h = hashlib.blake2b(digest_size=16)
+        h.update(c)
+        h.update(o)
+        return h.digest()
+
+    @property
+    def digest(self) -> bytes:
+        """ジオメトリのダイジェスト（必要時に遅延計算）。"""
+        # 環境変数で無効化可能（ベンチ用）
+        if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") in ("1", "true", "TRUE", "True"):
+            raise RuntimeError("Geometry digest disabled by env: PXD_DISABLE_GEOMETRY_DIGEST")
+        if self._digest is None:
+            self._digest = self._compute_digest()
+        return self._digest
+
     def translate(self, dx: float, dy: float, dz: float = 0.0) -> "Geometry":
         if self.coords.size == 0:
-            return Geometry(self.coords.copy(), self.offsets.copy())
+            obj = Geometry(self.coords.copy(), self.offsets.copy())
+            if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+                obj._digest = obj._compute_digest()
+            return obj
         vec = np.array([dx, dy, dz], dtype=np.float32)
         new_coords = self.coords + vec
-        return Geometry(new_coords, self.offsets.copy())
+        obj = Geometry(new_coords, self.offsets.copy())
+        if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+            obj._digest = obj._compute_digest()
+        return obj
 
     def scale(self, sx: float, sy: float | None = None, sz: float | None = None, center: Vec3 = (0.0, 0.0, 0.0)) -> "Geometry":
         if sy is None:
@@ -72,7 +107,10 @@ class Geometry:
         if sz is None:
             sz = sx
         if self.coords.size == 0:
-            return Geometry(self.coords.copy(), self.offsets.copy())
+            obj = Geometry(self.coords.copy(), self.offsets.copy())
+            if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+                obj._digest = obj._compute_digest()
+            return obj
         cx, cy, cz = center
         new = self.coords.copy()
         new[:, 0] -= cx
@@ -84,7 +122,9 @@ class Geometry:
         new[:, 0] += cx
         new[:, 1] += cy
         new[:, 2] += cz
-        return Geometry(new, self.offsets.copy())
+        obj = Geometry(new, self.offsets.copy())
+        obj._digest = obj._compute_digest()
+        return obj
 
     def rotate(
         self,
@@ -94,7 +134,9 @@ class Geometry:
         center: Vec3 = (0.0, 0.0, 0.0),
     ) -> "Geometry":
         if self.coords.size == 0 or (x == 0 and y == 0 and z == 0):
-            return Geometry(self.coords.copy(), self.offsets.copy())
+            obj = Geometry(self.coords.copy(), self.offsets.copy())
+            obj._digest = obj._compute_digest()
+            return obj
 
         cx, cy, cz = center
         c = self.coords.copy()
@@ -128,18 +170,30 @@ class Geometry:
         c[:, 0] += cx
         c[:, 1] += cy
         c[:, 2] += cz
-        return Geometry(c, self.offsets.copy())
+        obj = Geometry(c, self.offsets.copy())
+        if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+            obj._digest = obj._compute_digest()
+        return obj
 
     def concat(self, other: "Geometry") -> "Geometry":
         if self.coords.size == 0:
-            return Geometry(other.coords.copy(), other.offsets.copy())
+            obj = Geometry(other.coords.copy(), other.offsets.copy())
+            if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+                obj._digest = obj._compute_digest()
+            return obj
         if other.coords.size == 0:
-            return Geometry(self.coords.copy(), self.offsets.copy())
+            obj = Geometry(self.coords.copy(), self.offsets.copy())
+            if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+                obj._digest = obj._compute_digest()
+            return obj
         offset_shift = self.coords.shape[0]
         new_coords = np.vstack([self.coords, other.coords]).astype(np.float32, copy=False)
         adjusted_other_offsets = other.offsets[1:] + offset_shift
         new_offsets = np.hstack([self.offsets, adjusted_other_offsets]).astype(np.int32, copy=False)
-        return Geometry(new_coords, new_offsets)
+        obj = Geometry(new_coords, new_offsets)
+        if os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0") not in ("1", "true", "TRUE", "True"):
+            obj._digest = obj._compute_digest()
+        return obj
 
     # 演算子糖衣
     def __add__(self, other: "Geometry") -> "Geometry":

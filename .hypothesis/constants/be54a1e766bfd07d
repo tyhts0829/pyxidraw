@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/api/pipeline.py
+# hypothesis_version: 6.131.18
+
+['Pipeline', 'PipelineBuilder', '__code__', '__param_meta__', 'choices', 'g', 'integer', 'max', 'min', 'name', 'number', 'params', 'string', 'type']

@@ -9,7 +9,7 @@
 - [x] 2) engine/io/controller: 終了処理の一貫化（exit→例外）
   - [x] `InvalidPortError` 新設、handle_invalid_port_name で raise
   - [x] runner 側で捕捉して `SystemExit(2)`（CLI 相当）
-- [x] 3) effects/webify/filling: 可読性向上
+- [x] 3) effects/weave/fill: 可読性向上
   - [x] 冒頭にアルゴリズム概要コメントを追加
   - [ ] 関数分割（交点計算/候補線生成/緩和ステップの段落化）
 - [x] 4) common/cacheable_base: 仕様の明文化
@@ -48,10 +48,10 @@
   - 専用例外 `InvalidPortError` を挙げ、呼び出し側（CLI/ランナー）で終了コードを決定。
   - 例外メッセージに候補ポート一覧を含める今の振る舞いはそのまま活かす。
 
-### 3) effects/webify, effects/filling: 長関数の分割と命名整理
+### 3) effects/weave, effects/fill: 長関数の分割と命名整理
  - [x] 冒頭にアルゴリズム概要コメントを追加
- - [x] webify: 高レベル手順を `_webify_single_polygon()` に抽出（内部は既存 njit 利用）
- - [x] filling: 高レベル手順を `_fill_single_polygon()` に抽出
+ - [x] weave: 高レベル手順を `_webify_single_polygon()` に抽出（内部は既存 njit 利用）
+ - [x] fill: 高レベル手順を `_fill_single_polygon()` に抽出
  - [ ] さらなる段落化（numba 関数の粒度は現状維持）
 - 事象:
   - `webify.py` は多段の njit 関数 + 高レベル関数が 1 ファイルに密集。`filling.py` も複数の生成系が同居。
@@ -100,7 +100,7 @@
 ## 推奨アクション（小さく速く）
 1. util/geometry の `geometry_*` 系を非推奨化 or `transform_*` に置換（済: 非推奨化・警告）。
 2. engine/io/controller の `exit(1)` → 例外送出（済）＋ runner 側終了コード処理（済）。
-3. effects/webify/filling の冒頭にアルゴリズム概要コメント（済）＋必要に応じて関数分割（未）。
+3. effects/weave/fill の冒頭にアルゴリズム概要コメント（済）＋必要に応じて関数分割（未）。
 4. cacheable_base に前提と落とし穴を docstring（済）。
 5. extrude に `center="auto"` オプション（済）。
 

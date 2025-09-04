@@ -13,8 +13,8 @@ def build_geometry(t: float, cc: dict) -> "Geometry":
     # 関数パイプライン
     pipeline = (
         E.pipeline
-        .noise(intensity=cc.get(2, 0.3), time=t)
-        .rotation(center=(100, 100, 0), rotate=(0.1, 0.1, 0.1))
+        .displace(intensity=cc.get(2, 0.3), time=t)
+        .rotate(center=(100, 100, 0), rotate=(0.1, 0.1, 0.1))
         .build()
     )
     return pipeline(sphere)

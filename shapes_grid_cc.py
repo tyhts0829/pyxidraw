@@ -92,7 +92,7 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         g = base.scale(cell_size, cell_size, cell_size).translate(cx, cy, 0)
 
         # Rotate around each shape's own center using effect (0..1 → tau)
-        rotated = (E.pipeline.rotation(center=(cx, cy, 0), rotate=(rx, ry, rz)).build())(g)
+        rotated = (E.pipeline.rotate(center=(cx, cy, 0), rotate=(rx, ry, rz)).build())(g)
 
         combined = rotated if combined is None else (combined + rotated)
 

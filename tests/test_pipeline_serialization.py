@@ -18,9 +18,9 @@ class TestPipelineSerialization:
     def test_roundtrip(self):
         p = (
             E.pipeline
-            .rotation(rotate=(0.0, 0.0, 0.25))
-            .scaling(scale=(2.0, 2.0, 2.0))
-            .translation(offset_x=5.0, offset_y=3.0)
+            .rotate(rotate=(0.0, 0.0, 0.25))
+            .scale(scale=(2.0, 2.0, 2.0))
+            .translate(offset_x=5.0, offset_y=3.0)
             .build()
         )
         spec = to_spec(p)
@@ -39,9 +39,8 @@ class TestPipelineSerialization:
 
     def test_invalid_spec_types(self):
         with pytest.raises(TypeError):
-            from_spec({"name": "rotation", "params": {}})  # type: ignore[arg-type]
+            from_spec({"name": "rotate", "params": {}})  # type: ignore[arg-type]
         with pytest.raises(TypeError):
             from_spec([{"name": 123, "params": {}}])  # type: ignore[list-item]
         with pytest.raises(TypeError):
-            from_spec([{"name": "rotation", "params": 1}])  # type: ignore[list-item]
-
+            from_spec([{"name": "rotate", "params": 1}])  # type: ignore[list-item]

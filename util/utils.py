@@ -5,7 +5,8 @@ import yaml
 
 
 def load_config() -> Dict[str, Any]:
-    this_dir = Path(__file__).parents[1]
-    with open(this_dir / "config.yaml", "r") as f:
-        cfg = yaml.safe_load(f)
-    return cfg
+    """ルートの config.yaml を読み込み辞書を返す。"""
+    project_root = Path(__file__).parents[1]
+    with open(project_root / "config.yaml", "r") as f:
+        config = yaml.safe_load(f)
+    return config

@@ -110,7 +110,7 @@ def draw_comparison(t, cc):
     
     # 波エフェクト
     wave = G.polyhedron("cube").scale(50, 50, 50).translate(200, 100, 0)
-    wave = (E.pipeline.wave(amplitude=0.2, frequency=2).build())(wave)
+    wave = (E.pipeline.ripple(amplitude=0.2, frequency=2).build())(wave)
     combined = combined + wave
     
     # ツイストエフェクト
@@ -125,7 +125,7 @@ def draw_comparison(t, cc):
     
     # 複合エフェクト
     complex_fx = G.polyhedron("cube").scale(50, 50, 50).translate(250, 200, 0)
-    complex_fx = (E.pipeline.wave(amplitude=0.1).twist(angle=30).gradient().build())(complex_fx)
+    complex_fx = (E.pipeline.ripple(amplitude=0.1).twist(angle=30).gradient().build())(complex_fx)
     combined = combined + complex_fx
     
     return combined
@@ -141,7 +141,7 @@ def main():
     logger.info("- explode: 爆発エフェクト")
     logger.info("- twist: ねじれエフェクト")
     logger.info("- gradient: カラーグラデーション")
-    logger.info("エフェクトは E.pipeline.wave().twist() のように組み立て可能")
+    logger.info("エフェクトは E.pipeline.ripple().twist() のように組み立て可能")
     logger.info("終了するには Ctrl+C を押してください")
     
     headless = os.environ.get("PYXIDRAW_HEADLESS") == "1"

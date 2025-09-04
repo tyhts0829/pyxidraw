@@ -8,7 +8,7 @@ from common.types import Vec3
 
 
 @effect()
-def wave(
+def ripple(
     g: Geometry,
     *,
     amplitude: float = 0.1,
@@ -51,3 +51,8 @@ def wave(
         out[:, 2] += amplitude * np.sin(two_pi * fz * coords[:, 2] + phase)
 
     return Geometry(out, offsets.copy())
+
+ripple.__param_meta__ = {
+    "amplitude": {"type": "number", "min": 0.0},
+    "phase": {"type": "number"},
+}

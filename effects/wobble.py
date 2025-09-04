@@ -41,7 +41,6 @@ def wobble(
     amplitude: float = 1.0,
     frequency: float | Vec3 = (0.1, 0.1, 0.1),
     phase: float = 0.0,
-    **_params: Any,
 ) -> Geometry:
     """線にウォブル/波の歪みを追加（純関数）。
 
@@ -70,3 +69,8 @@ def wobble(
     if not wobbled_vertices:
         return Geometry(coords.copy(), offsets.copy())
     return Geometry.from_lines(wobbled_vertices)
+
+wobble.__param_meta__ = {
+    "amplitude": {"type": "number", "min": 0.0},
+    "phase": {"type": "number"},
+}

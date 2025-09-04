@@ -16,17 +16,22 @@ def _apply_translation(vertices: np.ndarray, offset: np.ndarray) -> np.ndarray:
 
 
 @effect()
-def translation(
+def translate(
     g: Geometry,
     *,
+    # 旧API
     offset: Vec3 | None = None,
     offset_x: float = 0.0,
     offset_y: float = 0.0,
     offset_z: float = 0.0,
+    # 新API（推奨）
+    delta: Vec3 | None = None,
 ) -> Geometry:
-    """指定されたオフセットで頂点を移動（純関数）。"""
+    """指定ベクトルで平行移動（純関数）。新APIは `delta` を推奨。"""
     coords, offsets = g.as_arrays(copy=False)
-    if offset is not None:
+    if delta is not None:
+        ox, oy, oz = float(delta[0]), float(delta[1]), float(delta[2])
+    elif offset is not None:
         ox, oy, oz = float(offset[0]), float(offset[1]), float(offset[2])
     else:
         ox, oy, oz = float(offset_x), float(offset_y), float(offset_z)
@@ -37,6 +42,12 @@ def translation(
     vec = np.array([ox, oy, oz], dtype=np.float32)
     translated_coords = _apply_translation(coords, vec)
     return Geometry(translated_coords, offsets.copy())
+
+translate.__param_meta__ = {
+    "offset_x": {"type": "number"},
+    "offset_y": {"type": "number"},
+    "offset_z": {"type": "number"},
+}
 
 
 # 後方互換クラスは廃止（関数APIのみ）

@@ -14,24 +14,32 @@ from engine.core.geometry import Geometry
 
 
 @effect()
-def buffer(
+def offset(
     g: Geometry,
     *,
-    distance: float = 0.5,
+    # 旧API
     join_style: float = 0.5,
     resolution: float = 0.5,
-    **_params: Any,
+    # 新API（推奨）
+    join: str | None = None,                 # 'miter'|'round'|'bevel'
+    segments_per_circle: int | None = None,  # shapelyのresolutionに相当
+    # 共通
+    distance: float = 0.5,
+    distance_mm: float | None = None,
 ) -> Geometry:
     """Shapely を使用したバッファ/オフセット（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
     # 0..1 → 実距離（mm）へ写像（提案5: 一貫写像）
     MAX_DISTANCE = 25.0
-    actual_distance = norm_to_range(float(distance), 0.0, MAX_DISTANCE)
+    if distance_mm is not None:
+        actual_distance = float(distance_mm)
+    else:
+        actual_distance = norm_to_range(float(distance), 0.0, MAX_DISTANCE)
     if actual_distance == 0:
         return Geometry(coords.copy(), offsets.copy())
 
-    join_style_str = _determine_join_style(float(join_style))
-    resolution_int = max(1, norm_to_int(float(resolution), 1, 10))
+    join_style_str = join if isinstance(join, str) else _determine_join_style(float(join_style))
+    resolution_int = int(segments_per_circle) if segments_per_circle is not None else max(1, norm_to_int(float(resolution), 1, 10))
 
     vertices_list = []
     for i in range(len(offsets) - 1):
@@ -57,6 +65,15 @@ def buffer(
         new_offsets.append(acc)
 
     return Geometry(all_coords, np.array(new_offsets, dtype=np.int32))
+
+# validate_spec 用のメタデータ
+offset.__param_meta__ = {
+    "distance": {"type": "number", "min": 0.0, "max": 1.0},
+    "join": {"type": "string", "choices": ["mitre", "round", "bevel"]},
+    "join_style": {"type": "number", "min": 0.0, "max": 1.0},
+    "resolution": {"type": "number", "min": 0.0, "max": 1.0},
+    "segments_per_circle": {"type": "integer", "min": 1, "max": 1000},
+}
 
 def _buffer(vertices_list: list[np.ndarray], distance: float, join_style: str, resolution: int) -> list[np.ndarray]:
     if distance == 0:

@@ -52,7 +52,7 @@
 ## 参照ポイント（実装の所在）
 - Geometry: `engine/core/geometry.py`（純関数 `translate/scale/rotate/concat`）
 - パイプライン: `api/pipeline.py`（`Pipeline/PipelineBuilder` と to_spec/from_spec）
-- エフェクト: `effects/*`（`@effect` 関数。rotation/translation/scaling/transform/noise/...）
+- エフェクト: `effects/*`（`@effect` 関数。rotate/translate/scale/affine/displace/...）
 - レジストリ: `effects/registry.py`, `shapes/registry.py`
 - 形状 API: `api/shape_factory.py`（`G.*` は `Geometry` を返却）
 - ベンチ: `benchmarks/plugins/*`, `benchmarks/core/*`（CLI: `python -m benchmarks`）
@@ -141,7 +141,7 @@ class Pipeline:
 
 - デモの移行（動作確認済み）:
   - `main.py`: `E.pipeline` + 関数エフェクト（noise/filling/rotation）に全面移行（GUI起動確認済み）。
-  - `shapes_grid_cc.py`: `.size/.at` → `.scale/.translate`、回転は `E.pipeline.rotation(...).build()(g)` に変更。
+  - `shapes_grid_cc.py`: `.size/.at` → `.scale/.translate`、回転は `E.pipeline.rotate(...).build()(g)` に変更。
   - `simple.py`: 最小サンプルを `Geometry` + `E.pipeline` 化（統計のみ出力）。
 
 - 形状ファクトリの統一:

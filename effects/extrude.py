@@ -19,7 +19,6 @@ def extrude(
     scale: float = 0.5,
     subdivisions: float = 0.5,
     center_mode: Literal["origin", "auto"] = "origin",
-    **_params: Any,
 ) -> Geometry:
     """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
@@ -87,10 +86,18 @@ def extrude(
 
     new_coords = np.vstack(out_lines).astype(np.float32, copy=False)
     new_offsets = [0]
-    acc = 0
+    vertex_count = 0
     for ln in out_lines:
-        acc += len(ln)
-        new_offsets.append(acc)
+        vertex_count += len(ln)
+        new_offsets.append(vertex_count)
     new_offsets = np.asarray(new_offsets, dtype=np.int32)
 
     return Geometry(new_coords, new_offsets)
+
+# validate_spec 用のメタデータ
+extrude.__param_meta__ = {
+    "distance": {"type": "number", "min": 0.0, "max": 1.0},
+    "scale": {"type": "number", "min": 0.0, "max": 1.0},
+    "subdivisions": {"type": "number", "min": 0.0, "max": 1.0},
+    "center_mode": {"type": "string", "choices": ["origin", "auto"]},
+}

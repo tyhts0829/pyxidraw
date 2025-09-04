@@ -72,13 +72,13 @@ class SerializableEffectTarget:
             if isinstance(rotate, (list, tuple)):
                 rotate = tuple(float(v) / 360.0 for v in rotate)
                 params["rotate"] = rotate
-            pipeline = E.pipeline.transform(**params).build()
+            pipeline = E.pipeline.affine(**params).build()
             return pipeline(geom)
         elif self.effect_type == "scale":
             E = _get_cached_module("api.pipeline")
             scale = self.params.get("scale", (1, 1, 1))
             center = self.params.get("center", (0, 0, 0))
-            pipeline = E.pipeline.scaling(scale=tuple(scale), center=tuple(center)).build()
+            pipeline = E.pipeline.scale(scale=tuple(scale), center=tuple(center)).build()
             return pipeline(geom)
         elif self.effect_type == "translate":
             E = _get_cached_module("api.pipeline")
@@ -86,26 +86,26 @@ class SerializableEffectTarget:
             tx, ty, tz = (translate + (0, 0, 0))[:3] if isinstance(translate, tuple) else (
                 translate[0], translate[1], translate[2]
             )
-            pipeline = E.pipeline.translation(offset_x=float(tx), offset_y=float(ty), offset_z=float(tz)).build()
+            pipeline = E.pipeline.translate(offset_x=float(tx), offset_y=float(ty), offset_z=float(tz)).build()
             return pipeline(geom)
         elif self.effect_type == "rotate":
             E = _get_cached_module("api.pipeline")
             rotate = self.params.get("rotate", (0, 0, 0))
             # 度 → 0..1 正規化
             rotate = tuple(float(v) / 360.0 for v in rotate)
-            pipeline = E.pipeline.rotation(rotate=tuple(rotate)).build()
+            pipeline = E.pipeline.rotate(rotate=tuple(rotate)).build()
             return pipeline(geom)
         elif self.effect_type == "noise":
             E = _get_cached_module("api.pipeline")
             intensity = self.params.get("intensity", 0.5)
             frequency = self.params.get("frequency", 1.0)
-            pipeline = E.pipeline.noise(intensity=intensity, frequency=frequency).build()
+            pipeline = E.pipeline.displace(intensity=intensity, frequency=frequency).build()
             return pipeline(geom)
         elif self.effect_type == "filling":
             E = _get_cached_module("api.pipeline")
             density = self.params.get("spacing", 10.0) / 20.0  # spacing → density 変換の暫定
             angle = self.params.get("angle", 0.0)
-            pipeline = E.pipeline.filling(density=density, angle=angle).build()
+            pipeline = E.pipeline.fill(density=density, angle=angle).build()
             return pipeline(geom)
         elif self.effect_type == "array":
             E = _get_cached_module("api.pipeline")
@@ -113,14 +113,14 @@ class SerializableEffectTarget:
             n_duplicates = min(count_total / 10.0, 1.0)  # normalize to 0.0-1.0
             spacing_x = self.params.get("spacing_x", 10.0)
             spacing_y = self.params.get("spacing_y", 10.0)
-            pipeline = E.pipeline.array(n_duplicates=n_duplicates, offset=(spacing_x, spacing_y, 0)).build()
+            pipeline = E.pipeline.repeat(n_duplicates=n_duplicates, offset=(spacing_x, spacing_y, 0)).build()
             return pipeline(geom)
         elif self.effect_type == "subdivision":
             E = _get_cached_module("api.pipeline")
             # level(1..3) → subdivisions(0..1) に粗変換
             level = float(self.params.get("level", 1))
             subdivisions = max(0.0, min(level / 3.0, 1.0))
-            pipeline = E.pipeline.subdivision(subdivisions=subdivisions).build()
+            pipeline = E.pipeline.subdivide(subdivisions=subdivisions).build()
             return pipeline(geom)
         elif self.effect_type == "extrude":
             E = _get_cached_module("api.pipeline")
@@ -134,7 +134,7 @@ class SerializableEffectTarget:
             # distance(mm) → 0..1（effects.buffer 内部で *25mm）
             dist_mm = float(self.params.get("distance", 2.0))
             distance = max(0.0, min(dist_mm / 25.0, 1.0))
-            pipeline = E.pipeline.buffer(distance=distance).build()
+            pipeline = E.pipeline.offset(distance=distance).build()
             return pipeline(geom)
         else:
             raise ValueError(f"Unknown effect type: {self.effect_type}")

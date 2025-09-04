@@ -70,10 +70,10 @@ def test_as_arrays_copy_behavior():
 
 def test_effect_noise_integration_path():
     # Verify function-based effect accepts Geometry and returns Geometry
-    from effects.noise import noise
+    from effects.noise import displace
 
     base = Geometry.from_lines([make_line([[0, 0, 0], [1, 0, 0], [0, 1, 0]])])
-    out = noise(base, intensity=0.01, frequency=(0.1, 0.1, 0.1), time=0.0)
+    out = displace(base, intensity=0.01, frequency=(0.1, 0.1, 0.1), time=0.0)
 
     assert isinstance(out, Geometry)
     c_in, o_in = base.as_arrays()

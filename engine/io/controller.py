@@ -32,7 +32,7 @@ class MidiController:
         self.cc = self.init_cc()
 
         self.sync_grid_knob_values()
-        self.enable_debug = False
+        self.debug_enabled = False
         self._logger = logging.getLogger(__name__)
 
     def __repr__(self):
@@ -100,7 +100,7 @@ class MidiController:
             result["value"] /= 127
             cc_number = result["CC number"]
             self.cc[cc_number] = result["value"]
-            if self.enable_debug:
+            if self.debug_enabled:
                 self._logger.debug("CC updated: %s", dict(self.cc))
 
     @staticmethod
@@ -163,7 +163,7 @@ class MidiController:
         return min_val + (max_val - min_val) * normalized  # 正規化された値を新しい範囲にスケール変換
 
     def set_debug(self, debug: bool):
-        self.enable_debug = debug
+        self.debug_enabled = debug
 
     def sync_grid_knob_values(self):
         names = [name for name in mido.get_output_names() if "Intech Grid MIDI device" in name]  # type: ignore
@@ -173,6 +173,15 @@ class MidiController:
         with mido.open_output(grid_output_port_name) as outport:  # type: ignore
             msg = mido.Message("control_change", channel=0, control=64, value=127)
             outport.send(msg)
+
+    # 後方互換: enable_debug をプロパティで保持
+    @property
+    def enable_debug(self) -> bool:  # deprecated
+        return self.debug_enabled
+
+    @enable_debug.setter
+    def enable_debug(self, value: bool) -> None:  # deprecated
+        self.debug_enabled = value
 
     @staticmethod
     def show_available_ports() -> None:

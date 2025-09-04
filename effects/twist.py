@@ -68,3 +68,7 @@ def twist(g: Geometry, *, angle: float = 45.0, axis: str = "y") -> Geometry:
 
     return Geometry(out, offsets.copy())
 
+twist.__param_meta__ = {
+    "angle": {"type": "number"},
+    "axis": {"type": "string", "choices": ["x", "y", "z"]},
+}

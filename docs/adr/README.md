@@ -13,4 +13,4 @@
 - 0007 — ログ出力ポリシー（Engine=logging, CLI/Bench=print）（Accepted）
 - 0008 — パイプラインのシリアライズ形式（to_spec/from_spec）（Accepted）
 - 0009 — ベンチマーク基準化ワークフロー（Accepted）
-
+- 0010 — エフェクトパラメータのメタデータ検証（Accepted）

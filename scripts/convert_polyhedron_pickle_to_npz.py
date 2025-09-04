@@ -15,6 +15,7 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import logging
 import pickle
 from pathlib import Path
 from typing import Iterable
@@ -64,25 +65,28 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true", help="Verbose logging")
     args = parser.parse_args()
 
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(level=(logging.DEBUG if args.verbose else logging.INFO))
+
     if not data_dir.exists():
-        print(f"No directory: {data_dir}")
+        logger.error("No directory: %s", data_dir)
         return 1
 
     pkl_files = find_pickle_files(data_dir)
     if not pkl_files:
-        print("No pickle files to convert.")
+        logger.info("No pickle files to convert.")
         return 0
 
     converted = 0
     for pkl in pkl_files:
         out = pkl.with_suffix(".npz")
         if args.verbose:
-            print(f"Converting {pkl.name} -> {out.name}")
+            logger.info("Converting %s -> %s", pkl.name, out.name)
 
         try:
             arrays = load_pickle(pkl)
         except Exception as e:
-            print(f"[SKIP] {pkl.name}: {e}")
+            logger.warning("[SKIP] %s: %s", pkl.name, e)
             continue
 
         if args.dry_run:
@@ -95,14 +99,13 @@ def main() -> int:
             if args.delete_original and out.exists():
                 pkl.unlink(missing_ok=True)
                 if args.verbose:
-                    print(f"Deleted {pkl.name}")
+                    logger.info("Deleted %s", pkl.name)
         except Exception as e:
-            print(f"[ERROR] {pkl.name}: {e}")
+            logger.error("[ERROR] %s: %s", pkl.name, e)
 
-    print(f"Converted {converted} file(s).")
+    logger.info("Converted %d file(s).", converted)
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

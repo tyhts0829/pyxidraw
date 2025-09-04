@@ -26,8 +26,8 @@ class TestPipelineBuilder:
         np.testing.assert_allclose(c0, c1, rtol=1e-6)
 
     def test_order_matters(self, simple_geometry):
-        p1 = E.pipeline.scaling(scale=(2.0, 2.0, 2.0)).translation(offset_x=5.0).build()
-        p2 = E.pipeline.translation(offset_x=5.0).scaling(scale=(2.0, 2.0, 2.0)).build()
+        p1 = E.pipeline.scale(scale=(2.0, 2.0, 2.0)).translate(offset_x=5.0).build()
+        p2 = E.pipeline.translate(offset_x=5.0).scale(scale=(2.0, 2.0, 2.0)).build()
         r1 = p1(simple_geometry)
         r2 = p2(simple_geometry)
         assert isinstance(r1, Geometry)
@@ -38,20 +38,20 @@ class TestPipelineBuilder:
 
     def test_progressive_vs_pipeline(self, simple_geometry):
         # 段階適用
-        from effects.rotation import rotation
-        from effects.scaling import scaling
-        from effects.translation import translation
+        from effects.rotation import rotate
+        from effects.scaling import scale
+        from effects.translation import translate
 
-        step1 = rotation(simple_geometry, rotate=(0.0, 0.0, 0.25))
-        step2 = scaling(step1, scale=(2.0, 2.0, 2.0))
-        step3 = translation(step2, offset_x=5.0, offset_y=3.0)
+        step1 = rotate(simple_geometry, rotate=(0.0, 0.0, 0.25))
+        step2 = scale(step1, scale=(2.0, 2.0, 2.0))
+        step3 = translate(step2, offset_x=5.0, offset_y=3.0)
 
         # パイプライン適用
         p = (
             E.pipeline
-            .rotation(rotate=(0.0, 0.0, 0.25))
-            .scaling(scale=(2.0, 2.0, 2.0))
-            .translation(offset_x=5.0, offset_y=3.0)
+            .rotate(rotate=(0.0, 0.0, 0.25))
+            .scale(scale=(2.0, 2.0, 2.0))
+            .translate(offset_x=5.0, offset_y=3.0)
             .build()
         )
         pr = p(simple_geometry)

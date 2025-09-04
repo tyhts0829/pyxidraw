@@ -13,13 +13,25 @@ PyxiDraw4 は、MIDIコントローラーを使用してリアルタイムで 3D
 
 ## インストール
 
-依存関係は固定の requirements.txt を設けていません（提案に基づく最小依存）。以下は最小構成の例です。
+依存は用途別に分かれます。まずは最小構成を入れ、必要に応じて機能別オプションを追加してください。
+
+必須（最小構成）:
 
 ```bash
 git clone <this-repo>
 cd pyxidraw4
 pip install numpy numba pyglet moderngl psutil pyyaml
 ```
+
+オプション（機能別）:
+
+- バッファ/オフセット系（Shapely を使用）
+  - `pip install shapely`
+- アセミックグリフ（KD-Tree で SciPy を使用）
+  - `pip install scipy`
+- MIDI コントローラ（mido）
+  - `pip install mido python-rtmidi`（環境依存）
+  - `arc` を使うサンプルは任意です。MIDI を使わない場合は `run(..., use_midi=False)` を指定してください。
 
 ## 基本的な使用方法
 
@@ -33,7 +45,7 @@ from util.constants import CANVAS_SIZES
 def draw(t, cc):
     # 球体を生成してエフェクトを適用
     sphere = G.sphere(subdivisions=0.5).scale(80, 80, 80).translate(100, 100, 0)
-    pipeline = E.pipeline.noise(intensity=0.3).build()
+    pipeline = E.pipeline.displace(intensity=0.3).build()
     return pipeline(sphere)
 
 if __name__ == "__main__":
@@ -44,9 +56,13 @@ if __name__ == "__main__":
 
 ### 角度・スケールの取り扱い（指針）
 
-- 角度入力は 0..1 を基本とし、内部で 0..2π に正規化（`effects.rotation/transform`）。
+- 角度入力は 0..1 を基本とし、内部で 0..2π に正規化（`effects.rotation/transform`）。推奨は `angles_rad` または `angles_deg` の明示指定です。
 - `translation` は物理単位（mm）を直接指定。
 - `scaling` は `(sx, sy, sz)` の倍率指定。スカラー/1要素/3要素を受け付けます。
+
+命名の推奨（互換名は当面併存）:
+- 中心は `pivot` を推奨（互換: `center`）。
+- 角度は `angles_rad` / `angles_deg` を推奨（互換: `rotate` 0..1）。
 
 ### 複雑な例（main.py）
 
@@ -60,8 +76,8 @@ def draw(t, cc):
     
     # エフェクトパイプラインの適用
     sphere_with_effects = (E.pipeline
-                            .noise(intensity=cc[5] * 0.5)
-                            .filling(density=cc[6] * 0.8)
+                            .displace(intensity=cc[5] * 0.5)
+                            .fill(density=cc[6] * 0.8)
                             .build())(sphere)
     polygon_with_swirl = polygon  # 例の簡略化
     
@@ -105,9 +121,9 @@ out = (E.pipeline
 
 パラメータ指針（抜粋）:
 - 正規化系: 0..1 を受け取り内部でレンジに写像
-  - 例: `rotation.rotate`（0..1→2π）, `extrude.distance/subdivisions`（0..1→上限レンジ）, `buffer.distance/resolution`
+  - 例: `rotate.rotate`（0..1→2π）, `extrude.distance/subdivisions`（0..1→上限レンジ）, `offset.distance/resolution`
 - 物理/実値系: 座標単位（mm相当）・そのままの値
-  - 例: `translation.offset_*`, `dashify.dash_length/gap_length`, `wave.amplitude`, `wobble.amplitude`
+  - 例: `translate.offset_*`, `dash.dash_length/gap_length`, `ripple.amplitude`, `wobble.amplitude`
 - 空間周波数: `wave/wobble.frequency` は「座標1あたりの周期数 [cycles per unit]」
 
 ### エンジン (engine/)
@@ -145,7 +161,7 @@ midi_devices:
 ```python
 from api import E, to_spec, from_spec, validate_spec
 
-pipeline = (E.pipeline.rotation(rotate=(0.25,0,0)).noise(intensity=0.2).build())
+pipeline = (E.pipeline.rotate(rotate=(0.25,0,0)).displace(intensity=0.2).build())
 spec = to_spec(pipeline)
 validate_spec(spec)     # 構造/登録名/パラメータ検証（例外が出なければOK）
 pipeline2 = from_spec(spec)
@@ -163,6 +179,12 @@ python -m pytest
 # ベンチマークを実行（全ターゲット）
 python -m benchmarks run
 ```
+
+## 開発向け: エフェクトの追加/作成
+
+- エフェクトは純関数（`Geometry -> Geometry`）として `effects/` に追加し、`@effects.registry.effect()` で登録します。
+- 仕様検証のため、任意で `__param_meta__`（型/範囲/choices）を関数属性として宣言できます。
+- 詳細は「docs/guides/effects_authoring.md」を参照してください。
 
 ## キャッシュ制御（開発向け）
 
@@ -183,7 +205,7 @@ export PXD_CACHE_MAXSIZE=64
 ```python
 >>> from effects.registry import list_effects
 >>> list_effects()[:8]
-['array', 'boldify', 'buffer', 'collapse', 'dashify', 'explode', 'extrude', 'filling']
+['repeat', 'collapse', 'dash', 'explode', 'extrude', 'fill', 'offset', 'rotate']
 ```
 
 スクリプト内からの防御的プログラミングにも利用できます（未登録名の早期検出など）。

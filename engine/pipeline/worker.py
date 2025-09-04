@@ -11,6 +11,15 @@ from .packet import RenderPacket
 from .task import RenderTask
 
 
+class WorkerTaskError(Exception):
+    """Draw コールバック中の例外をラップしてフレームID等の文脈を付与。"""
+
+    def __init__(self, frame_id: int, original: Exception):
+        super().__init__(f"WorkerTaskError(frame_id={frame_id}): {original}")
+        self.frame_id = frame_id
+        self.original = original
+
+
 class _WorkerProcess(mp.Process):
     """バックグラウンドで draw_callback を呼び RenderPacket を生成する。"""
 
@@ -32,11 +41,13 @@ class _WorkerProcess(mp.Process):
                 geometry = self.draw_callback(task.t, task.cc_state)
                 self.result_q.put(RenderPacket(geometry, task.frame_id))
             except Exception as e:  # 例外を親へ
-                # デバッグ用：より詳細なエラー情報を追加
+                # デバッグ用：分類情報を付与
                 import traceback
-                error_msg = f"Worker error in draw_callback: {e}\nTraceback: {traceback.format_exc()}"
-                logger.exception(error_msg)
-                self.result_q.put(e)
+                logger.exception(
+                    "[worker] stage=draw_callback frame_id=%s error=%s\n%s",
+                    getattr(task, "frame_id", -1), e, traceback.format_exc(),
+                )
+                self.result_q.put(WorkerTaskError(getattr(task, "frame_id", -1), e))
 
 
 class WorkerPool(Tickable):

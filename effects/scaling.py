@@ -8,14 +8,16 @@ from common.types import Vec3
 
 
 @effect()
-def scaling(
+def scale(
     g: Geometry,
     *,
-    center: Vec3 = (0.0, 0.0, 0.0),
+    center: Vec3 = (0.0, 0.0, 0.0),  # 旧
+    pivot: Vec3 | None = None,       # 新（推奨）
     scale: Vec3 = (1.0, 1.0, 1.0),
 ) -> Geometry:
     sx, sy, sz = scale
-    return g.scale(sx, sy, sz, center=center)
+    c = pivot if pivot is not None else center
+    return g.scale(sx, sy, sz, center=c)
 
 
 # 後方互換クラスは廃止（関数APIのみ）

@@ -12,7 +12,7 @@ instructions = "Think in English, answer in Japanese."
   ```python
   from api import E, G
   g = G.sphere(subdivisions=0.5).scale(100,100,100).translate(100,100,0)
-  result = (E.pipeline.noise(intensity=0.3).filling(density=0.5).build())(g)
+  result = (E.pipeline.displace(intensity=0.3).fill(density=0.5).build())(g)
   ```
 
 ### パイプライン仕様のシリアライズ/検証
@@ -24,8 +24,8 @@ instructions = "Think in English, answer in Japanese."
 ```python
 from api import E, to_spec, from_spec, validate_spec
 
-pipeline = (E.pipeline.rotation(rotate=(0.25,0,0))
-                      .noise(intensity=0.2)
+pipeline = (E.pipeline.rotate(rotate=(0.25,0,0))
+                      .displace(intensity=0.2)
                       .build())
 spec = to_spec(pipeline)
 validate_spec(spec)     # 例外が出なければOK

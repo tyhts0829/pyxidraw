@@ -33,12 +33,11 @@ def _interpolate_segment(vertices: np.ndarray, cumulative_distances: np.ndarray,
 
 
 @effect()
-def dashify(
+def dash(
     g: Geometry,
     *,
     dash_length: float = 0.1,
     gap_length: float = 0.05,
-    **_params: Any,
 ) -> Geometry:
     """連続線を破線に変換（純関数）。
 
@@ -74,3 +73,8 @@ def dashify(
     if not lines:
         return Geometry(coords.copy(), offsets.copy())
     return Geometry.from_lines(lines)
+
+dash.__param_meta__ = {
+    "dash_length": {"type": "number", "min": 0.0},
+    "gap_length": {"type": "number", "min": 0.0},
+}

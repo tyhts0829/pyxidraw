@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Sequence, Tuple
 import inspect
 
@@ -13,13 +14,22 @@ from effects.registry import get_effect
 
 
 def _geometry_hash(g: Geometry) -> bytes:
-    c, o = g.as_arrays(copy=False)
-    c = np.ascontiguousarray(c).view(np.uint8)
-    o = np.ascontiguousarray(o).view(np.uint8)
-    h = hashlib.blake2b(digest_size=16)
-    h.update(c)
-    h.update(o)
-    return h.digest()
+    """Geometry のハッシュ。
+
+    Geometry が `digest` プロパティを提供する場合はそれを優先し、
+    なければ従来通りに coords/offsets から計算します。
+    """
+    try:
+        return g.digest  # type: ignore[attr-defined]
+    except Exception:
+        # フォールバック（理論上到達しない想定）
+        c, o = g.as_arrays(copy=False)
+        c = np.ascontiguousarray(c).view(np.uint8)
+        o = np.ascontiguousarray(o).view(np.uint8)
+        h = hashlib.blake2b(digest_size=16)
+        h.update(c)
+        h.update(o)
+        return h.digest()
 
 
 def _fn_version(fn: Callable[..., Geometry]) -> bytes:
@@ -51,9 +61,11 @@ class Step:
 
 
 class Pipeline:
-    def __init__(self, steps: Sequence[Step]):
+    def __init__(self, steps: Sequence[Step], *, cache_maxsize: int | None = None):
         self._steps = list(steps)
-        self._cache: Dict[Tuple[bytes, bytes], Geometry] = {}
+        # LRU 互換の単層キャッシュ（maxsize=None なら従来通り無制限）
+        self._cache_maxsize: int | None = cache_maxsize
+        self._cache: "OrderedDict[Tuple[bytes, bytes], Geometry]" = OrderedDict()
 
         # パイプラインハッシュを先に計算
         h = hashlib.blake2b(digest_size=16)
@@ -67,16 +79,26 @@ class Pipeline:
     def __call__(self, g: Geometry) -> Geometry:
         key = (_geometry_hash(g), self._pipeline_key)
         if key in self._cache:
-            return self._cache[key]
+            # LRU: 参照を末尾へ
+            out = self._cache.pop(key)
+            self._cache[key] = out
+            return out
 
         out = g
         for st in self._steps:
             fn = get_effect(st.name)
             out = fn(out, **st.params)
 
-        # 単層キャッシュ
+        # 単層キャッシュ（LRU 風）
         self._cache[key] = out
+        if self._cache_maxsize is not None and self._cache_maxsize > 0:
+            while len(self._cache) > self._cache_maxsize:
+                self._cache.popitem(last=False)  # 先頭（最古）を追い出す
         return out
+
+    def clear_cache(self) -> None:
+        """パイプラインの単層キャッシュをクリア。"""
+        self._cache.clear()
 
     # ---- Serialization (Proposal 6) ----
     def to_spec(self) -> List[Dict[str, Any]]:
@@ -94,6 +116,7 @@ class Pipeline:
 class PipelineBuilder:
     def __init__(self):
         self._steps: List[Step] = []
+        self._cache_maxsize: int | None = None
 
     def _add(self, name: str, params: Dict[str, Any]) -> "PipelineBuilder":
         self._steps.append(Step(name, params))
@@ -106,8 +129,13 @@ class PipelineBuilder:
 
         return adder
 
+    # オプション: 単層キャッシュの上限を設定（None で無制限・従来互換）
+    def cache(self, *, maxsize: int | None) -> "PipelineBuilder":
+        self._cache_maxsize = maxsize
+        return self
+
     def build(self) -> Pipeline:
-        return Pipeline(self._steps)
+        return Pipeline(self._steps, cache_maxsize=self._cache_maxsize)
 
     def __call__(self, g: Geometry) -> Geometry:
         return self.build()(g)
@@ -198,3 +226,29 @@ def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
         except ValueError:
             # Builtins or objects without signature: skip strict check
             pass
+
+        # Optional: param meta validation (type/range/choices) if effect exposes __param_meta__
+        meta = getattr(fn, "__param_meta__", None)
+        if isinstance(meta, dict):
+            for k, rules in meta.items():
+                if k not in params:
+                    continue
+                v = params[k]
+                # type check (loose)
+                t = rules.get("type") if isinstance(rules, dict) else None
+                if t == "number" and not isinstance(v, (int, float)):
+                    raise TypeError(f"spec[{i}]['params']['{k}'] must be number, got {type(v).__name__}")
+                if t == "integer" and not isinstance(v, int):
+                    raise TypeError(f"spec[{i}]['params']['{k}'] must be integer, got {type(v).__name__}")
+                if t == "string" and not isinstance(v, str):
+                    raise TypeError(f"spec[{i}]['params']['{k}'] must be string, got {type(v).__name__}")
+                # range
+                if isinstance(rules, dict):
+                    if "min" in rules and isinstance(v, (int, float)) and v < rules["min"]:
+                        raise TypeError(f"spec[{i}]['params']['{k}']={v} is below min {rules['min']}")
+                    if "max" in rules and isinstance(v, (int, float)) and v > rules["max"]:
+                        raise TypeError(f"spec[{i}]['params']['{k}']={v} exceeds max {rules['max']}")
+                    # choices
+                    choices = rules.get("choices")
+                    if choices is not None and v not in choices:
+                        raise TypeError(f"spec[{i}]['params']['{k}']={v!r} must be one of {choices}")

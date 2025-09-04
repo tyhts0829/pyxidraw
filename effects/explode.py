@@ -33,3 +33,7 @@ def explode(g: Geometry, *, factor: float = 0.2) -> Geometry:
     amount = norm_to_range(float(factor), 0.0, MAX_OFFSET)
     out = coords + unit * amount
     return Geometry(out.astype(np.float32, copy=False), offsets.copy())
+
+explode.__param_meta__ = {
+    "factor": {"type": "number", "min": 0.0, "max": 1.0},
+}

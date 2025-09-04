@@ -3,142 +3,98 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from numba import njit
 
 from .registry import effect
 from engine.core.geometry import Geometry
 
 
-@njit(fastmath=True, cache=True)
-def _calculate_line_normals_3d(vertices: np.ndarray) -> np.ndarray:
-    """3D線分のXY平面での法線ベクトルを計算。"""
-    if vertices.shape[0] < 2:
-        return np.zeros((0, 3), dtype=np.float32)
-
-    # Direction vectors in XY plane
-    directions = vertices[1:] - vertices[:-1]
-
-    # Normals in XY plane (Z component is 0)
-    normals = np.zeros_like(directions, dtype=np.float32)
-    normals[:, 0] = -directions[:, 1]  # x = -offset_y
-    normals[:, 1] = directions[:, 0]  # y = offset_x
-    normals[:, 2] = 0  # z = 0
-
-    # Normalize
-    lengths = np.sqrt(normals[:, 0] ** 2 + normals[:, 1] ** 2)
-    lengths = np.where(lengths == 0, 1, lengths)
-    normals[:, 0] /= lengths
-    normals[:, 1] /= lengths
-
-    return normals
-
-
-@njit(fastmath=True, cache=True)
-def _boldify_coords_with_offsets(
-    coords: np.ndarray,
-    offsets: np.ndarray,
-    boldness: float = 0.01,
-) -> tuple[np.ndarray, np.ndarray]:
-    """法線ベースの効率的な太線実装。
-    
-    各線分の法線ベクトルを計算し、元の線の両側に平行線を生成して太線効果を実現。
-    
-    処理の流れ:
-    1. offsetsを使って各ポリラインを識別
-    2. 各ポリラインについて法線ベクトル(垂直方向)を計算
-    3. 各頂点で法線方向に太さの半分だけオフセットした左右の平行線を生成
-    4. 元の線と左右の平行線を結果として返す
-    
-    Args:
-        coords: 3D座標配列 (N, 3)
-        offsets: オフセット配列 (M,)
-        boldness: 太さ（単位：ミリメートル相当）
-    
-    Returns:
-        (new_coords, new_offsets): 元の線 + 左の平行線 + 右の平行線を含む座標とオフセット
-    """
-    if boldness <= 0:
+def _boldify_coords_with_offsets(coords: np.ndarray, offsets: np.ndarray, boldness: float) -> tuple[np.ndarray, np.ndarray]:
+    """太線化（XY平面の法線ベース）。Numba 依存を排し、2 パスで事前確保して高速化。"""
+    if boldness <= 0 or coords.size == 0 or offsets.size <= 1:
         return coords.copy(), offsets.copy()
 
-    if len(coords) == 0:
+    # 1st pass: 出力サイズ見積もり
+    total_vertices = 0
+    total_lines = 0
+    for i in range(len(offsets) - 1):
+        start, end = int(offsets[i]), int(offsets[i + 1])
+        L = max(0, end - start)
+        if L < 2:
+            total_vertices += L
+            total_lines += 1
+        else:
+            total_vertices += 3 * L
+            total_lines += 3
+
+    if total_lines == 0:
         return coords.copy(), offsets.copy()
 
-    half_boldness = boldness / 2
-    
-    # 結果を格納するリスト
-    all_coords = []
-    all_offsets = []
-    
-    # offsetsからポリラインを抽出
-    start_idx = 0
-    for end_idx in offsets:
-        if start_idx >= end_idx:
-            start_idx = end_idx
+    out_coords = np.empty((total_vertices, 3), dtype=np.float32)
+    out_offsets = np.empty(total_lines + 1, dtype=np.int32)
+    out_offsets[0] = 0
+
+    half = float(boldness) / 2.0
+    ci = 0  # coord cursor
+    oi = 0  # offsets cursor (points to last written offset index)
+
+    for i in range(len(offsets) - 1):
+        start, end = int(offsets[i]), int(offsets[i + 1])
+        v = coords[start:end]
+        L = v.shape[0]
+        if L == 0:
             continue
-            
-        vertices = coords[start_idx:end_idx]
-        
-        if vertices.shape[0] < 2:
-            # 元のラインを追加
-            all_coords.append(vertices)
-            all_offsets.append(np.array([end_idx - start_idx], dtype=offsets.dtype))
-            start_idx = end_idx
-            continue
-
-        # 元のラインを追加
-        all_coords.append(vertices)
-        all_offsets.append(np.array([vertices.shape[0]], dtype=offsets.dtype))
-
-        # Calculate normals for 3D vertices
-        normals = _calculate_line_normals_3d(vertices)
-
-        if normals.shape[0] == 0:
-            start_idx = end_idx
+        if L < 2:
+            out_coords[ci : ci + L] = v
+            ci += L
+            out_offsets[oi + 1] = ci
+            oi += 1
             continue
 
-        # Calculate per-vertex normals
-        vertex_normals = np.zeros_like(vertices, dtype=np.float32)
+        # 元のライン
+        out_coords[ci : ci + L] = v
+        ci += L
+        out_offsets[oi + 1] = ci
+        oi += 1
 
-        # First vertex
-        vertex_normals[0] = normals[0]
+        # セグメント法線（XY 平面）
+        seg = v[1:] - v[:-1]
+        n = np.zeros_like(seg, dtype=np.float32)
+        n[:, 0] = -seg[:, 1]
+        n[:, 1] = seg[:, 0]
+        # 正規化（ゼロ除外）
+        ln = np.sqrt(n[:, 0] * n[:, 0] + n[:, 1] * n[:, 1])
+        ln = np.where(ln == 0.0, 1.0, ln)
+        n[:, 0] /= ln
+        n[:, 1] /= ln
 
-        # Middle vertices (average of adjacent segment normals)
-        for i in range(1, vertices.shape[0] - 1):
-            vertex_normals[i] = (normals[i - 1] + normals[i]) / 2
-            # Re-normalize
-            length = np.sqrt(vertex_normals[i, 0] ** 2 + vertex_normals[i, 1] ** 2)
-            if length > 0:
-                vertex_normals[i] /= length
+        # 頂点法線（端点は隣接の法線、内部は隣接平均→正規化）
+        vn = np.zeros_like(v, dtype=np.float32)
+        vn[0] = n[0]
+        vn[-1] = n[-1]
+        if L > 2:
+            vn[1:-1] = (n[:-1] + n[1:]) * 0.5
+            mag = np.sqrt(vn[1:-1, 0] * vn[1:-1, 0] + vn[1:-1, 1] * vn[1:-1, 1])
+            nz = mag > 0
+            vn[1:-1][nz] /= mag[nz][:, None]
 
-        # Last vertex
-        vertex_normals[-1] = normals[-1]
+        left = v + vn * half
+        right = v - vn * half
 
-        # Generate left and right parallel lines
-        left_line = vertices + vertex_normals * half_boldness
-        right_line = vertices - vertex_normals * half_boldness
+        out_coords[ci : ci + L] = left.astype(np.float32, copy=False)
+        ci += L
+        out_offsets[oi + 1] = ci
+        oi += 1
 
-        all_coords.append(left_line.astype(vertices.dtype))
-        all_coords.append(right_line.astype(vertices.dtype))
-        all_offsets.append(np.array([left_line.shape[0]], dtype=offsets.dtype))
-        all_offsets.append(np.array([right_line.shape[0]], dtype=offsets.dtype))
-        
-        start_idx = end_idx
+        out_coords[ci : ci + L] = right.astype(np.float32, copy=False)
+        ci += L
+        out_offsets[oi + 1] = ci
+        oi += 1
 
-    # すべての座標とオフセットを結合
-    if len(all_coords) == 0:
-        return coords.copy(), offsets.copy()
-        
-    combined_coords = np.vstack(all_coords)
-    combined_offsets = np.cumsum(np.concatenate(all_offsets))
-
-    return combined_coords, combined_offsets
+    return out_coords, out_offsets
 
 
-@effect()
-def boldify(g: Geometry, *, boldness: float = 0.5, **_: Any) -> Geometry:
+def boldify(g: Geometry, *, boldness: float = 0.5) -> Geometry:
     """平行線を追加して線を太く見せる（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
-    if boldness <= 0:
-        return Geometry(coords.copy(), offsets.copy())
     new_coords, new_offsets = _boldify_coords_with_offsets(coords, offsets, float(boldness))
     return Geometry(new_coords, new_offsets)

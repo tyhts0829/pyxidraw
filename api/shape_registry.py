@@ -10,6 +10,7 @@ from typing import Callable, Dict, List, Type, Union
 
 from engine.core.geometry import Geometry
 from shapes.registry import shape, get_shape, list_shapes, is_shape_registered, clear_registry
+from shapes import registry as _shapes_registry
 
 
 register_shape = shape
@@ -30,9 +31,11 @@ def list_registered_shapes() -> List[str]:
 
 def unregister_shape(name: str):
     """形状の登録を解除（主にテスト用）。"""
-    # clear_registryは全消去なので、個別削除はサポートしない
-    # 将来的にBaseRegistryにunregisterメソッドを追加することを検討
-    pass
+    try:
+        _shapes_registry.get_registry().unregister(name)
+    except Exception:
+        # 存在しない場合は無視（安全側）
+        return
 
 
 class CustomShape(ABC):

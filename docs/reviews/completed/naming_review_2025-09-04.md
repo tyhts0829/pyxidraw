@@ -1,142 +1,123 @@
-# Naming Review (2025-09-04)
+# Naming Spec (あるべき姿) — 2025-09-04
 
-本レビューは、コードベース全体（effects/, shapes/, api/, engine/, common/, util/, tests/ ほか）を走査し、関数名・変数名・クラス名・引数名の一貫性と可読性を評価したものです。目的は「破壊的変更（2025-09-03）」後の設計方針に沿って、実用性の高い命名改善を提案することです。ここでは即時に安全に適用できるものを優先し、影響が大きい変更は移行計画を併記します。
-
----
-
-## サマリー（結論）
-- 全体として命名規約（snake_case/UpperCamelCase/UPPER_SNAKE_CASE）は概ね順守できています。
-- Geometry 周辺は translate/scale/rotate/concat で統一され、良好です。
-- Pipeline/Effects は登録名の整合性は取れている一方で、
-  - 変換系エフェクトが名詞系（translation/scaling/rotation）、その他が動詞/名詞混在（noise, extrude, wobble, dashify, webify 等）で、スタイルが揺れています。
-  - 一部引数名が「正規化値なのか実数（ラジアン/スケール）なのか」が読み取りづらい箇所があります。
-- 低リスクで効果が高い改善対象は「引数名の明確化」「モジュール定数の命名」「ユーティリティ変数名の具体化」です。
+目的: 現行に縛られず、長期運用で迷いが生じにくい命名規範を提示します。設計の一貫性・読みやすさ・学習容易性を最優先に定めます。
 
 ---
 
-## リポジトリ横断の命名方針（提案）
-- 関数/変数: `snake_case`、クラス: `CamelCase`、定数: `UPPER_SNAKE_CASE`（現状踏襲）。
-- Geometry のメソッド系: 動詞（`translate/scale/rotate/concat`）。
-- Effects の登録名: 現行を尊重しつつ、新規追加は「効果を表すシンプルな英単語」を推奨。
-  - 変換系は名詞系（`translation/scaling/rotation`）で統一済みのため維持。
-  - “-ify” の造語（`dashify`, `boldify`, `webify`）は読み手に意味が伝わりにくいので避ける。
-- 正規化 vs 物理単位を明示:
-  - 正規化パラメータは `*_norm`、ラジアンは `*_rad`、スケールは `*_scale` など接尾辞で区別。
-  - 例: `rotate_norm`（0..1）/ `angles_rad`（ラジアン）／`scale`（倍率）。
-- 数量パラメータは整数名を優先（`count`, `copies`, `n` など）。0..1 から整数に写像する場合は `*_norm` を併記して明示。
-- ブールは状態を表す形（`is_*/has_*/enable_*`）。
+## グローバル原則
+- 関数/変数: `snake_case`、クラス: `CamelCase`、定数: `UPPER_SNAKE_CASE`。
+- 関数名は「何をするか」を動詞で表す（副作用なしでも動詞）。
+- 引数名は「単位・型・範囲」を名前で推測できるようにする（必要に応じ接尾辞）。
+- 省略語は避ける（`arr/cfg/tmp/res/acc` → `array/config/temp/result/total_count`）。
+- 同義語は統一（`pivot` を変換中心に、`origin` は (0,0,0) のみ）。
 
 ---
 
-## 具体的な改善提案（優先度つき）
-
-### A. 引数名の明確化（低リスク・高効果）
-- effects/rotation.py
-  - 現状: `rotate: Vec3`（0..1 を 2π に変換）
-  - 提案: `rotate_norm: Vec3` を許可する（`rotate` は当面維持）。
-  - 目的: 値域の意図を引数名から読み取れるようにする。
-- effects/array.py
-  - 現状: `n_duplicates: float` → 整数へ丸め（0..1 正規化）。
-  - 提案: `count: int` を第1候補に、`duplicates_norm: float` を後方互換として受理。
-- effects/extrude.py
-  - 現状: `subdivisions: float`（0..1→0..5）
-  - 提案: `detail_norm: float` を受理。整数段数は将来的に `subdivisions: int`（本義）へ移行。
-- shapes/text.py
-  - 現状: `size: float`
-  - 提案: `font_scale: float`（あるいは `scale`）へ。移行期は `size` 併存。
-
-移行方針: 追加引数は後方互換で共存させ、`validate_spec` には新引数も許容させる（未知キー検出ロジックは現状 `**kwargs` 無し関数に対し厳密なので、関数シグネチャ側で新キーを追加する）。
-
-### B. エフェクト登録名の語彙整理（中リスク）
-- 造語の簡素化（意味を直接想起できる語へ）:
-  - `dashify` → `dash`
-  - `boldify` → `bold` または `embolden`
-  - `webify` → `web`（“蜘蛛の巣化”の意なら）
-- 備考: effects.registry は現在「エイリアス非対応」。命名変更は spec/チュートリアル/テストの一括更新が必要。段階導入したい場合は registry に限定的エイリアス機構を追加するか、移行スクリプトを用意（後述のチェックリスト参照）。
-
-### C. モジュール内の定数・一時変数名（低リスク）
-- effects/noise.py
-  - 現状: モジュールレベル変数 `perm`, `grad3`（実質定数）
-  - 提案: `NOISE_PERMUTATION_TABLE`, `NOISE_GRADIENTS_3D` など `UPPER_SNAKE_CASE` に。
-  - 関数名 `perlin_core` は目的が曖昧 → `perlin_offset_field_3d` 等へ検討。
-- effects/extrude.py
-  - ループ内の累積変数 `acc` は `vertex_count` などにすると読みやすい。
-- util/utils.py
-  - `cfg` → `config`。`this_dir` → `project_root` など、役割を即時に連想できる名に。
-- engine/render/line_mesh.py
-  - `prim_restart_idx` と引数 `primitive_restart_index` の併存 → `primitive_restart_index` に統一し、フィールドも同名に。
-
-### D. 「正規化値」命名の一貫化（中リスク）
-- shapes/sphere.Sphere.generate, shapes/polygon.Polygon.generate など、`subdivisions: float` が「正規化値→整数」に写像されているケースを広く確認。
-  - 提案: 正規化入力は `*_norm` を導入し、本義の整数は `subdivisions: int` に。短期は両対応、長期で非推奨化。
+## 単位と接尾辞
+- 角度: 規定はラジアン。明示は `*_rad`。度は `*_deg`（両指定はエラー）。
+- 距離/長さ: mm 前提。必要に応じ `*_mm`。
+- 正規化値(0..1): 原則廃止。どうしても使う場合は `*_norm`。
+- 周波数: 空間は `spatial_freq`（cycles per unit）。時間は `freq_hz`。
+- 時間: 秒は `*_sec`。
 
 ---
 
-## 影響範囲と移行プラン
-- 影響小（即時可）: C（定数・ローカル変数の改名）、A の「引数を追加して受け付ける」型の改善。
-- 影響中: D（正規化と整数の二系統受理）。
-- 影響大: B（エフェクト名自体の変更）。effects.registry がエイリアス非対応のため、以下のどちらか:
-  1) 一括置換（effects名・to_spec/from_specのspec・tests・tutorials・docs すべて）
-  2) registry に限定的な `alias(old, new)` を導入（短期のみ、起動時に DeprecationWarning を発する）。
+## API サーフェス
+- Geometry メソッド: `translate/scale/rotate/concat`（現行踏襲）。
+- Effects 登録名（`E.pipeline` 配下）: すべて動詞の命令形で統一。
+  - 例: `E.pipeline.rotate(...).scale(...).translate(...).fill(...).trim(...).subdivide(...).repeat(...)`。
+- Registry キー: 公開名は `snake_case` のみ（登録時に大文字/ケバブを正規化）。
 
 ---
 
-## ファイル別・具体提案（抜粋）
-- effects/rotation.py
-  - `rotate` → 新規で `rotate_norm` を許可（0..1）。将来 `angles_rad` も許可（ラジアン直接指定）。
-- effects/array.py
-  - `n_duplicates` → 新規 `count: int`（優先）/ `duplicates_norm: float`（互換）。
-- effects/extrude.py
-  - `subdivisions: float` → `detail_norm: float`（互換）、将来的に `subdivisions: int` を本義に。
-  - `acc` → `vertex_count`。
-- effects/noise.py
-  - `perm` → `NOISE_PERMUTATION_TABLE`、`grad3` → `NOISE_GRADIENTS_3D`。
-  - `perlin_core` → `perlin_offset_field_3d`（検討）。
-- util/utils.py
-  - `cfg` → `config`、`this_dir` → `project_root`。
-- engine/render/line_mesh.py
-  - `prim_restart_idx` → `primitive_restart_index` に統一。
-- engine/io/controller.py
-  - `enable_debug` → `debug_enabled`（ブール状態名）。
+## エフェクト命名（理想の一覧）
+- 幾何変換: `translate`, `scale`, `rotate`, `affine`（複合変換）
+- 分割/簡略: `subdivide`, `simplify`, `trim`
+- 配列複製: `repeat`（旧: array）
+- 太らせ/オフセット: `offset`（旧: buffer, boldify）
+- 破裂: `explode`
+- 押し出し: `extrude`
+- 充填/ハッチング: `fill`（mode: `hatch|cross|dots`）
+- ねじり: `twist`
+- 波歪み: `ripple`（旧: wave）
+- ふらつき: `wobble`
+- 破線化: `dash`（旧: dashify）
+- 網目化: `weave`（旧: webify）
+- 変位場: `displace`（field: `perlin|curl|...`、旧: noise）
 
 ---
 
-## サーチ&置換チェックリスト（実行例）
-> 参照だけでなく置換を伴う場合は `tests/` と `docs/` を含め一括更新してください。
-
-- 正規化語尾の導入へ向けた棚卸し
-  - `rg -n "subdivisions\s*:\s*float"`
-  - `rg -n "n_duplicates|duplicates|count" effects/`
-  - `rg -n "rotate=\(" effects/rotation.py tutorials/`（0..1 指定の用法確認）
-- 造語系エフェクトの呼び出し箇所
-  - `rg -n "dashify|boldify|webify"`（テスト・チュートリアル含む）
-- ノイズ定数の参照
-  - `rg -n "\bperm\b|\bgrad3\b" effects/noise.py`
-- util の略称
-  - `rg -n "\bcfg\b|\bconf\b" util/`、`rg -n "this_dir" util/`
-
----
-
-## オープン課題（判断が必要）
-- Effects 登録名のスタイル統一（名詞系に寄せるか、動詞系に寄せるか）。現状ドキュメントは `E.pipeline.rotation(...).filling(...)` を例示しており、変換系は名詞の設計思想が見て取れます。新規はこの方針に合わせ、既存の `dashify/boldify/webify` のみ語彙改善する案が妥当です。
-- `validate_spec` のパラメータ検証は、先頭引数名を `'g'` として黙認する実装（先頭引数名に依存）。将来 `g → geom` へ改名したい場合は「先頭の POSITIONAL_ONLY/POSITIONAL_OR_KEYWORD をスキップする」ロジックへ変更する必要があります。
-- `RenderPacket.timestamp` は現在クラス定義時に固定される（`time.time()` がデフォルト引数で評価）。命名ではないが生成時刻を持たせたい場合は `default_factory` を検討（機能面の補足）。
+## 代表エフェクトの引数仕様（理想）
+- `translate(delta: Vec3)`
+  - `delta`: 加算変位ベクトル（mm）。
+- `scale(scale: Vec3, *, pivot: Vec3=(0,0,0))`
+  - `scale`: 各軸倍率。`1.0` で等倍。
+  - `pivot`: 変換中心。
+- `rotate(angles_rad: Vec3, *, pivot: Vec3=(0,0,0))`
+  - `angles_rad`: ラジアン指定。`angles_deg` も受理（どちらか一方）。
+- `fill(mode: Literal['hatch','cross','dots'], density: float, angle_rad: float=0.0)`
+  - `density`: 密度（0..1 を採用）。
+- `repeat(count: int, *, offset: Vec3=(0,0,0), angles_rad_step: Vec3=(0,0,0), scale_mul: Vec3=(1,1,1), pivot: Vec3=(0,0,0))`
+  - 各複製ごとのステップ量を明示（角度はラジアンステップ）。
+- `offset(distance_mm: float, *, join: Literal['miter','round','bevel']='round', segments_per_circle: int=8)`
+- `displace(amplitude_mm: float, *, spatial_freq: Vec3|float=(0.5,0.5,0.5), t_sec: float=0.0, field: str='perlin')`
 
 ---
 
-## 付録: 走査対象の主なディレクトリ
-- api/: `E`, `G`, パイプライン、シリアライズ/検証
-- effects/: 登録レジストリと各エフェクト関数
-- shapes/: シェイプ生成とレジストリ
-- engine/: core/geometry, transform_utils, render, pipeline, io
-- util/, common/: 補助ユーティリティ
-- tests/, tutorials/, docs/
+## 変数・定数の命名
+- 定数: `UPPER_SNAKE_CASE`（例: `NOISE_PERMUTATION_TABLE`, `NOISE_GRADIENTS_3D`）。
+- ローカル/一時: 役割が分かる名（`acc`→`vertex_count`、`cfg`→`config`）。
+- 衝突回避: レンダリングの `SwapBuffer` と区別するため、エフェクト名に `buffer` は使わない（`offset` へ統一）。
 
 ---
 
-### 今後の進め方（提案）
-1) 低リスク（C, Aの追加受理）を先行反映 → テスト更新最小。
-2) 正規化接尾辞（D）を段階導入 → ドキュメントとチュートリアルに注記。
-3) 造語の語彙整理（B）を必要箇所に限定して実施 → 影響面を Issue 化し、合意後に一括適用。
+## 現行→理想 マッピング（主要どころ）
+- translation → translate
+- scaling → scale
+- rotation → rotate
+- filling → fill
+- trimming → trim
+- subdivision → subdivide
+- array → repeat
+- buffer → offset
+- boldify → offset（または `thicken` だが意味重複のため `offset` に統一）
+- dashify → dash
+- webify → weave
+- wave → ripple
+- noise → displace(field='perlin')
 
-以上。
+---
+
+## validate_spec まわりの命名規範
+- 先頭引数は常に `g: Geometry` 固定（検証から除外）。
+- パラメータ名は上記「理想引数名」に合わせる。未知キーはエラー（`**kwargs` 非推奨）。
+- Enum/モードは `mode` または用途名（`join`, `field`）で一貫化。
+
+---
+
+## 改善チェックリスト（実装順の推奨）
+- [x] エフェクト登録名を上記「理想一覧」に統一（alias 不使用、完全移行）
+- [x] `translate/scale/rotate` の引数を `delta/scale/angles_rad` と `pivot` に統一（旧名も受理）
+- [x] `repeat`（旧 array）に `count/offset/angles_rad_step/scale_mul/pivot` を導入
+- [x] `offset`（旧 buffer/boldify）に `distance_mm/join/segments_per_circle` を導入
+- [x] `fill`（旧 filling）の `mode/density/angle_rad` を導入
+- [x] `displace`（旧 noise）へ改名し、`amplitude_mm/spatial_freq/t_sec/field` を導入
+- [x] `subdivide/simplify/trim/twist/ripple/wobble/dash/weave/extrude/explode` の引数を定義し直し
+- [x] `effects/noise.py` の `perm/grad3` を `NOISE_PERMUTATION_TABLE/NOISE_GRADIENTS_3D` に改名（旧名は互換エイリアス残し）
+- [x] ローカル変数の略称撲滅（例: `effects/extrude.py` の `acc`→`vertex_count`、`util/utils.py` の `cfg/this_dir`→`config/project_root`）。残項目は継続。
+- [x] `engine/render/line_mesh.py` の `prim_restart_idx` を `primitive_restart_index` に統一（互換プロパティ追加）
+- [x] `engine/io/controller.py` の `enable_debug` → `debug_enabled`（互換プロパティ追加）
+- [x] ドキュメント・チュートリアル・テストの名称を一括更新
+- [x] `validate_spec` を新パラメータ名に合わせて強化（param_meta による型/範囲/choices 検証）
+- [x] 旧名→新名の自動変換スクリプト（scripts/rename_effects_in_specs.py）を追加
+
+---
+
+## ロールアウト方針（推奨）
+- Phase 1（互換期）: registry に `alias(old, new)` を追加し、旧名使用時に DeprecationWarning。
+- Phase 2（置換期）: 公式ドキュメント・サンプル・テストを新名へ切替、旧名の警告を強化。
+- Phase 3（収束期）: 旧名を削除し、`from_spec/validate_spec` も新名のみ受理。
+
+---
+
+以上が「あるべき姿」の命名仕様と具体的な移行チェックリストです。

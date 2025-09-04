@@ -143,33 +143,62 @@ def _apply_noise_to_coords(
 
 
 # Perlinノイズ用のPermutationテーブルを作成
-perm = np.array(NOISE_CONST["PERM"], dtype=np.int32)
-perm = np.concatenate([perm, perm])  # 0-255までの順列を2回連結
+# 命名: 定数は UPPER_SNAKE_CASE（互換のため旧名も残す）
+NOISE_PERMUTATION_TABLE = np.array(NOISE_CONST["PERM"], dtype=np.int32)
+NOISE_PERMUTATION_TABLE = np.concatenate([NOISE_PERMUTATION_TABLE, NOISE_PERMUTATION_TABLE])  # 0-255 を2回連結
 
 # Perlinノイズで使用するグラディエントベクトル
-grad3 = np.array(NOISE_CONST["GRAD3"], dtype=np.float32)
+NOISE_GRADIENTS_3D = np.array(NOISE_CONST["GRAD3"], dtype=np.float32)
+
+# 後方互換（非推奨）
+perm = NOISE_PERMUTATION_TABLE
+grad3 = NOISE_GRADIENTS_3D
 
 
 @effect()
-def noise(
+def displace(
     g: Geometry,
     *,
+    # 旧API
     intensity: float = 0.5,
     frequency: float | Vec3 = (0.5, 0.5, 0.5),
     time: float = 0.0,
-    **_params,
+    # 新API（推奨）
+    amplitude_mm: float | None = None,
+    spatial_freq: float | Vec3 | None = None,
+    t_sec: float | None = None,
 ) -> Geometry:
     """3次元頂点にPerlinノイズを追加（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
 
-    # 周波数の正規化
-    if isinstance(frequency, (int, float)):
-        frequency = (frequency, frequency, frequency)
-    elif len(frequency) == 1:
-        frequency = (frequency[0], frequency[0], frequency[0])
+    # パラメータ解決
+    amp = float(amplitude_mm) if amplitude_mm is not None else float(intensity)
+    freq_val = spatial_freq if spatial_freq is not None else frequency
+    ti = float(t_sec) if t_sec is not None else float(time)
 
-    new_coords = _apply_noise_to_coords(coords, float(intensity), frequency, float(time), perm, grad3)
+    # 周波数の正規化
+    if isinstance(freq_val, (int, float)):
+        freq_tuple = (freq_val, freq_val, freq_val)
+    elif len(freq_val) == 1:  # type: ignore[arg-type]
+        freq_tuple = (freq_val[0], freq_val[0], freq_val[0])  # type: ignore[index]
+    else:
+        freq_tuple = tuple(freq_val)  # type: ignore[arg-type]
+
+    new_coords = _apply_noise_to_coords(
+        coords,
+        amp,
+        freq_tuple,
+        ti,
+        NOISE_PERMUTATION_TABLE,
+        NOISE_GRADIENTS_3D,
+    )
     return Geometry(new_coords, offsets.copy())
+
+displace.__param_meta__ = {
+    "amplitude_mm": {"type": "number", "min": 0.0},
+    "t_sec": {"type": "number", "min": 0.0},
+    "intensity": {"type": "number", "min": 0.0},
+}
 
 
 # 後方互換クラスは廃止（関数APIのみ）

@@ -53,7 +53,7 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
 
 
 @effect()
-def trimming(g: Geometry, *, start_param: float = 0.0, end_param: float = 1.0, **_params: Any) -> Geometry:
+def trim(g: Geometry, *, start_param: float = 0.0, end_param: float = 1.0) -> Geometry:
     start_param = clamp01(float(start_param))
     end_param = clamp01(float(end_param))
     coords, offsets = g.as_arrays(copy=False)
@@ -71,3 +71,9 @@ def trimming(g: Geometry, *, start_param: float = 0.0, end_param: float = 1.0, *
     if not results:
         return Geometry(coords.copy(), offsets.copy())
     return Geometry.from_lines(results)
+
+# validate_spec 用メタ
+trim.__param_meta__ = {
+    "start_param": {"type": "number", "min": 0.0, "max": 1.0},
+    "end_param": {"type": "number", "min": 0.0, "max": 1.0},
+}

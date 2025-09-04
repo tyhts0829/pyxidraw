@@ -147,13 +147,17 @@ def _point_in_polygon(polygon: np.ndarray, point: list[float]) -> bool:
 
 
 @effect()
-def filling(
+def fill(
     g: Geometry,
     *,
+    # 旧API
     pattern: str = "lines",
-    density: float = 0.5,
     angle: float = 0.0,
-    **_params: Any,
+    # 新API（推奨）
+    mode: str | None = None,
+    angle_rad: float | None = None,
+    # 共通
+    density: float = 0.5,
 ) -> Geometry:
     """閉じた形状をハッチング/ドットで塗りつぶし（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
@@ -162,16 +166,29 @@ def filling(
 
     filled_results: list[np.ndarray] = []
 
+    # 新旧キー解決
+    pat = (mode or pattern) or "lines"
+    ang = float(angle_rad) if angle_rad is not None else float(angle)
+
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
         filled_results.extend(
-            _fill_single_polygon(vertices, pattern=pattern, density=density, angle=angle)
+            _fill_single_polygon(vertices, pattern=pat, density=density, angle=ang)
         )
 
     if not filled_results:
         return Geometry(coords.copy(), offsets.copy())
 
     return Geometry.from_lines(filled_results)
+
+# パラメータメタ（validate_spec で参照）
+fill.__param_meta__ = {
+    "mode": {"type": "string", "choices": ["lines", "cross", "dots"]},
+    "pattern": {"type": "string", "choices": ["lines", "cross", "dots"]},
+    "density": {"type": "number", "min": 0.0, "max": 1.0},
+    "angle": {"type": "number"},
+    "angle_rad": {"type": "number"},
+}
 
 
 def _fill_single_polygon(
