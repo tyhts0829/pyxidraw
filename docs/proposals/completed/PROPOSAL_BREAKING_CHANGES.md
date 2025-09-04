@@ -30,7 +30,17 @@
 - 提案8（ディレクトリ再編）は完了（`__init__.py` 追加・不要物削除）
 - polyhedron データの完全移行は完了（pickle フォールバック撤去）
 
-### 決定記録: polyhedron データ形式（pickle → npz）採用理由（2025-09-04）
+### 決定記録: API パラメータの完全切替（2025-09-04）
+
+- 旧名パラメータは廃止。新名のみ受理。
+  - rotate(0..1) → angles_rad（ラジアン）/ pivot（中心）
+  - translate: offset/offset_x/y/z → delta
+  - fill: pattern/angle → mode/angle_rad
+  - repeat: n_duplicates/rotate/center → count/angles_rad_step/pivot
+  - displace: intensity/frequency/time → amplitude_mm/spatial_freq/t_sec
+  - offset: join_style/resolution → join/segments_per_circle
+
+理由: 一貫性・可読性・検証強化（validate_spec と param_meta の単純化）。
 
 - 安全性: pickle はロード時に任意コード実行のリスクがある一方、npz は `allow_pickle=False` 前提で純データのみを扱える。
 - 互換性: pickle は Python 実装/バージョン/クラス定義に依存が強い。npz は環境非依存で将来の移行コストが低い。
@@ -88,7 +98,7 @@ class Geometry:
 
 # effects/noise.py（概念）
 @effect
-def noise(g: Geometry, *, intensity=0.5, frequency=(0.5,0.5,0.5), time=0.0) -> Geometry:
+def noise(g: Geometry, *, amplitude_mm=0.5, spatial_freq=(0.5,0.5,0.5), t_sec=0.0) -> Geometry:
     ...
 
 # api/pipeline.py（概念）

@@ -1,5 +1,8 @@
 from typing import Optional, Union
 
+# ボタン/シフトに相当するトグル系 CC 番号をモジュール定数として定義
+TOGGLE_CC_NUMBERS = (25, 26, 27, 28, 29, 30, 35)
+
 
 class DualKeyDict:
     """
@@ -43,7 +46,7 @@ class DualKeyDict:
         if isinstance(key, int):
             return self._int_to_value[key]
         elif isinstance(key, str):
-            self.is_active[key] = True  # TODO あとでリファクタリング
+            # 読み取りで副作用を起こさない（is_active の更新は setter/専用メソッドで行う）
             return self._str_to_value[key]
         else:
             raise KeyError(f"Unsupported key type: {type(key)}")
@@ -104,14 +107,9 @@ class DualKeyDict:
         Returns:
             bool: ボタンキーならTrue。
         """
-        TOGGLE_KEY_NUMS = [25, 26, 27, 28, 29, 30, 35]  # buttonまたはshift
-
         if isinstance(key, int):
             # 25〜30のbuttonキー、35のshiftキー
-            if key in TOGGLE_KEY_NUMS:
-                return True
-            else:
-                return False
+            return key in TOGGLE_CC_NUMBERS
         # if isinstance(key, str):
         #     # bから始まる文字列がボタンキー
         #     if key.startswith("b"):

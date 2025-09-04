@@ -51,32 +51,32 @@ class TestOffset:
 
     def test_join_styles(self, square_geometry):
         """接合スタイルテスト"""
-        # round style (0.0-0.33)
-        result_round = offset(square_geometry, distance=0.5, join_style=0.2)
+        # round style
+        result_round = offset(square_geometry, distance=0.5, join='round')
         assert isinstance(result_round, Geometry)
         
-        # mitre style (0.33-0.66)
-        result_mitre = offset(square_geometry, distance=0.5, join_style=0.5)
+        # mitre style
+        result_mitre = offset(square_geometry, distance=0.5, join='mitre')
         assert isinstance(result_mitre, Geometry)
         
-        # bevel style (0.66-1.0)
-        result_bevel = offset(square_geometry, distance=0.5, join_style=0.8)
+        # bevel style
+        result_bevel = offset(square_geometry, distance=0.5, join='bevel')
         assert isinstance(result_bevel, Geometry)
 
     def test_resolution_levels(self, square_geometry):
         """解像度レベルテスト"""
-        for resolution in [0.1, 0.3, 0.5, 0.7, 0.9]:
-            result = offset(square_geometry, distance=0.5, resolution=resolution)
+        for resolution in [2, 4, 8, 12, 16]:
+            result = offset(square_geometry, distance=0.5, segments_per_circle=resolution)
             assert isinstance(result, Geometry)
 
     def test_min_resolution(self, simple_geometry):
         """最小解像度テスト"""
-        result = offset(simple_geometry, distance=0.5, resolution=0.0)
+        result = offset(simple_geometry, distance=0.5, segments_per_circle=1)
         assert isinstance(result, Geometry)
 
     def test_max_resolution(self, simple_geometry):
         """最大解像度テスト"""
-        result = offset(simple_geometry, distance=0.5, resolution=1.0)
+        result = offset(simple_geometry, distance=0.5, segments_per_circle=64)
         assert isinstance(result, Geometry)
 
     def test_combined_parameters(self, square_geometry):
@@ -84,8 +84,8 @@ class TestOffset:
         result = offset(
             square_geometry,
             distance=0.7,
-            join_style=0.3,
-            resolution=0.8
+            join='round',
+            segments_per_circle=12
         )
         assert isinstance(result, Geometry)
 
@@ -97,8 +97,8 @@ class TestOffset:
     def test_edge_join_style_values(self, square_geometry):
         """接合スタイル境界値テスト"""
         # 境界値でのテスト
-        for join_style in [0.0, 0.33, 0.66, 1.0]:
-            result = offset(square_geometry, distance=0.5, join_style=join_style)
+        for join in ['mitre', 'round', 'bevel']:
+            result = offset(square_geometry, distance=0.5, join=join)
             assert isinstance(result, Geometry)
 
     def test_single_line_buffer(self):
@@ -111,7 +111,7 @@ class TestOffset:
 
     def test_complex_geometry_buffer(self, simple_geometry):
         """複雑なジオメトリバッファテスト"""
-        result = offset(simple_geometry, distance=0.4, join_style=0.5, resolution=0.6)
+        result = offset(simple_geometry, distance=0.4, join='round', segments_per_circle=8)
         assert isinstance(result, Geometry)
 
     def test_buffer_increases_complexity(self, square_geometry):

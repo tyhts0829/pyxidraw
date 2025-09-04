@@ -25,7 +25,7 @@ class TestBoundaryValues:
 
     def test_filling_density_one_adds_elements(self):
         g = _square()
-        out = fill(g, density=1.0, pattern="lines")
+        out = fill(g, density=1.0, mode="lines")
         c0, _ = g.as_arrays()
         c1, _ = out.as_arrays()
         assert c1.shape[0] >= c0.shape[0]
@@ -53,7 +53,7 @@ class TestBoundaryValues:
         np.testing.assert_allclose(c0, c1)
         np.testing.assert_array_equal(o0, o1)
 
-    @pytest.mark.parametrize("join_style", [0.1, 0.5, 0.9])
+    @pytest.mark.parametrize("join_style", ["mitre", "round", "bevel"])
     def test_buffer_join_styles_no_exception(self, join_style):
         g = _square()
-        _ = buffer_effect(g, distance=0.3, join_style=join_style)
+        _ = buffer_effect(g, distance=0.3, join=join_style)

@@ -27,7 +27,7 @@ def ripple(
         Geometry: ゆらぎが適用された新しいジオメトリ
     """
     coords, offsets = g.as_arrays(copy=False)
-    if coords.size == 0:
+    if g.is_empty:
         return Geometry(coords.copy(), offsets.copy())
 
     # frequency をタプルに正規化

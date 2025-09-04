@@ -26,8 +26,8 @@ class TestPipelineBuilder:
         np.testing.assert_allclose(c0, c1, rtol=1e-6)
 
     def test_order_matters(self, simple_geometry):
-        p1 = E.pipeline.scale(scale=(2.0, 2.0, 2.0)).translate(offset_x=5.0).build()
-        p2 = E.pipeline.translate(offset_x=5.0).scale(scale=(2.0, 2.0, 2.0)).build()
+        p1 = E.pipeline.scale(scale=(2.0, 2.0, 2.0)).translate(delta=(5.0, 0.0, 0.0)).build()
+        p2 = E.pipeline.translate(delta=(5.0, 0.0, 0.0)).scale(scale=(2.0, 2.0, 2.0)).build()
         r1 = p1(simple_geometry)
         r2 = p2(simple_geometry)
         assert isinstance(r1, Geometry)
@@ -42,16 +42,16 @@ class TestPipelineBuilder:
         from effects.scaling import scale
         from effects.translation import translate
 
-        step1 = rotate(simple_geometry, rotate=(0.0, 0.0, 0.25))
+        step1 = rotate(simple_geometry, angles_rad=(0.0, 0.0, 1.5707963267948966))
         step2 = scale(step1, scale=(2.0, 2.0, 2.0))
-        step3 = translate(step2, offset_x=5.0, offset_y=3.0)
+        step3 = translate(step2, delta=(5.0, 3.0, 0.0))
 
         # パイプライン適用
         p = (
             E.pipeline
-            .rotate(rotate=(0.0, 0.0, 0.25))
+            .rotate(angles_rad=(0.0, 0.0, 1.5707963267948966))
             .scale(scale=(2.0, 2.0, 2.0))
-            .translate(offset_x=5.0, offset_y=3.0)
+            .translate(delta=(5.0, 3.0, 0.0))
             .build()
         )
         pr = p(simple_geometry)

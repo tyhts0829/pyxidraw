@@ -19,7 +19,7 @@ def explode(g: Geometry, *, factor: float = 0.2) -> Geometry:
         Geometry: 変形後のジオメトリ
     """
     coords, offsets = g.as_arrays(copy=False)
-    if coords.size == 0:
+    if g.is_empty:
         return Geometry(coords.copy(), offsets.copy())
 
     center = coords.mean(axis=0)

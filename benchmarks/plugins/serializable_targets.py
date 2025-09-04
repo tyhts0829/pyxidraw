@@ -90,10 +90,10 @@ class SerializableEffectTarget:
             return pipeline(geom)
         elif self.effect_type == "rotate":
             E = _get_cached_module("api.pipeline")
-            rotate = self.params.get("rotate", (0, 0, 0))
-            # 度 → 0..1 正規化
-            rotate = tuple(float(v) / 360.0 for v in rotate)
-            pipeline = E.pipeline.rotate(rotate=tuple(rotate)).build()
+            rotate_deg = self.params.get("rotate", (0, 0, 0))
+            # 度 → ラジアン
+            angles = tuple(float(v) * 2 * 3.141592653589793 / 360.0 for v in rotate_deg)
+            pipeline = E.pipeline.rotate(angles_rad=angles).build()
             return pipeline(geom)
         elif self.effect_type == "noise":
             E = _get_cached_module("api.pipeline")

@@ -88,11 +88,11 @@ def draw(t, cc):
     explode_factor = 0.1 * (1 + np.sin(time_factor * 2))
     pipeline = (
         E.pipeline
-        .wave(amplitude=wave_amp, frequency=3.0, axis="z")
+        .ripple(amplitude=wave_amp, frequency=3.0)
         .twist(angle=twist_angle, axis="y")
         .explode(factor=explode_factor)
         .gradient(color_start=[1, 0, 0], color_end=[0, 0, 1], axis="y")
-        .rotation(rotate=(0.0, (time_factor*20)/360.0, 0.0))
+        .rotate(angles_rad=(0.0, (time_factor*20) * 2 * np.pi / 360.0, 0.0))
         .build()
     )
     return pipeline(base)

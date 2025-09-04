@@ -7,11 +7,11 @@ MIDI CC で各シェイプを回転させつつ、登録済みシェイプをグ
 
 使い方（APIファースト、CLIなし）:
     from api import run
-    run(draw, canvas_size=(300,300), render_scale=6, use_midi=False)
+    run(draw, canvas_size=(300,300), render_scale=6)  # use_midi は既定で True
 
 備考:
 - 破壊的変更後のアーキテクチャに準拠（Geometry 統一 / E.pipeline）。
-- MIDI 未接続環境ではデフォルトで無効。環境変数 `PYXIDRAW_USE_MIDI=1` で有効化可能。
+- MIDI は既定で有効。無効化したい場合は `PYXIDRAW_USE_MIDI=0` を設定。
 """
 
 from __future__ import annotations
@@ -91,8 +91,9 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
 
         g = base.scale(cell_size, cell_size, cell_size).translate(cx, cy, 0)
 
-        # Rotate around each shape's own center using effect (0..1 → tau)
-        rotated = (E.pipeline.rotate(center=(cx, cy, 0), rotate=(rx, ry, rz)).build())(g)
+        # Rotate around each shape's own center using angles_rad (explicit)
+        angles = (rx * 2 * math.pi, ry * 2 * math.pi, rz * 2 * math.pi)
+        rotated = (E.pipeline.rotate(pivot=(cx, cy, 0), angles_rad=angles).build())(g)
 
         combined = rotated if combined is None else (combined + rotated)
 
@@ -104,5 +105,7 @@ if __name__ == "__main__":
     # デフォルト定数（チューニングしやすく）
     CANVAS = CANVAS_SIZES["SQUARE_300"]
     SCALE = 6
-    USE_MIDI = os.environ.get("PYXIDRAW_USE_MIDI") == "1"
+    # 既定は True。`PYXIDRAW_USE_MIDI=0` で明示的に無効化。
+    env = os.environ.get("PYXIDRAW_USE_MIDI")
+    USE_MIDI = True if env is None else (env == "1" or env.lower() in ("true", "on", "yes"))
     run(draw, canvas_size=CANVAS, render_scale=SCALE, background=(1, 1, 1, 1), use_midi=USE_MIDI)

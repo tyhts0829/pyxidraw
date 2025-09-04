@@ -11,7 +11,7 @@ def _geom():
 
 def test_pipeline_cache_hit_and_miss():
     g = _geom()
-    p = (E.pipeline.rotate(rotate=(0.0, 0.0, 0.25)).build())
+    p = (E.pipeline.rotate(angles_rad=(0.0, 0.0, 1.5707963267948966)).build())
 
     out1 = p(g)
     out2 = p(g)
@@ -19,7 +19,7 @@ def test_pipeline_cache_hit_and_miss():
     assert out1 is out2
 
     # パラメータが違えばミス
-    p2 = (E.pipeline.rotate(rotate=(0.0, 0.0, 0.26)).build())
+    p2 = (E.pipeline.rotate(angles_rad=(0.0, 0.0, 1.6336281798666928)).build())
     out3 = p2(g)
     assert out3 is not out1
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Callable, Mapping
 import logging
 import sys
+import os
 
 import numpy as np
 
@@ -18,7 +19,8 @@ def run_sketch(
     fps: int = 60,
     background: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     workers: int = 4,
-    use_midi: bool = False,
+    use_midi: bool = True,
+    midi_strict: bool | None = None,
 ) -> None:
     """
     user_draw :
@@ -33,6 +35,11 @@ def run_sketch(
         RGBA (0‑1)。Processing の ``background()`` と同義。
     workers :
         バックグラウンド計算プロセス数。
+    use_midi :
+        True の場合は可能なら実機 MIDI を使用。未接続/未導入時は既定でフォールバック。
+    midi_strict :
+        True で厳格モード（初期化失敗時に SystemExit(2)）。None の場合は
+        環境変数 ``PYXIDRAW_MIDI_STRICT`` を参照（未設定は False）。
     """
     # 遅延インポート（テスト環境のヘッドレス収集時にウィンドウ作成を避ける）
     import moderngl
@@ -40,8 +47,6 @@ def run_sketch(
     from pyglet.window import key
     from engine.core.frame_clock import FrameClock
     from engine.core.render_window import RenderWindow
-    from engine.io.manager import connect_midi_controllers
-    from engine.io.service import MidiService
     from engine.monitor.sampler import MetricSampler
     from engine.pipeline.buffer import SwapBuffer
     from engine.pipeline.receiver import StreamReceiver
@@ -57,15 +62,52 @@ def run_sketch(
     window_width, window_height = int(canvas_width * render_scale), int(canvas_height * render_scale)
 
     # ---- ② MIDI ---------------------------------------------------
+    # 環境変数から厳格モードを補完（未指定時）。
+    if midi_strict is None:
+        env = os.environ.get("PYXIDRAW_MIDI_STRICT")
+        if env is not None:
+            midi_strict = env == "1" or env.lower() in ("true", "on", "yes")
+        else:
+            # 設定から既定を参照（なければ False）
+            try:
+                from util.utils import load_config  # noqa: WPS433
+
+                cfg = load_config() or {}
+                midi_cfg = cfg.get("midi", {}) if isinstance(cfg, dict) else {}
+                midi_strict = bool(midi_cfg.get("strict_default", False))
+            except Exception:
+                midi_strict = False
+
     if use_midi:
         try:
+            # 遅延インポート（依存未導入環境でもフォールバック可能に）
+            from engine.io.manager import connect_midi_controllers  # noqa: WPS433
+            from engine.io.service import MidiService  # noqa: WPS433
+
             midi_manager = connect_midi_controllers()
+            # 0台接続もエラー扱いにするかは strict で切替
+            if not getattr(midi_manager, "controllers", {}):
+                raise RuntimeError("No MIDI devices connected")
             midi_service = MidiService(midi_manager)
             cc_snapshot_fn = midi_service.snapshot
-        except Exception as e:  # engine.io.controller.InvalidPortError など
-            logging.getLogger(__name__).exception("MIDI initialization failed: %s", e)
-            # CLI 相当の挙動: 明示的に終了コードを返す
-            raise SystemExit(2)
+        except Exception as e:  # ImportError / InvalidPortError / RuntimeError など
+            logger = logging.getLogger(__name__)
+            if midi_strict:
+                logger.exception("MIDI initialization failed (strict): %s", e)
+                raise SystemExit(2)
+            else:
+                logger.warning("MIDI unavailable; falling back to NullMidi: %s", e)
+                midi_manager = None
+
+                class _NullMidi:
+                    def snapshot(self):
+                        return {}
+
+                    def tick(self, dt: float) -> None:
+                        return None
+
+                midi_service = _NullMidi()
+                cc_snapshot_fn = midi_service.snapshot
     else:
         midi_manager = None
         # ダミーのスナップショット（常に空のCC）

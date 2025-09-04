@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+import os
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Sequence, Tuple
 import inspect
@@ -90,6 +91,8 @@ class Pipeline:
             out = fn(out, **st.params)
 
         # 単層キャッシュ（LRU 風）
+        if self._cache_maxsize == 0:
+            return out  # キャッシュ無効
         self._cache[key] = out
         if self._cache_maxsize is not None and self._cache_maxsize > 0:
             while len(self._cache) > self._cache_maxsize:
@@ -99,6 +102,12 @@ class Pipeline:
     def clear_cache(self) -> None:
         """パイプラインの単層キャッシュをクリア。"""
         self._cache.clear()
+
+    def __repr__(self) -> str:  # 開発時の可読性向上
+        steps = ", ".join(f"{s.name}({', '.join(f'{k}={v!r}' for k, v in s.params.items())})" for s in self._steps)
+        return f"Pipeline(steps=[{steps}], cache_maxsize={self._cache_maxsize})"
+
+    __str__ = __repr__
 
     # ---- Serialization (Proposal 6) ----
     def to_spec(self) -> List[Dict[str, Any]]:
@@ -116,7 +125,15 @@ class Pipeline:
 class PipelineBuilder:
     def __init__(self):
         self._steps: List[Step] = []
+        # 既定サイズは環境変数から上書き可能
         self._cache_maxsize: int | None = None
+        _env = os.getenv("PXD_PIPELINE_CACHE_MAXSIZE")
+        if _env is not None:
+            try:
+                val = int(_env)
+                self._cache_maxsize = val
+            except ValueError:
+                pass
 
     def _add(self, name: str, params: Dict[str, Any]) -> "PipelineBuilder":
         self._steps.append(Step(name, params))
@@ -242,6 +259,16 @@ def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
                     raise TypeError(f"spec[{i}]['params']['{k}'] must be integer, got {type(v).__name__}")
                 if t == "string" and not isinstance(v, str):
                     raise TypeError(f"spec[{i}]['params']['{k}'] must be string, got {type(v).__name__}")
+                if t == "vec3":
+                    # allow scalar, 1-tuple, or 3-tuple of numbers
+                    def _is_num(x):
+                        return isinstance(x, (int, float))
+                    if _is_num(v):
+                        pass
+                    elif isinstance(v, (list, tuple)) and len(v) in (1, 3) and all(_is_num(x) for x in v):
+                        pass
+                    else:
+                        raise TypeError(f"spec[{i}]['params']['{k}'] must be scalar, 1-tuple, or 3-tuple of numbers")
                 # range
                 if isinstance(rules, dict):
                     if "min" in rules and isinstance(v, (int, float)) and v < rules["min"]:

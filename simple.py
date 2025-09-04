@@ -14,7 +14,7 @@ def build_geometry(t: float, cc: dict) -> "Geometry":
     pipeline = (
         E.pipeline
         .displace(intensity=cc.get(2, 0.3), time=t)
-        .rotate(center=(100, 100, 0), rotate=(0.1, 0.1, 0.1))
+        .rotate(pivot=(100, 100, 0), angles_rad=(0.1 * 2 * 3.141592653589793, 0.1 * 2 * 3.141592653589793, 0.1 * 2 * 3.141592653589793))
         .build()
     )
     return pipeline(sphere)

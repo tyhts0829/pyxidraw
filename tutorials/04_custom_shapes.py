@@ -145,7 +145,7 @@ def draw(t, cc):
         .translate(200, 250, 0)
     spiral = (
         E.pipeline
-        .rotation(rotate=(30/360.0, (t * 0.5)/360.0, 0.0))
+        .rotate(angles_rad=(30 * 2 * np.pi / 360.0, (t * 0.5) * 2 * np.pi / 360.0, 0.0))
         .build()
     )(spiral)
     combined = combined + spiral

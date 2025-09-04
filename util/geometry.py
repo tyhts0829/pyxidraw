@@ -1,8 +1,14 @@
-"""3D変換のためのジオメトリユーティリティ関数。"""
+"""3D 変換ユーティリティ（実行時使用部分のみ）。
+
+提供関数:
+- `transform_to_xy_plane(vertices)`: 各ラインの XY 平面への姿勢合わせ
+- `transform_back(vertices, R, z_offset)`: 元の姿勢へ戻す
+
+注: 旧互換の Geometry 一括変換ラッパは削除しました（未使用・廃止）。
+"""
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
-import warnings
 
 import numpy as np
 from numba import njit
@@ -113,81 +119,3 @@ def transform_back(vertices: np.ndarray, rotation_matrix: np.ndarray, z_offset: 
 
     # Apply inverse rotation
     return np.dot(result, rotation_matrix)
-
-
-def geometry_transform_to_xy_plane(geometry: "Geometry") -> tuple["Geometry", np.ndarray, float]:
-    """[Deprecated] Geometry を簡易に XY 平面へ“押しつぶす”近似変換。
-
-    注意: 本関数は重心の z を 0 にするだけの簡易版です。法線に沿った厳密な
-    姿勢合わせは `transform_to_xy_plane(vertices)` を各ラインに適用して
-    `Geometry.from_lines(...)` で再構築してください。
-
-    戻り値の `rotation_matrix` は常に単位行列、`z_offset` は重心 z です。
-    将来的に削除予定のため、新規コードでは使用しないでください。
-    """
-    warnings.warn(
-        "geometry_transform_to_xy_plane is deprecated. Use transform_to_xy_plane per line.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from engine.core.geometry import Geometry
-    
-    if len(geometry.coords) == 0:
-        return geometry, np.eye(3), 0.0
-    
-    # 全頂点の重心をZ=0平面に投影する簡単な変換を行う
-    coords = geometry.coords.astype(np.float64)
-    
-    # 重心を計算
-    centroid = np.mean(coords, axis=0)
-    z_offset = centroid[2]
-    
-    # Z座標を0に設定
-    transformed_coords = coords.copy()
-    transformed_coords[:, 2] = 0.0
-    
-    # 単位行列（回転なし）
-    rotation_matrix = np.eye(3)
-    
-    # 新しいGeometryを作成
-    transformed_geometry = Geometry(
-        coords=transformed_coords.astype(np.float32),
-        offsets=geometry.offsets.copy()
-    )
-    
-    return transformed_geometry, rotation_matrix, z_offset
-
-
-def geometry_transform_back(geometry: "Geometry", rotation_matrix: np.ndarray, z_offset: float) -> "Geometry":
-    """[Deprecated] `geometry_transform_to_xy_plane` の簡易逆変換。
-
-    注意: 厳密な逆変換は `transform_back(vertices, R, z)` を各ラインに適用して
-    `Geometry.from_lines(...)` で再構築してください。本関数は互換目的の簡易版です。
-    将来的に削除予定のため、新規コードでは使用しないでください。
-    """
-    warnings.warn(
-        "geometry_transform_back is deprecated. Use transform_back per line.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from engine.core.geometry import Geometry
-    
-    if len(geometry.coords) == 0:
-        return geometry
-    
-    # 簡単な逆変換（Z座標にオフセットを加算）
-    coords = geometry.coords.astype(np.float64)
-    restored_coords = coords.copy()
-    restored_coords[:, 2] += z_offset
-    
-    # 回転行列を適用（現在は単位行列なので実質的に何もしない）
-    if not np.allclose(rotation_matrix, np.eye(3)):
-        restored_coords = transform_back(restored_coords, rotation_matrix, 0.0)
-    
-    # 新しいGeometryを作成
-    restored_geometry = Geometry(
-        coords=restored_coords.astype(np.float32),
-        offsets=geometry.offsets.copy()
-    )
-    
-    return restored_geometry

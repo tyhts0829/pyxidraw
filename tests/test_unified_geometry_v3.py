@@ -73,7 +73,7 @@ def test_effect_noise_integration_path():
     from effects.noise import displace
 
     base = Geometry.from_lines([make_line([[0, 0, 0], [1, 0, 0], [0, 1, 0]])])
-    out = displace(base, intensity=0.01, frequency=(0.1, 0.1, 0.1), time=0.0)
+    out = displace(base, amplitude_mm=0.01, spatial_freq=(0.1, 0.1, 0.1), t_sec=0.0)
 
     assert isinstance(out, Geometry)
     c_in, o_in = base.as_arrays()

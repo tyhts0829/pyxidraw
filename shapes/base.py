@@ -9,10 +9,16 @@ from common.types import Vec3
 
 
 class BaseShape(LRUCacheable, ABC):
-    """すべてのシェイプのベースクラス。キャッシング機能付きの形状生成を担当します。"""
+    """すべてのシェイプのベースクラス。
 
-    def __init__(self, maxsize: int = 128):
+    方針: 形状生成のキャッシュは `api/shape_factory.ShapeFactory` 側に一本化します。
+    そのため、BaseShape の LRU キャッシュは既定で無効化します（必要なら個別に有効化）。
+    """
+
+    def __init__(self, maxsize: int = 128, *, enable_cache: bool = False):
         super().__init__(maxsize=maxsize)
+        if not enable_cache:
+            self.disable_cache()
 
     @abstractmethod
     def generate(self, **params: Any) -> Geometry:

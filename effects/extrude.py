@@ -22,7 +22,7 @@ def extrude(
 ) -> Geometry:
     """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
-    if coords.size == 0 or offsets.size < 2:
+    if g.is_empty or offsets.size < 2:
         return Geometry(coords.copy(), offsets.copy())
 
     MAX_DISTANCE = 200.0

@@ -6,12 +6,12 @@
 - 登録: `@effects.registry.effect()`（関数名が登録名）
 - 原則: 入力/出力は Geometry、内部で破壊しない（新しい Geometry を返す）
 
-## 命名・パラメータ指針
+## 命名・パラメータ指針（2025-09 完全切替）
 - 動詞の命令形: `translate/scale/rotate/fill/repeat/offset/displace/...`
-- 角度: `angles_rad`（推奨）/ `angles_deg`。旧 `rotate`（0..1→2π）は併存可。
-- 中心: `pivot`（推奨）/ `center` 併存可。
-- 平行移動: `delta: Vec3`（推奨）/ `offset(_x/_y/_z)` 併存可。
-- 正規化: 0..1 を取る値は `*_norm` より「意味のある名前 + 範囲説明」を優先（例: `density: 0..1`）。
+- 角度: `angles_rad`（ラジアンのみ）。`angles_deg`/`rotate(0..1)` は使用しない。
+- 中心: `pivot` のみ（`center` は使用しない）。
+- 平行移動: `delta: Vec3` のみ（`offset(_x/_y/_z)` は使用しない）。
+- 正規化: 0..1 を取る値は「意味のある名前 + 範囲説明」を明記（例: `density: 0..1`）。
 - 物理単位: mm 相当は `*_mm`（例: `amplitude_mm`）。
 
 ## 例: 基本的なエフェクト
@@ -65,5 +65,13 @@ my_fx.__param_meta__ = {
 
 ## ベストプラクティス（検証の厳格化）
 - `**kwargs` は原則非推奨です。未知キー検出（`validate_spec()` による早期失敗）を有効化するため、公開パラメータはシグネチャに明示してください。
-- 互換維持で旧名を受けたい場合は、明示パラメータとして併記し、関数冒頭で正規化する方針を推奨します。
 - 仕様の一貫性を高めるため、数値の型/範囲や列挙は `__param_meta__` に宣言してください。
+
+## 旧名 → 新名の移行マップ（最終確定）
+- 回転: `rotate(0..1)` → `angles_rad`（0..1→2π は呼び出し側で変換）
+- 中心: `center` → `pivot`
+- 平行移動: `offset/offset_x/offset_y/offset_z` → `delta`
+- 塗り: `pattern/angle` → `mode/angle_rad`
+- 複製: `n_duplicates/rotate/center` → `count/angles_rad_step/pivot`
+- ノイズ: `intensity/frequency/time` → `amplitude_mm/spatial_freq/t_sec`
+- バッファ: `join_style/resolution` → `join/segments_per_circle`

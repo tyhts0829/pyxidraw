@@ -2,6 +2,9 @@ canvas:
   background_color: [1.0, 1.0, 1.0, 1.0]
 canvas_controller:
   fps: 24
+midi:
+  enabled_default: true
+  strict_default: false
 status_manager:
   font: HackGenConsoleNF-Regular
   font_size: 2

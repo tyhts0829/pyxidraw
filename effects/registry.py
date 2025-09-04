@@ -12,6 +12,7 @@ from inspect import isfunction
 from typing import Any, Callable, Dict
 
 from engine.core.geometry import Geometry
+from common.base_registry import BaseRegistry
 
 
 EffectFn = Callable[[Geometry], Geometry]
@@ -19,7 +20,8 @@ _REGISTRY: Dict[str, Callable[..., Geometry]] = {}
 
 
 def _normalize_key(name: str) -> str:
-    return name.replace("-", "_").lower()
+    """キー正規化: shapes と同一ポリシー（Camel→snake, '-'→'_', lower）。"""
+    return BaseRegistry._normalize_key(name)
 
 
 def effect(arg: Any | None = None, /, name: str | None = None):

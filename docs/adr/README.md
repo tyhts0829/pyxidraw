@@ -14,3 +14,5 @@
 - 0008 — パイプラインのシリアライズ形式（to_spec/from_spec）（Accepted）
 - 0009 — ベンチマーク基準化ワークフロー（Accepted）
 - 0010 — エフェクトパラメータのメタデータ検証（Accepted）
+- 0011 — キャッシュの責務分担（ShapeFactory/Shape/Pipeline）（Accepted）
+- 0012 — レジストリのキー正規化ポリシー（Accepted）

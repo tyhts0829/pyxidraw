@@ -12,7 +12,7 @@
 ## 高優先度（直近のリスク/影響が大）
 
 ### 1) 依存関係ドリフト（README 未記載）
-- 観測: SciPy（`shapes/asemic_glyph.py`）、Shapely（`effects/buffer.py`）、`arc`（`README.md`/`effect_test.py`/`engine/io/controller.py`）が使用されるが、README の最小インストール例に未記載。
+- 観測: SciPy（`shapes/asemic_glyph.py`）、Shapely（`effects/buffer.py`）、`arc`（`README.md`/`engine/io/controller.py`）が使用されるが、README の最小インストール例に未記載。
 - 影響: 初回セットアップ失敗／環境差による再現性低下。
 - 提案: README を「必須 / 機能別オプション / 開発補助」に三分割。`shapes`（SciPy）, `buffer`（Shapely）, `midi`（mido/arc）などの“機能別”で明示。
 
@@ -84,6 +84,14 @@
 - [x] boldify の numba 依存を排し、2 パス事前確保で安定化（スモークテスト通過）。
 - [x] Geometry digest の計測ガードとベンチスクリプトを追加（`PXD_DISABLE_GEOMETRY_DIGEST=1` 環境変数、`scripts/bench_geometry_digest.py`）。
 - [x] README の命名指針を更新し、推奨表記（`pivot`, `angles_rad`）を強調する。
+
+追加タスク（未対応）
+
+- [ ] 型安全性の強化: `mido`/`moderngl` 等の外部依存を `Protocol` で局所化し、`type: ignore` を削減。`mypy.ini`（または pyproject）での設定追加を含む。
+- [ ] 変換 API の選択指針を明文化: README か guides に「Geometry メソッド vs `transform_utils.transform_combined` の使い分け」を短章で追記。
+- [ ] 大型モジュールの段落化: `effects/webify.py` と `shapes/asemic_glyph.py` を「前処理／コア計算／後処理」に分ける私的関数抽出、先頭にアルゴリズム概要コメントを追加。
+- [ ] `effects/*` の `__param_meta__` を拡充: 境界/範囲/choices をなるべく網羅（例: `repeat.scale` の範囲、`offset.join` の choices はOKだが他も明示）。
+- [ ] README にヘッドレス実行の最小例を追加し、`arc` なしでも動くことを明示（`run(..., use_midi=False)` のサンプルコード）。
 
 ---
 

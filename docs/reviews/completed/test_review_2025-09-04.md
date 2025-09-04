@@ -37,7 +37,7 @@
   - [x] effects/offset: distance=0 で恒等、join の代表 3 つで例外が出ないこと
 - [x] ベクトル正規化と受理形の確認（優先: 中）
   - [x] affine/repeat: rotate=(s,) 相当と (x,y,z) の 0..1→2π 変換の一致（rotate は Vec3 受理）。新APIの `angles_rad_step` でも一致
-  - [x] translate: `delta`/`offset`/`offset_x/y/z` の両 API が同一結果を返す
+- [x] translate: 旧名 `offset(_x/_y/_z)` は廃止。`delta` のみを受理することを確認
 - [x] キャッシュ挙動の観測（優先: 中）
   - [x] Pipeline: 同一 `Geometry` + 同一 `Pipeline` でキャッシュヒット、関数コード変更/params変更でミス。
 - [x] 並走/安定性の最小統合（優先: 低）

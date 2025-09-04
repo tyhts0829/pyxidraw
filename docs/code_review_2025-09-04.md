@@ -25,7 +25,7 @@
 
 ## API/一貫性
 - `Vec3` の横断適用（effects/affine/rotate/scale/repeat/extrude/ripple/wobble 等、shapes/base、engine/core/geometry）でシグネチャの読みやすさが向上。
-- `translate` は `delta: Vec3`（推奨）と `offset/offset_x/y/z` の両受理で後方互換性に配慮（良）。
+- `translate` は `delta: Vec3` のみに統一（旧 `offset(_x/_y/_z)` は廃止）。
 - `displace.spatial_freq: float|Vec3` を明示化し、`ripple/wobble` も周波数の取り扱いを Docstring で明記（良）。
 
 ## データ/I/O/安全性

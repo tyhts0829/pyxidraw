@@ -54,5 +54,5 @@ def test_runner_converts_invalid_midi_to_systemexit(monkeypatch):
     monkeypatch.setitem(__import__("sys").modules, "moderngl", mgl_stub)
 
     with pytest.raises(SystemExit) as ex:
-        run_sketch(_draw, use_midi=True, fps=1)
+        run_sketch(_draw, use_midi=True, midi_strict=True, fps=1)
     assert ex.value.code == 2

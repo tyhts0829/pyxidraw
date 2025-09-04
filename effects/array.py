@@ -63,34 +63,24 @@ MAX_DUPLICATES = 10
 def repeat(
     g: Geometry,
     *,
-    # 旧API
-    n_duplicates: float = 0.5,
+    count: int = 0,
     offset: Vec3 = (0.0, 0.0, 0.0),
-    rotate: Vec3 = (0.5, 0.5, 0.5),
+    angles_rad_step: Vec3 = (0.0, 0.0, 0.0),
     scale: Vec3 = (0.5, 0.5, 0.5),
-    center: Vec3 = (0.0, 0.0, 0.0),
-    # 新API（推奨）
-    count: int | None = None,
-    angles_rad_step: Vec3 | None = None,
-    pivot: Vec3 | None = None,
+    pivot: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
     """入力のコピーを配列状に生成（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
     # count があれば優先。なければ 0..1 → 0..MAX_DUPLICATES（整数）
-    n_int = int(count) if count is not None else norm_to_int(float(n_duplicates), 0, MAX_DUPLICATES)
-    if n_int <= 0 or coords.size == 0 or offsets.size <= 1:
+    n_int = int(count)
+    if n_int <= 0 or g.is_empty or offsets.size <= 1:
         return Geometry(coords.copy(), offsets.copy())
 
-    center_np = np.array(pivot if pivot is not None else center, dtype=np.float32)
+    center_np = np.array(pivot, dtype=np.float32)
     offset_np = np.array(offset, dtype=np.float32)
     scale_np = np.array(scale, dtype=np.float32)
 
-    # 0..1 正規化入力 → ラジアン（0..2π）
-    if angles_rad_step is not None:
-        rotate_radians = np.array(angles_rad_step, dtype=np.float32)
-    else:
-        rx, ry, rz = ensure_vec3(rotate)
-        rotate_radians = np.array([norm_to_rad(rx), norm_to_rad(ry), norm_to_rad(rz)], dtype=np.float32)
+    rotate_radians = np.array(angles_rad_step, dtype=np.float32)
 
     # 生成する線のリスト（Geometry.from_lines で正しい offsets を構築）
     lines: list[np.ndarray] = []
@@ -119,7 +109,6 @@ def repeat(
 
 # validate_spec 用のメタデータ（最小限）
 repeat.__param_meta__ = {
-    "n_duplicates": {"type": "number", "min": 0.0, "max": 1.0},
     "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES},
 }
 

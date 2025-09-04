@@ -3,7 +3,6 @@
 import math
 import numbers
 import operator
-import pickle
 from pathlib import Path
 from typing import List, Tuple
 
@@ -810,15 +809,15 @@ if __name__ == "__main__":
         12: "dodecahedron",
         20: "icosahedron",
     }
-    # vertices_listを保存する
+    # 頂点リストを .npz で保存する（pickle 非採用）
     SAVE_DIR = Path(r"data/regular_polyhedron")
     for M, name in regular_polyhedrons.items():
         rp = RegularPolyhedron(M)
         mp = close_polygon(rp.main_polygon)
         mv = rp.main_vertex
         vertices_list = to_vertices_list(mp, mv)
-        # pickleで保存
-        with open(SAVE_DIR / f"{name}_vertices_list.pkl", "wb") as f:
-            pickle.dump(vertices_list, f)
-        logging.getLogger(__name__).info("%s is saved", name)
+        # npz で保存（arr_0, arr_1, ... として格納）
+        out = SAVE_DIR / f"{name}_vertices_list.npz"
+        np.savez(out, **{f"arr_{i}": np.asarray(a, dtype=np.float32) for i, a in enumerate(vertices_list)})
+        logging.getLogger(__name__).info("%s is saved as npz: %s", name, out)
     logging.getLogger(__name__).info("finish")

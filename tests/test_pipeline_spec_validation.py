@@ -5,8 +5,8 @@ from api.pipeline import validate_spec, from_spec
 
 def test_validate_spec_accepts_valid_spec():
     spec = [
-        {"name": "translate", "params": {"offset_x": 1.0}},
-        {"name": "rotate", "params": {"center": (0.0, 0.0, 0.0), "rotate": (0.25, 0.0, 0.0)}},
+        {"name": "translate", "params": {"delta": (1.0, 0.0, 0.0)}},
+        {"name": "rotate", "params": {"pivot": (0.0, 0.0, 0.0), "angles_rad": (1.5707963267948966, 0.0, 0.0)}},
     ]
     # Should not raise
     validate_spec(spec)

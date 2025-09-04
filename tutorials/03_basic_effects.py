@@ -9,6 +9,7 @@
 import os
 import logging
 import sys
+import math
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 try:
@@ -41,13 +42,12 @@ def draw(t, cc):
     base_shape = G.polyhedron(polygon_type="cube").scale(100, 100, 100).translate(200, 200, 0)
     
     # パイプラインで適用（ノイズ→回転→スケール）
-    import math
     scale_factor = 1.0 + 0.2 * math.sin(time_factor)
     pipeline = (
         E.pipeline
-        .noise(intensity=0.2)
-        .rotation(rotate=((time_factor * 30)/360.0, (time_factor * 45)/360.0, 0.0))
-        .scaling(scale=(scale_factor, scale_factor, scale_factor))
+        .displace(amplitude_mm=0.2)
+        .rotate(angles_rad=((time_factor * 30) * 2 * math.pi / 360.0, (time_factor * 45) * 2 * math.pi / 360.0, 0.0))
+        .scale(scale=(scale_factor, scale_factor, scale_factor))
         .build()
     )
     return pipeline(base_shape)
@@ -64,8 +64,8 @@ def draw_comparison(t, cc):
     effected = G.polyhedron(polygon_type="cube").scale(80, 80, 80).translate(250, 200, 0)
     effected = (
         E.pipeline
-        .noise(intensity=0.3)
-        .rotation(rotate=(45/360.0, 45/360.0, 0.0))
+        .displace(amplitude_mm=0.3)
+        .rotate(angles_rad=(45 * 2 * math.pi / 360.0, 45 * 2 * math.pi / 360.0, 0.0))
         .build()
     )(effected)
     

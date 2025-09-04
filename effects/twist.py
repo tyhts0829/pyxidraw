@@ -20,7 +20,7 @@ def twist(g: Geometry, *, angle: float = 45.0, axis: str = "y") -> Geometry:
         Geometry: ねじれ適用後のジオメトリ
     """
     coords, offsets = g.as_arrays(copy=False)
-    if coords.size == 0:
+    if g.is_empty:
         return Geometry(coords.copy(), offsets.copy())
 
     ax = axis.lower()

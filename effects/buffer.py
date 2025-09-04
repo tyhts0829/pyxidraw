@@ -17,13 +17,8 @@ from engine.core.geometry import Geometry
 def offset(
     g: Geometry,
     *,
-    # 旧API
-    join_style: float = 0.5,
-    resolution: float = 0.5,
-    # 新API（推奨）
-    join: str | None = None,                 # 'miter'|'round'|'bevel'
-    segments_per_circle: int | None = None,  # shapelyのresolutionに相当
-    # 共通
+    join: str = "round",                 # 'mitre'|'round'|'bevel'
+    segments_per_circle: int = 8,  # shapelyのresolutionに相当
     distance: float = 0.5,
     distance_mm: float | None = None,
 ) -> Geometry:
@@ -38,8 +33,8 @@ def offset(
     if actual_distance == 0:
         return Geometry(coords.copy(), offsets.copy())
 
-    join_style_str = join if isinstance(join, str) else _determine_join_style(float(join_style))
-    resolution_int = int(segments_per_circle) if segments_per_circle is not None else max(1, norm_to_int(float(resolution), 1, 10))
+    join_style_str = join
+    resolution_int = int(segments_per_circle)
 
     vertices_list = []
     for i in range(len(offsets) - 1):
@@ -70,8 +65,6 @@ def offset(
 offset.__param_meta__ = {
     "distance": {"type": "number", "min": 0.0, "max": 1.0},
     "join": {"type": "string", "choices": ["mitre", "round", "bevel"]},
-    "join_style": {"type": "number", "min": 0.0, "max": 1.0},
-    "resolution": {"type": "number", "min": 0.0, "max": 1.0},
     "segments_per_circle": {"type": "integer", "min": 1, "max": 1000},
 }
 
@@ -130,6 +123,7 @@ def _extract_vertices_from_line(new_vertices_list: list, buffered_line: BaseGeom
     return new_vertices_list
 
 def _determine_join_style(join_style: float) -> str:
+    # Deprecated: kept for internal fallback if needed
     if 0.0 <= join_style < 0.33:
         return "mitre"
     elif 0.33 <= join_style < 0.67:

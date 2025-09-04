@@ -150,13 +150,8 @@ def _point_in_polygon(polygon: np.ndarray, point: list[float]) -> bool:
 def fill(
     g: Geometry,
     *,
-    # 旧API
-    pattern: str = "lines",
-    angle: float = 0.0,
-    # 新API（推奨）
-    mode: str | None = None,
-    angle_rad: float | None = None,
-    # 共通
+    mode: str = "lines",
+    angle_rad: float = 0.0,
     density: float = 0.5,
 ) -> Geometry:
     """閉じた形状をハッチング/ドットで塗りつぶし（純関数）。"""
@@ -166,9 +161,8 @@ def fill(
 
     filled_results: list[np.ndarray] = []
 
-    # 新旧キー解決
-    pat = (mode or pattern) or "lines"
-    ang = float(angle_rad) if angle_rad is not None else float(angle)
+    pat = mode or "lines"
+    ang = float(angle_rad)
 
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
@@ -184,9 +178,7 @@ def fill(
 # パラメータメタ（validate_spec で参照）
 fill.__param_meta__ = {
     "mode": {"type": "string", "choices": ["lines", "cross", "dots"]},
-    "pattern": {"type": "string", "choices": ["lines", "cross", "dots"]},
     "density": {"type": "number", "min": 0.0, "max": 1.0},
-    "angle": {"type": "number"},
     "angle_rad": {"type": "number"},
 }
 

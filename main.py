@@ -47,7 +47,7 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
     rz = cc.get(9, 0.0)
     combined = (
         E.pipeline
-        .rotate(center=(150, 100, 0), rotate=(rx, ry, rz))
+        .rotate(pivot=(150, 100, 0), angles_rad=(rx * 2 * np.pi, ry * 2 * np.pi, rz * 2 * np.pi))
         .build()
     )(combined)
 
@@ -70,11 +70,59 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyxiDraw demo launcher (API-first, thin CLI)")
     parser.add_argument("--size", default="SQUARE_200", help="キャンバスサイズキーまたは 'WxH'（例: 300x300）")
     parser.add_argument("--scale", type=int, default=8, help="レンダリング拡大率")
-    parser.add_argument("--midi", action="store_true", help="MIDI を有効化する")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--midi", dest="midi", action="store_true", help="MIDI を有効化する（既定: 有効）")
+    group.add_argument("--no-midi", dest="no_midi", action="store_true", help="MIDI を無効化する（ヘッドレス向け）")
+    parser.add_argument("--midi-strict", action="store_true", help="MIDI 初期化に失敗したら終了する（公演/本番向け）")
     args = parser.parse_args()
 
     canvas = _parse_canvas(args.size)
-    use_midi = args.midi or os.environ.get("PYXIDRAW_USE_MIDI") == "1"
+    # 既定は True。環境変数/設定/CLI で上書き可能。
+    cfg_enabled_default = None
+    cfg_strict_default = None
+    try:
+        from util.utils import load_config  # noqa: WPS433
 
-    logger.info("Launching demo: size=%s, scale=%d, midi=%s", str(canvas), args.scale, use_midi)
-    run(draw, canvas_size=canvas, render_scale=args.scale, background=(1, 1, 1, 1), use_midi=use_midi)
+        cfg = load_config() or {}
+        midi_cfg = cfg.get("midi", {}) if isinstance(cfg, dict) else {}
+        if isinstance(midi_cfg, dict):
+            if "enabled_default" in midi_cfg:
+                cfg_enabled_default = bool(midi_cfg.get("enabled_default"))
+            if "strict_default" in midi_cfg:
+                cfg_strict_default = bool(midi_cfg.get("strict_default"))
+    except Exception:
+        pass
+
+    # use_midi 決定
+    env = os.environ.get("PYXIDRAW_USE_MIDI")
+    if env is not None:
+        use_midi = env == "1" or env.lower() in ("true", "on", "yes")
+    elif cfg_enabled_default is not None:
+        use_midi = cfg_enabled_default
+    else:
+        use_midi = True
+    if getattr(args, "midi", False):
+        use_midi = True
+    if getattr(args, "no_midi", False):
+        use_midi = False
+
+    # midi_strict 決定
+    env_strict = os.environ.get("PYXIDRAW_MIDI_STRICT")
+    if getattr(args, "midi_strict", False):
+        midi_strict_eff = True
+    elif env_strict is not None:
+        midi_strict_eff = env_strict == "1" or env_strict.lower() in ("true", "on", "yes")
+    elif cfg_strict_default is not None:
+        midi_strict_eff = cfg_strict_default
+    else:
+        midi_strict_eff = False
+
+    logger.info("Launching demo: size=%s, scale=%d, midi=%s strict=%s", str(canvas), args.scale, use_midi, midi_strict_eff)
+    run(
+        draw,
+        canvas_size=canvas,
+        render_scale=args.scale,
+        background=(1, 1, 1, 1),
+        use_midi=use_midi,
+        midi_strict=midi_strict_eff,
+    )

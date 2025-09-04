@@ -24,7 +24,7 @@ class TestPipeline:
     def test_basic_pipeline(self, simple_geometry):
         pipeline = (
             E.pipeline
-            .rotate(rotate=(0, 0, 0.1))
+            .rotate(angles_rad=(0, 0, 0.2 * 3.141592653589793))
             .scale(scale=(1.5, 1.5, 1.5))
             .build()
         )
@@ -34,9 +34,9 @@ class TestPipeline:
     def test_translation_rotation_scaling(self, simple_geometry):
         out = (
             E.pipeline
-            .translate(offset_x=10, offset_y=20, offset_z=0)
-            .rotate(center=(0, 0, 0), rotate=(0, 0, 0.25))
-            .scale(center=(0, 0, 0), scale=(2, 2, 2))
+            .translate(delta=(10, 20, 0))
+            .rotate(pivot=(0, 0, 0), angles_rad=(0, 0, 1.5707963267948966))
+            .scale(pivot=(0, 0, 0), scale=(2, 2, 2))
             (simple_geometry)
         )
         assert isinstance(out, Geometry)
@@ -44,8 +44,8 @@ class TestPipeline:
     def test_noise_and_filling(self, simple_geometry):
         out = (
             E.pipeline
-            .displace(intensity=0.3, frequency=(0.2, 0.2, 0.2), time=0.0)
-            .fill(pattern="lines", density=0.5, angle=0.0)
+            .displace(amplitude_mm=0.3, spatial_freq=(0.2, 0.2, 0.2), t_sec=0.0)
+            .fill(mode="lines", density=0.5, angle_rad=0.0)
             (simple_geometry)
         )
         assert isinstance(out, Geometry)
@@ -53,10 +53,10 @@ class TestPipeline:
     def test_complex_pipeline(self, complex_geometry):
         out = (
             E.pipeline
-            .rotate(rotate=(0.1, 0.1, 0.1))
+            .rotate(angles_rad=(0.2 * 3.141592653589793, 0.2 * 3.141592653589793, 0.2 * 3.141592653589793))
             .scale(scale=(1.2, 1.2, 1.2))
             .subdivide(subdivisions=0.6)
-            .displace(intensity=0.2, time=0.5, frequency=0.3)
+            .displace(amplitude_mm=0.2, t_sec=0.5, spatial_freq=0.3)
             (complex_geometry)
         )
         assert isinstance(out, Geometry)
@@ -64,7 +64,7 @@ class TestPipeline:
     def test_pipeline_cache(self, simple_geometry):
         builder = (
             E.pipeline
-            .rotate(rotate=(0, 0, 0.1))
+            .rotate(angles_rad=(0, 0, 0.2 * 3.141592653589793))
             .scale(scale=(1.5, 1.5, 1.5))
         )
         p = builder.build()

@@ -11,13 +11,15 @@ from common.types import Vec3
 def scale(
     g: Geometry,
     *,
-    center: Vec3 = (0.0, 0.0, 0.0),  # 旧
-    pivot: Vec3 | None = None,       # 新（推奨）
+    pivot: Vec3 = (0.0, 0.0, 0.0),
     scale: Vec3 = (1.0, 1.0, 1.0),
 ) -> Geometry:
     sx, sy, sz = scale
-    c = pivot if pivot is not None else center
-    return g.scale(sx, sy, sz, center=c)
+    return g.scale(sx, sy, sz, center=pivot)
 
 
 # 後方互換クラスは廃止（関数APIのみ）
+scale.__param_meta__ = {
+    "pivot": {"type": "vec3"},
+    "scale": {"type": "vec3"},
+}

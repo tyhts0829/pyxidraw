@@ -9,7 +9,7 @@ def test_filling_returns_geometry_and_adds_lines():
     # square polygon (closed)
     square = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 0]], dtype=np.float32)
     g = Geometry.from_lines([square])
-    out = fill(g, pattern="lines", density=0.2, angle=0.0)
+    out = fill(g, mode="lines", density=0.2, angle_rad=0.0)
     assert isinstance(out, Geometry)
     c0, o0 = g.as_arrays()
     c1, o1 = out.as_arrays()
@@ -23,7 +23,7 @@ def test_array_duplicates_line_counts():
         np.array([[0, 1, 0], [1, 1, 0]], dtype=np.float32),
     ])
     dup = 0.3  # -> int(dup*10)=3 duplicates
-    out = repeat(base, n_duplicates=dup, offset=(2, 0, 0), rotate=(0.5, 0.5, 0.5), scale=(1.0, 1.0, 1.0), center=(0, 0, 0))
+    out = repeat(base, count=int(round(dup*10)), offset=(2, 0, 0), angles_rad_step=(np.pi, np.pi, np.pi), scale=(1.0, 1.0, 1.0), pivot=(0, 0, 0))
     c0, o0 = base.as_arrays()
     c1, o1 = out.as_arrays()
     n0 = len(o0) - 1

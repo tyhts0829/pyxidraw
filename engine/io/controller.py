@@ -196,7 +196,5 @@ class MidiController:
 
 
 if __name__ == "__main__":
-    import arc
-
-    arc.run()
+    # Standalone listing without external deps
     MidiController.show_available_ports()

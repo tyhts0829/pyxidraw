@@ -6,7 +6,7 @@ from effects.translation import translate
 
 def test_translate_effect_geometry_path_returns_geometry():
     base = Geometry.from_lines([np.array([[0, 0, 0], [1, 2, 3]], dtype=np.float32)])
-    out = translate(base, offset_x=5, offset_y=-1, offset_z=2)
+    out = translate(base, delta=(5, -1, 2))
     assert isinstance(out, Geometry)
     c, o = out.as_arrays()
     assert o.tolist() == [0, 2]

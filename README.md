@@ -31,28 +31,47 @@ pip install numpy numba pyglet moderngl psutil pyyaml
   - `pip install scipy`
 - MIDI コントローラ（mido）
   - `pip install mido python-rtmidi`（環境依存）
-  - `arc` を使うサンプルは任意です。MIDI を使わない場合は `run(..., use_midi=False)` を指定してください。
+  - MIDI は既定で有効です。無効化したい場合は `run(..., use_midi=False)` または `python main.py --no-midi` を使用してください。
+  - デバイス未接続／依存未導入時は警告のうえ自動フォールバック（NullMidi）します。厳格に失敗させたい場合は `--midi-strict` か `PYXIDRAW_MIDI_STRICT=1` を利用してください。
 
 ## 基本的な使用方法
 
 ### シンプルな例（関数エフェクト + パイプライン）
 
 ```python
-import arc
 from api import E, G, run
 from util.constants import CANVAS_SIZES
 
 def draw(t, cc):
-    # 球体を生成してエフェクトを適用
+    # 球体を生成してエフェクトを適用（MIDI不要）
     sphere = G.sphere(subdivisions=0.5).scale(80, 80, 80).translate(100, 100, 0)
-    pipeline = E.pipeline.displace(intensity=0.3).build()
+    pipeline = E.pipeline.displace(amplitude_mm=0.3).build()
     return pipeline(sphere)
 
 if __name__ == "__main__":
-    arc.start()
     run(draw, canvas_size=CANVAS_SIZES["SQUARE_200"]) 
-    arc.stop()
 ```
+
+MIDI は既定で有効です。無効化する場合は `run(..., use_midi=False)` もしくは `python main.py --no-midi` を使用してください。
+
+### MIDI フォールバックと厳格モード
+
+- 既定: 有効化時にデバイスや依存が見つからない場合、警告のみで NullMidi にフォールバック（例外は出ません）。
+- 厳格モード: `python main.py --midi-strict` または `PYXIDRAW_MIDI_STRICT=1` で有効。初期化失敗時は `SystemExit(2)` を返します。
+- 環境変数の真偽解釈: `1/true/on/yes` → True、`0/false/off/no` → False。
+- 設定ファイルで既定を変更: `config.yaml` の `midi.enabled_default` / `midi.strict_default`。
+
+#### ヘッドレス実行（Headless）
+- 目的: ウィンドウや OpenGL を起動せずに、描画関数だけを実行して Geometry の統計を確認。
+- 有効化: 環境変数 `PYXIDRAW_HEADLESS=1` を付けて実行します。
+
+```bash
+PYXIDRAW_HEADLESS=1 python tutorials/01_basic_shapes.py
+```
+
+- 挙動: `draw(0, {})` を1回だけ呼び、頂点数・ライン数をログ出力（例: `Headless OK: points=..., lines=...`）。
+- ユースケース: CI/サーバーでのスモークチェック、依存の軽い実行確認。
+- 注意: レンダリング品質や見た目は検証しません。時間依存の確認は `t` を変えて繰り返し `draw(t, {})` を呼び出してください。
 
 ### 角度・スケールの取り扱い（指針）
 
@@ -60,9 +79,9 @@ if __name__ == "__main__":
 - `translation` は物理単位（mm）を直接指定。
 - `scaling` は `(sx, sy, sz)` の倍率指定。スカラー/1要素/3要素を受け付けます。
 
-命名の推奨（互換名は当面併存）:
+命名の推奨:
 - 中心は `pivot` を推奨（互換: `center`）。
-- 角度は `angles_rad` / `angles_deg` を推奨（互換: `rotate` 0..1）。
+- 角度は `angles_rad` / `angles_deg` を明示（0..1 の暗黙指定は非推奨）。
 
 ### 複雑な例（main.py）
 
@@ -76,7 +95,7 @@ def draw(t, cc):
     
     # エフェクトパイプラインの適用
     sphere_with_effects = (E.pipeline
-                            .displace(intensity=cc[5] * 0.5)
+                            .displace(amplitude_mm=cc[5] * 0.5)
                             .fill(density=cc[6] * 0.8)
                             .build())(sphere)
     polygon_with_swirl = polygon  # 例の簡略化
@@ -121,7 +140,7 @@ out = (E.pipeline
 
 パラメータ指針（抜粋）:
 - 正規化系: 0..1 を受け取り内部でレンジに写像
-  - 例: `rotate.rotate`（0..1→2π）, `extrude.distance/subdivisions`（0..1→上限レンジ）, `offset.distance/resolution`
+  - 例: `rotate.angles_rad`（ラジアン）, `extrude.distance/subdivisions`（0..1→上限レンジ）, `offset.distance/segments_per_circle`
 - 物理/実値系: 座標単位（mm相当）・そのままの値
   - 例: `translate.offset_*`, `dash.dash_length/gap_length`, `ripple.amplitude`, `wobble.amplitude`
 - 空間周波数: `wave/wobble.frequency` は「座標1あたりの周期数 [cycles per unit]」
@@ -148,11 +167,16 @@ canvas:
   background_color: [1.0, 1.0, 1.0, 1.0]
 canvas_controller:
   fps: 24
+midi:
+  enabled_default: true
+  strict_default: false
 midi_devices:
   - port_name: "ArcController OUT"
     mode: "14bit"
     controller_name: "arc"
 ```
+
+補足: `midi.enabled_default` と `midi.strict_default` で既定の有効化/厳格モードの挙動を切り替えできます。
 
 ## パイプラインのシリアライズ/検証
 
@@ -161,7 +185,9 @@ midi_devices:
 ```python
 from api import E, to_spec, from_spec, validate_spec
 
-pipeline = (E.pipeline.rotate(rotate=(0.25,0,0)).displace(intensity=0.2).build())
+pipeline = (E.pipeline.rotate(angles_rad=(0.5 * 3.141592653589793, 0.0, 0.0))
+                       .displace(amplitude_mm=0.2)
+                       .build())
 spec = to_spec(pipeline)
 validate_spec(spec)     # 構造/登録名/パラメータ検証（例外が出なければOK）
 pipeline2 = from_spec(spec)
@@ -251,42 +277,29 @@ python -m benchmarks run --skip effects.noise.high_frequency --skip shapes.spher
 並列実行の目安は docs/benchmarks_parallel_guide.md を参照してください。
 ```
 
-## データ移行（polyhedron: pickle → npz）
+## データ形式（npz 統一）
 
-正多面体データは順次 `.npz` 形式へ移行しています（`shapes/polyhedron.py` は `.npz` を優先読み込み）。
-既存の `data/regular_polyhedron/*_vertices_list.pkl` を一括変換するには次のスクリプトを使用します。
+このリポジトリに含まれる幾何データ資産はすべて `.npz` に統一されています。
+`shapes/polyhedron.py` を含むランタイムは `.npz` のみを対象とし、`.pkl` は使用しません。
+
+既存の外部 pickle 資産を `.npz` に変換したい場合は、同梱の変換スクリプトを利用できます（任意・外部資産向け）。
 
 ```bash
-# 変換（dry-run）
+# 外部 pickle → npz 変換（dry-run / 実行 / 削除オプション）
 python scripts/convert_polyhedron_pickle_to_npz.py --dry-run --verbose
-
-# 実変換（上書きしない）
 python scripts/convert_polyhedron_pickle_to_npz.py --verbose
-
-# 変換後に .pkl を削除
 python scripts/convert_polyhedron_pickle_to_npz.py --delete-original --verbose
-
-# 既存の .npz を上書き
-python scripts/convert_polyhedron_pickle_to_npz.py --force
 ```
 
-なぜ npz?:
-- 安全性（pickleは任意コード実行リスク、npzは純データ）
-- 互換性（環境非依存で将来の移行が容易）
-- 再現性（dtype/shape/順序が決定的）
-- 単純化（ローダ/実装が簡潔）
+理由（要約）:
+- 安全性（pickle は任意コード実行リスク、npz は純データ）
+- 互換性（環境非依存）/再現性（dtype/shape 決定的）
+- 実装の単純化
 
-備考:
-- 何度実行しても安全です（既存 `.npz` は既定では上書きしません）。
-- 変換後は `.pkl` を削除して構いません（`--delete-original` で自動削除可）。
-- 詳細な判断理由は `docs/proposals/completed/PROPOSAL_BREAKING_CHANGES.md` の「決定記録」および
-  ADR: `docs/adr/0001-npz-over-pickle.md` を参照してください。
-
-移行完了チェック:
+現状確認:
 ```bash
-# .npz が存在し .pkl が無いことを確認
 ls data/regular_polyhedron/*_vertices_list.npz
-rg "_vertices_list\\.pkl" -n data/regular_polyhedron || echo "OK: no .pkl files"
+rg "_vertices_list\\.pkl" -n data || echo "OK: no .pkl files in repo"
 ```
 
 ## ライセンス

@@ -76,7 +76,7 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
         # クラスをインスタンス化して、generateメソッドを呼び出す
         instance = generator()
         data = instance.generate(**params_dict)
-        # 生成器は GeometryData (= Geometry) を返す前提
+        # 生成器は Geometry を返す前提
         if isinstance(data, Geometry):
             return data
         return Geometry.from_lines(data)

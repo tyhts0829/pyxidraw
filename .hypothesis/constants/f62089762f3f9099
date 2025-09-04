@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/plugins/serializable_targets.py
+# hypothesis_version: 6.131.18
+
+[0.0, 0.5, 1.0, 2.0, 3.0, 3.141592653589793, 10.0, 20.0, 25.0, 100.0, 360.0, 'angle', 'api.pipeline', 'api.pipeline.E', 'api.shape_factory', 'array', 'asemic_glyph', 'attractor', 'buffer', 'capsule', 'center', 'cone', 'count_x', 'count_y', 'cylinder', 'depth', 'distance', 'divisions', 'extrude', 'filling', 'frequency', 'grid', 'intensity', 'level', 'lissajous', 'n_divisions', 'noise', 'polygon', 'polygon_type', 'polyhedron', 'polyhedron_type', 'rotate', 'scale', 'spacing', 'spacing_x', 'spacing_y', 'sphere', 'subdivision', 'text', 'text_content', 'torus', 'transform', 'translate']

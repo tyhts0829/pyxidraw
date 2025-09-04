@@ -23,9 +23,9 @@ class TestAffine:
         """恒等変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(1, 1, 1),
-            rotate=(0, 0, 0)
+            angles_rad=(0, 0, 0)
         )
         assert isinstance(result, Geometry)
         # 恒等変換なので元と同じ
@@ -35,9 +35,9 @@ class TestAffine:
         """スケールのみ変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(2, 2, 2),
-            rotate=(0, 0, 0)
+            angles_rad=(0, 0, 0)
         )
         assert isinstance(result, Geometry)
         # 2倍スケールされることを確認
@@ -48,9 +48,9 @@ class TestAffine:
         """回転のみ変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(1, 1, 1),
-            rotate=(0, 0, 0.25)  # Z軸90度回転
+            angles_rad=(0, 0, 1.5707963267948966)  # 90度
         )
         assert isinstance(result, Geometry)
 
@@ -58,9 +58,9 @@ class TestAffine:
         """複合変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0.5, 0.5, 0),
+            pivot=(0.5, 0.5, 0),
             scale=(2, 1.5, 1),
-            rotate=(0, 0, 0.25)
+            angles_rad=(0, 0, 1.5707963267948966)
         )
         assert isinstance(result, Geometry)
 
@@ -69,9 +69,9 @@ class TestAffine:
         center = (1.0, 1.0, 0.5)
         result = affine(
             simple_geometry,
-            center=center,
+            pivot=center,
             scale=(2, 2, 2),
-            rotate=(0, 0, 0)
+            angles_rad=(0, 0, 0)
         )
         assert isinstance(result, Geometry)
 
@@ -79,9 +79,9 @@ class TestAffine:
         """非均一スケール変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(3, 0.5, 2),
-            rotate=(0, 0, 0)
+            angles_rad=(0, 0, 0)
         )
         assert isinstance(result, Geometry)
 
@@ -89,9 +89,9 @@ class TestAffine:
         """多軸回転変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(1, 1, 1),
-            rotate=(0.1, 0.2, 0.3)
+            angles_rad=(0.2 * np.pi, 0.4 * np.pi, 0.6 * np.pi)
         )
         assert isinstance(result, Geometry)
 
@@ -99,9 +99,9 @@ class TestAffine:
         """負のスケール変換テスト（反転）"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(-1, 1, 1),
-            rotate=(0, 0, 0)
+            angles_rad=(0, 0, 0)
         )
         assert isinstance(result, Geometry)
 
@@ -109,9 +109,9 @@ class TestAffine:
         """ゼロスケール変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(0, 1, 1),
-            rotate=(0, 0, 0)
+            angles_rad=(0, 0, 0)
         )
         assert isinstance(result, Geometry)
 
@@ -119,9 +119,9 @@ class TestAffine:
         """大きなスケール変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(100, 100, 100),
-            rotate=(0, 0, 0)
+            angles_rad=(0, 0, 0)
         )
         assert isinstance(result, Geometry)
 
@@ -129,9 +129,9 @@ class TestAffine:
         """1回転変換テスト"""
         result = affine(
             simple_geometry,
-            center=(0, 0, 0),
+            pivot=(0, 0, 0),
             scale=(1, 1, 1),
-            rotate=(0, 0, 1.0)  # 360度
+            angles_rad=(0, 0, 2 * np.pi)  # 360度
         )
         assert isinstance(result, Geometry)
         # 1回転で元の位置に戻る（浮動小数点の精度を考慮）
@@ -141,9 +141,9 @@ class TestAffine:
         """複雑な中心点変換テスト"""
         result = affine(
             simple_geometry,
-            center=(10, -5, 3),
+            pivot=(10, -5, 3),
             scale=(1.5, 0.8, 2.0),
-            rotate=(0.2, -0.1, 0.3)
+            angles_rad=(0.4 * np.pi, -0.2 * np.pi, 0.6 * np.pi)
         )
         assert isinstance(result, Geometry)
 
@@ -151,9 +151,9 @@ class TestAffine:
         """構造保持テスト"""
         result = affine(
             simple_geometry,
-            center=(1, 2, 3),
+            pivot=(1, 2, 3),
             scale=(2, 3, 0.5),
-            rotate=(0.1, 0.2, 0.3)
+            angles_rad=(0.2 * np.pi, 0.4 * np.pi, 0.6 * np.pi)
         )
         assert isinstance(result, Geometry)
         assert result.coords.shape == simple_geometry.coords.shape

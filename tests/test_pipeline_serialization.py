@@ -18,9 +18,9 @@ class TestPipelineSerialization:
     def test_roundtrip(self):
         p = (
             E.pipeline
-            .rotate(rotate=(0.0, 0.0, 0.25))
+            .rotate(angles_rad=(0.0, 0.0, 1.5707963267948966))
             .scale(scale=(2.0, 2.0, 2.0))
-            .translate(offset_x=5.0, offset_y=3.0)
+            .translate(delta=(5.0, 3.0, 0.0))
             .build()
         )
         spec = to_spec(p)

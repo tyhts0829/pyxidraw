@@ -159,22 +159,17 @@ grad3 = NOISE_GRADIENTS_3D
 def displace(
     g: Geometry,
     *,
-    # 旧API
-    intensity: float = 0.5,
-    frequency: float | Vec3 = (0.5, 0.5, 0.5),
-    time: float = 0.0,
-    # 新API（推奨）
-    amplitude_mm: float | None = None,
-    spatial_freq: float | Vec3 | None = None,
-    t_sec: float | None = None,
+    amplitude_mm: float = 0.5,
+    spatial_freq: float | Vec3 = (0.5, 0.5, 0.5),
+    t_sec: float = 0.0,
 ) -> Geometry:
-    """3次元頂点にPerlinノイズを追加（純関数）。"""
+    """3次元頂点にPerlinノイズを追加（新形式のみ）。"""
     coords, offsets = g.as_arrays(copy=False)
 
-    # パラメータ解決
-    amp = float(amplitude_mm) if amplitude_mm is not None else float(intensity)
-    freq_val = spatial_freq if spatial_freq is not None else frequency
-    ti = float(t_sec) if t_sec is not None else float(time)
+    # パラメータ解決（新形式）
+    amp = float(amplitude_mm)
+    freq_val = spatial_freq
+    ti = float(t_sec)
 
     # 周波数の正規化
     if isinstance(freq_val, (int, float)):
@@ -197,7 +192,6 @@ def displace(
 displace.__param_meta__ = {
     "amplitude_mm": {"type": "number", "min": 0.0},
     "t_sec": {"type": "number", "min": 0.0},
-    "intensity": {"type": "number", "min": 0.0},
 }
 
 

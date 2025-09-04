@@ -47,10 +47,10 @@ class TestScaling:
         expected = np.array([2.0, 3.0, 0.0], dtype=np.float32)
         np.testing.assert_allclose(scaled_point, expected, rtol=1e-6)
 
-    def test_with_center(self, simple_geometry):
+    def test_with_pivot(self, simple_geometry):
         """中心点指定スケーリングテスト"""
         center = (0.5, 0.5, 0.0)
-        result = scale(simple_geometry, center=center, scale=(2.0, 2.0, 2.0))
+        result = scale(simple_geometry, pivot=center, scale=(2.0, 2.0, 2.0))
         assert isinstance(result, Geometry)
 
     def test_zero_scaling(self, simple_geometry):

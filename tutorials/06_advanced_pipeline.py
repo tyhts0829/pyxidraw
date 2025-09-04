@@ -52,15 +52,15 @@ class ConditionalPipeline:
         # モードに応じたエフェクトチェーン
         if self.mode == 0:
             # モード0: 基本変形
-            return (E.pipeline.displace(intensity=0.1)
-                    .rotate(rotate=(0.0, (t * 0.5) / 360.0, 0.0))
+            return (E.pipeline.displace(amplitude_mm=0.1)
+                    .rotate(angles_rad=(0.0, (t * 0.5) * 2 * np.pi / 360.0, 0.0))
                     .build())(geometry)
         
         elif self.mode == 1:
             # モード1: 波状変形
             return (E.pipeline.ripple(amplitude=0.2, frequency=3)
                     .scale(scale=(1.2, 0.8, 1.0))
-                    .rotate(rotate=(30/360.0, (t * 0.3)/360.0, 0.0))
+                    .rotate(angles_rad=(30 * 2 * np.pi / 360.0, (t * 0.3) * 2 * np.pi / 360.0, 0.0))
                     .build())(geometry)
         
         elif self.mode == 2:
@@ -68,15 +68,15 @@ class ConditionalPipeline:
             factor = 0.3 * np.sin(t * 0.02)
             return (E.pipeline.explode(factor=abs(factor))
                     .twist(angle=factor * 90)
-                    .rotate(rotate=(0.0, 0.0, (t * 0.4)/360.0))
+                    .rotate(angles_rad=(0.0, 0.0, (t * 0.4) * 2 * np.pi / 360.0))
                     .build())(geometry)
         
         else:
             # モード3: 複合エフェクト
             return (E.pipeline
-                    .displace(intensity=0.05)
+                    .displace(amplitude_mm=0.05)
                     .ripple(amplitude=0.1, frequency=2)
-                    .rotate(rotate=((t * 0.2)/360.0, (t * 0.3)/360.0, (t * 0.1)/360.0))
+                    .rotate(angles_rad=((t * 0.2) * 2 * np.pi / 360.0, (t * 0.3) * 2 * np.pi / 360.0, (t * 0.1) * 2 * np.pi / 360.0))
                     .build())(geometry)
     
     def get_mode_name(self):
@@ -116,13 +116,13 @@ class PerformanceOptimizedPipeline:
         else:
             # LODに基づいた処理
             if lod == 0:  # 高品質（暫定: 細分化は未実装）
-                result = (E.pipeline.displace(intensity=0.1)
+                result = (E.pipeline.displace(amplitude_mm=0.1)
                           .ripple(amplitude=0.15, frequency=4)
                           .build())(geometry)
             elif lod == 1:  # 中品質
-                result = (E.pipeline.displace(intensity=0.1).build())(geometry)
+                result = (E.pipeline.displace(amplitude_mm=0.1).build())(geometry)
             else:  # 低品質
-                result = (E.pipeline.displace(intensity=0.05).build())(geometry)
+                result = (E.pipeline.displace(amplitude_mm=0.05).build())(geometry)
             
             # キャッシュに保存
             if self.use_cache:
@@ -130,7 +130,7 @@ class PerformanceOptimizedPipeline:
         
         # 共通の変形（キャッシュされない）
         result = (E.pipeline
-                  .rotation(rotate=(0.0, (t * 0.5)/360.0, 0.0))
+                  .rotate(angles_rad=(0.0, (t * 0.5) * 2 * np.pi / 360.0, 0.0))
                   .build())(result)
         
         # パフォーマンス情報を出力（100フレームごと）
@@ -178,7 +178,7 @@ def create_complex_scene(t, cc):
         
         # サテライトごとに異なるエフェクト
         satellite = (E.pipeline
-                     .rotate(rotate=((t * (i + 1))/360.0, (t * 0.5)/360.0, 0.0))
+                     .rotate(angles_rad=((t * (i + 1)) * 2 * np.pi / 360.0, (t * 0.5) * 2 * np.pi / 360.0, 0.0))
                      .scale(scale=(1 + 0.3 * np.sin(t * 0.02 + i),) * 3)
                      .build())(satellite)
         
@@ -216,17 +216,17 @@ def midi_controlled_pipeline(t, cc):
     builder = E.pipeline
     noise_intensity = simulated_cc.get(1, 0.5) * 0.3
     if noise_intensity > 0.01:
-        builder = builder.displace(intensity=noise_intensity)
+        builder = builder.displace(amplitude_mm=noise_intensity)
 
     wave_amplitude = simulated_cc.get(2, 0.5) * 0.4
     if wave_amplitude > 0.01:
         builder = builder.ripple(amplitude=wave_amplitude, frequency=3)
 
     rotation_speed = simulated_cc.get(3, 0.5)
-    builder = builder.rotate(rotate=(
-        (t * rotation_speed * 0.5)/360.0,
-        (t * rotation_speed)/360.0,
-        (t * rotation_speed * 0.3)/360.0,
+    builder = builder.rotate(angles_rad=(
+        (t * rotation_speed * 0.5) * 2 * np.pi / 360.0,
+        (t * rotation_speed) * 2 * np.pi / 360.0,
+        (t * rotation_speed * 0.3) * 2 * np.pi / 360.0,
     ))
 
     scale_factor = 0.5 + simulated_cc.get(4, 0.5) * 1.5
