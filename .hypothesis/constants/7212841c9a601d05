@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/plugins/effects.py
+# hypothesis_version: 6.131.18
+
+[0.1, 0.5, 1.0, 3.0, '.', 'alloc-heavy', 'array', 'buffer', 'complex', 'count_x', 'count_y', 'cpu-bound', 'effect_type', 'effects', 'enabled', 'extrude', 'filling', 'frequency', 'has_njit', 'high_frequency', 'identity', 'intensity', 'level', 'low_intensity', 'medium', 'metadata', 'name', 'noise', 'numba', 'params', 'pure-numpy', 'rotate', 'scale', 'simple', 'stochastic', 'subdivision', 'targets', 'transform', 'translate', 'unknown', 'variations']

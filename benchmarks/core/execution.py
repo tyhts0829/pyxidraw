@@ -6,6 +6,9 @@ UnifiedBenchmarkRunnerから分離されたベンチマーク実行の詳細処�
 import time
 import logging
 from typing import Any, Dict, List, Optional
+import os
+import sys
+import platform
 
 import numpy as np
 
@@ -33,6 +36,11 @@ class BenchmarkExecutor:
     
     def initialize_benchmark_result(self, target: BenchmarkTarget) -> BenchmarkResult:
         """ベンチマーク結果の初期化"""
+        # タグ収集（存在すれば）
+        target_tags: list[str] = []
+        if hasattr(target, 'tags') and isinstance(getattr(target, 'tags'), (list, set, tuple)):
+            target_tags = list(getattr(target, 'tags'))
+
         return BenchmarkResult(
             target_name=target.name,
             plugin_name=target.plugin_name if hasattr(target, 'plugin_name') else "unknown",
@@ -56,7 +64,10 @@ class BenchmarkExecutor:
                 cache_hit_rate=0.0
             ),
             output_data=None,
-            serialization_overhead=0.0
+            serialization_overhead=0.0,
+            tags=target_tags,
+            meta=self._collect_runtime_meta(),
+            schema_version="1.0",
         )
     
     def measure_target_characteristics(self, target: BenchmarkTarget, result: BenchmarkResult) -> None:
@@ -230,6 +241,21 @@ class BenchmarkExecutor:
                 "type": str(type(geometry).__name__),
                 "repr": str(geometry)[:100]
             }
+
+    def _collect_runtime_meta(self) -> Dict[str, Any]:
+        """実行環境メタデータを収集（軽量版）"""
+        try:
+            meta = {
+                "python": sys.version.split()[0],
+                "os": platform.platform(),
+                "machine": platform.machine(),
+                "processor": platform.processor(),
+                "cores": os.cpu_count() or 1,
+                "env": {k: v for k, v in os.environ.items() if k.startswith("PXD_")},
+            }
+        except Exception:
+            meta = {"python": sys.version.split()[0]}
+        return meta
     
     def _update_geometry_metrics(self, geometry: Any, result: BenchmarkResult) -> None:
         """ジオメトリメトリクスを更新"""

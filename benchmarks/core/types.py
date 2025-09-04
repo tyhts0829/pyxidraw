@@ -7,7 +7,7 @@
 型安全性を向上させ、IDEの補完機能を活用できます。
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, TypedDict, Union
@@ -47,9 +47,9 @@ class BenchmarkMetrics:
     cache_hit_rate: float
 
 
-@dataclass(init=False)
+@dataclass
 class BenchmarkResult:
-    """ベンチマーク結果の標準形式（柔軟な初期化をサポート）"""
+    """ベンチマーク結果の標準形式（後方互換なしのシンプル版）"""
     target_name: str
     plugin_name: str
     config: dict[str, Any]
@@ -58,88 +58,11 @@ class BenchmarkResult:
     error_message: str
     timing_data: TimingData
     metrics: BenchmarkMetrics
-    output_data: Optional[Any]
-    serialization_overhead: float
-
-    def __init__(
-        self,
-        target_name: Optional[str] = None,
-        plugin_name: str = "unknown",
-        config: Optional[dict[str, Any]] = None,
-        timestamp: float = 0.0,
-        success: bool = False,
-        error_message: str = "",
-        timing_data: Optional[TimingData] = None,
-        metrics: Optional[BenchmarkMetrics] = None,
-        output_data: Optional[Any] = None,
-        serialization_overhead: float = 0.0,
-        # 互換引数（レガシー）
-        module: Optional[str] = None,
-        status: Optional[str] = None,
-        timings: Optional[dict[str, list[float]]] = None,
-        average_times: Optional[dict[str, float]] = None,
-        error: Optional[str] = None,
-        **_kwargs: Any,
-    ) -> None:
-        # レガシー形式が渡された場合のマッピング
-        if module is not None and target_name is None:
-            target_name = module
-        if status is not None:
-            success = success if success is not None else (status == "success")
-        if error is not None and not error_message:
-            error_message = error
-
-        # TimingData の決定
-        if timing_data is None:
-            warm = []
-            meas: list[float] = []
-            if timings:
-                # 任意のキーの測定値をまとめる（平均値を計算する側は各テスト専用）
-                for v in timings.values():
-                    meas.extend(v)
-            timing_data = TimingData(
-                warm_up_times=warm,
-                measurement_times=meas,
-                total_time=sum(meas) if meas else 0.0,
-                average_time=(sum(meas) / len(meas)) if meas else 0.0,
-                std_dev=0.0,
-                min_time=min(meas) if meas else 0.0,
-                max_time=max(meas) if meas else 0.0,
-            )
-
-        # Metrics の決定
-        if metrics is None or isinstance(metrics, dict):
-            metrics = BenchmarkMetrics(vertices_count=0, geometry_complexity=0.0, memory_usage=0, cache_hit_rate=0.0)
-
-        # 実フィールド設定
-        self.target_name = target_name or "unknown"
-        self.plugin_name = plugin_name
-        self.config = config or {}
-        self.timestamp = timestamp
-        self.success = success
-        self.error_message = error_message
-        self.timing_data = timing_data
-        self.metrics = metrics
-        self.output_data = output_data
-        self.serialization_overhead = serialization_overhead
-
-        # レガシー互換用に保持
-        self._legacy_average_times = average_times or {}
-        self._legacy_timings = timings or {}
-
-    # 互換: dict風コピーを提供
-    def copy(self) -> dict:
-        status = "success" if self.success else "failed"
-        return {
-            "module": self.target_name,
-            "timestamp": self.timestamp,
-            "success": self.success,
-            "status": status,
-            "error": self.error_message,
-            "timings": dict(self._legacy_timings) if self._legacy_timings else {},
-            "average_times": dict(self._legacy_average_times) if self._legacy_average_times else {},
-            "metrics": getattr(self, 'metrics', {}) if isinstance(self.metrics, dict) else {"has_njit": False, "has_cache": True},
-        }
+    output_data: Optional[Any] = None
+    serialization_overhead: float = 0.0
+    tags: list[str] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
+    schema_version: str = "1.0"
 
 
 class ModuleFeatures(TypedDict):
@@ -181,6 +104,11 @@ class BenchmarkConfig:
     generate_charts: bool = True
     chart_format: str = "png"
     chart_dpi: int = 150
+    
+    # 比較しきい値の柔軟化
+    abs_threshold: float = 0.0
+    regression_threshold_by_tag: dict[str, float] = field(default_factory=dict)
+    regression_threshold_by_target: dict[str, float] = field(default_factory=dict)
 
 
 class BenchmarkTarget(Protocol):
@@ -326,8 +254,4 @@ class ValidationError(BenchmarkError):
     pass
 
 
-# ===== 後方互換性のための型エイリアス =====
-
-# 既存コードとの互換性を保つため
-LegacyBenchmarkResult = Dict[str, Any]
-LegacyTimingData = Dict[str, List[float]]
+# 後方互換コードは削除（シンプルな型のみに統一）

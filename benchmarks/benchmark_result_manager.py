@@ -230,20 +230,9 @@ class BenchmarkResultManager:
             logger.warning(f"Could not check disk space: {e}")
     
     def _convert_results_for_json(self, results: Dict[str, BenchmarkResult]) -> Dict[str, Any]:
-        """BenchmarkResultをJSON可能な形式に変換"""
+        """BenchmarkResultをJSON可能な形式に変換（後方互換なし）"""
         try:
-            serializable_results = {}
-            
-            for key, result in results.items():
-                if hasattr(result, '__dict__'):
-                    # BenchmarkResultオブジェクトの場合
-                    serializable_results[key] = self._convert_benchmark_result(result)
-                else:
-                    # 既に辞書形式の場合
-                    serializable_results[key] = result
-            
-            return serializable_results
-            
+            return {key: self._convert_benchmark_result(result) for key, result in results.items()}
         except Exception as e:
             raise BenchmarkError(f"Failed to convert results for JSON serialization: {e}")
     
@@ -257,6 +246,7 @@ class BenchmarkResultManager:
                 "timestamp": result.timestamp,
                 "success": result.success,
                 "error_message": result.error_message,
+                "schema_version": getattr(result, 'schema_version', '1.0'),
                 "timing_data": {
                     "warm_up_times": result.timing_data.warm_up_times,
                     "measurement_times": result.timing_data.measurement_times,
@@ -273,7 +263,9 @@ class BenchmarkResultManager:
                     "cache_hit_rate": result.metrics.cache_hit_rate
                 },
                 "output_data": result.output_data,
-                "serialization_overhead": result.serialization_overhead
+                "serialization_overhead": result.serialization_overhead,
+                "tags": getattr(result, 'tags', []),
+                "meta": getattr(result, 'meta', {}),
             }
         except AttributeError as e:
             raise BenchmarkError(f"Invalid BenchmarkResult object structure: {e}")

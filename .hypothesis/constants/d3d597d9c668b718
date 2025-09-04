@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/core/visualization.py
+# hypothesis_version: 6.131.18
+
+[0.0, 100, 1000, 'average_time', 'benchmark_report.md', 'complexity', 'errors', 'execution_time', 'failed_targets', 'fastest_time', 'max_time', 'message', 'min_time', 'plugin', 'slowest_time', 'std_dev', 'success_rate', 'success_rate.png', 'successful', 'successful_targets', 'target', 'total', 'total_benchmarks', 'total_execution_time', 'total_targets', 'total_time', 'vertices_count', '⚠️  %s']

@@ -210,6 +210,12 @@ class PluginManager:
             try:
                 with plugin_operation(f"Get targets from plugin {plugin.name}", plugin.name):
                     targets = plugin.get_targets()
+                    # 各ターゲットにプラグイン名を付与（後段のメタ用）
+                    for t in targets:
+                        try:
+                            setattr(t, 'plugin_name', plugin.name)
+                        except Exception:
+                            pass
                     all_targets[plugin.name] = targets
                     successful_plugins.append(plugin.name)
                     logger.debug(f"Successfully retrieved {len(targets)} targets from plugin {plugin.name}")
@@ -314,10 +320,11 @@ class PluginManager:
 class BaseBenchmarkTarget:
     """ベンチマーク対象の基底実装"""
     
-    def __init__(self, name: str, execute_func: callable, **metadata):
+    def __init__(self, name: str, execute_func: callable, *, tags: Optional[List[str]] = None, **metadata):
         self.name = name
         self._execute_func = execute_func
         self.metadata = metadata
+        self.tags: List[str] = list(tags) if tags else []
     
     def execute(self, *args: Any, **kwargs: Any) -> Any:
         """ベンチマーク対象を実行"""
@@ -402,12 +409,12 @@ class ModuleBenchmarkTarget(BaseBenchmarkTarget):
 class ParametrizedBenchmarkTarget(BaseBenchmarkTarget):
     """パラメータ化されたベンチマーク対象"""
     
-    def __init__(self, name: str, base_func: callable, parameters: Dict[str, Any], **metadata):
+    def __init__(self, name: str, base_func: callable, parameters: Dict[str, Any], *, tags: Optional[List[str]] = None, **metadata):
         self.base_func = base_func
         self.parameters = parameters
         
         # base_funcを直接使用（シリアライズ可能）
-        super().__init__(name, base_func, **metadata)
+        super().__init__(name, base_func, tags=tags, **metadata)
     
     def get_parameter(self, key: str, default: Any = None) -> Any:
         """パラメータを取得"""

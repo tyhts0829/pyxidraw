@@ -26,14 +26,12 @@ class TestEffectBenchmarkPlugin(unittest.TestCase):
 
     def test_discover_targets(self):
         """ターゲット発見のテスト"""
-        # 互換レイヤの名残として存在した api.effect_chain をダミーでモック（現在は未使用だが無害）
-        with patch.dict('sys.modules', {'api.effect_chain': unittest.mock.MagicMock()}):
-            targets = self.plugin.discover_targets()
-            self.assertGreater(len(targets), 0)
-            # noiseターゲットが存在することを確認
-            self.assertTrue(any(t.name.startswith("noise.") for t in targets))
-            # transformターゲットが存在することを確認
-            self.assertTrue(any(t.name.startswith("transform.") for t in targets))
+        targets = self.plugin.discover_targets()
+        self.assertGreater(len(targets), 0)
+        # noiseターゲットが存在することを確認
+        self.assertTrue(any(t.name.startswith("noise.") for t in targets))
+        # transformターゲットが存在することを確認
+        self.assertTrue(any(t.name.startswith("transform.") for t in targets))
 
     def test_create_benchmark_target(self):
         """ベンチマークターゲット作成のテスト"""

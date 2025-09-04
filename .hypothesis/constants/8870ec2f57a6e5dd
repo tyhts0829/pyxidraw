@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/visualization/reports.py
+# hypothesis_version: 6.131.18
+
+[1.0, '## 📈 ベンチマーク結果チャート\n\n', '## 📊 統計情報\n\n', '## 🔍 検証結果\n\n', ', ', '-', '</div>', '</ul>', 'avg_measurements', 'benchmark_results', 'cache_usage_rate', 'errors', 'inf', 'is_valid', 'njit_usage_rate', 'performance_ranking', 'rb', 'statistics', 'status-failure', 'status-success', 'successful', 'summary', 'tags', 'utf-8', 'validation', 'w', 'warnings', '✓ すべての検証項目が合格しました\n\n', '✓ 成功', '✗ 失敗', '✗ 検証エラーが検出されました\n\n']

@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/core/types.py
+# hypothesis_version: 6.131.18
+
+[0.0, 30.0, 150, '1.0', 'Geometry', 'bar', 'benchmark_results', 'box', 'complex', 'csv', 'error', 'failed', 'heatmap', 'html', 'json', 'line', 'markdown', 'medium', 'pdf', 'png', 'scatter', 'simple', 'success', 'svg', 'timeout', 'yaml']

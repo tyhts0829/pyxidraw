@@ -12,6 +12,10 @@ from .helpers import DualKeyDict
 # from midi.ui.controllers.tx6 import TX6Dict
 
 
+class InvalidPortError(Exception):
+    """Raised when a requested MIDI port name is not available."""
+
+
 class MidiController:
     MSB_THRESHOLD = 32  # 14ビットのコントロールチェンジメッセージのMSBの値は32以下
     SCALED_14BIT_MIN = 0  # 14ビットのMIDI値をスケール変換したときの最小値
@@ -109,9 +113,10 @@ class MidiController:
     @staticmethod
     def handle_invalid_port_name(port_name: str) -> None:
         logger = logging.getLogger(__name__)
+        available = mido.get_input_names()  # type: ignore
         logger.error("Invalid port name: %s", port_name)
-        logger.info("Available ports are: %s", mido.get_input_names())  # type: ignore
-        exit(1)
+        logger.info("Available input ports: %s", available)
+        raise InvalidPortError(f"Invalid port name: {port_name}. Available: {available}")
 
     def process_midi_message(self, msg: mido.Message) -> Optional[dict]:
         if msg.type == "control_change":  # type: ignore

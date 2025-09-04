@@ -1,6 +1,10 @@
 """
 エンジン層の変換ユーティリティ関数群（Geometry 統一版）。
-Geometry のみを受け取り、Geometry を返す純関数。
+
+基本方針:
+- 個別の変換は `Geometry` のメソッド（`g.translate/scale/rotate`）の利用を推奨。
+- ここでは「まとめて適用」の `transform_combined()` を主用途とし、
+  個別関数は互換と補助のために提供する。
 """
 
 from __future__ import annotations

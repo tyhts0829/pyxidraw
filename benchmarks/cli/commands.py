@@ -95,22 +95,52 @@ class RunCommand(CommandExecutor):
     
     def _run_benchmarks(self, runner: UnifiedBenchmarkRunner) -> List[BenchmarkResult]:
         """ベンチマークを実行"""
-        if hasattr(self.args, 'target') and self.args.target:
-            results_dict = runner.run_specific_targets(self.args.target)
+        # --from-file の読み込み
+        targets_from_file: List[str] = []
+        if getattr(self.args, 'from_file', None):
+            try:
+                with open(self.args.from_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        targets_from_file = [str(x) for x in data]
+                    elif isinstance(data, dict) and 'targets' in data:
+                        targets_from_file = [str(x) for x in data['targets']]
+            except Exception as e:
+                self.logger.warning("Failed to read --from-file: %s", e)
+
+        # 優先順: --target / --from-file / all
+        if getattr(self.args, 'target', None):
+            names: List[str] = self.args.target
+        elif targets_from_file:
+            names = targets_from_file
+        else:
+            names = []
+
+        # スキップ指定
+        skip: set[str] = set(getattr(self.args, 'skip', []) or [])
+
+        if names:
+            # 指定ターゲットからスキップを除外
+            names = [n for n in names if n not in skip]
+            results_dict = runner.run_specific_targets(names)
             return list(results_dict.values())
         else:
-            all_results_dict = runner.run_all_benchmarks()
-            # 全結果を平坦なリストに変換
-            all_results = []
-            for plugin_results in all_results_dict.values():
-                if isinstance(plugin_results, dict):
-                    all_results.extend(plugin_results.values())
-                elif isinstance(plugin_results, list):
-                    all_results.extend(plugin_results)
-                else:
-                    # 単一のBenchmarkResultオブジェクトの場合
-                    all_results.append(plugin_results)
-            return all_results
+            # 全実行 → スキップは後段でフィルタ
+            all_targets = runner.plugin_manager.get_all_targets()
+            # スキップ対象を除外
+            for plugin, targets in all_targets.items():
+                all_targets[plugin] = [t for t in targets if t.name not in skip and f"{plugin}.{t.name}" not in skip]
+            # 実行
+            results: List[BenchmarkResult] = []
+            for plugin, targets in all_targets.items():
+                if not targets:
+                    continue
+                # 一時ランナーで逐次実行（既存run_all_benchmarksは再利用しない）
+                # ただし既存のrun_all_benchmarksでもスキップ影響を出すには内部変更が必要なため簡易実装
+                for t in targets:
+                    res = runner.benchmark_target(t)
+                    results.append(res)
+            return results
     
     def _save_results(self, results: List[BenchmarkResult], config):
         """結果を保存"""
@@ -120,6 +150,15 @@ class RunCommand(CommandExecutor):
             result_manager = BenchmarkResultManager(str(config.output_dir))
             saved_file = result_manager.save_results(results_dict)
             self.logger.info("Results saved to: %s", saved_file)
+            # 失敗ターゲットを書き出し
+            failed = [r.target_name for r in results if not r.success]
+            try:
+                fail_path = Path(config.output_dir) / "failed_targets.json"
+                with open(fail_path, 'w', encoding='utf-8') as f:
+                    json.dump(failed, f, indent=2, ensure_ascii=False)
+                self.logger.info("Failed targets saved to: %s", fail_path)
+            except Exception as e:
+                self.logger.warning("Failed to save failed_targets.json: %s", e)
     
     def _analyze_and_display_results(self, results: List[BenchmarkResult]):
         """結果を分析して表示"""
@@ -172,12 +211,28 @@ class ListCommand(CommandExecutor):
         try:
             config = self.load_config()
             runner = UnifiedBenchmarkRunner(config)
-            
-            targets = runner.list_available_targets()
-            
-            # プラグインフィルタリング
-            if hasattr(self.args, 'plugin') and self.args.plugin:
+            # ターゲットを取得（タグフィルタのため詳細取得）
+            all_targets = runner.plugin_manager.get_all_targets()
+            filtered: List[str] = []
+            for plugin_name, tlist in all_targets.items():
+                for t in tlist:
+                    fq = f"{plugin_name}.{t.name}"
+                    filtered.append(fq)
+            targets = filtered
+            # プラグインフィルタ
+            if getattr(self.args, 'plugin', None):
                 targets = [t for t in targets if t.startswith(self.args.plugin)]
+            # タグフィルタ
+            if getattr(self.args, 'tag', None):
+                want_tags = set(self.args.tag)
+                # 再取得してタグで落とす
+                tagged: List[str] = []
+                for plugin_name, tlist in all_targets.items():
+                    for t in tlist:
+                        t_tags = set(getattr(t, 'tags', []) or [])
+                        if want_tags.issubset(t_tags):
+                            tagged.append(f"{plugin_name}.{t.name}")
+                targets = [t for t in targets if t in tagged]
             
             # フォーマット別出力
             format_type = getattr(self.args, 'format', 'table')
@@ -297,16 +352,43 @@ class CompareCommand(CommandExecutor):
             with open(current_file, 'r') as f:
                 current_data = json.load(f)
             
-            # 比較実行
-            analyzer = BenchmarkResultAnalyzer()
-            comparison = analyzer.compare_results(baseline_data, current_data)
-            
-            # 比較結果を表示
+            # タグフィルタ（保存結果に 'tags' がある前提。なければ通さない）
+            if getattr(self.args, 'tag', None):
+                need = set(self.args.tag)
+                baseline_data = {k: v for k, v in baseline_data.items() if isinstance(v, dict) and need.issubset(set(v.get('tags', []) or []))}
+                current_data = {k: v for k, v in current_data.items() if isinstance(v, dict) and need.issubset(set(v.get('tags', []) or []))}
+
+            # 比較実行（辞書同士の軽量比較）
+            comparison = self._compare_dicts(baseline_data, current_data)
+
+            # 結果表示
             self._display_comparison_result(comparison)
-            
-            # 回帰検出
-            threshold = getattr(self.args, 'regression_threshold', -0.1)
-            regressions = [c for c in comparison if c.get('performance_change', 0) < threshold]
+
+            # 回帰検出（タグ/ターゲット別閾値と絶対値閾値を考慮）
+            cfg = self.load_config()
+            threshold_default = getattr(self.args, 'regression_threshold', -0.1)
+            abs_thr = getattr(self.args, 'abs_threshold', 0.0) or 0.0
+            regressions = []
+            for c in comparison:
+                tgt = c["target"]
+                change = c.get("performance_change", 0.0)
+                abs_diff = c.get("abs_diff", 0.0)
+                if abs_diff < abs_thr:
+                    continue  # 無視（ノイズ）
+                # ターゲット/タグ別のしきい値があれば上書き
+                thr = cfg.regression_threshold_by_target.get(tgt, threshold_default)
+                # タグはファイルのcurrent側を参照（なければbaseline）
+                tags = []
+                if tgt in current_data and isinstance(current_data[tgt], dict):
+                    tags = current_data[tgt].get('tags', []) or []
+                elif tgt in baseline_data and isinstance(baseline_data[tgt], dict):
+                    tags = baseline_data[tgt].get('tags', []) or []
+                for t in tags:
+                    if t in cfg.regression_threshold_by_tag:
+                        thr = cfg.regression_threshold_by_tag[t]
+                        break
+                if change < thr:
+                    regressions.append(c)
             
             if regressions:
                 self.logger.warning("⚠️  Performance regressions detected: %d", len(regressions))
@@ -325,6 +407,7 @@ class CompareCommand(CommandExecutor):
         for result in comparison:
             target = result["target"]
             change = result.get("performance_change", 0)
+            abs_diff = result.get("abs_diff", 0.0)
             
             if change > 0.05:  # 5%以上の改善
                 status = "🚀 IMPROVED"
@@ -333,7 +416,35 @@ class CompareCommand(CommandExecutor):
             else:
                 status = "➡️  UNCHANGED"
             
-            print(f"{target}: {status} ({change:+.1%})")
+            print(f"{target}: {status} ({change:+.1%}, Δ={abs_diff*1000:.3f} ms)")
+
+    def _compare_dicts(self, baseline: Dict[str, Any], current: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """JSON辞書（ファイル読み込み結果）同士の比較を行い、ターゲットごとの差分を返す。"""
+        results: List[Dict[str, Any]] = []
+        keys = sorted(set(baseline.keys()) & set(current.keys()))
+        for k in keys:
+            b = baseline[k]
+            c = current[k]
+            # 平均時間の抽出（新/旧の両形式に対応）
+            def _avg(x: Any) -> float:
+                # 新フォーマットのみ対応
+                if isinstance(x, dict) and isinstance(x.get('timing_data'), dict):
+                    return float(x['timing_data'].get('average_time', 0.0) or 0.0)
+                return 0.0
+            b_avg = _avg(b)
+            c_avg = _avg(c)
+            if b_avg == 0:
+                change = float('inf') if c_avg == 0 else -float('inf')
+            else:
+                change = (b_avg - c_avg) / b_avg
+            results.append({
+                "target": k,
+                "baseline_avg": b_avg,
+                "current_avg": c_avg,
+                "performance_change": change,
+                "abs_diff": abs(c_avg - b_avg),
+            })
+        return results
 
 
 class ConfigCommand(CommandExecutor):

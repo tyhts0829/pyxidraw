@@ -11,7 +11,7 @@ import numpy as np
 
 from benchmarks.core.config import BenchmarkConfig
 from benchmarks.core.runner import UnifiedBenchmarkRunner
-from benchmarks.core.types import BenchmarkResult
+from benchmarks.core.types import BenchmarkResult, TimingData, BenchmarkMetrics
 from benchmarks.plugins.base import BaseBenchmarkTarget
 
 # --- ヘルパー関数とモッククラス ---
@@ -27,12 +27,29 @@ class MockPlugin:
     def analyze_target_features(self, target):
         return {"has_njit": False, "has_cache": False, "function_count": 1}
 
-def create_dummy_result(module, success, avg_times):
+def create_typed_result(name: str, avg_time: float) -> BenchmarkResult:
     return BenchmarkResult(
-        module=module, timestamp="", success=success, error=None,
-        status="success" if success else "failed",
-        timings={k: [v] for k, v in avg_times.items()},
-        average_times=avg_times, metrics={}
+        target_name=name,
+        plugin_name="test_plugin",
+        config={},
+        timestamp=0.0,
+        success=True,
+        error_message="",
+        timing_data=TimingData(
+            warm_up_times=[avg_time],
+            measurement_times=[avg_time, avg_time],
+            total_time=avg_time * 2,
+            average_time=avg_time,
+            std_dev=0.0,
+            min_time=avg_time,
+            max_time=avg_time,
+        ),
+        metrics=BenchmarkMetrics(
+            vertices_count=0,
+            geometry_complexity=0.0,
+            memory_usage=0,
+            cache_hit_rate=0.0,
+        ),
     )
 
 # --- テストクラス本体 ---
@@ -68,22 +85,27 @@ class TestUnifiedBenchmarkRunner(unittest.TestCase):
             MockPlugin("shapes", [self.shape_target]),
         ]
 
-    @patch("benchmarks.core.runner.UnifiedBenchmarkRunner._benchmark_effect_application", return_value=[0.1, 0.2])
-    def test_benchmark_target_isolated_effect(self, mock_benchmark_effect):
-        """単一エフェクトターゲットのベンチマークが成功するかのテスト"""
-        with patch.object(self.runner, '_get_plugin_for_target', return_value=MockPlugin("effects", [])):
-            result = self.runner._benchmark_target_isolated(self.effect_target)
-            self.assertTrue(result["success"])
-            self.assertAlmostEqual(result["average_times"]["small"], 0.15)
+    def test_benchmark_target_effect(self):
+        """Typed BenchmarkResult が返り、平均値が計算される"""
+        # executor をモックして測定時間を差し込む
+        def fake_execute_measurements(target, result):
+            result.timing_data.measurement_times.extend([0.1, 0.2])
+        with patch.object(self.runner.executor, 'execute_benchmark_measurements', side_effect=fake_execute_measurements):
+            res = self.runner.benchmark_target(self.effect_target)
+            self.assertIsInstance(res, BenchmarkResult)
+            self.assertTrue(res.success)
+            self.assertAlmostEqual(res.timing_data.average_time, np.mean([0.1, 0.2]))
 
-    @patch("benchmarks.core.runner.UnifiedBenchmarkRunner._benchmark_shape_generation", return_value=[0.3, 0.4])
-    def test_benchmark_target_isolated_shape(self, mock_benchmark_shape):
-        """単一形状ターゲットのベンチマークが成功するかのテスト"""
+    def test_benchmark_target_shape(self):
+        """形状ターゲットでも平均が計算される"""
+        def fake_execute_measurements(target, result):
+            result.timing_data.measurement_times.extend([0.3, 0.4])
         with patch.object(self.runner, '_is_shape_target', return_value=True), \
-             patch.object(self.runner, '_get_plugin_for_target', return_value=MockPlugin("shapes", [])):
-            result = self.runner._benchmark_target_isolated(self.shape_target)
-            self.assertTrue(result["success"])
-            self.assertAlmostEqual(result["average_times"]["generation"], 0.35)
+             patch.object(self.runner.executor, 'execute_benchmark_measurements', side_effect=fake_execute_measurements):
+            res = self.runner.benchmark_target(self.shape_target)
+            self.assertIsInstance(res, BenchmarkResult)
+            self.assertTrue(res.success)
+            self.assertAlmostEqual(res.timing_data.average_time, np.mean([0.3, 0.4]))
 
     def test_is_shape_target(self):
         """ターゲットが形状生成かどうかの判定テスト"""
@@ -96,7 +118,7 @@ class TestUnifiedBenchmarkRunner(unittest.TestCase):
     def test_run_all_benchmarks_sequential(self, mock_benchmark_target):
         """全ベンチマークの順次実行テスト"""
         self.runner.config.parallel = False
-        mock_benchmark_target.return_value = create_dummy_result("mock", True, {"small": 0.1})
+        mock_benchmark_target.return_value = create_typed_result("mock", 0.1)
         results = self.runner.run_all_benchmarks()
         self.assertEqual(len(results), 2)
         self.assertEqual(mock_benchmark_target.call_count, 2)

@@ -12,15 +12,11 @@ except Exception:
     class ChartGenerator:  # minimal stub for tests
         pass
 
-__all__ = [
-    "ChartGenerator",
-]
+__all__ = ["ChartGenerator"]
+
 from .reports import ReportGenerator, generate_html_report, generate_markdown_report
 
-__all__ = [
-    "ChartGenerator",
-    "create_performance_chart", 
-    "create_comparison_chart",
+__all__ += [
     "ReportGenerator",
     "generate_html_report",
     "generate_markdown_report",

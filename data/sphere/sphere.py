@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
-from icecream import ic
+import logging
 
 from effects.effector import apply_effectors
 
@@ -46,5 +46,5 @@ if __name__ == "__main__":
         save_name = f"sphere_tri_{subdivision}_vertices_list.pkl"
         with open(SAVE_DIR / save_name, "wb") as f:
             pickle.dump(vertices_list, f)
-        ic(f"saved: {SAVE_DIR / save_name}")
-    ic("finish")
+        logging.getLogger(__name__).info("saved: %s", SAVE_DIR / save_name)
+    logging.getLogger(__name__).info("finish")

@@ -40,11 +40,13 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
                 target_name = f"{effect_type}.{variation['name']}"
                 params = variation.get('params', {})
                 complexity = self._determine_complexity(effect_type, params)
+                tags = self._tags_for_effect(effect_type, params)
                 targets.append(
                     ParametrizedBenchmarkTarget(
                         name=target_name,
                         base_func=SerializableEffectTarget(effect_type, params),
                         parameters=params,
+                        tags=tags,
                         effect_type=effect_type,
                         complexity=complexity,
                     )
@@ -87,6 +89,7 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
                         name=target_name,
                         base_func=SerializableEffectTarget(effect_type, params),
                         parameters=params,
+                        tags=self._tags_for_effect(effect_type, params),
                         effect_type=effect_type,
                         complexity=complexity,
                     )
@@ -132,3 +135,20 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
                 {'name': 'high_frequency', 'params': {'intensity': 0.5, 'frequency': 3.0}},
             ],
         }
+
+    def _tags_for_effect(self, effect_type: str, params: Dict[str, Any]) -> List[str]:
+        """効果種別から代表的なタグを付与（例示）。"""
+        tags: List[str] = ["effects"]
+        if effect_type in ['transform', 'scale', 'translate', 'rotate']:
+            tags += ["pure-numpy", "cpu-bound"]
+        elif effect_type in ['noise']:
+            tags += ["numba", "cpu-bound", "stochastic"]
+            if params.get('frequency', 1.0) >= 3.0:
+                tags.append("complex")
+        elif effect_type in ['array']:
+            tags += ["alloc-heavy"]
+        elif effect_type in ['subdivision']:
+            tags += ["cpu-bound"]
+        elif effect_type in ['buffer', 'extrude', 'filling']:
+            tags += ["pure-numpy"]
+        return tags

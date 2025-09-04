@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+"""
+概要（アルゴリズム要約）
+- 入力曲線を XY 平面へ射影
+- 乱択的に候補線を生成し（距離最大などの基準）、交点/連結を評価
+- 弾性緩和（反復）でウェブ構造を安定化
+- 元の 3D 姿勢に戻して合成
+
+正規化パラメータ（候補線数/反復/ステップ）は 0..1 をレンジに写像して使用する。
+"""
+
 import math
 from typing import Any
 
@@ -34,22 +44,41 @@ def webify(
     iterations = norm_to_int(float(relaxation_iterations), 0, MAX_RELAXATION_ITERATIONS)
     step_size = norm_to_range(float(step), 0.0, MAX_STEP)
 
+    # STEP 1: 各ポリラインに対してウェブ構造を生成
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
         if len(vertices) < 3:
             result_lines.append(vertices)
             continue
-        transformed, R, z = transform_to_xy_plane(vertices)
-        polylines_xy = create_web(
-            transformed, num_candidate_lines=num_lines, relaxation_iterations=iterations, step=step_size
+        result_lines.extend(
+            _webify_single_polygon(vertices, num_candidate_lines=num_lines, relaxation_iterations=iterations, step=step_size)
         )
-        for poly in polylines_xy:
-            poly_back = transform_back(poly, R, z)
-            result_lines.append(poly_back)
 
     if not result_lines:
         return Geometry(coords.copy(), offsets.copy())
     return Geometry.from_lines(result_lines)
+
+
+def _webify_single_polygon(
+    vertices: np.ndarray,
+    *,
+    num_candidate_lines: int,
+    relaxation_iterations: int,
+    step: float,
+) -> list[np.ndarray]:
+    """単一の閉曲線からウェブ状のストリング群を生成して 3D に戻す。
+
+    - 2D へ射影 → ウェブ生成 → 3D へ戻す、の高レベル手順をひとまとめにする。
+    - 数値計算の詳細は numba 最適化済みのローレベル関数群に委譲する。
+    """
+    transformed, R, z = transform_to_xy_plane(vertices)
+    polylines_xy = create_web(
+        transformed, num_candidate_lines=num_candidate_lines, relaxation_iterations=relaxation_iterations, step=step
+    )
+    out: list[np.ndarray] = []
+    for poly in polylines_xy:
+        out.append(transform_back(poly, R, z))
+    return out
 
 
 @njit(fastmath=True, cache=True)

@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/core/exceptions.py
+# hypothesis_version: 6.131.18
+
+['continue_on_error', 'error_code', 'error_count', 'error_type', 'max_errors', 'message', 'module_name', 'original_exception', 'timestamp', 'traceback', 'unknown']

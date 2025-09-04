@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -18,6 +18,7 @@ def extrude(
     distance: float = 0.5,
     scale: float = 0.5,
     subdivisions: float = 0.5,
+    center_mode: Literal["origin", "auto"] = "origin",
     **_params: Any,
 ) -> Geometry:
     """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。"""
@@ -70,7 +71,12 @@ def extrude(
     out_lines.extend(lines)
 
     for line in lines:
-        extruded_line = (line + extrude_vec) * np.float32(scale_scaled)
+        extruded_base = line + extrude_vec
+        if center_mode == "auto":
+            centroid = extruded_base.mean(axis=0)
+            extruded_line = (extruded_base - centroid) * np.float32(scale_scaled) + centroid
+        else:
+            extruded_line = extruded_base * np.float32(scale_scaled)
         out_lines.append(extruded_line.astype(np.float32, copy=False))
         for j in range(len(line)):
             seg = np.asarray([line[j], extruded_line[j]], dtype=np.float32)

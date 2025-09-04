@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Callable, Mapping
+import logging
+import sys
 
 import numpy as np
 
@@ -56,9 +58,14 @@ def run_sketch(
 
     # ---- ② MIDI ---------------------------------------------------
     if use_midi:
-        midi_manager = connect_midi_controllers()
-        midi_service = MidiService(midi_manager)
-        cc_snapshot_fn = midi_service.snapshot
+        try:
+            midi_manager = connect_midi_controllers()
+            midi_service = MidiService(midi_manager)
+            cc_snapshot_fn = midi_service.snapshot
+        except Exception as e:  # engine.io.controller.InvalidPortError など
+            logging.getLogger(__name__).exception("MIDI initialization failed: %s", e)
+            # CLI 相当の挙動: 明示的に終了コードを返す
+            raise SystemExit(2)
     else:
         midi_manager = None
         # ダミーのスナップショット（常に空のCC）

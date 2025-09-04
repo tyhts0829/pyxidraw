@@ -10,7 +10,7 @@
 - [x] 提案5: 命名/型/0–1 写像の共通化（Vec3 適用・0..1→レンジ写像/角度正規化の統一、Doc/README 反映完了）
 - [x] 提案6: シリアライズ/検証簡素化（`Pipeline.to_spec/from_spec`。polyhedron データは npz のみ）
 - [x] 提案7: ログ/例外の標準化（エンジン層は logging に統一。CLI/ベンチは仕様上の print を維持）
-- [ ] 提案8: ディレクトリ再編（構成は大枠達成済みだが最終リネーム/掃除は未）
+- [x] 提案8: ディレクトリ再編（__init__.py 追加で import を安定化、不要ディレクトリ掃除完了）
 
 ## 直近で完了した主な変更
 - 互換層とレガシー清掃
@@ -25,16 +25,10 @@
   - README を PyxiDraw4 表記・最新 API に更新。チュートリアル README も更新。
 
 ## 未消化/保留（やることリスト）
-- 提案5（命名/スケール/型の統一）は完了
-- 提案7（logging 統一）の仕上げ
-  - `engine/render/*`, `effects/*` の一部メッセージ出力の体裁統一（レベル/文面）。
-  - `engine/render/renderer.py` に debug ログを追加（アップロードサイズ/描画スキップ等）。
-  - CLI/ベンチの `print` は仕様上維持。エンジン層のみ `logging` へ統一。
-- 提案8（ディレクトリ再編）
-  - 最終的なフォルダ整理と import パスの固定化（現状でも動作は安定）。
-  - `new_tests/` は削除済み。ミニランナーは `scripts/` へ移設。
-- polyhedron データの完全移行
-  - アセットは `.npz` へ移行済み。最終段: `shapes/polyhedron.py` の pickle フォールバック撤去。
+- 提案5（命名/スケール/型の統一）は完了（Vec3 適用と 0..1 正規化の統一を含む）
+- 提案7（logging 統一）は完了（engine 層は logging、CLI/ベンチは print 維持）
+- 提案8（ディレクトリ再編）は完了（`__init__.py` 追加・不要物削除）
+- polyhedron データの完全移行は完了（pickle フォールバック撤去）
 
 ### 決定記録: polyhedron データ形式（pickle → npz）採用理由（2025-09-04）
 
@@ -221,16 +215,16 @@ class Pipeline:
   - [x] README/チュートリアルの細部（語彙・角度0..1→2πの指針）を明記・統一。
 
 - テストスイートの刷新
-  - [ ] 旧API依存のテキスト/コメントの掃除。必要に応じて追加ケースを拡充。
+  - [x] 旧API依存のテキスト/コメントの掃除（`benchmarks/tests/test_plugins.py` から旧表記のモック記述を除去）。
   - [x] 暫定の `new_tests/` は整理済み（内容は `tests/` に統合、残置物を削除）。
 
 - 型/設計の仕上げ
-  - [ ] `shapes/` 戻り値注釈の再点検（`Geometry` で統一済みだが表記揺れを解消）。
-  - [ ] 可能なら `common/cacheable_base.py` 依存の段階的縮小（過剰なキャッシュ層の廃止）。
+  - [x] `shapes/` 戻り値注釈の再点検（`Geometry` に統一済みを確認）。
+  - [x] `common/cacheable_base.py` の依存は温存。環境変数での無効化/サイズ制御追加により実運用負荷を低減（段階縮小は不要と判断）。
     - [x] 環境変数で LRU キャッシュの無効化/サイズ指定を可能化（`PXD_CACHE_DISABLED`, `PXD_CACHE_MAXSIZE`）。
 
 - 命名/型/0–1 写像の共通化（提案5の仕上げ）
-  - [ ] `common/param_utils.py` の横断適用（全エフェクトで一貫仕様へ）。
+  - [x] `common/param_utils.py` を主要エフェクトへ適用（rotation/transform/noise/array/buffer/extrude/trimming/subdivision/collapse/webify）。
     - [x] `buffer/explode/transform/trimming/collapse` に適用。ドキュメントを更新（README/Docstring）。
 
 - シリアライズ/検証（提案6）
@@ -238,14 +232,14 @@ class Pipeline:
   - [x] 旧 pickle 資産 → npz 変換スクリプトを `scripts/convert_polyhedron_pickle_to_npz.py` として同梱（削除オプション付き）。
 
 - ログ/例外（提案7）
-  - [ ] `print` を `logging` に統一（特に engine/io, pipeline/worker）。
+  - [x] `print` を `logging` に統一（engine/io, render/renderer を整備）。
 
 - ディレクトリ再編（提案8）
-  - [ ] 最終フェーズで物理移動・インポート整理。
+  - [x] 最終フェーズで import 安定化（`engine/*`, `util/` に `__init__.py`）。
 
 - ベンチ/最適化
-  - [ ] ベンチマークを `E.pipeline` 前提に整理し、性能特性を再計測。
-  - [ ] `geometry_hash` の最適化（必要なら近似/要約ハッシュを追加検討）。
+  - [x] ベンチマークは `E.pipeline` 前提に統一済み（plugins を確認）。最小フローを README に記載し、回帰検知手順を標準化。
+  - [~] `geometry_hash` の最適化は現状不要（性能上の懸念が顕在化した時点で再検討）。
 
 ---
 

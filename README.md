@@ -75,7 +75,7 @@ def draw(t, cc):
 from api import E, G
 base = G.polygon(n_sides=6).scale(80, 80, 80)
 out = (E.pipeline
-         .extrude(direction=(0, 0, 1), distance=0.5, scale=1.0, subdivisions=0.3)
+         .extrude(direction=(0, 0, 1), distance=0.5, scale=1.0, subdivisions=0.3, center_mode="auto")
          .build())(base)
 ```
 主なパラメータ:
@@ -83,6 +83,7 @@ out = (E.pipeline
 - distance: 押し出し距離係数（0.0–1.0）
 - scale: 押し出し側スケール係数（0.0–1.0）
 - subdivisions: 細分化係数（0.0–1.0）
+- center_mode: 押し出し側スケールの中心（"origin"|"auto"）。"auto" は押し出し先ラインの重心を基準にスケール。
 
 ## 主要なコンポーネント
 
@@ -115,9 +116,12 @@ out = (E.pipeline
 - `render/` - 3Dレンダリング
 
 ### ベンチマーク (benchmarks/)
-- パフォーマンス測定
-- レポート生成
-- 可視化チャート
+- パフォーマンス測定（`python -m benchmarks run`）
+- ターゲット一覧/絞り込み（`list --tag`, `--plugin`）
+- 結果比較（`compare --abs-threshold`、タグ/ターゲット別しきい値）
+- 失敗のみ再実行（`run --from-file benchmark_results/failed_targets.json`）
+- 個別スキップ（`run --skip effects.noise.high_frequency`）
+- レポート生成（HTML/Markdown、自動出力）
 
 ## 設定
 
@@ -148,6 +152,7 @@ pipeline2 = from_spec(spec)
 ```
 
 効果のパラメータ仕様は `docs/effects_cheatsheet.md` を参照してください。
+アーキテクチャ決定（ADR）は `docs/adr/README.md` を参照してください。
 
 ## テスト
 
@@ -155,8 +160,8 @@ pipeline2 = from_spec(spec)
 # 全テストを実行
 python -m pytest
 
-# ベンチマークを実行
-python -m benchmarks
+# ベンチマークを実行（全ターゲット）
+python -m benchmarks run
 ```
 
 ## キャッシュ制御（開発向け）
@@ -196,12 +201,32 @@ python -m benchmarks run -o benchmark_results/current
 
 # 差分を比較
 python -m benchmarks compare benchmark_results/baseline/latest.json benchmark_results/current/latest.json
+
+# しきい値を調整（2ms未満は無視、alloc-heavy の回帰閾値を厳しめに）
+python -m benchmarks compare \
+  benchmark_results/baseline/latest.json benchmark_results/current/latest.json \
+  --abs-threshold 0.002 --tag alloc-heavy
 ```
 
 高速なスモーク実行（保存/チャート無効）:
 
 ```bash
 python -m benchmarks run --warmup 0 --runs 1 --timeout 15 --no-charts --no-save
+
+タグで絞り込んだ実行や一覧:
+
+```bash
+# タグで一覧
+python -m benchmarks list --tag cpu-bound --format table
+
+# 失敗のみ再実行
+python -m benchmarks run --from-file benchmark_results/failed_targets.json
+
+# 個別ターゲットをスキップ
+python -m benchmarks run --skip effects.noise.high_frequency --skip shapes.sphere.high_res
+```
+
+並列実行の目安は docs/benchmarks_parallel_guide.md を参照してください。
 ```
 
 ## データ移行（polyhedron: pickle → npz）
@@ -232,7 +257,7 @@ python scripts/convert_polyhedron_pickle_to_npz.py --force
 備考:
 - 何度実行しても安全です（既存 `.npz` は既定では上書きしません）。
 - 変換後は `.pkl` を削除して構いません（`--delete-original` で自動削除可）。
-- 詳細な判断理由は `PROPOSAL_BREAKING_CHANGES.md` の「決定記録」および
+- 詳細な判断理由は `docs/proposals/completed/PROPOSAL_BREAKING_CHANGES.md` の「決定記録」および
   ADR: `docs/adr/0001-npz-over-pickle.md` を参照してください。
 
 移行完了チェック:

@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/ArcController/arc/services/sender/control_sender.py
+# hypothesis_version: 6.131.18
+
+[127, 16383, 57120, '0.0.0.0', '127.0.0.1', 'MIDI 送信は無効化されています', "MIDI 送信ポート '%s' を作成", 'MIDI 送信ポートの作成に失敗: %s', 'MIDI 送信ポートを閉じました', 'OSC バンドル送信: %s', 'OSC 送信: %s = %d', 'OSC 送信: %s = %f', 'OSC 送信は無効化されています', 'OSC 送信ポート %s:%d を作成', 'OSC 送信ポートの作成に失敗: %s', 'OSC 送信ポートを閉じました', 'control_change', 'mido.backends.rtmidi']

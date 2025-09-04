@@ -340,37 +340,17 @@ class ReportGenerator:
         """
         
         for module_name, result in sorted(results.items()):
-            status_class = "status-success" if result["success"] else "status-failure"
-            status_text = "✓ 成功" if result["success"] else "✗ 失敗"
+            status_class = "status-success" if result.success else "status-failure"
+            status_text = "✓ 成功" if result.success else "✗ 失敗"
+            avg_time_str = f"{result.timing_data.average_time*1000:.3f}ms" if result.success and result.timing_data.average_time > 0 else "-"
             
-            if result["success"] and result["average_times"]:
-                import statistics
-                avg_time = statistics.mean(result["average_times"].values())
-                avg_time_str = f"{avg_time*1000:.3f}ms"
-            else:
-                avg_time_str = "-"
+            # 表示用: タグを最適化欄に出す（簡潔）
+            optimization_str = ", ".join(result.tags) if getattr(result, 'tags', None) else "-"
             
-            # 最適化情報
-            metrics = result.get("metrics", {})
-            optimizations = []
-            if metrics.get("has_njit", False):
-                optimizations.append("NJIT")
-            if metrics.get("has_cache", False):
-                optimizations.append("Cache")
-            optimization_str = ", ".join(optimizations) if optimizations else "-"
+            # シリアライズ情報（ms）
+            serialization_str = f"{result.serialization_overhead*1000:.2f}ms" if result.serialization_overhead > 0 else "-"
             
-            # シリアライズ情報
-            serialization_str = "-"
-            if "serialization_overhead" in metrics:
-                overhead = metrics["serialization_overhead"]
-                if "target_serialize_time" in overhead:
-                    target_time = overhead["target_serialize_time"] * 1000
-                    serialization_str = f"{target_time:.2f}ms"
-                if "geometry_serialize_time" in overhead:
-                    geom_time = overhead["geometry_serialize_time"] * 1000
-                    serialization_str += f" / {geom_time:.2f}ms"
-            
-            error_str = result.get("error", "-") if not result["success"] else "-"
+            error_str = result.error_message or "-" if not result.success else "-"
             
             html += f"""
                 <tr class="{status_class}">
@@ -526,26 +506,10 @@ class ReportGenerator:
 """
         
         for module_name, result in sorted(results.items()):
-            status_text = "✓ 成功" if result["success"] else "✗ 失敗"
-            
-            if result["success"] and result["average_times"]:
-                import statistics
-                avg_time = statistics.mean(result["average_times"].values())
-                avg_time_str = f"{avg_time*1000:.3f}ms"
-            else:
-                avg_time_str = "-"
-            
-            # 最適化情報
-            metrics = result.get("metrics", {})
-            optimizations = []
-            if metrics.get("has_njit", False):
-                optimizations.append("NJIT")
-            if metrics.get("has_cache", False):
-                optimizations.append("Cache")
-            optimization_str = ", ".join(optimizations) if optimizations else "-"
-            
-            error_str = result.get("error", "-") if not result["success"] else "-"
-            
+            status_text = "✓ 成功" if result.success else "✗ 失敗"
+            avg_time_str = f"{result.timing_data.average_time*1000:.3f}ms" if result.success and result.timing_data.average_time > 0 else "-"
+            optimization_str = ", ".join(result.tags) if getattr(result, 'tags', None) else "-"
+            error_str = result.error_message or "-" if not result.success else "-"
             md += f"| {module_name} | {status_text} | {avg_time_str} | {optimization_str} | {error_str} |\n"
         
         md += "\n"

@@ -34,14 +34,15 @@ class ShapeBenchmarkPlugin(BenchmarkPlugin):
                 target_name = f"{shape_type}.{variation['name']}"
                 params = variation.get('params', {})
                 complexity = self._determine_complexity(shape_type, params)
+                tags = self._tags_for_shape(shape_type, complexity)
                 targets.append(
                     ParametrizedBenchmarkTarget(
                         name=target_name,
                         base_func=SerializableShapeTarget(shape_type, params),
                         parameters=params,
+                        tags=tags,
                         shape_type=shape_type,
                         complexity=complexity,
-                        metadata={"shape_type": shape_type},
                     )
                 )
         return targets
@@ -80,9 +81,9 @@ class ShapeBenchmarkPlugin(BenchmarkPlugin):
                         name=target_name,
                         base_func=SerializableShapeTarget(shape_type, params),
                         parameters=params,
+                        tags=self._tags_for_shape(shape_type, complexity),
                         shape_type=shape_type,
                         complexity=complexity,
-                        metadata={"shape_type": shape_type},
                     )
         
         raise ValueError(f"Target not found in config: {target_name}")
@@ -122,3 +123,11 @@ class ShapeBenchmarkPlugin(BenchmarkPlugin):
                 {'name': 'high_res', 'params': {'subdivisions': 1}},
             ],
         }
+
+    def _tags_for_shape(self, shape_type: str, complexity: str) -> List[str]:
+        tags: List[str] = ["shapes", "cpu-bound"]
+        if complexity == "complex":
+            tags.append("alloc-heavy")
+        if shape_type in ["sphere", "polyhedron"]:
+            tags.append("numba")  # 数値計算が多い想定
+        return tags

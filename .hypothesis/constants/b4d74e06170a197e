@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/benchmark_result_manager.py
+# hypothesis_version: 6.131.18
+
+[100, 1024, '%Y%m%d_%H%M%S', '.tmp', '1.0', 'average_time', 'backup', 'benchmark_', 'benchmark_*.json', 'benchmark_results', 'cache_hit_rate', 'config', 'disk_free_mb', 'disk_total_mb', 'disk_used_percent', 'effects', 'error', 'error_message', 'geometry_complexity', 'latest.json', 'max_time', 'measurement_times', 'memory_usage', 'meta', 'metrics', 'min_time', 'output_data', 'output_directory', 'plugin_name', 'r', 'schema_version', 'std_dev', 'success', 'tags', 'target_name', 'timestamp', 'timing_data', 'total_size_mb', 'total_time', 'utf-8', 'vertices_count', 'w', 'warm_up_times']

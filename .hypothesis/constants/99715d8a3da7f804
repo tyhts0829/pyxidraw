@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/ArcController/arc/__init__.py
+# hypothesis_version: 6.131.18
+
+['1.0.0', 'is_running', 'main', 'midi', 'osc', 'run', 'start', 'stop']

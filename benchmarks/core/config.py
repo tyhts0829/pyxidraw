@@ -240,7 +240,18 @@ class BenchmarkConfigManager:
             generate_charts=benchmark_section.get('generate_charts', True),
             chart_format=benchmark_section.get('chart_format', 'png'),
             chart_dpi=benchmark_section.get('chart_dpi', 150),
+            abs_threshold=(benchmark_section.get('thresholds', {}) or {}).get('abs_threshold', 0.0),
         )
+
+        # しきい値の詳細（タグ/ターゲット別）
+        thresholds = benchmark_section.get('thresholds', {}) or {}
+        if isinstance(thresholds, dict):
+            by_tag = thresholds.get('by_tag', {}) or {}
+            by_target = thresholds.get('by_target', {}) or {}
+            if isinstance(by_tag, dict):
+                config.regression_threshold_by_tag = {str(k): float(v) for k, v in by_tag.items()}
+            if isinstance(by_target, dict):
+                config.regression_threshold_by_target = {str(k): float(v) for k, v in by_target.items()}
         
         # targetsセクションを追加
         if 'targets' in config_data:
@@ -263,6 +274,11 @@ class BenchmarkConfigManager:
                 "generate_charts": config.generate_charts,
                 "chart_format": config.chart_format,
                 "chart_dpi": config.chart_dpi,
+                "thresholds": {
+                    "abs_threshold": getattr(config, 'abs_threshold', 0.0),
+                    "by_tag": getattr(config, 'regression_threshold_by_tag', {}),
+                    "by_target": getattr(config, 'regression_threshold_by_target', {}),
+                },
             }
         }
     

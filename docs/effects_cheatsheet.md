@@ -29,9 +29,10 @@
   - rotate: 0..1 正規化角（各軸）
   - 例: `(E.pipeline.array(n_duplicates=0.3, offset=(5,0,0)).build())(g)`
 
-- extrude(direction, distance, scale, subdivisions)
+- extrude(direction, distance, scale, subdivisions, center_mode)
   - distance/scale/subdivisions: 0..1 正規化
-  - 例: `(E.pipeline.extrude(distance=0.5, scale=0.7).build())(g)`
+  - center_mode: "origin"（既定）or "auto"（押し出し先ラインの重心基準）
+  - 例: `(E.pipeline.extrude(distance=0.5, scale=0.7, center_mode="auto").build())(g)`
 
 - buffer(distance, join_style, resolution)
   - distance: 0..1→0..25mm、resolution: 0..1→段数

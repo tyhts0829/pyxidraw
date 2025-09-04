@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/core/execution.py
+# hypothesis_version: 6.131.18
+
+[0.0, 1.0, 1000.0, 100, '   ❌ %s: %s', '1.0', 'Geometry', 'PXD_', '__call__', '__len__', '_execute_func', 'array.', 'average_time', 'buffer.', 'circle', 'cone', 'config', 'coords', 'cores', 'count', 'cube', 'cylinder', 'env', 'extrude.', 'failed', 'fastest_time', 'filling.', 'grid', 'has_vertices', 'icosahedron', 'machine', 'message', 'noise.', 'offsets', 'os', 'plugin_name', 'polygon', 'processor', 'python', 'repr', 'rotate.', 'scale.', 'shape', 'slowest_time', 'sphere', 'square', 'subdivision.', 'success_rate', 'successful', 'tags', 'torus', 'total', 'total_vertices', 'transform.', 'translate.', 'type', 'unknown', 'vertices_count', 'vertices_list', '⚠️', '✅', '❌']

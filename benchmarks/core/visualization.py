@@ -194,16 +194,12 @@ class BenchmarkVisualizationGenerator:
     def _generate_html_report(self, results: Dict[str, BenchmarkResult], chart_paths: List[str]) -> None:
         """HTMLレポートを生成"""
         try:
-            from benchmarks.visualization.reports import HTMLReportGenerator
-            
-            report_generator = HTMLReportGenerator()
+            from benchmarks.visualization.reports import ReportGenerator
             output_path = Path(self.config.output_dir) / "benchmark_report.html"
-            
-            report_generator.generate_comprehensive_report(
-                results=list(results.values()),
-                output_path=str(output_path),
-                chart_paths=chart_paths
-            )
+            gen = ReportGenerator(Path(self.config.output_dir))
+            # chart_paths を Path 型に正規化
+            paths = [Path(p) for p in chart_paths] if chart_paths else None
+            gen.generate_html_report(results, chart_paths=paths, save_path=output_path)
             
             logging.getLogger(__name__).info("📄 HTML report generated: %s", output_path)
             
@@ -215,16 +211,11 @@ class BenchmarkVisualizationGenerator:
     def _generate_markdown_report(self, results: Dict[str, BenchmarkResult], chart_paths: List[str]) -> None:
         """Markdownレポートを生成"""
         try:
-            from benchmarks.visualization.reports import MarkdownReportGenerator
-            
-            report_generator = MarkdownReportGenerator()
+            from benchmarks.visualization.reports import ReportGenerator
             output_path = Path(self.config.output_dir) / "benchmark_report.md"
-            
-            report_generator.generate_summary_report(
-                results=list(results.values()),
-                output_path=str(output_path),
-                include_charts=True
-            )
+            gen = ReportGenerator(Path(self.config.output_dir))
+            paths = [Path(p) for p in chart_paths] if chart_paths else None
+            gen.generate_markdown_report(results, chart_paths=paths, save_path=output_path)
             
             logging.getLogger(__name__).info("📄 Markdown report generated: %s", output_path)
             

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
-from icecream import ic
+import logging
 
 ####
 # 直径1の球に内接する正多面体のデータ生成
@@ -820,5 +820,5 @@ if __name__ == "__main__":
         # pickleで保存
         with open(SAVE_DIR / f"{name}_vertices_list.pkl", "wb") as f:
             pickle.dump(vertices_list, f)
-        ic(f"{name} is saved")
-    ic("finish")
+        logging.getLogger(__name__).info("%s is saved", name)
+    logging.getLogger(__name__).info("finish")

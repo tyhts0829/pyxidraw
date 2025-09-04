@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+"""
+概要（アルゴリズム要約）
+- 各ポリラインを XY 平面へ射影（場合により回転を伴う）
+- パターン（lines/cross/dots）に応じて塗りつぶし要素を生成
+- 生成要素を元の 3D 姿勢に戻して合成
+
+密度は 0..1 正規化を線/ドット数に写像して使用する。
+"""
+
 from typing import Any
 
 import numpy as np
@@ -155,27 +164,38 @@ def filling(
 
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
-        if len(vertices) < 3:
-            filled_results.append(vertices)
-            continue
-
-        filled_results.append(vertices)
-
-        if pattern == "lines":
-            fill_lines = _generate_line_fill(vertices, density, angle)
-        elif pattern == "cross":
-            fill_lines = _generate_cross_fill(vertices, density, angle)
-        elif pattern == "dots":
-            fill_lines = _generate_dot_fill(vertices, density)
-        else:
-            fill_lines = _generate_line_fill(vertices, density, angle)
-
-        filled_results.extend(fill_lines)
+        filled_results.extend(
+            _fill_single_polygon(vertices, pattern=pattern, density=density, angle=angle)
+        )
 
     if not filled_results:
         return Geometry(coords.copy(), offsets.copy())
 
     return Geometry.from_lines(filled_results)
+
+
+def _fill_single_polygon(
+    vertices: np.ndarray,
+    *,
+    pattern: str,
+    density: float,
+    angle: float,
+) -> list[np.ndarray]:
+    """単一ポリゴンに対して塗りつぶし線/ドットを生成し、元の輪郭と合わせて返す。"""
+    if len(vertices) < 3:
+        return [vertices]
+
+    out: list[np.ndarray] = [vertices]
+    if pattern == "lines":
+        fill_lines = _generate_line_fill(vertices, density, angle)
+    elif pattern == "cross":
+        fill_lines = _generate_cross_fill(vertices, density, angle)
+    elif pattern == "dots":
+        fill_lines = _generate_dot_fill(vertices, density)
+    else:
+        fill_lines = _generate_line_fill(vertices, density, angle)
+    out.extend(fill_lines)
+    return out
 
 
 # 後方互換クラスは廃止（関数APIのみ）

@@ -37,16 +37,6 @@ class BenchmarkValidator:
         warnings: List[str] = []
         metrics: Dict[str, Any] = {}
 
-        # レガシー辞書形式に対応
-        if isinstance(result, dict):
-            legacy_errors, legacy_warnings, legacy_metrics = self._validate_legacy_dict(result)
-            return ValidationResult(
-                is_valid=len(legacy_errors) == 0,
-                errors=legacy_errors,
-                warnings=legacy_warnings,
-                metrics=legacy_metrics,
-            )
-
         # 1. 構造検証
         structure_errors = self._validate_structure(result)
         if structure_errors:
@@ -94,38 +84,12 @@ class BenchmarkValidator:
         valid_count = 0
         
         for module_name, result in results.items():
-            # resultが辞書の場合はBenchmarkResultオブジェクトに変換
-            if isinstance(result, dict):
-                # 辞書形式の結果の場合、基本的な検証のみ実行
-                if result.get("success", False):
-                    valid_count += 1
-                continue
-            
             validation = self.validate_result(result)
-            
-            # validationの型を確認
-            if hasattr(validation, 'is_valid'):
-                if validation.is_valid:
-                    valid_count += 1
-            elif isinstance(validation, dict):
-                # 辞書の場合
-                if validation.get("is_valid", False):
-                    valid_count += 1
-            else:
-                # 予期しない型の場合はスキップ
-                continue
-            
-            # エラーと警告にモジュール名を付加
-            if hasattr(validation, 'errors'):
-                module_errors = [f"{module_name}: {error}" for error in validation.errors]
-                module_warnings = [f"{module_name}: {warning}" for warning in validation.warnings]
-                all_metrics[module_name] = validation.metrics
-            elif isinstance(validation, dict):
-                module_errors = [f"{module_name}: {error}" for error in validation.get("errors", [])]
-                module_warnings = [f"{module_name}: {warning}" for warning in validation.get("warnings", [])]
-                all_metrics[module_name] = validation.get("metrics", {})
-            else:
-                continue
+            if validation["is_valid"]:
+                valid_count += 1
+            module_errors = [f"{module_name}: {error}" for error in validation["errors"]]
+            module_warnings = [f"{module_name}: {warning}" for warning in validation["warnings"]]
+            all_metrics[module_name] = validation["metrics"]
             
             all_errors.extend(module_errors)
             all_warnings.extend(module_warnings)
@@ -154,23 +118,6 @@ class BenchmarkValidator:
     
     def compare_results(self, current: BenchmarkResult, baseline: BenchmarkResult) -> ComparisonResult:
         """2つのベンチマーク結果を比較"""
-        # レガシー辞書形式に対応
-        if isinstance(current, dict) and isinstance(baseline, dict):
-            cur_avg = self._legacy_overall_average(current)
-            base_avg = self._legacy_overall_average(baseline)
-            if base_avg == 0:
-                improvement_ratio = float('inf') if cur_avg == 0 else -float('inf')
-            else:
-                improvement_ratio = (base_avg - cur_avg) / base_avg
-            # 辞書形式では統計的有意性は簡易に常にTrueとする
-            return ComparisonResult(
-                baseline=baseline,  # type: ignore[arg-type]
-                current=current,  # type: ignore[arg-type]
-                improvement_ratio=improvement_ratio,
-                is_significant=True,
-                p_value=0.0,
-            )
-
         if not (current.success and baseline.success):
             raise ValidationError("Both results must be successful for comparison")
         
@@ -194,40 +141,7 @@ class BenchmarkValidator:
             p_value=p_value
         )
 
-    # === レガシーサポート ===
-    def _validate_legacy_dict(self, result: dict) -> tuple[list[str], list[str], dict]:
-        errors: List[str] = []
-        warnings: List[str] = []
-        metrics: Dict[str, Any] = {}
-
-        required_fields = ["module", "status", "timings", "average_times"]
-        for f in required_fields:
-            if f not in result:
-                errors.append(f"Missing required field: {f}")
-
-        # 成功判定
-        is_success = result.get("success")
-        if is_success is None:
-            is_success = result.get("status") == "success"
-        if not is_success:
-            errors.append(f"Benchmark failed: {result.get('error', 'Unknown error')}")
-            return errors, warnings, metrics
-
-        # ばらつき警告（各カテゴリでCV > 0.5）
-        timings: dict = result.get("timings", {}) or {}
-        for name, values in timings.items():
-            if values and len(values) >= 2:
-                mean = float(np.mean(values))
-                std = float(np.std(values))
-                if mean > 0 and std / mean > 0.5:
-                    warnings.append(f"high variability in {name}: CV={std/mean:.2f}")
-        return errors, warnings, metrics
-
-    def _legacy_overall_average(self, result: dict) -> float:
-        avgs: dict = result.get("average_times", {}) or {}
-        if not avgs:
-            return 0.0
-        return float(np.mean(list(avgs.values())))
+    # レガシー辞書サポートは削除
     
     def detect_performance_regression(self, 
                                     current: Dict[str, BenchmarkResult],
@@ -241,28 +155,13 @@ class BenchmarkValidator:
 
             cur = current[module_name]
             base = baseline[module_name]
-            # レガシー平均（存在すれば優先）
-            cur_avg = None
-            base_avg = None
-            if hasattr(cur, '_legacy_average_times') and getattr(cur, '_legacy_average_times'):
-                cur_avg = self._legacy_overall_average({"average_times": getattr(cur, '_legacy_average_times')})
-            if hasattr(base, '_legacy_average_times') and getattr(base, '_legacy_average_times'):
-                base_avg = self._legacy_overall_average({"average_times": getattr(base, '_legacy_average_times')})
-            if cur_avg is None or base_avg is None:
-                try:
-                    comp = self.compare_results(cur, base)
-                    imp = comp['improvement_ratio'] if isinstance(comp, dict) else comp.improvement_ratio
-                    signif = comp['is_significant'] if isinstance(comp, dict) else comp.is_significant
-                except Exception as e:
-                    regressions.append(f"{module_name}: comparison failed ({e})")
-                    continue
-            else:
-                # 単純比較（有意性は常にTrueとする）
-                if base_avg == 0:
-                    imp = float('inf') if cur_avg == 0 else -float('inf')
-                else:
-                    imp = (base_avg - cur_avg) / base_avg
-                signif = True
+            try:
+                comp = self.compare_results(cur, base)
+                imp = comp["improvement_ratio"] if isinstance(comp, dict) else comp.improvement_ratio
+                signif = comp["is_significant"] if isinstance(comp, dict) else comp.is_significant
+            except Exception as e:
+                regressions.append(f"{module_name}: comparison failed ({e})")
+                continue
 
             if imp < regression_threshold and signif:
                 regressions.append(f"{module_name}: {abs(imp)*100:.1f}% performance degradation (p-value: 0.000)")
@@ -370,6 +269,8 @@ class BenchmarkValidator:
                 relative_error = abs(calculated_avg - reported_avg) / calculated_avg
                 if relative_error > 0.01:  # 1%以上の誤差
                     errors.append("average_time mismatch with measurement data")
+        else:
+            errors.append("No timing data available")
         
         return errors, warnings, metrics
     

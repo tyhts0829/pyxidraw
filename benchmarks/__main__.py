@@ -73,6 +73,10 @@ def create_parser() -> argparse.ArgumentParser:
                            help="結果を保存しない")
     run_parser.add_argument("--no-charts", action="store_true",
                            help="チャートを生成しない")
+    run_parser.add_argument("--skip", action="append",
+                           help="指定ターゲットをスキップ (複数可)")
+    run_parser.add_argument("--from-file", type=Path,
+                           help="再実行するターゲット名のファイル(JSONリスト)を指定")
     
     # list サブコマンド
     list_parser = subparsers.add_parser("list", help="利用可能なターゲットを表示")
@@ -80,6 +84,8 @@ def create_parser() -> argparse.ArgumentParser:
                             help="特定プラグインのターゲットのみ表示")
     list_parser.add_argument("--format", choices=["table", "json", "yaml"],
                             default="table", help="出力フォーマット")
+    list_parser.add_argument("--tag", action="append",
+                            help="タグでフィルタ（複数可）")
     
     # validate サブコマンド
     validate_parser = subparsers.add_parser("validate", help="ベンチマーク結果を検証")
@@ -96,6 +102,10 @@ def create_parser() -> argparse.ArgumentParser:
                                help="現在の結果ファイル")
     compare_parser.add_argument("--regression-threshold", type=float, default=-0.1,
                                help="回帰検出の閾値 (デフォルト: -10%)")
+    compare_parser.add_argument("--abs-threshold", type=float, default=0.0,
+                               help="最小絶対差の閾値（秒）。これ未満は変化なし扱い")
+    compare_parser.add_argument("--tag", action="append",
+                               help="タグで比較対象をフィルタ（複数可）")
     
     # config サブコマンド
     config_parser = subparsers.add_parser("config", help="設定管理")

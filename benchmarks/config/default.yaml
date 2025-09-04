@@ -20,6 +20,18 @@ benchmark:
   generate_charts: true
   chart_format: "png"  # png, svg, pdf, html
   chart_dpi: 150
+  
+  # 比較しきい値（柔軟化）
+  thresholds:
+    # 最小絶対差（秒）。これ未満は変化なし扱い
+    abs_threshold: 0.002
+    # タグ別の回帰しきい値（割合）。例: -0.10 は -10% 以上の悪化で回帰
+    by_tag:
+      alloc-heavy: -0.05
+      cpu-bound: -0.10
+    # ターゲット別の回帰しきい値（割合）。個別に上書き
+    by_target:
+      effects.noise.high_frequency: -0.15
 
 # ベンチマーク対象設定
 targets:

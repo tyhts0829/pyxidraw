@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/core/runner.py
+# hypothesis_version: 6.131.18
+
+[0.0, 0.1, 1.0, '  [%d/%d] %s...', '%s', '=', 'Benchmarking %s...', 'ERROR SUMMARY', 'Total results: %d', 'asemic_glyph', 'attractor', 'capsule', 'cone', 'coords', 'cylinder', 'geometry_size_bytes', 'grid', 'large', 'lissajous', 'max_workers', 'medium', 'metadata', 'polygon', 'polyhedron', 'shape_type', 'small', 'sphere', 'target_size_bytes', 'text', 'torus', 'unknown error', '✓', '✓ (%.1f fps)', '✓ (instant)', '✗', '✗ (%s)', '✗ (exception: %s)']

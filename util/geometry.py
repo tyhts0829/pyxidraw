@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
+import warnings
 
 import numpy as np
 from numba import njit
@@ -115,20 +116,20 @@ def transform_back(vertices: np.ndarray, rotation_matrix: np.ndarray, z_offset: 
 
 
 def geometry_transform_to_xy_plane(geometry: "Geometry") -> tuple["Geometry", np.ndarray, float]:
-    """GeometryをXY平面（z=0）に変換する。
+    """[Deprecated] Geometry を簡易に XY 平面へ“押しつぶす”近似変換。
 
-    Geometryの全頂点の最適な法線ベクトルがZ軸に沿うように回転させ、
-    その後z座標を0に平行移動する。
+    注意: 本関数は重心の z を 0 にするだけの簡易版です。法線に沿った厳密な
+    姿勢合わせは `transform_to_xy_plane(vertices)` を各ラインに適用して
+    `Geometry.from_lines(...)` で再構築してください。
 
-    Args:
-        geometry: 変換するGeometry
-
-    Returns:
-        以下のタプル:
-            - transformed_geometry: XY平面上のGeometry
-            - rotation_matrix: (3, 3) 使用された回転行列
-            - z_offset: z方向の平行移動量
+    戻り値の `rotation_matrix` は常に単位行列、`z_offset` は重心 z です。
+    将来的に削除予定のため、新規コードでは使用しないでください。
     """
+    warnings.warn(
+        "geometry_transform_to_xy_plane is deprecated. Use transform_to_xy_plane per line.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from engine.core.geometry import Geometry
     
     if len(geometry.coords) == 0:
@@ -158,18 +159,17 @@ def geometry_transform_to_xy_plane(geometry: "Geometry") -> tuple["Geometry", np
 
 
 def geometry_transform_back(geometry: "Geometry", rotation_matrix: np.ndarray, z_offset: float) -> "Geometry":
-    """Geometryを元の向きに戻す。
+    """[Deprecated] `geometry_transform_to_xy_plane` の簡易逆変換。
 
-    geometry_transform_to_xy_plane関数の逆変換。
-
-    Args:
-        geometry: 変換されたGeometry
-        rotation_matrix: (3, 3) geometry_transform_to_xy_planeから得られた回転行列
-        z_offset: geometry_transform_to_xy_planeから得られたz方向の平行移動量
-
-    Returns:
-        元の向きのGeometry
+    注意: 厳密な逆変換は `transform_back(vertices, R, z)` を各ラインに適用して
+    `Geometry.from_lines(...)` で再構築してください。本関数は互換目的の簡易版です。
+    将来的に削除予定のため、新規コードでは使用しないでください。
     """
+    warnings.warn(
+        "geometry_transform_back is deprecated. Use transform_back per line.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from engine.core.geometry import Geometry
     
     if len(geometry.coords) == 0:

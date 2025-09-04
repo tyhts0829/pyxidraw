@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/core/config.py
+# hypothesis_version: 6.131.18
+
+[0.1, 0.5, 1.0, 30.0, 150, '.json', '.yaml', '.yml', '1', 'BENCHMARK_OUTPUT_DIR', 'BENCHMARK_PARALLEL', 'BENCHMARK_TIMEOUT', 'benchmark', 'benchmark_results', 'chart_dpi', 'chart_format', 'circle', 'continue_on_error', 'effects', 'enabled', 'generate_charts', 'hexagon', 'high', 'high_res', 'identity', 'intensity', 'json', 'low', 'low_res', 'max_errors', 'max_workers', 'measurement_runs', 'medium', 'medium_res', 'n_sides', 'name', 'noise', 'on', 'output_dir', 'parallel', 'params', 'png', 'polygon', 'r', 'rotate', 'rotate_45', 'scale', 'scale_2x', 'shapes', 'sphere', 'subdivisions', 'targets', 'timeout_seconds', 'transform', 'triangle', 'true', 'utf-8', 'variations', 'w', 'warmup_runs', 'yaml', 'yes']

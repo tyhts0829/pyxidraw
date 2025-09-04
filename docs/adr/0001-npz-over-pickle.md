@@ -50,7 +50,6 @@
 
 ## 参照
 
-- `PROPOSAL_BREAKING_CHANGES.md` 「決定記録: polyhedron データ形式（pickle → npz）」
+- `docs/proposals/completed/PROPOSAL_BREAKING_CHANGES.md` 「決定記録: polyhedron データ形式（pickle → npz）」
 - `shapes/polyhedron.py`（npz 優先/自動移行の実装）
 - `scripts/convert_polyhedron_pickle_to_npz.py`
-

@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/ArcController/arc/enums/enums.py
+# hypothesis_version: 6.131.18
+
+['bipolar', 'disconnect_mode', 'dot', 'infinite', 'layer_select_mode', 'linear', 'midi_14_bit', 'midi_7_bit', 'perlin', 'potentiometer', 'preset_select_mode', 'random_ease', 'ready_mode', 'saw', 'sine', 'square', 'static', 'triangle', 'value_send_mode']

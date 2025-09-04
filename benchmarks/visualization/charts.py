@@ -22,7 +22,6 @@ class ChartGenerator:
     """統合チャート生成ファサードクラス
     
     分離されたチャート生成クラス群へのシンプルなインターフェースを提供。
-    レガシーAPIとの互換性を保ちつつ、新しい分離されたアーキテクチャを使用。
     """
     
     def __init__(self, output_dir: Optional[Path] = None):
@@ -38,28 +37,7 @@ class ChartGenerator:
         # データプロセッサ
         self.data_processor = ChartDataProcessor()
     
-    # === レガシー互換性API ===
-    
-    def create_performance_chart(self, results: Dict[str, BenchmarkResult], chart_type: str = "bar") -> str:
-        """パフォーマンスチャート作成（レガシー互換性）"""
-        successful_results = [r for r in results.values() if r.success]
-        
-        if not successful_results:
-            return ""
-        
-        # データを新しい形式に変換
-        chart_data = self._convert_results_to_chart_data(successful_results)
-        
-        if chart_type == "bar":
-            return self.bar_generator.create_timing_chart(chart_data, filename="performance_bar.png")
-        elif chart_type == "box":
-            return self.box_generator.create_timing_distribution_plot(chart_data, filename="performance_box.png")
-        elif chart_type == "heatmap":
-            return self.heatmap_generator.create_performance_matrix(chart_data, filename="performance_heatmap.png")
-        else:
-            raise ValueError(f"Unsupported chart type: {chart_type}")
-    
-    # === 新しい統一API ===
+    # === 統一API ===
     
     def create_bar_chart(self, data: List[Dict[str, Any]], x_column: str, y_column: str, 
                         title: str, output_path: str, **kwargs) -> str:
@@ -166,33 +144,4 @@ class ChartGenerator:
         )
 
 
-# === レガシー関数互換性 ===
-
-def create_performance_chart(results: Dict[str, BenchmarkResult], 
-                           chart_type: str = "bar", 
-                           output_dir: Optional[Path] = None) -> str:
-    """レガシー関数インターフェース"""
-    generator = ChartGenerator(output_dir)
-    return generator.create_performance_chart(results, chart_type)
-
-
-def create_timing_chart(data: List[Dict[str, Any]], output_path: str) -> str:
-    """実行時間チャート作成（レガシー互換）"""
-    generator = ChartGenerator()
-    return generator.create_timing_comparison_chart(data, output_path)
-
-
-def create_success_chart(data: List[Dict[str, Any]], output_path: str) -> str:
-    """成功率チャート作成（レガシー互換）"""
-    generator = ChartGenerator()
-    return generator.create_success_rate_chart(data, output_path)
-
-
-# === エクスポート ===
-
-__all__ = [
-    'ChartGenerator',
-    'create_performance_chart',
-    'create_timing_chart',
-    'create_success_chart'
-]
+__all__ = ['ChartGenerator']

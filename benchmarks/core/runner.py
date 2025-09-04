@@ -243,28 +243,7 @@ class UnifiedBenchmarkRunner:
             self.executor.handle_benchmark_exception(result, e)
         return result
     
-    def _benchmark_target_isolated(self, target: BenchmarkTarget):  # legacy dict for tests
-        """分離実行（テスト互換: レガシー辞書形式を返す）"""
-        # 形状かエフェクトかでルートを分ける
-        if self._is_shape_target(target):
-            times = self._benchmark_shape_generation(target)
-            ok = times is not None and len(times) > 0
-            avg = sum(times) / len(times) if times else 0.0
-            return {
-                "success": ok,
-                "average_times": {"generation": avg},
-                "timings": {"generation": times or []},
-            }
-        else:
-            # small のみ測定（runner の簡易実装）
-            times = self._benchmark_effect_application(target, self.test_geometries["small"])
-            ok = times is not None and len(times) > 0
-            avg = sum(times) / len(times) if times else 0.0
-            return {
-                "success": ok,
-                "average_times": {"small": avg},
-                "timings": {"small": times or []},
-            }
+    # レガシー辞書互換の簡易分離実行は削除しました
     
     def _benchmark_shape_generation(self, target: BenchmarkTarget) -> Optional[List[float]]:
         """形状生成のベンチマーク"""

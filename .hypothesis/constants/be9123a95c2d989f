@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/shapes/__init__.py
+# hypothesis_version: 6.131.18
+
+['AsemicGlyph', 'Attractor', 'BaseShape', 'Capsule', 'Cone', 'Cylinder', 'Grid', 'Lissajous', 'Polygon', 'Polyhedron', 'Sphere', 'Text', 'Torus', 'get_shape', 'is_shape_registered', 'list_shapes', 'shape']

@@ -1,0 +1,4 @@
+# file: /Users/tyhts0829/Documents/pyxidraw4/benchmarks/visualization/charts_facade.py
+# hypothesis_version: 6.131.18
+
+[1000, 'ChartGenerator', 'average_time', 'bar', 'benchmark_results', 'box', 'complexity', 'create_success_chart', 'create_timing_chart', 'heatmap', 'max_time', 'measurements', 'min_time', 'performance_bar.png', 'performance_box.png', 'plugin', 'std_dev', 'target', 'vertices_count']
