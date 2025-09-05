@@ -1,38 +1,113 @@
 """
-統合 Geometry 型（提案1）
+統合 Geometry 型（プロジェクト中核モジュール）
 
-coords   : float32 ndarray  (N, 3)   # 全頂点を 1 本の連続メモリで保持
-offsets  : int32   ndarray  (M+1,)   # 各線の開始 index（最後に N を追加）
-lines[i] = coords[offsets[i] : offsets[i+1]]
+本モジュールは、プロジェクト全体で使用する唯一の幾何表現 `Geometry` を提供する。
+`architecture.md` の方針に基づき、生成（Shapes/G）、変換（Geometry）、加工（Effects/E.pipeline）
+を明確に分離し、GPU 転送までの境界摩擦を最小化する。
 
-API 方針:
-- 変換は translate/scale/rotate/concat の最小セットのみ
-- すべて純粋（新インスタンスを返す）
+データモデル（不変条件）:
+- `coords: float32 ndarray (N, 3)` — 全頂点を 1 本の連続メモリで保持（行は XYZ）。
+- `offsets: int32 ndarray (M+1,)` — 各ポリラインの開始 index（末尾は必ず N）。
+- i 本目の線分配列は `coords[offsets[i] : offsets[i+1]]` で取り出せる。
+- dtype/形状は常に上記に正規化される（入力が 2D の場合は Z を 0 で補う）。
+
+API 方針（ADR 準拠）:
+- 変換は `translate/scale/rotate/concat` の最小セットのみを提供。
+- すべて純関数（副作用ゼロ）であり、新しい `Geometry` インスタンスを返す。
+- 変換チェーンは `Geometry` 側で完結し、エフェクトは `E.pipeline` に委譲する。
+
+ダイジェスト（キャッシュ連携）:
+- `digest: bytes` は `coords/offsets` 内容から算出する短いハッシュ指紋。
+- パイプラインの単層キャッシュ鍵 `(geometry_digest, pipeline_key)` の片翼として用いられる。
+- 環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（無効化時の詳細は `digest` docstring 参照）。
+
+構築ユーティリティ:
+- `Geometry.from_lines(lines)` は多様な入力（list/ndarray, 2D/3D, 1D ベクトル）から
+  上記データモデルへ正規化する。無効な形状は `ValueError`。
+
+性能上の注意:
+- 可能な限りコピーを避け、dtype 変換のみで整形する。大規模データでも可読性と速度の両立を狙う。
+- ダイジェスト計算では `np.ascontiguousarray(...).tobytes()` により安定したバイト列へ変換して
+  ハッシュ化する（初回のみコピー、以後はキャッシュされた `digest` を再利用）。
+
+直感図（複数線の格納）:
+
+    # 例1: 2 本のポリライン（線0は3点、線1は2点）
+    #
+    # coords (N=5)
+    #   idx  xy z
+    #   0   [0, 0, 0]
+    #   1   [1, 0, 0]
+    #   2   [1, 1, 0]
+    #   3   [2, 2, 0]
+    #   4   [3, 2, 0]
+    # offsets (M+1=3): [0, 3, 5]
+    #
+    # 取り出し:
+    #   線0 = coords[0:3]
+    #   線1 = coords[3:5]
+
+    # 例2: 3 本のポリライン（2D 入力は Z=0 で補完）
+    #   入力線:  L0=[(10,10)] , L1=[(0,0,0),(1,0,0),(1,1,0),(0,1,0)] , L2=[(5,5),(6,6)]
+    #   正規化後 coords (N=7):
+    #     [[10,10,0], [0,0,0], [1,0,0], [1,1,0], [0,1,0], [5,5,0], [6,6,0]]
+    #   offsets (M+1=4): [0, 1, 5, 7]
+    #   → L0=coords[0:1], L1=coords[1:5], L2=coords[5:7]
+
+補足:
+- 空ジオメトリは `coords.shape==(0,3)`, `offsets==[0]`（線本数 M=0）。
+- 単頂点の線も許容（例: `coords=[[0,0,0]]`, `offsets=[0,1]`）。
+- `concat` は後続の `offsets[1:]` に先行頂点数を加算して結合する。
+
+使用例:
+    from api import G, E
+    g = G.grid(divisions=10).scale(50, 50, 1).translate(100, 100, 0)
+    pipe = (E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.5)).build())
+    out = pipe(g)  # Geometry -> Geometry
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
 from dataclasses import dataclass, field
 from typing import Iterable, Tuple
-import os
-import hashlib
 
 import numpy as np
+
 from common.types import Vec3
 
 
 def _digest_enabled() -> bool:
+    """環境変数でダイジェスト機能の有効/無効を判定する小関数。"""
     v = os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0")
     return v not in ("1", "true", "TRUE", "True")
 
 
 def _set_digest_if_enabled(obj: "Geometry") -> None:
+    """必要なら `obj._digest` を計算してセットするヘルパ。
+
+    - コンストラクタ直後/変換直後に呼び出す。
+    - 無効化時（ベンチ比較用）には何もしない。
+    """
     if _digest_enabled():
         obj._digest = obj._compute_digest()
 
 
 @dataclass(slots=True)
 class Geometry:
+    """統一幾何データ構造。
+
+    フィールド:
+    - `coords (N,3) float32`: すべての点列を連結した配列。
+    - `offsets (M+1,) int32`: 各ポリラインの開始 index（末尾は N）。
+    - `_digest: bytes | None`: 有効時のみ保持する内容ハッシュ（内部用途）。
+
+    設計意図:
+    - 表現を 1 種に統一し、Shapes/E.pipeline/Renderer 間の境界を単純化する。
+    - 変換はインスタンスを複製する純関数（テスト容易・キャッシュ容易）。
+    """
+
     coords: np.ndarray  # (N, 3) float32
     offsets: np.ndarray  # (M+1,) int32
     _digest: bytes | None = field(default=None, repr=False, compare=False, init=False)
@@ -40,10 +115,29 @@ class Geometry:
     # ── ファクトリ ───────────────────
     @classmethod
     def from_lines(cls, lines: Iterable[np.ndarray]) -> "Geometry":
+        """多様な線分入力を `Geometry` に正規化するファクトリ。
+
+        受け入れる入力:
+        - 各要素は座標列（list/ndarray いずれも可）。
+        - 2D は Z=0 を補完。
+        - 1D ベクトルは長さが 3 の倍数である必要があり、(x,y,z) の並びとして
+          `(-1, 3)` にリシェイプされる。
+
+        戻り値:
+        - `coords (N,3) float32` と `offsets (M+1,) int32` を持つ `Geometry`。
+
+        例外:
+        - `ValueError`: 列の shape が (K,2)/(K,3)/(3K,) いずれにも適合しない場合、
+          または 1D ベクトル長が 3 の倍数でない場合。
+        """
         np_lines: list[np.ndarray] = []
         for line in lines:
             arr = np.asarray(line, dtype=np.float32)
             if arr.ndim == 1:
+                if arr.size % 3 != 0:
+                    raise ValueError(
+                        "1D input length must be a multiple of 3 to form (x,y, z) triplets"
+                    )
                 arr = arr.reshape(-1, 3)
             elif arr.shape[1] == 2:
                 zeros = np.zeros((arr.shape[0], 1), dtype=np.float32)
@@ -72,16 +166,24 @@ class Geometry:
 
     # ── 基本操作（すべて純粋） ────────
     def as_arrays(self, *, copy: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+        """内部配列を返すユーティリティ。
+
+        Args:
+            copy: True の場合はディープコピーを返す。
+
+        Returns:
+            `(coords, offsets)` のタプル。
+        """
         if copy:
             return self.coords.copy(), self.offsets.copy()
         return self.coords, self.offsets
 
     @property
     def is_empty(self) -> bool:
-        """座標配列が空かの簡易判定。読みやすさ向上のための糖衣。"""
+        """座標配列が空かの簡易判定（読みやすさのための糖衣）。"""
         return self.coords.size == 0
 
-    # ---- ダイジェスト（スナップショット） ---------------------------------
+    # ---- ダイジェスト（スナップショットID） ---------------------------------
     # Digest 概要:
     # - Geometry（coords/offsets）の内容から計算する短いハッシュ指紋（スナップショットID）。
     # - 主用途は Pipeline のキャッシュ鍵（入力ジオメトリの digest × パイプライン定義のハッシュ）。
@@ -92,24 +194,24 @@ class Geometry:
     # - 大規模ジオメトリでは初回のハッシュ計算にコストがかかりますが、ヒット率と
     #   同一性判定の安定性のために採用しています。
     def _compute_digest(self) -> bytes:
-        """coords/offsets から決定的なダイジェストを計算（blake2b-128）。"""
+        """`coords/offsets` から決定的なダイジェストを計算（blake2b-128）。"""
         c = np.ascontiguousarray(self.coords).view(np.uint8)
         o = np.ascontiguousarray(self.offsets).view(np.uint8)
         h = hashlib.blake2b(digest_size=16)
-        h.update(c)
-        h.update(o)
+        # mypy: ndarray を bytes に変換して渡す（コピー発生は一度きりのため許容）
+        h.update(c.tobytes())
+        h.update(o.tobytes())
         return h.digest()
 
     @property
     def digest(self) -> bytes:
         """ジオメトリのダイジェスト（必要時に遅延計算）。
 
-        Notes
-        -----
-        - `PXD_DISABLE_GEOMETRY_DIGEST=1` 設定時は意図的に例外を送出します。
-          その場合でも `api.pipeline` は配列から都度ハッシュを計算する
-          フォールバックを持つため、キャッシュは機能を継続します。
-        - 通常は一度計算して保持し、以降の同一性判定に再利用します。
+        注意:
+        - `PXD_DISABLE_GEOMETRY_DIGEST=1` 設定時は例外を送出する。
+          その場合でも `api.pipeline` 側は配列からの都度計算でフォールバックするため、
+          キャッシュ機構は有効に保たれる。
+        - 通常は初回アクセスで計算して保持し、以後の同一性判定を高速化する。
         """
         # 環境変数で無効化可能（ベンチ用）
         if not _digest_enabled():
@@ -119,7 +221,19 @@ class Geometry:
         return self._digest
 
     def translate(self, dx: float, dy: float, dz: float = 0.0) -> "Geometry":
+        """平行移動（純関数）。
+
+        Args:
+            dx, dy, dz: 各軸の移動量。
+
+        Returns:
+            新しい `Geometry`（元は不変）。
+        """
         if self.is_empty:
+            # 空ジオメトリは移動しても内容は変わらない（no-op）。
+            # ただし本APIは常に“新しいインスタンス”を返す純関数で統一しているため、
+            # ここでもコピーを作成して返す。これにより呼び出し側での別参照性が保証され、
+            # digest（有効時）の一貫性や、配列共有による意図せぬエイリアシングを避けられる。
             obj = Geometry(self.coords.copy(), self.offsets.copy())
             _set_digest_if_enabled(obj)
             return obj
@@ -129,7 +243,18 @@ class Geometry:
         _set_digest_if_enabled(obj)
         return obj
 
-    def scale(self, sx: float, sy: float | None = None, sz: float | None = None, center: Vec3 = (0.0, 0.0, 0.0)) -> "Geometry":
+    def scale(
+        self, sx: float, sy: float | None = None, sz: float | None = None, center: Vec3 = (0.0, 0.0, 0.0)
+    ) -> "Geometry":
+        """拡大縮小（純関数）。
+
+        Args:
+            sx, sy, sz: 各軸スケール。`sy/sz` 省略時は等方拡大。
+            center: 拡大の基準点（pivot）。
+
+        Returns:
+            新しい `Geometry`。
+        """
         if sy is None:
             sy = sx
         if sz is None:
@@ -150,7 +275,7 @@ class Geometry:
         new[:, 1] += cy
         new[:, 2] += cz
         obj = Geometry(new, self.offsets.copy())
-        obj._digest = obj._compute_digest()
+        _set_digest_if_enabled(obj)
         return obj
 
     def rotate(
@@ -160,9 +285,18 @@ class Geometry:
         z: float = 0.0,
         center: Vec3 = (0.0, 0.0, 0.0),
     ) -> "Geometry":
+        """回転（純関数）。X→Y→Z の順に右手系で適用。
+
+        Args:
+            x, y, z: 各軸回転角（ラジアン）。
+            center: 回転中心（pivot）。
+
+        Returns:
+            新しい `Geometry`。
+        """
         if self.is_empty or (x == 0 and y == 0 and z == 0):
             obj = Geometry(self.coords.copy(), self.offsets.copy())
-            obj._digest = obj._compute_digest()
+            _set_digest_if_enabled(obj)
             return obj
 
         cx, cy, cz = center
@@ -202,6 +336,11 @@ class Geometry:
         return obj
 
     def concat(self, other: "Geometry") -> "Geometry":
+        """ポリライン集合の連結（純関数）。
+
+        - `coords` を縦方向に結合し、`offsets` は後段の先頭をシフトして統合する。
+        - 空集合に対しては相手のコピー/自己のコピーを返す。
+        """
         if self.is_empty:
             obj = Geometry(other.coords.copy(), other.offsets.copy())
             _set_digest_if_enabled(obj)
@@ -220,7 +359,9 @@ class Geometry:
 
     # 演算子糖衣
     def __add__(self, other: "Geometry") -> "Geometry":
+        """糖衣: `concat` のエイリアス。"""
         return self.concat(other)
 
     def __len__(self) -> int:
+        """ポリライン本数（`M`）を返す。"""
         return int(self.offsets.shape[0] - 1) if self.offsets.size > 0 else 0

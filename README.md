@@ -75,13 +75,13 @@ PYXIDRAW_HEADLESS=1 python tutorials/01_basic_shapes.py
 
 ### 角度・スケールの取り扱い（指針）
 
-- 角度入力は 0..1 を基本とし、内部で 0..2π に正規化（`effects.rotation/transform`）。推奨は `angles_rad` または `angles_deg` の明示指定です。
+- 角度入力は `angles_rad`（ラジアン）を明示してください（`effects.rotation/transform`）。0..1 の暗黙指定や `angles_deg` は使用しません。
 - `translation` は物理単位（mm）を直接指定。
 - `scaling` は `(sx, sy, sz)` の倍率指定。スカラー/1要素/3要素を受け付けます。
 
 命名の推奨:
-- 中心は `pivot` を推奨（互換: `center`）。
-- 角度は `angles_rad` / `angles_deg` を明示（0..1 の暗黙指定は非推奨）。
+- 中心は `pivot` を使用します。
+- 角度は `angles_rad` を明示します（0..1 の暗黙指定は非推奨）。
 
 ### 複雑な例（main.py）
 
@@ -142,7 +142,7 @@ out = (E.pipeline
 - 正規化系: 0..1 を受け取り内部でレンジに写像
   - 例: `rotate.angles_rad`（ラジアン）, `extrude.distance/subdivisions`（0..1→上限レンジ）, `offset.distance/segments_per_circle`
 - 物理/実値系: 座標単位（mm相当）・そのままの値
-  - 例: `translate.offset_*`, `dash.dash_length/gap_length`, `ripple.amplitude`, `wobble.amplitude`
+  - 例: `translate.delta`, `dash.dash_length/gap_length`, `ripple.amplitude`, `wobble.amplitude`
 - 空間周波数: `wave/wobble.frequency` は「座標1あたりの周期数 [cycles per unit]」
 
 ### エンジン (engine/)
@@ -223,6 +223,25 @@ export PXD_CACHE_DISABLED=1
 # キャッシュサイズ上書き（デフォルト128）
 export PXD_CACHE_MAXSIZE=64
 ```
+
+パイプライン（`api.pipeline.Pipeline`）の単層キャッシュも環境変数で制御できます。
+
+```bash
+# パイプラインキャッシュの最大保持数（LRU 風）。0 で無効、未設定(None)で無制限。
+export PXD_PIPELINE_CACHE_MAXSIZE=128
+```
+
+ジオメトリダイジェスト（`Geometry.digest`）は環境変数で無効化できます。無効化時でもパイプラインのキャッシュはフォールバックハッシュで機能します。
+
+```bash
+# Geometry のダイジェスト計算を無効化（ベンチ比較や計測向け）
+export PXD_DISABLE_GEOMETRY_DIGEST=1
+```
+
+補足:
+- `PXD_CACHE_*`: 形状生成（`shapes/*`）の LRU キャッシュ制御。
+- `PXD_PIPELINE_CACHE_MAXSIZE`: パイプラインの単層キャッシュ上限（0 で無効）。
+- `PXD_DISABLE_GEOMETRY_DIGEST`: Geometry のダイジェスト保持を無効化（パイプラインはフォールバックで継続）。
 
 ### 登録済みエフェクトの確認（開発向け）
 

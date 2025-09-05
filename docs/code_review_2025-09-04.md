@@ -7,7 +7,7 @@
 ## サマリ
 - 体系化: 単一 `Geometry` 型 + 関数エフェクト + 単一パイプライン + 単層キャッシュという設計は簡潔で拡張に強い。
 - 安全性: polyhedron データ形式を pickle → npz に一本化し、任意コード実行リスクを回避済み。Pipeline の spec 検証も導入済み。
-- 一貫性: 角度は `angles_rad/angles_deg`（旧 `rotate` も受理）で明示、0..1→レンジ写像の方針、`Vec3` 型別名の横断適用で API はほぼ統一。
+- 一貫性: 角度は `angles_rad` のみを使用（`angles_deg` と旧 `rotate(0..1)` は廃止）。`Vec3` 型別名の横断適用で API はほぼ統一。
 - 可観測性: engine 層の logging への統一・renderer の DEBUG ログでデバッグしやすさ向上。
 - 品質: テスト 231 件が通過（回帰なし）。README/AGENTS/ADR 等の文書整備も進捗良好。
 

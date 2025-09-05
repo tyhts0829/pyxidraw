@@ -8,7 +8,7 @@ Usage:
     g = g.scale(100, 100, 100).translate(100, 100, 0)
 
     pipeline = (E.pipeline
-                  .displace(intensity=0.3)
+                  .displace(amplitude_mm=0.3)
                   .fill(density=0.5)
                   .build())
     result = pipeline(g)

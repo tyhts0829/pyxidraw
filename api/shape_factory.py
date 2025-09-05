@@ -1,15 +1,52 @@
 """
-G - 形状ファクトリ（関数・Geometryベース）
+G - 形状ファクトリ（高レベル API エントリ）
 
-レジストリに登録されたシェイプ生成器を呼び出し、`Geometry` を返す。
-従来の `GeometryAPI` 依存やチェーンは廃止し、変換は `Geometry` の
-`translate/scale/rotate` または `E.pipeline` を利用する。
+概要:
+- ユーザコードからは `from api import G` として利用し、`G.sphere(...)` のような
+  「関数的」な呼び出しで `Geometry` を生成する。
+- 実体はレジストリ（`shapes.registry`）に登録済みの各シェイプクラス（`BaseShape` 派生）を
+  動的ディスパッチで解決し、インスタンス化→`generate(**params)` を呼ぶ薄いファサード。
+- 生成結果は必ず `engine.core.geometry.Geometry`（以下 Geometry）に揃える。
+  旧実装の互換として、`(coords, offsets)` 等の「線分リスト」形式が返る場合は
+  `Geometry.from_lines(...)` で包む。
+
+プロジェクト内での役割（architecture.md 要約）:
+- 形状生成の単一入口: `G` が「どのシェイプをどう作るか」を一手に引き受ける。
+- 責務の境界: "生成" は `G`/各 `Shape`、"変換" は `Geometry.translate/scale/rotate/concat`、
+  "加工" は `E.pipeline` に委譲。シェイプ側での変換パラメータは互換のため残るが推奨しない。
+- キャッシュの責務: 形状生成の LRU は本モジュール（`ShapeFactory._cached_shape`）に集約
+  （ADR 0011）。`BaseShape` 側の LRU は既定で無効化（必要時のみ opt-in）。
+
+設計上のポイント:
+- 動的ディスパッチ: メタクラス `ShapeFactoryMeta` とインスタンス `__getattr__` の双方で
+  `G.sphere(...)`/`ShapeFactory.sphere(...)` をサポート（クラス/インスタンスどちらからでも可）。
+- 高速化と再現性: `_params_to_tuple()` でパラメータを「順序安定かつハッシュ可能」へ正規化し、
+  `functools.lru_cache` による 1 プロセス内 LRU キャッシュを掛ける。
+- 例外方針: 未登録名は `AttributeError`（動的属性の一貫性）、生成器側の失敗は各シェイプが責任。
+
+使用例:
+    from api import G, E
+
+    # 形状の生成と Geometry 変換
+    g = G.sphere(subdivisions=0.5).scale(100, 100, 100).translate(100, 100, 0)
+
+    # パイプラインの適用（加工は E.pipeline に委譲）
+    pipe = (E.pipeline.displace(amplitude_mm=0.2)
+                        .fill(density=0.5)
+                        .build())
+    g2 = pipe(g)
+
+運用メモ:
+- 本モジュールの LRU は `functools.lru_cache(maxsize=128)` 固定（環境変数では切り替えない）。
+  `BaseShape` の LRU（無効が既定）は `PXD_CACHE_DISABLED`/`PXD_CACHE_MAXSIZE` で調整可能（共通基盤）。
+- スレッドセーフティ: CPython の `lru_cache` は内部ロックを持つため、並列呼び出しでも基本安全。
+  ただし各シェイプの `generate` は純粋関数（副作用なし）であることを前提にする。
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import List, Sequence, Union
+from typing import List, Sequence, Union, Iterable
 
 import numpy as np
 
@@ -23,7 +60,9 @@ import shapes.lissajous
 import shapes.polygon
 import shapes.polyhedron
 
-# 形状の登録を実行（全て直接インポート）
+# レジストリ登録を副作用で完了させるため、形状モジュールを明示 import。
+# 新しいシェイプを追加する場合は `shapes/` にクラスを実装し、
+# `@shapes.registry.shape` デコレータで登録するだけで `G.<name>(...)` が解決される。
 import shapes.sphere
 import shapes.text
 import shapes.torus
@@ -32,10 +71,20 @@ from .shape_registry import get_shape_generator, list_registered_shapes
 
 
 class ShapeFactoryMeta(type):
-    """ShapeFactoryのメタクラス - クラスレベルでの動的属性アクセスを可能にする。"""
+    """ShapeFactory のメタクラス。
+
+    目的:
+    - クラスレベル（`ShapeFactory.sphere(...)` のような呼び出し）でも動的属性を解決し、
+      レジストリにあるシェイプ名を関数として露出する。
+    - 返す関数は `ShapeFactory._cached_shape(...)` を経由し、LRU キャッシュの恩恵を受ける。
+    """
 
     def __getattr__(cls, name: str):
-        """クラスレベルでの動的属性アクセス。"""
+        """クラスレベルでの動的属性アクセス。
+
+        指定された `name` がシェイプレジストリに存在する場合、
+        `shape_method(**params) -> Geometry` を返す。存在しない場合は `AttributeError`。
+        """
         try:
             get_shape_generator(name)
 
@@ -55,18 +104,35 @@ class ShapeFactoryMeta(type):
 
 
 class ShapeFactory(metaclass=ShapeFactoryMeta):
-    """高性能キャッシュ付き形状ファクトリ（G）。
+    """高性能キャッシュ付き形状ファクトリ（`G` の実体）。
 
-    Usage:
+    責務:
+    - 形状名→生成関数の動的ディスパッチ
+    - 生成結果の型統一（常に `Geometry` を返す）
+    - 形状生成結果の LRU キャッシュ（maxsize=128）
+
+    使い方:
         from api import G
-        sphere = G.sphere(subdivisions=0.5)
-        polygon = G.polygon(n_sides=6)
+        g1 = G.sphere(subdivisions=0.5)
+        g2 = G.polygon(n_sides=6)
     """
 
     @staticmethod
     @lru_cache(maxsize=128)
     def _cached_shape(shape_name: str, params_tuple: tuple) -> Geometry:
-        """内部キャッシュ機能。パラメータのタプルでキャッシュ。"""
+        """登録シェイプを解決・生成し、結果を LRU キャッシュ。
+
+        Args:
+            shape_name: シェイプ名（レジストリキー）
+            params_tuple: `_params_to_tuple(**params)` が返すハッシュ可能タプル
+
+        Returns:
+            Geometry: 生成された形状（必要に応じて `from_lines` でラップ）
+
+        Note:
+            - キャッシュキーは `(shape_name, params_tuple)`。
+            - 生成器（`BaseShape.generate`）が Geometry 以外の互換形式を返すケースを吸収する。
+        """
         params_dict = dict(params_tuple)
 
         # レジストリから形状生成器を取得
@@ -83,7 +149,17 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
 
     @staticmethod
     def _params_to_tuple(**params) -> tuple:
-        """パラメータ辞書をキャッシュ可能なタプルに変換。"""
+        """パラメータ辞書を「順序安定・ハッシュ可能」なタプルへ正規化。
+
+        - dict は key でソートし `(key, value)` のタプル列に。
+        - list/tuple は要素ごとに再帰変換。
+        - NumPy 配列は `flatten()` 後の値タプルに変換（型や dtype 情報は失われる点に注意）。
+
+        注意:
+        - 非推奨だが、NumPy 配列をパラメータに渡した場合は値列のみがキーに反映される。
+          形状生成に dtype を利用している場合は衝突の温床になり得るため、
+          可能なら Python の組込みイミュータブル型へ前処理して渡すことを推奨。
+        """
 
         # ネストした値も含めて再帰的にソート・変換
         def make_hashable(obj):
@@ -103,28 +179,28 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
     # === ユーザー拡張 ===
 
     @staticmethod
-    def from_lines(lines: Sequence[Union[np.ndarray, List]]) -> Geometry:
-        """線分リストから形状を作成。
+    def from_lines(lines: Iterable[np.ndarray]) -> Geometry:
+        """線分集合（ポリライン列）から `Geometry` を構築する補助。
 
         Args:
-            lines: 線分のリスト
+            lines: `[(N_i, 3) ndarray]` を要素とするイテラブル
 
         Returns:
-            Geometry: 作成された形状
+            Geometry: `coords`/`offsets` を持つ統一 Geometry
         """
         return Geometry.from_lines(lines)
 
     @staticmethod
     def empty() -> Geometry:
-        """空の形状を作成。
-
-        Returns:
-            Geometry: 空の形状
-        """
+        """空の `Geometry`（頂点ゼロ）を返すユーティリティ。"""
         return Geometry.from_lines([])
 
     def __getattr__(self, name: str):
-        """動的属性アクセスでレジストリの形状を呼び出し可能にする。"""
+        """インスタンスレベルでの動的属性アクセス。
+
+        `G.<name>(**params) -> Geometry` を提供。クラスレベルと同じロジックで
+        レジストリ解決とキャッシュを行う。
+        """
         # レジストリに登録されているか確認
         try:
             get_shape_generator(name)
@@ -143,21 +219,21 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
 
     @classmethod
     def list_shapes(cls) -> List[str]:
-        """利用可能な形状の一覧を返す。"""
+        """利用可能な形状（レジストリ登録済み名）の一覧を返す。"""
         return list_registered_shapes()
 
     # === キャッシュ管理 ===
 
     @classmethod
     def clear_cache(cls):
-        """形状キャッシュをクリア。"""
+        """形状生成結果の LRU キャッシュをクリア（デバッグ/メモリ回収用）。"""
         cls._cached_shape.cache_clear()
 
     @classmethod
     def cache_info(cls):
-        """キャッシュ情報を取得。"""
+        """`functools.lru_cache` の統計情報を取得（ヒット率等の観察に）。"""
         return cls._cached_shape.cache_info()
 
 
-# シングルトンインスタンス（G）
+# シングルトンインスタンス（`from api import G` で公開）
 G = ShapeFactory()

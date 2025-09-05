@@ -26,3 +26,10 @@ exclude = [
 [tool.ruff.lint]
 select = ["F401", "F841", "E9", "E999"]
 
+[tool.mypy]
+# 外部ライブラリの型スタブ欠如による雑音を抑制
+ignore_missing_imports = true
+python_version = "3.10"
+# リポジトリ全体を対象にした実行でもノイズを抑えるための除外
+# （必要になったら段階的に外していきます）
+exclude = "(^|/)(benchmarks|docs|screenshots|scripts|tutorials|benchmark_results|.pytest_cache)/"

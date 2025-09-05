@@ -33,7 +33,7 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
     # 新パイプライン（関数エフェクト）
     sphere2 = (
         E.pipeline
-        .displace(intensity=cc.get(5, 0.3))
+        .displace(amplitude_mm=cc.get(5, 0.3))
         .fill(density=cc.get(6, 0.6))
         .build()
     )(sphere)

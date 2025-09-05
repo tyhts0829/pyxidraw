@@ -13,7 +13,7 @@ def build_geometry(t: float, cc: dict) -> "Geometry":
     # 関数パイプライン
     pipeline = (
         E.pipeline
-        .displace(intensity=cc.get(2, 0.3), time=t)
+        .displace(amplitude_mm=cc.get(2, 0.3), t_sec=t)
         .rotate(pivot=(100, 100, 0), angles_rad=(0.1 * 2 * 3.141592653589793, 0.1 * 2 * 3.141592653589793, 0.1 * 2 * 3.141592653589793))
         .build()
     )

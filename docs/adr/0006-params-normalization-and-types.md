@@ -7,7 +7,7 @@
 エフェクト間でパラメータのスケールや角度単位がバラバラだと学習コストが高い。
 
 ## 決定
-- 角度は原則ラジアン（`angles_rad`）。必要に応じて `angles_deg`（度）/ 旧 `rotate`（0..1→2π）を受理して正規化。
+- 角度はラジアン（`angles_rad`）のみを受理します。`angles_deg` や旧 `rotate`（0..1→2π）の暗黙指定は廃止します。
 - 距離/分割数は 0..1 をレンジに写像（`norm_to_range`/`norm_to_int`）。物理単位を明示する場合は接尾辞（例: `*_mm`）。
 - 物理単位を取るもの（例: translate/offset/dash/ripple amplitude）は実値（mm相当）。
 - ベクトル型は `common/types.py` の `Vec2/Vec3` を使う。

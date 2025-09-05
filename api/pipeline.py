@@ -28,8 +28,9 @@ def _geometry_hash(g: Geometry) -> bytes:
         c = np.ascontiguousarray(c).view(np.uint8)
         o = np.ascontiguousarray(o).view(np.uint8)
         h = hashlib.blake2b(digest_size=16)
-        h.update(c)
-        h.update(o)
+        # Fallback 経路のためコピーを許容し、bytes に変換して渡す
+        h.update(c.tobytes())
+        h.update(o.tobytes())
         return h.digest()
 
 
@@ -127,6 +128,7 @@ class PipelineBuilder:
         self._steps: List[Step] = []
         # 既定サイズは環境変数から上書き可能
         self._cache_maxsize: int | None = None
+        self._strict: bool = False
         _env = os.getenv("PXD_PIPELINE_CACHE_MAXSIZE")
         if _env is not None:
             try:
@@ -151,7 +153,41 @@ class PipelineBuilder:
         self._cache_maxsize = maxsize
         return self
 
+    # オプション: 厳格検証を有効化（ビルド時にパラメータ名を検査）
+    def strict(self, enabled: bool = True) -> "PipelineBuilder":
+        """Enable strict parameter-name validation at build time.
+
+        - 各ステップのパラメータ名をエフェクト関数のシグネチャと突き合わせ、未知キーがあれば TypeError を送出。
+        - `**kwargs` を受け取る関数は除外（未知キー許容）。
+        """
+        self._strict = enabled
+        return self
+
     def build(self) -> Pipeline:
+        if self._strict:
+            for i, st in enumerate(self._steps):
+                fn = get_effect(st.name)
+                try:
+                    sig = inspect.signature(fn)
+                except ValueError:
+                    # Builtins などはスキップ
+                    continue
+                has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+                if has_var_kw:
+                    continue
+                allowed = {
+                    p.name
+                    for p in sig.parameters.values()
+                    if p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                }
+                if "g" in allowed:
+                    allowed.remove("g")
+                unknown = [k for k in st.params.keys() if k not in allowed]
+                if unknown:
+                    allowed_sorted = ", ".join(sorted(allowed))
+                    raise TypeError(
+                        f"step[{i}] effect '{st.name}' has unknown params: {unknown}. Allowed: [{allowed_sorted}]"
+                    )
         return Pipeline(self._steps, cache_maxsize=self._cache_maxsize)
 
     def __call__(self, g: Geometry) -> Geometry:

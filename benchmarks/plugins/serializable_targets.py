@@ -86,7 +86,7 @@ class SerializableEffectTarget:
             tx, ty, tz = (translate + (0, 0, 0))[:3] if isinstance(translate, tuple) else (
                 translate[0], translate[1], translate[2]
             )
-            pipeline = E.pipeline.translate(offset_x=float(tx), offset_y=float(ty), offset_z=float(tz)).build()
+            pipeline = E.pipeline.translate(delta=(float(tx), float(ty), float(tz))).build()
             return pipeline(geom)
         elif self.effect_type == "rotate":
             E = _get_cached_module("api.pipeline")
@@ -99,13 +99,13 @@ class SerializableEffectTarget:
             E = _get_cached_module("api.pipeline")
             intensity = self.params.get("intensity", 0.5)
             frequency = self.params.get("frequency", 1.0)
-            pipeline = E.pipeline.displace(intensity=intensity, frequency=frequency).build()
+            pipeline = E.pipeline.displace(amplitude_mm=intensity, spatial_freq=frequency).build()
             return pipeline(geom)
         elif self.effect_type == "filling":
             E = _get_cached_module("api.pipeline")
             density = self.params.get("spacing", 10.0) / 20.0  # spacing → density 変換の暫定
             angle = self.params.get("angle", 0.0)
-            pipeline = E.pipeline.fill(density=density, angle=angle).build()
+            pipeline = E.pipeline.fill(density=density, angle_rad=angle).build()
             return pipeline(geom)
         elif self.effect_type == "array":
             E = _get_cached_module("api.pipeline")

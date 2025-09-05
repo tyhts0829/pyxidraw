@@ -60,8 +60,8 @@
 - 提案: `shapes.registry.get_registry().unregister(name)` を呼ぶ実装に置換。
 
 ### 10) 命名/用語の揺れ
-- 観測: `pivot/center`, `angles_rad/angles_deg/rotate` の併存。
-- 提案: README に推奨系（`pivot`, `angles_rad`）を太字で強調し、旧名は互換扱いに注記。
+- 観測: `pivot/center` の併存表記が残存。角度は `angles_rad` のみが正。
+- 提案: README など公開ドキュメントは `pivot`/`angles_rad` のみを使用し、旧名（`center`/`angles_deg`/`rotate(0..1)`）は移行ガイド内の注記に限定する。
 
 ### 11) スクリプトの `print` ログ
 - 観測: `scripts/convert_*` 系などに `print` ベースのログが残存。

@@ -18,3 +18,4 @@ venv/
 *.egg
 benchmark_results/
 engine/io/cc/
+.pytest_cache/

@@ -8,6 +8,7 @@ import os
 import numpy as np
 
 from engine.core.geometry import Geometry
+from engine.core.tickable import Tickable
 from util.constants import CANVAS_SIZES
 
 
@@ -78,6 +79,17 @@ def run_sketch(
             except Exception:
                 midi_strict = False
 
+    # ローカルな Null 実装（型安定のため 1 箇所に定義）
+    class _NullMidi:
+        def snapshot(self) -> Mapping[int, int]:  # CC は int→int の想定（外部で正規化）
+            return {}
+
+        def tick(self, dt: float) -> None:
+            return None
+
+    midi_service: Tickable
+    cc_snapshot_fn: Callable[[], Mapping[int, int]]
+
     if use_midi:
         try:
             # 遅延インポート（依存未導入環境でもフォールバック可能に）
@@ -89,7 +101,9 @@ def run_sketch(
             if not getattr(midi_manager, "controllers", {}):
                 raise RuntimeError("No MIDI devices connected")
             midi_service = MidiService(midi_manager)
-            cc_snapshot_fn = midi_service.snapshot
+            # MidiService は Tickable を実装し、snapshot() を提供する。
+            # 型: Callable[[], Mapping[int, int]] に合わせて渡す。
+            cc_snapshot_fn = midi_service.snapshot  # type: ignore[assignment]
         except Exception as e:  # ImportError / InvalidPortError / RuntimeError など
             logger = logging.getLogger(__name__)
             if midi_strict:
@@ -98,26 +112,11 @@ def run_sketch(
             else:
                 logger.warning("MIDI unavailable; falling back to NullMidi: %s", e)
                 midi_manager = None
-
-                class _NullMidi:
-                    def snapshot(self):
-                        return {}
-
-                    def tick(self, dt: float) -> None:
-                        return None
-
                 midi_service = _NullMidi()
                 cc_snapshot_fn = midi_service.snapshot
     else:
         midi_manager = None
         # ダミーのスナップショット（常に空のCC）
-        class _NullMidi:
-            def snapshot(self):
-                return {}
-
-            def tick(self, dt: float) -> None:
-                return None
-
         midi_service = _NullMidi()
         cc_snapshot_fn = midi_service.snapshot
 
@@ -127,7 +126,7 @@ def run_sketch(
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)
 
     # ---- ④ Window & ModernGL --------------------------------------
-    rendering_window = RenderWindow(window_width, window_height, bg_color=background)
+    rendering_window = RenderWindow(window_width, window_height, bg_color=background)  # type: ignore[abstract]
     mgl_ctx: moderngl.Context = moderngl.create_context()
     mgl_ctx.enable(moderngl.BLEND)
     mgl_ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)

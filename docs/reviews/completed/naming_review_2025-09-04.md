@@ -54,7 +54,7 @@
   - `scale`: 各軸倍率。`1.0` で等倍。
   - `pivot`: 変換中心。
 - `rotate(angles_rad: Vec3, *, pivot: Vec3=(0,0,0))`
-  - `angles_rad`: ラジアン指定。`angles_deg` も受理（どちらか一方）。
+  - `angles_rad`: ラジアン指定（`angles_deg` は廃止）。
 - `fill(mode: Literal['hatch','cross','dots'], density: float, angle_rad: float=0.0)`
   - `density`: 密度（0..1 を採用）。
 - `repeat(count: int, *, offset: Vec3=(0,0,0), angles_rad_step: Vec3=(0,0,0), scale_mul: Vec3=(1,1,1), pivot: Vec3=(0,0,0))`
@@ -97,7 +97,7 @@
 
 ## 改善チェックリスト（実装順の推奨）
 - [x] エフェクト登録名を上記「理想一覧」に統一（alias 不使用、完全移行）
-- [x] `translate/scale/rotate` の引数を `delta/scale/angles_rad` と `pivot` に統一（旧名も受理）
+- [x] `translate/scale/rotate` の引数を `delta/scale/angles_rad` と `pivot` に統一（旧名は移行ガイドにのみ表記）
 - [x] `repeat`（旧 array）に `count/offset/angles_rad_step/scale_mul/pivot` を導入
 - [x] `offset`（旧 buffer/boldify）に `distance_mm/join/segments_per_circle` を導入
 - [x] `fill`（旧 filling）の `mode/density/angle_rad` を導入

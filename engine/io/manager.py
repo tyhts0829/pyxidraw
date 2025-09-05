@@ -45,7 +45,8 @@ def connect_midi_controllers() -> MidiControllerManager:
     """
     PCに接続されているMIDIデバイスを検出し、MidiControllerオブジェクトにしてMidiControllerManagerに格納して返す。
     """
-    devices = load_config()["midi_devices"]
+    cfg = load_config() or {}
+    devices = cfg.get("midi_devices", []) if isinstance(cfg, dict) else []
 
     def find_connected_port_name(port_name):
         """

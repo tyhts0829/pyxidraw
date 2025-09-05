@@ -18,7 +18,6 @@ def translate(
         return Geometry(coords.copy(), offsets.copy())
     return g.translate(ox, oy, oz)
 
-translate.__param_meta__ = {}
 translate.__param_meta__ = {
     "delta": {"type": "vec3"},
 }

@@ -162,14 +162,43 @@ def displace(
     amplitude_mm: float = 0.5,
     spatial_freq: float | Vec3 = (0.5, 0.5, 0.5),
     t_sec: float = 0.0,
+    # 互換（非推奨）: 旧キーを受理し警告を出す
+    intensity: float | None = None,
+    frequency: float | Vec3 | None = None,
+    time: float | None = None,
 ) -> Geometry:
     """3次元頂点にPerlinノイズを追加（新形式のみ）。"""
     coords, offsets = g.as_arrays(copy=False)
 
-    # パラメータ解決（新形式）
+    # パラメータ解決（新形式優先、旧名は互換受理）
     amp = float(amplitude_mm)
     freq_val = spatial_freq
     ti = float(t_sec)
+
+    # 旧キーが渡された場合は読み替え（DeprecationWarning）
+    # 新旧が同時指定された場合は新を優先
+    import warnings as _warnings  # 局所 import（Numba JIT 影響を避けるため）
+    if intensity is not None and amplitude_mm == 0.5:
+        _warnings.warn(
+            "displace(): 'intensity' is deprecated; use 'amplitude_mm'",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        amp = float(intensity)
+    if frequency is not None and spatial_freq == (0.5, 0.5, 0.5):
+        _warnings.warn(
+            "displace(): 'frequency' is deprecated; use 'spatial_freq'",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        freq_val = frequency
+    if time is not None and t_sec == 0.0:
+        _warnings.warn(
+            "displace(): 'time' is deprecated; use 't_sec'",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        ti = float(time)
 
     # 周波数の正規化
     if isinstance(freq_val, (int, float)):

@@ -40,7 +40,7 @@ pipeline2 = from_spec(spec)
 - `effects/`: エフェクト実装（例: `noise.py`, `rotation.py`, `filling.py`）。
 - `engine/`: コア幾何、I/O（MIDI）、レンダリング内部。
 - `benchmarks/`: ベンチマーク CLI（`python -m benchmarks`）と可視化。
-- `tests/`: モジュールに対応した Pytest スイート。`pytest.ini` と `conftest.py` を参照。
+- `tests/`: モジュールに対応した Pytest スイート。`pytest.ini` を参照。
 - ルートの例: `main.py`（フルデモ）、`simple.py`（最小）。設定: `config.yaml`。
 
 ## ビルド・テスト・開発コマンド
