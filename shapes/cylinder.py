@@ -17,16 +17,16 @@ class Cylinder(BaseShape):
     
     def generate(self, radius: float = 0.3, height: float = 0.6, 
                 segments: int = 32, **params: Any) -> Geometry:
-        """Generate a cylinder.
-        
-        Args:
-            radius: Cylinder radius
-            height: Cylinder height
-            segments: Number of segments around circumference
-            **params: Additional parameters (ignored)
-            
-        Returns:
-            Geometry object containing cylinder lines
+        """円柱を生成します。
+
+        引数:
+            radius: 半径
+            height: 高さ
+            segments: 周方向の分割数
+            **params: 追加パラメータ（未使用）
+
+        返り値:
+            円柱の線群を含む Geometry
         """
         vertices_list = []
         

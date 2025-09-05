@@ -10,14 +10,14 @@ from .base import BaseShape
 
 
 def _generate_grid(nx: int, ny: int) -> list[np.ndarray]:
-    """Generate grid vertices.
+    """グリッドの頂点列を生成します。
 
-    Args:
-        nx: Number of vertical lines
-        ny: Number of horizontal lines
+    引数:
+        nx: 垂直線の本数
+        ny: 水平線の本数
 
-    Returns:
-        List of vertex arrays for grid lines
+    返り値:
+        グリッド各線の頂点配列のリスト
     """
     if max(nx, ny) < 1:
         # Return empty grid if divisions are too small
@@ -60,14 +60,14 @@ class Grid(BaseShape):
     MAX_DIVISIONS = 50
 
     def generate(self, subdivisions: tuple[float, float] = (0.1, 0.1), **params: Any) -> Geometry:
-        """Generate a 1x1 square grid with specified divisions.
+        """1x1 の正方形グリッドを生成します。
 
-        Args:
-            subdivisions: (x_divisions, y_divisions) as floats 0.0-1.0
-            **params: Additional parameters (ignored)
+        引数:
+            subdivisions: (x方向の分割, y方向の分割) を 0.0–1.0 浮動小数で指定
+            **params: 追加パラメータ（未使用）
 
-        Returns:
-            Geometry object containing grid lines
+        返り値:
+            グリッド線を含む Geometry
         """
         nx, ny = subdivisions
         nx = int(nx * Grid.MAX_DIVISIONS)

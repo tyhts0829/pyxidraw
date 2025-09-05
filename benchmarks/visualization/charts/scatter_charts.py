@@ -30,7 +30,7 @@ class ScatterPlotGenerator(BaseChartGenerator):
         elif chart_type == 'correlation':
             return self.create_correlation_plot(data, **kwargs)
         else:
-            raise ValueError(f"Unsupported chart type: {chart_type}")
+            raise ValueError(f"未対応のチャート種別です: {chart_type}")
     
     def create_complexity_analysis_plot(self, data: List[Dict[str, Any]], **kwargs) -> str:
         """複雑度 vs 実行時間の散布図作成"""

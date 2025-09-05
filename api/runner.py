@@ -99,7 +99,7 @@ def run_sketch(
             midi_manager = connect_midi_controllers()
             # 0台接続もエラー扱いにするかは strict で切替
             if not getattr(midi_manager, "controllers", {}):
-                raise RuntimeError("No MIDI devices connected")
+                raise RuntimeError("MIDI デバイスが接続されていません")
             midi_service = MidiService(midi_manager)
             # MidiService は Tickable を実装し、snapshot() を提供する。
             # 型: Callable[[], Mapping[int, int]] に合わせて渡す。

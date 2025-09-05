@@ -253,18 +253,18 @@ class Text(BaseShape):
         align: str = "center",
         **params: Any,
     ) -> Geometry:
-        """Generate text as line segments from font outlines.
+        """フォントのアウトラインから線分として文字列を生成します。
 
-        Args:
-            text: Text string to render
-            size: Text size (relative to canvas)
-            font: Font name or path
-            font_number: Font number for TTC files
-            align: Text alignment ('left', 'center', 'right')
-            **params: Additional parameters (ignored)
+        引数:
+            text: レンダリングする文字列
+            size: 文字サイズ（キャンバスに対する相対）
+            font: フォント名またはパス
+            font_number: TTC ファイルのフォント番号
+            align: 行揃え（'left' | 'center' | 'right'）
+            **params: 追加パラメータ（未使用）
 
-        Returns:
-            Geometry object containing text outlines
+        返り値:
+            テキストアウトラインを含む Geometry
         """
         vertices_list = []
 

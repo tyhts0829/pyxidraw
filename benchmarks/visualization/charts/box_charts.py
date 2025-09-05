@@ -29,7 +29,7 @@ class BoxPlotGenerator(BaseChartGenerator):
         elif chart_type == 'plugin_comparison':
             return self.create_plugin_comparison_plot(data, **kwargs)
         else:
-            raise ValueError(f"Unsupported chart type: {chart_type}")
+            raise ValueError(f"未対応のチャート種別です: {chart_type}")
     
     def create_timing_distribution_plot(self, data: List[Dict[str, Any]], **kwargs) -> str:
         """実行時間分布ボックスプロット作成"""

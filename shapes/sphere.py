@@ -290,20 +290,20 @@ class Sphere(BaseShape):
     """Sphere shape generator with multiple drawing styles."""
 
     def generate(self, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any) -> Geometry:
-        """Generate a sphere with radius 1.
+        """半径1の球を生成します。
 
-        Args:
-            subdivisions: Subdivision level (0.0-1.0, mapped to 0-5)
-            sphere_type: Drawing style (0.0-1.0):
-                        0.0-0.2: Lat-Lon (default style)
-                        0.2-0.4: Wireframe
-                        0.4-0.6: Zigzag
-                        0.6-0.8: Icosphere
-                        0.8-1.0: Rings
-            **params: Additional parameters (ignored)
+        引数:
+            subdivisions: 細分化レベル（0.0–1.0 を 0–5 に写像）
+            sphere_type: 描画スタイル（0.0–1.0）:
+                        0.0–0.2: 緯経線（デフォルト）
+                        0.2–0.4: ワイヤーフレーム
+                        0.4–0.6: ジグザグ
+                        0.6–0.8: アイコスフィア
+                        0.8–1.0: リング
+            **_params: 追加パラメータ（未使用）
 
-        Returns:
-            Geometry object containing sphere geometry
+        返り値:
+            球のジオメトリを含む Geometry
         """
         MIN_SUBDIVISIONS = 0
         MAX_SUBDIVISIONS = 5

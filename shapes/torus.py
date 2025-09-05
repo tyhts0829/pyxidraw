@@ -68,17 +68,17 @@ class Torus(BaseShape):
         minor_segments: int = 16,
         **params: Any,
     ) -> Geometry:
-        """Generate a torus.
+        """トーラスを生成します。
 
-        Args:
-            major_radius: Major radius (from center to tube center)
-            minor_radius: Minor radius (tube radius)
-            major_segments: Number of segments around major circle
-            minor_segments: Number of segments around minor circle
-            **params: Additional parameters (ignored)
+        引数:
+            major_radius: 主半径（トーラス中心からチューブ中心まで）
+            minor_radius: 従半径（チューブ半径）
+            major_segments: 主円周方向の分割数
+            minor_segments: 従円周方向の分割数
+            **params: 追加パラメータ（未使用）
 
-        Returns:
-            Geometry object containing torus lines
+        返り値:
+            トーラスの線群を含む Geometry
         """
         # Pre-calculate trigonometric values
         theta_values = 2 * np.pi * np.arange(major_segments) / major_segments

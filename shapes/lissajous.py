@@ -29,20 +29,20 @@ class Lissajous(BaseShape):
         points: int = 1000,
         **params: Any,
     ) -> Geometry:
-        """Generate a 2D/3D Lissajous curve.
+        """2D/3D リサージュ曲線を生成します。
 
-        Args:
-            freq_x: X-axis frequency (a)
-            freq_y: Y-axis frequency (b)
-            freq_z: Z-axis frequency (c). 0.0 keeps Z flat (2D)
-            phase: Phase offset for X in radians (δx)
-            phase_y: Phase offset for Y in radians (δy)
-            phase_z: Phase offset for Z in radians (δz)
-            points: Number of sample points
-            **params: Additional parameters (ignored)
+        引数:
+            freq_x: X 軸の周波数（a）
+            freq_y: Y 軸の周波数（b）
+            freq_z: Z 軸の周波数（c）。0.0 なら Z はフラット（2D）
+            phase: X の位相（ラジアン, δx）
+            phase_y: Y の位相（ラジアン, δy）
+            phase_z: Z の位相（ラジアン, δz）
+            points: サンプル点数
+            **params: 追加パラメータ（未使用）
 
-        Returns:
-            Geometry object containing the curve vertices as a single polyline
+        返り値:
+            ポリライン1本としての曲線の Geometry
         """
         # Sample parameter over one full cycle
         t = np.linspace(0, 2 * np.pi, points)

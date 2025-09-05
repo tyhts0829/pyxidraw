@@ -54,6 +54,17 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
 
 @effect()
 def trim(g: Geometry, *, start_param: float = 0.0, end_param: float = 1.0) -> Geometry:
+    """ポリラインの一部区間だけを残すトリム処理（純関数）。
+
+    0.0–1.0 の正規化パラメータで開始/終了位置を指定し、その区間の線分を残します。
+
+    Args:
+        start_param: 開始位置（0.0–1.0）。0.0 は先頭、1.0 は末尾。
+        end_param: 終了位置（0.0–1.0）。`start_param` より大きい値を指定。
+
+    Returns:
+        Geometry: 区間トリム後のジオメトリ
+    """
     start_param = clamp01(float(start_param))
     end_param = clamp01(float(end_param))
     coords, offsets = g.as_arrays(copy=False)

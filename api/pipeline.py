@@ -227,27 +227,26 @@ def _is_json_like(value: Any) -> bool:
 
 
 def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
-    """Validate a pipeline spec. Raises TypeError/KeyError on failure.
+    """パイプライン仕様を検証（不正時は TypeError/KeyError）。
 
-    Rules:
-    - spec is a list/tuple of {"name": str, "params": dict}
-    - effect name must be registered
-    - params must be dict and JSON-like (numbers/strings/bools/None, nested lists/dicts)
-    - parameter names are checked against function signature when possible
-      (unknown keys are allowed if the function accepts **kwargs)
+    仕様:
+    - `spec` は `{"name": str, "params": dict}` の列（list/tuple）
+    - `name` は登録済みエフェクト名
+    - `params` は辞書かつ JSON 風（数値/文字列/真偽/None、入れ子の list/dict を許容）
+    - 可能なら関数シグネチャと照合し、未知パラメータを検出（ただし関数が **kwargs を取る場合は許容）
     """
     if not isinstance(spec, (list, tuple)):
-        raise TypeError("spec must be a list or tuple of steps")
+        raise TypeError("spec はステップ辞書の list または tuple である必要があります")
 
     for i, entry in enumerate(spec):
         if not isinstance(entry, dict):
-            raise TypeError(f"spec[{i}] must be a dict, got {type(entry).__name__}")
+            raise TypeError(f"spec[{i}] は dict である必要があります（実際: {type(entry).__name__}）")
         name = entry.get("name")
         params = entry.get("params", {})
         if not isinstance(name, str):
-            raise TypeError(f"spec[{i}]['name'] must be str")
+            raise TypeError(f"spec[{i}]['name'] は str である必要があります")
         if not isinstance(params, dict):
-            raise TypeError(f"spec[{i}]['params'] must be dict")
+            raise TypeError(f"spec[{i}]['params'] は dict である必要があります")
 
         # Validate effect registration
         fn = get_effect(name)  # raises KeyError if not registered
@@ -255,9 +254,9 @@ def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
         # Validate params JSON-likeness
         for k, v in params.items():
             if not isinstance(k, str):
-                raise TypeError(f"spec[{i}]['params'] key must be str: {k!r}")
+                raise TypeError(f"spec[{i}]['params'] のキーは str である必要があります: {k!r}")
             if not _is_json_like(v):
-                raise TypeError(f"spec[{i}]['params']['{k}'] is not JSON-serializable-like: {type(v).__name__}")
+                raise TypeError(f"spec[{i}]['params']['{k}'] は JSON 風の値ではありません: {type(v).__name__}")
 
         # Validate parameter names against signature if possible
         try:
@@ -272,7 +271,7 @@ def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
                 if unknown:
                     allowed_sorted = sorted(allowed)
                     raise TypeError(
-                        "spec[{}] has unknown params for effect '{}': {}. Allowed: {}".format(
+                        "spec[{}] のエフェクト '{}' に未知のパラメータがあります: {} / 許可: {}".format(
                             i, name, unknown, allowed_sorted
                         )
                     )
@@ -290,11 +289,11 @@ def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
                 # type check (loose)
                 t = rules.get("type") if isinstance(rules, dict) else None
                 if t == "number" and not isinstance(v, (int, float)):
-                    raise TypeError(f"spec[{i}]['params']['{k}'] must be number, got {type(v).__name__}")
+                    raise TypeError(f"spec[{i}]['params']['{k}'] は数値である必要があります（実際: {type(v).__name__}）")
                 if t == "integer" and not isinstance(v, int):
-                    raise TypeError(f"spec[{i}]['params']['{k}'] must be integer, got {type(v).__name__}")
+                    raise TypeError(f"spec[{i}]['params']['{k}'] は整数である必要があります（実際: {type(v).__name__}）")
                 if t == "string" and not isinstance(v, str):
-                    raise TypeError(f"spec[{i}]['params']['{k}'] must be string, got {type(v).__name__}")
+                    raise TypeError(f"spec[{i}]['params']['{k}'] は文字列である必要があります（実際: {type(v).__name__}）")
                 if t == "vec3":
                     # allow scalar, 1-tuple, or 3-tuple of numbers
                     def _is_num(x):
@@ -304,14 +303,14 @@ def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
                     elif isinstance(v, (list, tuple)) and len(v) in (1, 3) and all(_is_num(x) for x in v):
                         pass
                     else:
-                        raise TypeError(f"spec[{i}]['params']['{k}'] must be scalar, 1-tuple, or 3-tuple of numbers")
+                        raise TypeError(f"spec[{i}]['params']['{k}'] は数値のスカラー、1要素、または3要素のタプルである必要があります")
                 # range
                 if isinstance(rules, dict):
                     if "min" in rules and isinstance(v, (int, float)) and v < rules["min"]:
-                        raise TypeError(f"spec[{i}]['params']['{k}']={v} is below min {rules['min']}")
+                        raise TypeError(f"spec[{i}]['params']['{k}']={v} は最小値 {rules['min']} 未満です")
                     if "max" in rules and isinstance(v, (int, float)) and v > rules["max"]:
-                        raise TypeError(f"spec[{i}]['params']['{k}']={v} exceeds max {rules['max']}")
+                        raise TypeError(f"spec[{i}]['params']['{k}']={v} は最大値 {rules['max']} を超えています")
                     # choices
                     choices = rules.get("choices")
                     if choices is not None and v not in choices:
-                        raise TypeError(f"spec[{i}]['params']['{k}']={v!r} must be one of {choices}")
+                        raise TypeError(f"spec[{i}]['params']['{k}']={v!r} は {choices} のいずれかである必要があります")

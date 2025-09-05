@@ -16,8 +16,8 @@ def _polygon_cached(n_sides: int) -> np.ndarray:
     Args:
         n_sides: Number of sides
         
-    Returns:
-        Array of vertices
+        返り値:
+            頂点配列
     """
     # Calculate vertex coords
     t = np.linspace(0, 2 * np.pi, n_sides, endpoint=False)
@@ -38,14 +38,14 @@ class Polygon(BaseShape):
     """Regular polygon shape generator."""
     
     def generate(self, n_sides: int | float = 3, **params: Any) -> Geometry:
-        """Generate a regular polygon inscribed in a circle of diameter 1.
-        
-        Args:
-            n_sides: Number of sides. If float, exponentially mapped from 0-100.
-            **params: Additional parameters (ignored)
-            
-        Returns:
-            Geometry object containing the polygon vertices
+        """直径1の円に内接する正多角形を生成します。
+
+        引数:
+            n_sides: 辺の数。float の場合は 0–1 を指数写像で 0–100 に変換。
+            **params: 追加パラメータ（未使用）
+
+        返り値:
+            多角形の頂点を含む Geometry
         """
         MIN_SIDES = 3
         MAX_SIDES = 100 - MIN_SIDES
@@ -71,15 +71,15 @@ class Polygon(BaseShape):
             N: Maximum value of output range (integer)
             a: Nonlinearity (>2.0 for sharp growth, close to 1.0 for nearly linear)
             
-        Returns:
-            Mapped integer value
+        返り値:
+            マッピングされた整数値
         """
         if not (0.0 <= value <= 1.0):
-            raise ValueError("value must be in range 0.0-1.0")
+            raise ValueError("value は 0.0–1.0 の範囲で指定してください")
         if N <= 0:
-            raise ValueError("N must be a positive integer")
+            raise ValueError("N は正の整数である必要があります")
         if a <= 1.0:
-            raise ValueError("a must be greater than 1.0")
+            raise ValueError("a は 1.0 より大きい値を指定してください")
         
         # Exponential nonlinear mapping
         normalized_value = (math.pow(a, value) - 1) / (a - 1)

@@ -44,7 +44,7 @@ class BenchmarkResultManager:
     def save_results(self, results: Dict[str, BenchmarkResult]) -> str:
         """タイムスタンプ付きでベンチマーク結果を保存"""
         if not results:
-            raise ValueError("Cannot save empty results")
+            raise ValueError("空の結果は保存できません")
         
         try:
             # ディスク容量チェック
@@ -84,7 +84,8 @@ class BenchmarkResultManager:
             
         except (PermissionError, OSError) as e:
             raise BenchmarkError(f"Permission denied or I/O error saving results: {e}")
-        except json.JSONEncodeError as e:
+        except TypeError as e:
+            # 標準jsonのエンコード失敗はTypeErrorを送出
             raise BenchmarkError(f"Failed to serialize results to JSON: {e}")
         except Exception as e:
             raise BenchmarkError(f"Unexpected error saving results: {e}")

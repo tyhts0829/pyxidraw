@@ -66,17 +66,17 @@ class Polyhedron(BaseShape):
                     continue
     
     def generate(self, polygon_type: str | int = "tetrahedron", **params: Any) -> Geometry:
-        """Generate a regular polyhedron.
-        
-        Args:
-            polygon_type: Type of polyhedron (name or number of faces)
-            **params: Additional parameters (ignored)
-            
-        Returns:
-            Geometry object containing polyhedron edges
+        """正多面体を生成します。
+
+        引数:
+            polygon_type: 多面体の種類（名前または面数）
+            **params: 追加パラメータ（未使用）
+
+        返り値:
+            多面体のエッジ群を含む Geometry
         """
         if polygon_type not in self._TYPE_MAP:
-            raise ValueError(f"Invalid polygon_type: {polygon_type}")
+            raise ValueError(f"polygon_type が不正です: {polygon_type}")
         
         shape_name = self._TYPE_MAP[polygon_type]
         

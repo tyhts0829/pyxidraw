@@ -36,11 +36,11 @@ class DualKeyDict:
     def __getitem__(self, key: Union[int, str]) -> int:
         """
         キーに対応する値を取得。
-        Args:
-            key (int or str): キー。
-        Returns:
-            1〜127の整数。
-        Raises:
+        引数:
+            key (int または str): キー。
+        返り値:
+            1〜127 の整数。
+        例外:
             KeyError: サポート外のキー型。
         """
         if isinstance(key, int):
@@ -49,17 +49,17 @@ class DualKeyDict:
             # 読み取りで副作用を起こさない（is_active の更新は setter/専用メソッドで行う）
             return self._str_to_value[key]
         else:
-            raise KeyError(f"Unsupported key type: {type(key)}")
+            raise KeyError(f"未対応のキー型です: {type(key)}")
 
     def __setitem__(self, key: Union[int, str], value: int) -> None:
         """
         キーに値を設定し、対応するもう一方のキーにも反映。
 
-        Args:
-            key (int or str): キー。
+        引数:
+            key (int または str): キー。
             value (int): 設定する値。
 
-        Raises:
+        例外:
             KeyError: サポート外のキー型。
         """
 
@@ -97,15 +97,15 @@ class DualKeyDict:
             if corresponding_int_key is not None:
                 self._int_to_value[corresponding_int_key] = value
         else:
-            raise KeyError(f"Unsupported key type: {type(key)}")
+            raise KeyError(f"未対応のキー型です: {type(key)}")
 
     def _is_toggle_key(self, key: Union[int, str]) -> Optional[bool]:
         """
         キーがボタンキーか確認。
-        Args:
-            key (int or str): キー。
-        Returns:
-            bool: ボタンキーならTrue。
+        引数:
+            key (int または str): キー。
+        返り値:
+            bool: ボタンキーなら True。
         """
         if isinstance(key, int):
             # 25〜30のbuttonキー、35のshiftキー
@@ -140,10 +140,10 @@ class DualKeyDict:
     def __contains__(self, key: Union[int, str]) -> bool:
         """
         キーが存在するか確認。
-        Args:
-            key (int or str): キー。
-        Returns:
-            bool: 存在すればTrue。
+        引数:
+            key (int または str): キー。
+        返り値:
+            bool: 存在すれば True。
         """
         if isinstance(key, int):
             return key in self._int_to_value
@@ -155,10 +155,10 @@ class DualKeyDict:
     def get(self, key, default=None):
         """
         キーに対応する値を取得。なければデフォルトを返す。
-        Args:
-            key (int or str): キー。
+        引数:
+            key (int または str): キー。
             default (Optional[int]): デフォルト値。
-        Returns:
+        返り値:
             Optional[int]: 値またはデフォルト。
         """
         try:

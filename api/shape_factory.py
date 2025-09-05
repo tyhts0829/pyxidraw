@@ -46,28 +46,19 @@ G - 形状ファクトリ（高レベル API エントリ）
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import List, Sequence, Union, Iterable
+from typing import List, Iterable, Callable, Any, cast
+import hashlib
 
 import numpy as np
 
-import shapes.asemic_glyph
-import shapes.attractor
-import shapes.capsule
-import shapes.cone
-import shapes.cylinder
-import shapes.grid
-import shapes.lissajous
-import shapes.polygon
-import shapes.polyhedron
-
-# レジストリ登録を副作用で完了させるため、形状モジュールを明示 import。
-# 新しいシェイプを追加する場合は `shapes/` にクラスを実装し、
-# `@shapes.registry.shape` デコレータで登録するだけで `G.<name>(...)` が解決される。
-import shapes.sphere
-import shapes.text
-import shapes.torus
+# レジストリ登録の副作用を発火させるため、shapes パッケージを 1 度だけ import すれば十分
+import shapes  # noqa: F401  (登録目的の副作用)
 from engine.core.geometry import Geometry
+from numpy.typing import NDArray
 from .shape_registry import get_shape_generator, list_registered_shapes
+
+
+ParamsTuple = tuple[tuple[str, object], ...]
 
 
 class ShapeFactoryMeta(type):
@@ -79,24 +70,21 @@ class ShapeFactoryMeta(type):
     - 返す関数は `ShapeFactory._cached_shape(...)` を経由し、LRU キャッシュの恩恵を受ける。
     """
 
-    def __getattr__(cls, name: str):
+    def __getattr__(cls, name: str) -> Callable[..., Geometry]:
         """クラスレベルでの動的属性アクセス。
 
         指定された `name` がシェイプレジストリに存在する場合、
         `shape_method(**params) -> Geometry` を返す。存在しない場合は `AttributeError`。
         """
         try:
+            # 存在確認のみ（実体の生成は _cached_shape に委譲）
             get_shape_generator(name)
 
             # 動的にクラスメソッドを生成
-            def shape_method(**params):
+            def shape_method(**params: object) -> Geometry:
                 params_tuple = cls._params_to_tuple(**params)
-                geom = ShapeFactory._cached_shape(name, params_tuple)
-                # 生成器は Geometry を返す前提。必要なら from_lines で包む。
-                if isinstance(geom, Geometry):
-                    return geom
-                # 互換: もし ndarray タプル等なら from_lines で構築
-                return Geometry.from_lines(geom)
+                # サブクラス差し替えを可能にするため cls 経由で呼び出す
+                return cls._cached_shape(name, params_tuple)
 
             return shape_method
         except ValueError:
@@ -119,7 +107,7 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
 
     @staticmethod
     @lru_cache(maxsize=128)
-    def _cached_shape(shape_name: str, params_tuple: tuple) -> Geometry:
+    def _cached_shape(shape_name: str, params_tuple: ParamsTuple) -> Geometry:
         """登録シェイプを解決・生成し、結果を LRU キャッシュ。
 
         Args:
@@ -135,12 +123,9 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
         """
         params_dict = dict(params_tuple)
 
-        # レジストリから形状生成器を取得
-        generator = get_shape_generator(shape_name)
-
-        # get_shape_generatorはBaseShapeクラス（Type[BaseShape]）を返す
-        # クラスをインスタンス化して、generateメソッドを呼び出す
-        instance = generator()
+        # レジストリから形状クラスを取得し、インスタンスを生成
+        shape_cls = get_shape_generator(shape_name)
+        instance = shape_cls()
         data = instance.generate(**params_dict)
         # 生成器は Geometry を返す前提
         if isinstance(data, Geometry):
@@ -148,38 +133,89 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
         return Geometry.from_lines(data)
 
     @staticmethod
-    def _params_to_tuple(**params) -> tuple:
+    def _params_to_tuple(**params: object) -> ParamsTuple:
         """パラメータ辞書を「順序安定・ハッシュ可能」なタプルへ正規化。
 
         - dict は key でソートし `(key, value)` のタプル列に。
         - list/tuple は要素ごとに再帰変換。
-        - NumPy 配列は `flatten()` 後の値タプルに変換（型や dtype 情報は失われる点に注意）。
+        - NumPy 配列は `("nd", shape, dtype, blake2b-128 digest)` という短い指紋に変換。
+          `dtype` と `shape` を含めるため、単なるフラット化による情報欠落を避けられる。
 
         注意:
-        - 非推奨だが、NumPy 配列をパラメータに渡した場合は値列のみがキーに反映される。
-          形状生成に dtype を利用している場合は衝突の温床になり得るため、
-          可能なら Python の組込みイミュータブル型へ前処理して渡すことを推奨。
+        - オブジェクト配列（`dtype=object`）は `tolist()` で中身を列挙して再帰的に正規化する。
+        - 未対応/非ハッシュ可能オブジェクトは安全側フォールバックで
+          `('obj', <qualified_class_name>, id(obj))` のタプルに変換する（同一インスタンスのみヒット）。
         """
 
         # ネストした値も含めて再帰的にソート・変換
-        def make_hashable(obj):
-            if isinstance(obj, dict):
-                return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
-            elif isinstance(obj, (list, tuple)):
-                return tuple(make_hashable(item) for item in obj)
-            elif isinstance(obj, np.ndarray):
-                return tuple(obj.flatten())
-            else:
-                return obj
+        def _key_for_sorting_object_key(k: object) -> str:
+            return f"{type(k).__name__}:{repr(k)}"
 
-        return tuple(sorted((k, make_hashable(v)) for k, v in params.items()))
+        def _sort_key_item(kv: tuple[str, object]) -> str:
+            return _key_for_sorting_object_key(kv[0])
+
+        def make_hashable(obj: object) -> object:
+            # dict: キー型が混在しても安定比較できるよう型名+reprでソート
+            if isinstance(obj, dict):
+                items_iter = cast(Iterable[tuple[object, object]], obj.items())
+                items = sorted(items_iter, key=lambda kv: _key_for_sorting_object_key(kv[0]))
+                return tuple((k, make_hashable(v)) for k, v in items)
+
+            # シーケンス: 再帰的にタプル化
+            if isinstance(obj, (list, tuple)):
+                return tuple(make_hashable(item) for item in obj)
+
+            # NumPy スカラーは Python 組込みへ
+            if isinstance(obj, np.generic):
+                return obj.item()
+
+            # NumPy 配列: dtype/shape を含む指紋化で巨大キー化と衝突を回避
+            if isinstance(obj, np.ndarray):
+                if obj.dtype.kind == 'O':
+                    # オブジェクト配列は素直に中身を列挙
+                    return ('nd_obj', tuple(make_hashable(x) for x in obj.tolist()))
+                arr = np.ascontiguousarray(obj)
+                h = hashlib.blake2b(digest_size=16)
+                h.update(arr.view(np.uint8).tobytes())
+                return ('nd', arr.shape, str(arr.dtype), h.digest())
+
+            # set/frozenset: 並びに依らず安定化
+            if isinstance(obj, (set, frozenset)):
+                return (
+                    'set',
+                    tuple(
+                        sorted(
+                            (make_hashable(x) for x in obj),
+                            key=_key_for_sorting_object_key,
+                        )
+                    ),
+                )
+
+            # bytes/bytearray
+            if isinstance(obj, (bytes, bytearray)):
+                return bytes(obj)
+
+            # ハッシュ可能であればそのまま返す
+            try:
+                hash(obj)  # type: ignore[arg-type]
+                return obj
+            except Exception:
+                # 非ハッシュ可能（例: ユーザ定義の __hash__=None）の場合でも
+                # lru_cache のキー化で落ちないように安全側フォールバック。
+                # 内容同値性よりも「プロセス内で同一インスタンスを同一視」を優先する。
+                cls_name = getattr(obj, "__class__", type(obj)).__qualname__
+                return ('obj', cls_name, id(obj))
+
+        params_dict: dict[str, object] = dict(params)
+        items = sorted(params_dict.items(), key=_sort_key_item)
+        return tuple((k, make_hashable(v)) for k, v in items)
 
     # === レジストリベース形状生成（メタクラスによる動的アクセス） ===
 
     # === ユーザー拡張 ===
 
     @staticmethod
-    def from_lines(lines: Iterable[np.ndarray]) -> Geometry:
+    def from_lines(lines: Iterable[NDArray[Any]]) -> Geometry:
         """線分集合（ポリライン列）から `Geometry` を構築する補助。
 
         Args:
@@ -195,7 +231,7 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
         """空の `Geometry`（頂点ゼロ）を返すユーティリティ。"""
         return Geometry.from_lines([])
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Callable[..., Geometry]:
         """インスタンスレベルでの動的属性アクセス。
 
         `G.<name>(**params) -> Geometry` を提供。クラスレベルと同じロジックで
@@ -206,12 +242,9 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
             get_shape_generator(name)
 
             # 動的にメソッドを生成
-            def shape_method(**params):
+            def shape_method(**params: object) -> Geometry:
                 params_tuple = self._params_to_tuple(**params)
-                geom = self._cached_shape(name, params_tuple)
-                if isinstance(geom, Geometry):
-                    return geom
-                return Geometry.from_lines(geom)
+                return self._cached_shape(name, params_tuple)
 
             return shape_method
         except ValueError:
@@ -225,14 +258,22 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
     # === キャッシュ管理 ===
 
     @classmethod
-    def clear_cache(cls):
+    def clear_cache(cls) -> None:
         """形状生成結果の LRU キャッシュをクリア（デバッグ/メモリ回収用）。"""
         cls._cached_shape.cache_clear()
 
     @classmethod
-    def cache_info(cls):
+    def cache_info(cls) -> object:
         """`functools.lru_cache` の統計情報を取得（ヒット率等の観察に）。"""
         return cls._cached_shape.cache_info()
+
+    # 補完体験向上: dir(G) で登録シェイプ名を出す
+    def __dir__(self) -> list[str]:
+        try:
+            base = set(object.__dir__(self))
+        except Exception:
+            base = set()
+        return sorted(base.union(list_registered_shapes()))
 
 
 # シングルトンインスタンス（`from api import G` で公開）

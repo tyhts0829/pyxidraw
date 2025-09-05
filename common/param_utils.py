@@ -33,7 +33,7 @@ def ensure_vec3(v: float | Iterable[float]) -> Tuple[float, float, float]:
     if len(t) == 1:
         return (t[0], t[0], t[0])
     if len(t) != 3:
-        raise ValueError("expected scalar, 1-tuple, or 3-tuple for vec3")
+        raise ValueError("vec3 には数値の単体、1要素タプル、または3要素タプルを指定してください")
     return (t[0], t[1], t[2])
 
 
@@ -44,4 +44,3 @@ __all__ = [
     "norm_to_rad",
     "ensure_vec3",
 ]
-

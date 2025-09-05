@@ -32,7 +32,7 @@ class HeatmapGenerator(BaseChartGenerator):
         elif chart_type == 'time_series':
             return self.create_time_series_heatmap(data, **kwargs)
         else:
-            raise ValueError(f"Unsupported chart type: {chart_type}")
+            raise ValueError(f"未対応のチャート種別です: {chart_type}")
     
     def create_performance_matrix(self, data: List[Dict[str, Any]], **kwargs) -> str:
         """パフォーマンスマトリックスヒートマップ作成"""

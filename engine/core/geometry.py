@@ -136,14 +136,14 @@ class Geometry:
             if arr.ndim == 1:
                 if arr.size % 3 != 0:
                     raise ValueError(
-                        "1D input length must be a multiple of 3 to form (x,y, z) triplets"
+                        "1次元入力の長さは3の倍数である必要があります（(x, y, z) の並び）"
                     )
                 arr = arr.reshape(-1, 3)
             elif arr.shape[1] == 2:
                 zeros = np.zeros((arr.shape[0], 1), dtype=np.float32)
                 arr = np.hstack([arr, zeros])
             elif arr.shape[1] != 3:
-                raise ValueError(f"Invalid coordinate shape: {arr.shape}")
+                raise ValueError(f"座標配列の形状が不正です: {arr.shape}")
             np_lines.append(arr)
 
         if not np_lines:
@@ -215,7 +215,7 @@ class Geometry:
         """
         # 環境変数で無効化可能（ベンチ用）
         if not _digest_enabled():
-            raise RuntimeError("Geometry digest disabled by env: PXD_DISABLE_GEOMETRY_DIGEST")
+            raise RuntimeError("環境変数によりジオメトリのダイジェスト計算が無効です: PXD_DISABLE_GEOMETRY_DIGEST")
         if self._digest is None:
             self._digest = self._compute_digest()
         return self._digest

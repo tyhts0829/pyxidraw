@@ -75,7 +75,7 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
         """設定ファイルからカスタムベンチマーク対象を作成"""
         parts = target_name.split('.')
         if len(parts) != 2:
-            raise ValueError(f"Invalid target name format: {target_name}")
+            raise ValueError(f"ターゲット名の形式が不正です: {target_name}")
         
         effect_type, variation_name = parts
         
@@ -94,7 +94,7 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
                         complexity=complexity,
                     )
         
-        raise ValueError(f"Target not found in config: {target_name}")
+        raise ValueError(f"設定にターゲットが見つかりません: {target_name}")
     
     def analyze_target_features(self, target: BenchmarkTarget) -> ModuleFeatures:
         """エフェクト対象の特性を分析"""

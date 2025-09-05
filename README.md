@@ -196,6 +196,27 @@ pipeline2 = from_spec(spec)
 効果のパラメータ仕様は `docs/effects_cheatsheet.md` を参照してください。
 アーキテクチャ決定（ADR）は `docs/adr/README.md` を参照してください。
 
+## IDE 補完（`G.sphere` など）
+
+`from api import G` の IDE 補完を強化するため、登録シェイプ名を静的に列挙した `api/__init__.pyi` を自動生成しています。`G.s` と入力した段階で `sphere` を含む候補が出ます（Pylance/PyCharm）。
+
+- 形状を追加/削除したら次を実行:
+  - `python -m scripts.gen_g_stubs`
+  - 生成物: `api/__init__.pyi`
+- pre-commit/CI で自動検証:
+  - pre-commit: `pip install pre-commit && pre-commit install` 後、コミット時に生成と同期テスト（`tests/test_g_stub_sync.py`）を実行します。
+  - GitHub Actions: `.github/workflows/verify-stubs.yml` が PR/Push 時に検証します。
+
+### IDE 補完（`E.pipeline.rotate(...).fill(...).build()` 連鎖）
+- `E.pipeline` も `.pyi` で Protocol 化しており、登録エフェクト名の候補と引数名が補完されます。
+- 影響ファイル: 同じ `api/__init__.pyi`（`_PipelineBuilder` / `_Effects` を含む）
+- 追加テスト: `tests/test_pipeline_stub_sync.py`
+- 反映されない場合の対処:
+  - VS Code: 「Developer: Reload Window」
+  - PyCharm: 「File > Invalidate Caches / Restart」
+ - ホバー説明: `.pyi` 側の各メソッドには関数 docstring を埋め込んでおり、元シェイプ `generate()` の要約と `Args:` を抽出して表示します（VS Code/PyCharm）。
+ - 詳細: `docs/guides/typing.md` を参照（docstring 記述ルール、生成・検証フロー）。
+
 ## テスト
 
 ```bash

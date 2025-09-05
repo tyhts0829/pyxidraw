@@ -12,12 +12,27 @@ from .task import RenderTask
 
 
 class WorkerTaskError(Exception):
-    """Draw コールバック中の例外をラップしてフレームID等の文脈を付与。"""
+    """Draw コールバック中の例外をラップしてフレームID等の文脈を付与。
 
-    def __init__(self, frame_id: int, original: Exception):
-        super().__init__(f"WorkerTaskError(frame_id={frame_id}): {original}")
+    multiprocessing 経由のシリアライズ/デシリアライズに耐えるよう、
+    単一のメッセージ引数でも初期化できるようにする。
+    """
+
+    def __init__(self, frame_id=None, original: Exception | None = None, message: str | None = None, *args):
+        # Unpickle 経路（例外は message だけで復元されることがある）
+        if message is None and isinstance(frame_id, str) and original is None:
+            message = frame_id
+            frame_id = None
+
+        if message is None:
+            message = f"WorkerTaskError(frame_id={frame_id}): {original}"
+        super().__init__(message)
         self.frame_id = frame_id
         self.original = original
+
+    def __reduce__(self):
+        # ピクル化時はメッセージのみで再構築できるようにする
+        return (WorkerTaskError, (str(self),))
 
 
 class _WorkerProcess(mp.Process):

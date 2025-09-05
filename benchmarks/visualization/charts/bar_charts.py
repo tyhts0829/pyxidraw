@@ -31,7 +31,7 @@ class BarChartGenerator(BaseChartGenerator):
         elif chart_type == 'comparison':
             return self.create_comparison_chart(data, **kwargs)
         else:
-            raise ValueError(f"Unsupported chart type: {chart_type}")
+            raise ValueError(f"未対応のチャート種別です: {chart_type}")
     
     def create_timing_chart(self, data: List[Dict[str, Any]], **kwargs) -> str:
         """実行時間バーチャート作成"""

@@ -21,7 +21,7 @@ def get_shape_generator(name: str):
     try:
         return get_shape(name)
     except KeyError:
-        raise ValueError(f"Unknown shape: {name}")
+        raise ValueError(f"未登録のシェイプ名です: {name}")
 
 
 def list_registered_shapes() -> List[str]:

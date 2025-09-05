@@ -32,17 +32,17 @@ def load_pickle(path: Path) -> list[np.ndarray]:
         obj = pickle.load(f)
     # Accept list/tuple of arrays-like
     if not isinstance(obj, (list, tuple)):
-        raise TypeError(f"{path.name}: expected list/tuple, got {type(obj).__name__}")
+        raise TypeError(f"{path.name}: list/tuple 形式を期待しましたが {type(obj).__name__} でした")
     arrays: list[np.ndarray] = []
     for i, a in enumerate(obj):
         arr = np.asarray(a, dtype=np.float32)
         if arr.ndim == 1:
             # Allow flat coordinates; try to reshape to (-1, 3)
             if arr.size % 3 != 0:
-                raise ValueError(f"{path.name}: item {i} cannot reshape to (-1, 3)")
+                raise ValueError(f"{path.name}: item {i} は (-1, 3) にリシェイプできません")
             arr = arr.reshape(-1, 3)
         elif arr.ndim != 2:
-            raise ValueError(f"{path.name}: item {i} has invalid ndim={arr.ndim}")
+            raise ValueError(f"{path.name}: item {i} の ndim が不正です: {arr.ndim}")
         arrays.append(arr)
     return arrays
 

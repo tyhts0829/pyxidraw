@@ -29,9 +29,9 @@ class BaseRegistry(ABC):
     def _normalize_key(cls, name: str) -> str:
         """レジストリキーの正規化（例: "MyEffect" -> "my_effect"）。"""
         if not isinstance(name, str):
-            raise TypeError("registry key must be str")
+            raise TypeError("レジストリキーは str である必要があります")
         if not name:
-            raise ValueError("registry key must be non-empty")
+            raise ValueError("レジストリキーは空であってはなりません")
         # 既にスネークケースならそのまま、キャメルケースなら変換
         # アンダースコアやハイフンを含む場合も小文字化して扱う
         name = name.replace("-", "_")
@@ -44,7 +44,7 @@ class BaseRegistry(ABC):
         def decorator(obj: Type) -> Type:
             key = self._normalize_key(name) if name else self._normalize_key(obj.__name__)
             if key in self._registry and self._registry[key] is not obj:
-                raise ValueError(f"'{key}' is already registered")
+                raise ValueError(f"'{key}' は既に登録されています")
             self._registry[key] = obj
             return obj
 
@@ -54,7 +54,7 @@ class BaseRegistry(ABC):
         """登録されたクラス/関数を取得。"""
         key = self._normalize_key(name)
         if key not in self._registry:
-            raise KeyError(f"'{name}' is not registered")
+            raise KeyError(f"'{name}' は登録されていません")
         return self._registry[key]
 
     def list_all(self) -> List[str]:

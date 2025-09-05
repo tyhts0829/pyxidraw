@@ -397,7 +397,7 @@ class ModuleBenchmarkTarget(BaseBenchmarkTarget):
     def execute(self, *args, **kwargs) -> Any:
         """ベンチマーク対象を実行（安全性チェック付き）"""
         if not self._initialized:
-            raise RuntimeError(f"Target {self.name} is not properly initialized")
+            raise RuntimeError(f"ターゲット {self.name} は正しく初期化されていません")
         
         try:
             return super().execute(*args, **kwargs)

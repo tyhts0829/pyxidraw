@@ -17,16 +17,16 @@ class Cone(BaseShape):
     
     def generate(self, radius: float = 0.3, height: float = 0.6,
                 segments: int = 32, **params: Any) -> Geometry:
-        """Generate a cone.
-        
-        Args:
-            radius: Base radius
-            height: Cone height
-            segments: Number of segments around circumference
-            **params: Additional parameters (ignored)
-            
-        Returns:
-            Geometry object containing cone lines
+        """円錐を生成します。
+
+        引数:
+            radius: 底面の半径
+            height: 高さ
+            segments: 周方向の分割数
+            **params: 追加パラメータ（未使用）
+
+        返り値:
+            円錐の線群を含む Geometry
         """
         vertices_list = []
         

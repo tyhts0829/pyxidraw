@@ -30,7 +30,7 @@ def _get_cached_module(module_name: str, function_name: Optional[str] = None):
             else:
                 _cached_modules[cache_key] = G
         else:
-            raise ValueError(f"Unknown module: {module_name}")
+            raise ValueError(f"未知のモジュールです: {module_name}")
     
     return _cached_modules[cache_key]
 
@@ -137,7 +137,7 @@ class SerializableEffectTarget:
             pipeline = E.pipeline.offset(distance=distance).build()
             return pipeline(geom)
         else:
-            raise ValueError(f"Unknown effect type: {self.effect_type}")
+            raise ValueError(f"未知のエフェクト種別です: {self.effect_type}")
 
 
 class SerializableShapeTarget:
@@ -200,4 +200,4 @@ class SerializableShapeTarget:
             asemic_glyph = _get_cached_module("api.shape_factory", "asemic_glyph")
             return asemic_glyph(**self.params)
         else:
-            raise ValueError(f"Unknown shape type: {self.shape_type}")
+            raise ValueError(f"未知のシェイプ種別です: {self.shape_type}")

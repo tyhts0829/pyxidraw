@@ -52,7 +52,7 @@ def build_cc_map(preset: str) -> Dict[int, float]:
         for i, spec in enumerate(grid.EFFECTS):
             m[spec.cc] = 0.35 if (i % 2 == 0) else 0.7
         return m
-    raise ValueError(f"Unknown preset: {preset}")
+    raise ValueError(f"未知のプリセットです: {preset}")
 
 
 def render_geometry_to_png(

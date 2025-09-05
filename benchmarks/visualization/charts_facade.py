@@ -46,7 +46,7 @@ class ChartGenerator:
         elif chart_type == "heatmap":
             return self.heatmap_generator.create_performance_matrix(chart_data, filename="performance_heatmap.png")
         else:
-            raise ValueError(f"Unsupported chart type: {chart_type}")
+            raise ValueError(f"未対応のチャート種別です: {chart_type}")
 
     # === 新しい統一API ===
     def create_bar_chart(self, data: List[Dict[str, Any]], x_column: str, y_column: str, title: str, output_path: str, **kwargs) -> str:
@@ -117,4 +117,3 @@ __all__ = [
     "create_timing_chart",
     "create_success_chart",
 ]
-
