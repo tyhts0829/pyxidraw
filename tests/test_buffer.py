@@ -1,10 +1,10 @@
 """
-effects.buffer モジュールのテスト
+effects.offset モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.buffer import offset
+from effects.offset import offset
 from engine.core.geometry import Geometry
 
 

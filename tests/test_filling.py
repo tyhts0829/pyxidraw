@@ -1,10 +1,10 @@
 """
-effects.filling モジュールのテスト
+effects.fill モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.filling import fill
+from effects.fill import fill
 from engine.core.geometry import Geometry
 
 

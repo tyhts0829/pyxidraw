@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 
 from engine.core.geometry import Geometry
-from effects.filling import fill
-from effects.subdivision import subdivide
-from effects.buffer import offset as buffer_effect
+from effects.fill import fill
+from effects.subdivide import subdivide
+from effects.offset import offset as buffer_effect
 
 
 def _square(size=1.0):

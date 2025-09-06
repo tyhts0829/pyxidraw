@@ -1,3 +1,25 @@
+"""
+repeat エフェクト（配列複製）
+
+- 入力のポリライン群を複製して規則的な配列を作ります。
+- 各複製に対して、ピボット基準のスケール、XYZ 回転（ラジアン）、平行移動を
+  「ステップごとに累積」適用します（n 回目には (n+1) 倍の回転/オフセット）。
+- 実装は numba 最適化した行列計算で一括変換し、元の線も結果に残します。
+
+主なパラメータ:
+- count: 複製回数。0 で変化なし。上限は MAX_DUPLICATES(=10)。
+- offset: 各ステップの並進量 [mm]。n 回目には (n+1) 倍が適用。
+- angles_rad_step: 各ステップの回転量 [rad]。Z→Y→X の順（合成行列）。
+- scale: 各ステップのスケール。累積乗算。
+- pivot: 変換の中心。
+
+注意:
+- `Geometry.from_lines` で offsets を再構築するため、複数線でも安全。
+- 複製数やスケール・回転を大きくすると頂点数が増え描画コストが上がります。
+
+使用例: `(E.pipeline.repeat(count=4, offset=(12,0,0)).build())(g)`
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -63,13 +85,19 @@ MAX_DUPLICATES = 10
 def repeat(
     g: Geometry,
     *,
-    count: int = 0,
-    offset: Vec3 = (0.0, 0.0, 0.0),
+    count: int = 3,
+    offset: Vec3 = (12.0, 0.0, 0.0),
     angles_rad_step: Vec3 = (0.0, 0.0, 0.0),
-    scale: Vec3 = (0.5, 0.5, 0.5),
+    scale: Vec3 = (1.0, 1.0, 1.0),
     pivot: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
-    """入力のコピーを配列状に生成（純関数）。"""
+    """入力のコピーを配列状に生成（純関数）。
+
+    既定値の方針（2025-09-06）:
+        - count=3, offset=(12,0,0)mm, scale=(1,1,1), angles_rad_step=(0,0,0)
+        - 300mm 正方キャンバス中央の立方体で、横に4つ並びが収まり、効果が一目で分かる。
+          累積オフセットは 1,3,6…倍になる実装のため、1ステップ12mmに抑えて画面内に収める。
+    """
     coords, offsets = g.as_arrays(copy=False)
     # count があれば優先。なければ 0..1 → 0..MAX_DUPLICATES（整数）
     n_int = int(count)
@@ -110,6 +138,10 @@ def repeat(
 # validate_spec 用のメタデータ（最小限）
 repeat.__param_meta__ = {
     "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES},
+    "offset": {"type": "vec3"},
+    "angles_rad_step": {"type": "vec3"},
+    "scale": {"type": "vec3"},
+    "pivot": {"type": "vec3"},
 }
 
 

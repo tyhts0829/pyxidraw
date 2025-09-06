@@ -16,12 +16,12 @@ def test_misc_effects_smoke_returns_geometry():
     # import lazily to avoid registry side-effects on module import order
     from effects.boldify import boldify
     from effects.collapse import collapse
-    from effects.dashify import dash
+    from effects.dash import dash
     from effects.explode import explode
-    from effects.trimming import trim
+    from effects.trim import trim
     from effects.twist import twist
-    from effects.wave import ripple
-    from effects.webify import weave
+    from effects.ripple import ripple
+    from effects.weave import weave
     from effects.wobble import wobble
 
     for fx in (boldify, collapse, dash, explode, trim, twist, ripple, weave, wobble):

@@ -1,3 +1,16 @@
+"""
+trim エフェクト（区間トリム）
+
+- 各ポリラインの全長に対する正規化位置 [0,1] を使い、指定区間だけを残します。
+- 始端/終端点は距離に基づいて補間して生成します。
+
+パラメータ:
+- start_param, end_param: 0..1。`start_param < end_param` を満たす必要があります。
+
+注意:
+- 極端に短い線では変化がない場合があります。複数線入力でも各線独立に処理します。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -53,7 +66,7 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
 
 
 @effect()
-def trim(g: Geometry, *, start_param: float = 0.0, end_param: float = 1.0) -> Geometry:
+def trim(g: Geometry, *, start_param: float = 0.1, end_param: float = 0.9) -> Geometry:
     """ポリラインの一部区間だけを残すトリム処理（純関数）。
 
     0.0–1.0 の正規化パラメータで開始/終了位置を指定し、その区間の線分を残します。

@@ -1,7 +1,7 @@
 import numpy as np
 
 from engine.core.geometry import Geometry
-from effects.translation import translate
+from effects.translate import translate
 
 
 def test_translate_effect_geometry_path_returns_geometry():

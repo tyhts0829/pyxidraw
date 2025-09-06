@@ -65,20 +65,27 @@ class SerializableEffectTarget:
         """エフェクトを適用"""
         # Pipeline builder（E.pipeline）を使った関数エフェクト適用に統一
         if self.effect_type == "transform":
-            # rotate は度指定が来る想定 → 0..1 に正規化
+            # 互換入力（rotate[deg], center）→ 新API（angles_rad, pivot）へ変換
             E = _get_cached_module("api.pipeline")
             params = dict(self.params)
-            rotate = params.get("rotate", (0, 0, 0))
-            if isinstance(rotate, (list, tuple)):
-                rotate = tuple(float(v) / 360.0 for v in rotate)
-                params["rotate"] = rotate
+            # rotate[deg] → angles_rad[rad]
+            if "rotate" in params:
+                rot = params.pop("rotate")
+                if isinstance(rot, (list, tuple)):
+                    angles_rad = tuple(float(v) * 2.0 * 3.141592653589793 / 360.0 for v in rot)
+                else:
+                    angles_rad = (0.0, 0.0, 0.0)
+                params["angles_rad"] = angles_rad
+            # center → pivot
+            if "center" in params and "pivot" not in params:
+                params["pivot"] = tuple(params.pop("center"))
             pipeline = E.pipeline.affine(**params).build()
             return pipeline(geom)
         elif self.effect_type == "scale":
             E = _get_cached_module("api.pipeline")
             scale = self.params.get("scale", (1, 1, 1))
-            center = self.params.get("center", (0, 0, 0))
-            pipeline = E.pipeline.scale(scale=tuple(scale), center=tuple(center)).build()
+            pivot = self.params.get("center", (0, 0, 0))  # 旧: center → 新: pivot
+            pipeline = E.pipeline.scale(scale=tuple(scale), pivot=tuple(pivot)).build()
             return pipeline(geom)
         elif self.effect_type == "translate":
             E = _get_cached_module("api.pipeline")
@@ -95,27 +102,28 @@ class SerializableEffectTarget:
             angles = tuple(float(v) * 2 * 3.141592653589793 / 360.0 for v in rotate_deg)
             pipeline = E.pipeline.rotate(angles_rad=angles).build()
             return pipeline(geom)
-        elif self.effect_type == "noise":
+        elif self.effect_type == "displace":
             E = _get_cached_module("api.pipeline")
             intensity = self.params.get("intensity", 0.5)
             frequency = self.params.get("frequency", 1.0)
-            pipeline = E.pipeline.displace(amplitude_mm=intensity, spatial_freq=frequency).build()
+            pipeline = E.pipeline.displace(amplitude_mm=float(intensity), spatial_freq=frequency).build()
             return pipeline(geom)
-        elif self.effect_type == "filling":
+        elif self.effect_type == "fill":
             E = _get_cached_module("api.pipeline")
             density = self.params.get("spacing", 10.0) / 20.0  # spacing → density 変換の暫定
             angle = self.params.get("angle", 0.0)
             pipeline = E.pipeline.fill(density=density, angle_rad=angle).build()
             return pipeline(geom)
-        elif self.effect_type == "array":
+        elif self.effect_type == "repeat":
             E = _get_cached_module("api.pipeline")
-            count_total = self.params.get("count_x", 2) * self.params.get("count_y", 2)
-            n_duplicates = min(count_total / 10.0, 1.0)  # normalize to 0.0-1.0
-            spacing_x = self.params.get("spacing_x", 10.0)
-            spacing_y = self.params.get("spacing_y", 10.0)
-            pipeline = E.pipeline.repeat(n_duplicates=n_duplicates, offset=(spacing_x, spacing_y, 0)).build()
+            count_total = int(self.params.get("count_x", 2)) * int(self.params.get("count_y", 2))
+            # 新API: repeat(count=int, offset=vec3)
+            count = max(0, min(10, int(count_total)))
+            spacing_x = float(self.params.get("spacing_x", 10.0))
+            spacing_y = float(self.params.get("spacing_y", 10.0))
+            pipeline = E.pipeline.repeat(count=count, offset=(spacing_x, spacing_y, 0.0)).build()
             return pipeline(geom)
-        elif self.effect_type == "subdivision":
+        elif self.effect_type == "subdivide":
             E = _get_cached_module("api.pipeline")
             # level(1..3) → subdivisions(0..1) に粗変換
             level = float(self.params.get("level", 1))
@@ -129,9 +137,9 @@ class SerializableEffectTarget:
             distance = max(0.0, min(depth / 100.0, 1.0))
             pipeline = E.pipeline.extrude(direction=(0, 0, 1), distance=distance, scale=1.0, subdivisions=0.0).build()
             return pipeline(geom)
-        elif self.effect_type == "buffer":
+        elif self.effect_type == "offset":
             E = _get_cached_module("api.pipeline")
-            # distance(mm) → 0..1（effects.buffer 内部で *25mm）
+            # distance(mm) → 0..1（effects.offset 内部で *25mm）
             dist_mm = float(self.params.get("distance", 2.0))
             distance = max(0.0, min(dist_mm / 25.0, 1.0))
             pipeline = E.pipeline.offset(distance=distance).build()

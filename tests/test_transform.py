@@ -1,10 +1,10 @@
 """
-effects.transform モジュールのテスト
+effects.affine モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.transform import affine
+from effects.affine import affine
 from engine.core.geometry import Geometry
 
 

@@ -1,10 +1,10 @@
 """
-effects.scaling モジュールのテスト
+effects.scale モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.scaling import scale
+from effects.scale import scale
 from engine.core.geometry import Geometry
 
 

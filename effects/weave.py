@@ -28,9 +28,9 @@ from common.param_utils import norm_to_int, norm_to_range
 def weave(
     g: Geometry,
     *,
-    num_candidate_lines: float = 0.5,
-    relaxation_iterations: float = 0.5,
-    step: float = 0.5,
+    num_candidate_lines: float = 0.2,
+    relaxation_iterations: float = 0.3,
+    step: float = 0.25,
 ) -> Geometry:
     """形状にウェブ状のストリング構造を追加（純関数）。"""
     MAX_NUM_CANDIDATE_LINES = 500

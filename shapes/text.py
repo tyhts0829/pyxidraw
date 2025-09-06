@@ -247,7 +247,7 @@ class Text(BaseShape):
     def generate(
         self,
         text: str = "HELLO",
-        size: float = 0.4,
+        font_size: float = 0.4,
         font: str = "Helvetica",
         font_number: int = 0,
         align: str = "center",
@@ -257,7 +257,7 @@ class Text(BaseShape):
 
         引数:
             text: レンダリングする文字列
-            size: 文字サイズ（キャンバスに対する相対）
+            font_size: 文字サイズ（キャンバスに対する相対）
             font: フォント名またはパス
             font_number: TTC ファイルのフォント番号
             align: 行揃え（'left' | 'center' | 'right'）
@@ -296,7 +296,7 @@ class Text(BaseShape):
 
         # Batch process all character vertices
         if char_data:
-            vertices_list = self._process_character_batch(char_data, size)
+            vertices_list = self._process_character_batch(char_data, font_size)
         else:
             vertices_list = []
 

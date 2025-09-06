@@ -57,13 +57,13 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
         """エフェクトタイプとパラメータから複雑さを判定"""
         if effect_type in ['transform', 'scale', 'translate', 'rotate']:
             return "simple"
-        elif effect_type in ['noise']:
+        elif effect_type in ['displace']:
             frequency = params.get('frequency', 1.0)
             return "complex" if frequency > 2 else "medium"
-        elif effect_type in ['subdivision']:
+        elif effect_type in ['subdivide']:
             level = params.get('level', 1)
             return "simple" if level == 1 else "complex" if level >= 3 else "medium"
-        elif effect_type in ['array']:
+        elif effect_type in ['repeat']:
             count_x = params.get('count_x', 1)
             count_y = params.get('count_y', 1)
             return "complex" if count_x * count_y >= 9 else "medium"
@@ -130,7 +130,7 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
             'transform': [
                 {'name': 'identity', 'params': {}},
             ],
-            'noise': [
+            'displace': [
                 {'name': 'low_intensity', 'params': {'intensity': 0.1, 'frequency': 1.0}},
                 {'name': 'high_frequency', 'params': {'intensity': 0.5, 'frequency': 3.0}},
             ],
@@ -141,14 +141,14 @@ class EffectBenchmarkPlugin(BenchmarkPlugin):
         tags: List[str] = ["effects"]
         if effect_type in ['transform', 'scale', 'translate', 'rotate']:
             tags += ["pure-numpy", "cpu-bound"]
-        elif effect_type in ['noise']:
+        elif effect_type in ['displace']:
             tags += ["numba", "cpu-bound", "stochastic"]
             if params.get('frequency', 1.0) >= 3.0:
                 tags.append("complex")
-        elif effect_type in ['array']:
+        elif effect_type in ['repeat']:
             tags += ["alloc-heavy"]
-        elif effect_type in ['subdivision']:
+        elif effect_type in ['subdivide']:
             tags += ["cpu-bound"]
-        elif effect_type in ['buffer', 'extrude', 'filling']:
+        elif effect_type in ['offset', 'extrude', 'fill']:
             tags += ["pure-numpy"]
         return tags

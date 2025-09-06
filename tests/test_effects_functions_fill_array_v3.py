@@ -1,8 +1,8 @@
 import numpy as np
 
 from engine.core.geometry import Geometry
-from effects.filling import fill
-from effects.array import repeat
+from effects.fill import fill
+from effects.repeat import repeat
 
 
 def test_filling_returns_geometry_and_adds_lines():

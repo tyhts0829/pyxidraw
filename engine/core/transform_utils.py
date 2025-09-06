@@ -57,15 +57,15 @@ def transform_combined(
     rotate_angles=(0, 0, 0),
 ) -> Geometry:
     """複合変換：スケール → 回転 → 移動を順次適用。
-    
-    Args:
-        g: 変換対象のGeometry
+
+    引数:
+        g: 変換対象の Geometry
         center: 最終的な中心位置
         scale_factors: (sx, sy, sz) スケール係数
         rotate_angles: (rx, ry, rz) 回転角度（ラジアン）
-        
-    Returns:
-        変換後の新しいGeometry
+
+    返り値:
+        変換後の新しい Geometry
     """
     result: Geometry = g
     

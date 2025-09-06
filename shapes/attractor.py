@@ -70,7 +70,7 @@ class Attractor(BaseShape):
 
 
 class BaseAttractor(ABC):
-    """Base class for all attractors to reduce code duplication."""
+    """全アトラクタの共通基底クラス（重複を削減）。"""
     
     def __init__(self, dt: float = 0.01, steps: int = 10000, scale: float = 1.0):
         self.dt = dt
@@ -79,16 +79,16 @@ class BaseAttractor(ABC):
     
     @abstractmethod
     def _derivatives(self, state: np.ndarray) -> np.ndarray:
-        """Calculate derivatives for the attractor system."""
+        """アトラクタ方程式の微分（時間発展）を計算。"""
         pass
     
     @abstractmethod
     def _get_initial_state(self) -> np.ndarray:
-        """Get default initial state for the attractor."""
+        """既定の初期状態ベクトルを取得。"""
         pass
     
     def integrate(self, initial_state: np.ndarray | None = None) -> np.ndarray:
-        """Integrate the attractor using RK4 method."""
+        """RK4 法でアトラクタを数値積分します。"""
         if initial_state is None:
             state = self._get_initial_state()
         else:

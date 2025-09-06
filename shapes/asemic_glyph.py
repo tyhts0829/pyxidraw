@@ -45,11 +45,11 @@ def relative_neighborhood_graph(nodes: list[Point3D], config: AsemicGlyphConfig)
     """
     RNG (Relative Neighborhood Graph) を構築する。KD-Treeを使用してO(n²log n)で最適化。
 
-    Args:
+    引数:
         nodes: [(x, y, z), ...] の点のリスト
         config: 設定パラメータ
 
-    Returns:
+    返り値:
         edges: (i, j) のタプルのリスト
         adjacency: 各ノード番号と隣接ノード番号のリストの辞書
     """
@@ -103,7 +103,7 @@ def random_walk_strokes_generator(nodes: list[Point3D], adjacency: dict, config:
     RNG上でランダムウォークによりストロークを生成する（ジェネレータ版）。
     メモリ効率を向上させ、大きなグラフでも処理可能。
 
-    Args:
+    引数:
         nodes: ノードリスト
         adjacency: 隣接リスト
         config: 設定パラメータ
@@ -176,11 +176,11 @@ def snap_stroke(original: list[Point3D], config: AsemicGlyphConfig) -> list[Poin
     """
     各セグメントの方向を指定角度刻みにスナップする。
 
-    Args:
+    引数:
         original: 元の頂点列
         config: 設定パラメータ
 
-    Returns:
+    返り値:
         スナップ後の頂点列
     """
     if len(original) < 2:
@@ -229,12 +229,12 @@ def smooth_polyline(polyline: list[Point3D], smoothing_radius: float, config: As
     quadratic Bézier曲線により各内部コーナーを補間し、なめらかなポリラインを生成する。
     NumPy配列を活用してベクトル演算を最適化。
 
-    Args:
+    引数:
         polyline: 頂点列
         smoothing_radius: 補間用の最大オフセット距離
         config: 設定パラメータ
 
-    Returns:
+    返り値:
         補間後の頂点列
     """
     if len(polyline) < 3:
@@ -296,12 +296,12 @@ def generate_nodes(region: Region, cell_margin: float, placement_mode: str, conf
     """
     指定された領域と余白、配置モードに応じてノードを生成する。
 
-    Args:
+    引数:
         region: (x0, y0, x1, y1) の領域
         cell_margin: 余白のサイズ
         placement_mode: "grid", "hexagon", "poisson", "spiral", "radial", "concentric" のいずれか
 
-    Returns:
+    返り値:
         生成されたノードのリスト [(x, y, 0), ...]
     """
     x0, y0, x1, y1 = region
@@ -671,7 +671,7 @@ class AsemicGlyph(BaseShape):
     ) -> Geometry:
         """アセミック文字形状を生成する。
         
-        Args:
+        引数:
             region: (x0, y0, x1, y1) の領域
             smoothing_radius: 補間用Bézier曲線の半径
             diacritic_probability: 使用ノード付近にディアクリティカルを追加する確率
@@ -679,7 +679,7 @@ class AsemicGlyph(BaseShape):
             random_seed: 乱数シード
             **_params: 追加パラメータ（無視される）
             
-        Returns:
+        返り値:
             Geometry object containing アセミック文字
         """
         # 乱数状態の初期化（テスト可能性のために分離）

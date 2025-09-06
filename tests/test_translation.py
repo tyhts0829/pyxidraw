@@ -1,10 +1,10 @@
 """
-effects.translation モジュールのテスト
+effects.translate モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.translation import translate
+from effects.translate import translate
 from engine.core.geometry import Geometry
 
 

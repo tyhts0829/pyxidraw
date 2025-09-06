@@ -1,3 +1,17 @@
+"""
+dash エフェクト（破線化）
+
+- 各ポリラインを一定のダッシュ長とギャップ長で切り出し、破線の集合へ変換します。
+
+主なパラメータ:
+- dash_length: ダッシュ区間の長さ [mm]。
+- gap_length: ギャップ区間の長さ [mm]。
+
+仕様/注意:
+- 端部は補間により部分ダッシュになり得ます。全長が短い場合は原線を保持します。
+- 長さ単位は正規化値ではなく座標系の実寸（mm 相当）です。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -36,14 +50,15 @@ def _interpolate_segment(vertices: np.ndarray, cumulative_distances: np.ndarray,
 def dash(
     g: Geometry,
     *,
-    dash_length: float = 0.1,
-    gap_length: float = 0.05,
+    dash_length: float = 6.0,
+    gap_length: float = 3.0,
 ) -> Geometry:
     """連続線を破線に変換（純関数）。
 
-    Notes:
+    備考:
         - dash_length/gap_length は座標単位（mm 相当）。0..1 正規化ではありません。
-        - 線長に応じて端部のダッシュは補間されます。
+        - 線長に応じて端部のダッシュは補間されます（端は部分ダッシュになり得ます）。
+        - 既定値（6mm/3mm）は 300mm キャンバス中央の立方体（辺=150mm）で視認性と密度のバランスが良好です。
     """
     coords, offsets = g.as_arrays(copy=False)
     if len(coords) == 0:

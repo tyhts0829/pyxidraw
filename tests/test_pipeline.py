@@ -38,9 +38,9 @@ class TestPipelineBuilder:
 
     def test_progressive_vs_pipeline(self, simple_geometry):
         # 段階適用
-        from effects.rotation import rotate
-        from effects.scaling import scale
-        from effects.translation import translate
+        from effects.rotate import rotate
+        from effects.scale import scale
+        from effects.translate import translate
 
         step1 = rotate(simple_geometry, angles_rad=(0.0, 0.0, 1.5707963267948966))
         step2 = scale(step1, scale=(2.0, 2.0, 2.0))

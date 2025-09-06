@@ -53,7 +53,7 @@
 
 3) テスト（同期検証）
 - `tests/test_pipeline_stub_sync.py` を追加。
-  - `effects.registry.list_effects()` と `.pyi` のメソッド列挙が一致することを検証。
+- `effects.registry.list_effects()` と `.pyi` のメソッド列挙が一致することを検証。
   - シグネチャは「関数名が存在すること」を主検証に留め、詳細型の厳密一致は緩める（`Any` 許容）。
 
 4) 開発フロー組み込み

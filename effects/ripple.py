@@ -1,3 +1,16 @@
+"""
+ripple エフェクト（座標依存サイン波）
+
+- 座標値に比例したサイン波変位を各軸に加え、周期的なうねりを与えます。
+- `wobble` よりも整った波形で、周波数/位相の調整により規則的なリップル表現が可能です。
+
+パラメータ:
+- amplitude [mm], frequency [cycles/unit], phase [rad]。
+
+注意:
+- 単位は正規化値ではなく座標系の実寸（mm 相当）です。
+"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -11,19 +24,19 @@ from common.types import Vec3
 def ripple(
     g: Geometry,
     *,
-    amplitude: float = 0.1,
-    frequency: float | Vec3 = (0.1, 0.1, 0.1),
+    amplitude: float = 1.5,
+    frequency: float | Vec3 = 0.03,
     phase: float = 0.0,
 ) -> Geometry:
     """座標値に基づくサイン波ゆらぎ（ウォブル）を各軸に適用する純関数エフェクト。
 
-    Args:
+    引数:
         g: 入力ジオメトリ
         amplitude: 変位の大きさ（座標単位, mm 相当）。0..1 正規化ではありません。
         frequency: 空間周波数 [cycles per unit]。float なら全軸に同一値、タプルなら (fx, fy, fz)。
         phase: 位相オフセット（ラジアン）
 
-    Returns:
+    返り値:
         Geometry: ゆらぎが適用された新しいジオメトリ
     """
     coords, offsets = g.as_arrays(copy=False)
@@ -54,5 +67,6 @@ def ripple(
 
 ripple.__param_meta__ = {
     "amplitude": {"type": "number", "min": 0.0},
+    "frequency": {"type": "vec3"},
     "phase": {"type": "number"},
 }

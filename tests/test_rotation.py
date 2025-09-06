@@ -1,12 +1,12 @@
 """
-effects.rotation モジュールのテスト
+effects.rotate モジュールのテスト
 """
 import math
 
 import numpy as np
 import pytest
 
-from effects.rotation import rotate
+from effects.rotate import rotate
 from engine.core.geometry import Geometry
 
 

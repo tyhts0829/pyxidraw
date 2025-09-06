@@ -97,7 +97,13 @@ def _generate_cross_fill(vertices: np.ndarray, density: float, angle: float = 0.
         return lines1 + lines2
 
 def _generate_dot_fill(vertices: np.ndarray, density: float) -> list[np.ndarray]:
-        """ドット塗りつぶしパターンを生成します。"""
+        """ドット塗りつぶしパターンを生成します。
+
+        実装メモ:
+        - レンダラは線分のみ描画するため「点」は表示されない。
+          そのため各グリッド点を小さな「クロス（＋）」の2線分として表現する。
+        - クロスのサイズはグリッド間隔に比例（視認性と過密回避のバランス）。
+        """
         # Transform to XY plane
         vertices_2d, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
         coords_2d = vertices_2d[:, :2]
@@ -122,17 +128,27 @@ def _generate_dot_fill(vertices: np.ndarray, density: float) -> list[np.ndarray]
         x_values = np.arange(min_x, max_x + spacing, spacing)
         y_values = np.arange(min_y, max_y + spacing, spacing)
 
-        # Use batch processing for finding dots
-        dot_points = find_dots_in_polygon(coords_2d, x_values, y_values)
+        # Use batch processing for finding dots (centers)
+        centers = find_dots_in_polygon(coords_2d, x_values, y_values)
 
-        dots = []
-        for i in range(len(dot_points)):
-            # Create a small dot (just a point for now)
-            dot_3d = np.array([[dot_points[i, 0], dot_points[i, 1], 0]])
-            dot_final = transform_back(dot_3d, rotation_matrix, z_offset)
-            dots.append(dot_final)
+        # Represent a dot as a small cross of two short segments
+        r = float(spacing) * 0.18  # size ratio tuned for clarity
+        if r <= 0:
+            return []
 
-        return dots
+        out_lines: list[np.ndarray] = []
+        for i in range(len(centers)):
+            cx, cy = float(centers[i, 0]), float(centers[i, 1])
+            # Horizontal tiny segment
+            seg_h_2d = np.array([[cx - r, cy], [cx + r, cy]], dtype=np.float32)
+            seg_h_3d = np.hstack([seg_h_2d, np.zeros((2, 1), dtype=np.float32)])
+            out_lines.append(transform_back(seg_h_3d, rotation_matrix, z_offset))
+            # Vertical tiny segment
+            seg_v_2d = np.array([[cx, cy - r], [cx, cy + r]], dtype=np.float32)
+            seg_v_3d = np.hstack([seg_v_2d, np.zeros((2, 1), dtype=np.float32)])
+            out_lines.append(transform_back(seg_v_3d, rotation_matrix, z_offset))
+
+        return out_lines
 
 def _find_line_intersections(polygon: np.ndarray, y: float) -> list[float]:
     """水平線とポリゴンエッジの交点を検索します。"""
@@ -151,8 +167,8 @@ def fill(
     g: Geometry,
     *,
     mode: str = "lines",
-    angle_rad: float = 0.0,
-    density: float = 0.5,
+    angle_rad: float = 0.7853981633974483,  # pi/4 ≈ 45°
+    density: float = 0.35,
 ) -> Geometry:
     """閉じた形状をハッチング/ドットで塗りつぶし（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)

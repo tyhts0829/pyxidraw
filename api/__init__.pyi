@@ -124,13 +124,13 @@ class _GShapes(Protocol):
             sphere_type: 描画スタイル（0.0–1.0）: 0.0–0.2: 緯経線（デフォルト） 0.2–0.4: ワイヤーフレーム 0.4–0.6: ジグザグ 0.6–0.8: アイコスフィア 0.8–1.0: リング
         """
         ...
-    def text(self, *, text: str = ..., size: float = ..., font: str = ..., font_number: int = ..., align: str = ..., **_params: Any) -> Geometry:
+    def text(self, *, text: str = ..., font_size: float = ..., font: str = ..., font_number: int = ..., align: str = ..., **_params: Any) -> Geometry:
         """
         フォントのアウトラインから線分として文字列を生成します。
 
         引数:
             text: レンダリングする文字列
-            size: 文字サイズ（キャンバスに対する相対）
+            font_size: 文字サイズ（キャンバスに対する相対）
             font: フォント名またはパス
             font_number: TTC ファイルのフォント番号
             align: 行揃え（'left' | 'center' | 'right'）
@@ -153,8 +153,17 @@ class _GShapes(Protocol):
 from common.types import Vec3
 
 class _PipelineBuilder(Protocol):
-    def affine(self, *, pivot: Vec3 = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
-        """        任意の変換（スケール→回転→移動）を適用する純関数エフェクト（新形式のみ）。
+    # meta: pivot (type=vec3)
+    # meta: angles_rad (type=vec3)
+    # meta: scale (type=vec3)
+    def affine(self, *, pivot: Vec3 | None = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+        """
+        任意の変換（スケール→回転→移動）を適用する純関数エフェクト。
+
+        引数:
+            pivot: vec3
+            angles_rad: vec3
+            scale: vec3
         """
         ...
     # meta: intensity (type=number, min=0.0)
@@ -181,9 +190,9 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: amplitude_mm (type=number, min=0.0)
     # meta: t_sec (type=number, min=0.0)
-    def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | Vec3 = ..., t_sec: float = ..., intensity: float | None = ..., frequency: float | Vec3 | None = ..., time: float | None = ..., **_params: Any) -> _PipelineBuilder:
+    def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | Vec3 = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        3次元頂点にPerlinノイズを追加（新形式のみ）。
+        3次元頂点にPerlinノイズを追加（クリーンAPI）。
 
         引数:
             amplitude_mm: number, min 0.0
@@ -233,6 +242,7 @@ class _PipelineBuilder(Protocol):
     # choices: join in ['mitre', 'round', 'bevel']
     # meta: segments_per_circle (type=integer, range=[1, 1000])
     # meta: distance (type=number, range=[0.0, 1.0])
+    # meta: distance_mm (type=number, min=0.0)
     def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., distance_mm: float | None = ..., **_params: Any) -> _PipelineBuilder:
         """
         Shapely を使用したバッファ/オフセット（純関数）。
@@ -241,18 +251,28 @@ class _PipelineBuilder(Protocol):
             join: string, choices { 'mitre', 'round', 'bevel' }
             segments_per_circle: integer, range [1, 1000]
             distance: number, range [0.0, 1.0]
+            distance_mm: number, min 0.0
         """
         ...
     # meta: count (type=integer, range=[0, 10])
+    # meta: offset (type=vec3)
+    # meta: angles_rad_step (type=vec3)
+    # meta: scale (type=vec3)
+    # meta: pivot (type=vec3)
     def repeat(self, *, count: int = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         入力のコピーを配列状に生成（純関数）。
 
         引数:
             count: integer, range [0, 10]
+            offset: vec3
+            angles_rad_step: vec3
+            scale: vec3
+            pivot: vec3
         """
         ...
     # meta: amplitude (type=number, min=0.0)
+    # meta: frequency (type=vec3)
     # meta: phase (type=number)
     def ripple(self, *, amplitude: float = ..., frequency: float | Vec3 = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
@@ -341,14 +361,16 @@ class _PipelineBuilder(Protocol):
         """
         ...
     # meta: amplitude (type=number, min=0.0)
+    # meta: frequency (type=vec3)
     # meta: phase (type=number)
     def wobble(self, *, amplitude: float = ..., frequency: float | Vec3 = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         線にウォブル/波の歪みを追加（純関数）。
 
         引数:
-            amplitude: number, min 0.0
-            phase: number
+            amplitude: 変位量（座標単位, mm 相当）
+            frequency: 空間周波数 [cycles per unit]
+            phase: 位相（ラジアン）
         """
         ...
     def build(self) -> Pipeline: ...

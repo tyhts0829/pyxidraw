@@ -30,10 +30,10 @@ class Cylinder(BaseShape):
         """
         vertices_list = []
         
-        # Generate top and bottom circles
+        # 上面と下面の円を生成
         angles = np.linspace(0, 2 * np.pi, segments + 1)
         
-        # Top circle
+        # 上面の円
         top_circle = []
         for angle in angles:
             x = radius * np.cos(angle)
@@ -42,7 +42,7 @@ class Cylinder(BaseShape):
             top_circle.append([x, y, z])
         vertices_list.append(np.array(top_circle, dtype=np.float32))
         
-        # Bottom circle
+        # 下面の円
         bottom_circle = []
         for angle in angles:
             x = radius * np.cos(angle)
@@ -51,7 +51,7 @@ class Cylinder(BaseShape):
             bottom_circle.append([x, y, z])
         vertices_list.append(np.array(bottom_circle, dtype=np.float32))
         
-        # Vertical lines
+        # 側面の垂直ライン
         for i in range(segments):
             angle = 2 * np.pi * i / segments
             x = radius * np.cos(angle)

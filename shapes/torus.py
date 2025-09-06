@@ -14,7 +14,7 @@ from .registry import shape
 def _generate_meridian_line(
     major_radius: float, minor_radius: float, minor_segments: int, cos_theta: float, sin_theta: float
 ) -> np.ndarray:
-    """Generate a single meridian line."""
+    """トーラスの子午線（縦方向）1本を生成します。"""
     phi_values = 2 * np.pi * np.arange(minor_segments + 1) / minor_segments
     cos_phi = np.cos(phi_values)
     sin_phi = np.sin(phi_values)
@@ -36,7 +36,7 @@ def _generate_meridian_line(
 def _generate_parallel_line(
     major_radius: float, minor_radius: float, major_segments: int, cos_phi: float, sin_phi: float
 ) -> np.ndarray:
-    """Generate a single parallel line."""
+    """トーラスの緯線（横方向）1本を生成します。"""
     theta_values = 2 * np.pi * np.arange(major_segments + 1) / major_segments
     cos_theta = np.cos(theta_values)
     sin_theta = np.sin(theta_values)

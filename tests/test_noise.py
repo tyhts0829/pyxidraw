@@ -1,10 +1,10 @@
 """
-effects.noise モジュールのテスト
+effects.displace モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.noise import displace
+from effects.displace import displace
 from engine.core.geometry import Geometry
 
 

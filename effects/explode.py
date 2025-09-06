@@ -1,3 +1,16 @@
+"""
+explode エフェクト（中心からの放射発散）
+
+- 重心から各頂点へ向かう方向ベクトルを正規化し、一定距離だけ外側へ移動させます。
+- 形を「弾けさせる」効果で、線の位相は保持されます。
+
+主なパラメータ:
+- factor: 0..1 を実距離に写像して移動量を決定（MAX_OFFSET=50mm 基準）。
+
+注意:
+- 全頂点が等距離で外側へ移動するため、連結は維持されますが交差が増える可能性があります。
+"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -8,7 +21,7 @@ from .registry import effect
 
 
 @effect()
-def explode(g: Geometry, *, factor: float = 0.2) -> Geometry:
+def explode(g: Geometry, *, factor: float = 0.3) -> Geometry:
     """中心から外側へ頂点を放射状に移動させるエフェクト。
 
     Args:

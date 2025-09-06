@@ -75,7 +75,7 @@ PYXIDRAW_HEADLESS=1 python tutorials/01_basic_shapes.py
 
 ### 角度・スケールの取り扱い（指針）
 
-- 角度入力は `angles_rad`（ラジアン）を明示してください（`effects.rotation/transform`）。0..1 の暗黙指定や `angles_deg` は使用しません。
+- 角度入力は `angles_rad`（ラジアン）を明示してください（`effects.rotate/affine`）。0..1 の暗黙指定や `angles_deg` は使用しません。
 - `translation` は物理単位（mm）を直接指定。
 - `scaling` は `(sx, sy, sz)` の倍率指定。スカラー/1要素/3要素を受け付けます。
 
@@ -155,7 +155,7 @@ out = (E.pipeline
 - ターゲット一覧/絞り込み（`list --tag`, `--plugin`）
 - 結果比較（`compare --abs-threshold`、タグ/ターゲット別しきい値）
 - 失敗のみ再実行（`run --from-file benchmark_results/failed_targets.json`）
-- 個別スキップ（`run --skip effects.noise.high_frequency`）
+- 個別スキップ（`run --skip effects.displace.high_frequency`）
 - レポート生成（HTML/Markdown、自動出力）
 
 ## 設定
@@ -194,7 +194,12 @@ pipeline2 = from_spec(spec)
 ```
 
 効果のパラメータ仕様は `docs/effects_cheatsheet.md` を参照してください。
+移行時の置換は `docs/migration.md` を参照してください。
 アーキテクチャ決定（ADR）は `docs/adr/README.md` を参照してください。
+
+開発向けTips:
+- 厳格検証: `PipelineBuilder` は既定で厳格（unknown params は TypeError）。明示する場合は `E.pipeline.strict(True)`。
+- 単層キャッシュ上限: 環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` で制御（未設定は無制限、`0` で無効）。
 
 ## IDE 補完（`G.sphere` など）
 
@@ -311,7 +316,7 @@ python -m benchmarks list --tag cpu-bound --format table
 python -m benchmarks run --from-file benchmark_results/failed_targets.json
 
 # 個別ターゲットをスキップ
-python -m benchmarks run --skip effects.noise.high_frequency --skip shapes.sphere.high_res
+python -m benchmarks run --skip effects.displace.high_frequency --skip shapes.sphere.high_res
 ```
 
 並列実行の目安は docs/benchmarks_parallel_guide.md を参照してください。

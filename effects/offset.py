@@ -1,3 +1,20 @@
+"""
+offset エフェクト（バッファ/輪郭オフセット）
+
+- Shapely の `buffer` を用いて各ポリラインをオフセットし、膨張（外側）または収縮（内側）形状を生成します。
+- 3D 入力は XY 平面に射影して処理後、元の姿勢に戻します。
+
+主なパラメータ:
+- distance / distance_mm: オフセット距離。`distance` は 0..1 を mm に写像、`distance_mm` は実距離指定。
+- join: 角の処理（`round` | `mitre` | `bevel`）。
+- segments_per_circle: 円弧近似分割数（大きいほど滑らかだが重い）。
+
+実装メモ/注意:
+- 入力曲線は必要に応じて自動クローズしてから処理し、結果を 3D 姿勢へ復元します。
+- 全体が膨張し過ぎないよう軽い縮尺補正を適用します。
+- 自己交差や極端な距離ではトポロジが変化する可能性があります。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -18,11 +35,16 @@ def offset(
     g: Geometry,
     *,
     join: str = "round",                 # 'mitre'|'round'|'bevel'
-    segments_per_circle: int = 8,  # shapelyのresolutionに相当
-    distance: float = 0.5,
+    segments_per_circle: int = 12,  # shapelyのresolutionに相当（既定値を上げて円滑さを確保）
+    distance: float = 0.2,
     distance_mm: float | None = None,
 ) -> Geometry:
-    """Shapely を使用したバッファ/オフセット（純関数）。"""
+    """Shapely を使用したバッファ/オフセット（純関数）。
+
+    既定値の方針（2025-09-06）:
+        - distance=0.2（0..1→mmの写像で約5mm）、join='round', segments_per_circle=12。
+          300mm 正方キャンバス中央の立方体に適用した静止画で、明瞭かつ過度でない見た目。
+    """
     coords, offsets = g.as_arrays(copy=False)
     # 0..1 → 実距離（mm）へ写像（提案5: 一貫写像）
     MAX_DISTANCE = 25.0
@@ -64,6 +86,7 @@ def offset(
 # validate_spec 用のメタデータ
 offset.__param_meta__ = {
     "distance": {"type": "number", "min": 0.0, "max": 1.0},
+    "distance_mm": {"type": "number", "min": 0.0},
     "join": {"type": "string", "choices": ["mitre", "round", "bevel"]},
     "segments_per_circle": {"type": "integer", "min": 1, "max": 1000},
 }

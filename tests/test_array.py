@@ -1,10 +1,10 @@
 """
-effects.array モジュールのテスト
+effects.repeat モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.array import repeat
+from effects.repeat import repeat
 from engine.core.geometry import Geometry
 
 

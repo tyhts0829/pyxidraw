@@ -70,7 +70,7 @@ def test_as_arrays_copy_behavior():
 
 def test_effect_noise_integration_path():
     # Verify function-based effect accepts Geometry and returns Geometry
-    from effects.noise import displace
+    from effects.displace import displace
 
     base = Geometry.from_lines([make_line([[0, 0, 0], [1, 0, 0], [0, 1, 0]])])
     out = displace(base, amplitude_mm=0.01, spatial_freq=(0.1, 0.1, 0.1), t_sec=0.0)

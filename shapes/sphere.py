@@ -13,20 +13,20 @@ from .registry import shape
 
 @lru_cache(maxsize=128)
 def _sphere_latlon(subdivisions: int) -> list[np.ndarray]:
-    """Generate sphere wireframe using longitude/latitude lines only.
+    """緯度経度線のみで球ワイヤーフレームを生成します。
 
-    Args:
-        subdivisions: Subdivision level (0-5)
+    引数:
+        subdivisions: 細分化レベル（0–5）
 
-    Returns:
-        List of vertex arrays for sphere wireframe
+    返り値:
+        球ワイヤーフレームの頂点配列リスト
     """
     segment_count = 16 + 32 * subdivisions  # Number of segments per ring
     ring_count = segment_count // 2  # Number of rings (latitude lines)
 
     vertices_list = []
 
-    # Longitude lines
+    # 経度線
     for j in range(segment_count):
         lon = 2 * np.pi * j / segment_count
         line = []
@@ -38,7 +38,7 @@ def _sphere_latlon(subdivisions: int) -> list[np.ndarray]:
             line.append([x, y, z])
         vertices_list.append(np.array(line, dtype=np.float32))
 
-    # Latitude lines
+    # 緯度線
     for i in range(1, ring_count):  # Skip poles
         lat = np.pi * i / ring_count
         line = []
@@ -55,13 +55,13 @@ def _sphere_latlon(subdivisions: int) -> list[np.ndarray]:
 
 @lru_cache(maxsize=128)
 def _sphere_zigzag(subdivisions: int) -> list[np.ndarray]:
-    """Generate sphere using zigzag pattern.
+    """ジグザグパターンで球を生成します。
 
-    Args:
-        subdivisions: Subdivision level (0-5)
+    引数:
+        subdivisions: 細分化レベル（0–5）
 
-    Returns:
-        List of vertex arrays for sphere spiral
+    返り値:
+        螺旋状の頂点配列リスト
     """
     # 螺旋の総回転数
     total_rotations = 8 + 4 * subdivisions
@@ -91,7 +91,7 @@ def _sphere_zigzag(subdivisions: int) -> list[np.ndarray]:
     vertices_list = []
     vertices_array = np.array(vertices, dtype=np.float32)
 
-    # Create short line segments between consecutive points
+    # 隣接点同士の短い線分を作成
     for i in range(len(vertices_array) - 1):
         line_segment = np.array([vertices_array[i], vertices_array[i + 1]], dtype=np.float32)
         vertices_list.append(line_segment)
@@ -101,18 +101,18 @@ def _sphere_zigzag(subdivisions: int) -> list[np.ndarray]:
 
 @lru_cache(maxsize=128)
 def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
-    """Generate sphere using icosphere pattern with hierarchical subdivision.
+    """アイコスフィア手法（階層細分化）で球を生成します。
 
-    Args:
-        subdivisions: Subdivision level (0-5)
+    引数:
+        subdivisions: 細分化レベル（0–5）
 
-    Returns:
-        List of vertex arrays for sphere icosphere
+    返り値:
+        アイコスフィア用の頂点配列リスト
     """
-    # Start with icosahedron vertices
+    # アイコサヘドロンの頂点から開始
     phi = (1 + np.sqrt(5)) / 2  # Golden ratio
 
-    # 12 vertices of an icosahedron
+    # アイコサヘドロンの12頂点
     base_vertices = np.array(
         [
             [-1, phi, 0],
@@ -131,11 +131,11 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
         dtype=np.float32,
     )
 
-    # Normalize vertices to unit sphere
+    # 頂点を単位球に正規化
     norms = np.linalg.norm(base_vertices, axis=1, keepdims=True)
     base_vertices = base_vertices / norms * 0.5
 
-    # Base triangular faces for icosahedron
+    # アイコサヘドロンの三角面
     base_faces = [
         # Top cap triangles
         (0, 11, 5),
@@ -163,12 +163,12 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
     ]
 
     def subdivide_triangle(v1, v2, v3, level):
-        """Recursively subdivide a triangle into smaller triangles."""
+        """三角形を再帰的に細分化して小三角形へ分割。"""
         if level <= 0:
             # Base case: return the triangle edges
             return [(v1, v2), (v2, v3), (v3, v1)]
 
-        # Calculate midpoints and project to sphere surface
+        # 中点を計算し球面へ射影
         def midpoint_on_sphere(p1, p2):
             mid = (p1 + p2) / 2
             norm = np.linalg.norm(mid)
@@ -178,7 +178,7 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
         m2 = midpoint_on_sphere(v2, v3)
         m3 = midpoint_on_sphere(v3, v1)
 
-        # Recursively subdivide the 4 new triangles
+        # 4つの新しい三角形を再帰細分化
         edges = []
         edges.extend(subdivide_triangle(v1, m1, m3, level - 1))
         edges.extend(subdivide_triangle(m1, v2, m2, level - 1))
@@ -187,19 +187,19 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
 
         return edges
 
-    # Generate all edges with subdivision
+    # すべての辺（細分化込み）を生成
     all_edges = []
     for face in base_faces:
         v1, v2, v3 = base_vertices[face[0]], base_vertices[face[1]], base_vertices[face[2]]
         edges = subdivide_triangle(v1, v2, v3, subdivisions)
         all_edges.extend(edges)
 
-    # Convert edges to vertex arrays, removing duplicates
+    # 辺を頂点配列へ変換（重複削除）
     vertices_list = []
     seen_edges = set()
 
     for edge in all_edges:
-        # Create a hashable representation of the edge
+        # 辺のハッシュ可能な表現を作成
         edge_key = tuple(sorted([tuple(edge[0]), tuple(edge[1])]))
 
         if edge_key not in seen_edges:
@@ -212,13 +212,13 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
 
 @lru_cache(maxsize=128)
 def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
-    """Generate sphere using horizontal ring slices.
+    """水平リングで球を生成します。
 
-    Args:
-        subdivisions: Subdivision level (0-5)
+    引数:
+        subdivisions: 細分化レベル（0–5）
 
-    Returns:
-        List of vertex arrays for sphere rings
+    返り値:
+        リングの頂点配列リスト
     """
     ring_count = 5 + 12 * subdivisions  # Number of slices per axis
     segment_count = 64  # Points per ring

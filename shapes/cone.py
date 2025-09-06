@@ -30,7 +30,7 @@ class Cone(BaseShape):
         """
         vertices_list = []
         
-        # Base circle
+        # 底面の円
         angles = np.linspace(0, 2 * np.pi, segments + 1)
         base_circle = []
         for angle in angles:
@@ -40,7 +40,7 @@ class Cone(BaseShape):
             base_circle.append([x, y, z])
         vertices_list.append(np.array(base_circle, dtype=np.float32))
         
-        # Lines from apex to base
+        # 頂点から底面へのライン
         apex = np.array([0, 0, height / 2], dtype=np.float32)
         for i in range(segments):
             angle = 2 * np.pi * i / segments

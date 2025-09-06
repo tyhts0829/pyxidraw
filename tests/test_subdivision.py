@@ -1,10 +1,10 @@
 """
-effects.subdivision モジュールのテスト
+effects.subdivide モジュールのテスト
 """
 import numpy as np
 import pytest
 
-from effects.subdivision import subdivide
+from effects.subdivide import subdivide
 from engine.core.geometry import Geometry
 
 

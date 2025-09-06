@@ -44,15 +44,15 @@ class Lissajous(BaseShape):
         返り値:
             ポリライン1本としての曲線の Geometry
         """
-        # Sample parameter over one full cycle
+        # 1 周期分のパラメータをサンプリング
         t = np.linspace(0, 2 * np.pi, points)
 
-        # Amplitude 0.5 to match conventions of other shapes (roughly unit box)
+        # 振幅 0.5（他シェイプの慣習に合わせ、概ね単位ボックスに収める）
         amp = 0.5
 
         x = np.sin(freq_x * t + phase) * amp
         y = np.sin(freq_y * t + phase_y) * amp
-        # If freq_z == 0 (default), produce a flat Z (2D). Otherwise, full 3D.
+        # freq_z == 0（既定）なら Z はフラット（2D）。それ以外は 3D。
         if freq_z == 0.0:
             z = np.zeros_like(t)
         else:

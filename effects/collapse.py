@@ -1,3 +1,19 @@
+"""
+collapse エフェクト（線の崩し/しわ寄せ）
+
+- 各線分を細分化し、小区間ごとに主方向と直交するランダムベクトルでオフセットして
+  「崩れた」「くしゃっとした」見た目を作ります。
+- ノイズはセグメントごとに独立に生成し、激しさは `intensity` で制御します。
+
+主なパラメータ:
+- intensity: 変位量（mm 相当）。
+- subdivisions: 0..1 を細分回数に写像（最大 MAX_DIV=10）。
+
+特性/注意:
+- 細分化を増やすと鋸歯状の微細な揺らぎが増え、頂点数も増加します。
+- 直線長が極端に短い場合やゼロ長はスキップされます。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -134,10 +150,15 @@ def _apply_collapse_to_coords(
 def collapse(
     g: Geometry,
     *,
-    intensity: float = 0.5,
+    intensity: float = 1.8,
     subdivisions: float = 0.5,
 ) -> Geometry:
-    """線分を細分化してノイズで変形（純関数）。"""
+    """線分を細分化してノイズで変形（純関数）。
+
+    既定値ポリシー（強め）:
+    - intensity=1.8: 輪郭の揺らぎがはっきり見える強さ。
+    - subdivisions=0.5: 細分化 5 程度（MAX_DIV=10 基準）で「ギザつき」を十分に出す。
+    """
     coords, offsets = g.as_arrays(copy=False)
     if len(coords) == 0 or intensity == 0.0 or subdivisions == 0.0:
         return Geometry(coords.copy(), offsets.copy())

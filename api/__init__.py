@@ -40,11 +40,11 @@ __all__ = [
 
 # バージョン情報
 __version__ = "2025.09"
-__api_version__ = "3.0"
+__api_version__ = "4.0"
 
 # 互換性情報（破壊的変更）
 __breaking_changes__ = [
-    "エフェクトは関数ベースに統一 (Geometry -> Geometry)",
-    "パイプラインは E.pipeline（単層キャッシュ）",
-    "GeometryData を Geometry に統合",
+    "後方互換引数を廃止しクリーンAPIへ統一",
+    "PipelineBuilder を既定 strict=True に変更",
+    "Text 形状の size を font_size に改名",
 ]

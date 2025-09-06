@@ -31,7 +31,7 @@ benchmark:
       cpu-bound: -0.10
     # ターゲット別の回帰しきい値（割合）。個別に上書き
     by_target:
-      effects.noise.high_frequency: -0.15
+      effects.displace.high_frequency: -0.15
 
 # ベンチマーク対象設定
 targets:
@@ -74,7 +74,7 @@ targets:
         - name: "xyz"
           params: {rotate: [30, 45, 60]}
       
-      noise:
+      displace:
         - name: "low_intensity"
           params: {intensity: 0.1, frequency: 1.0}
         - name: "medium_intensity"
@@ -84,7 +84,7 @@ targets:
         - name: "high_frequency"
           params: {intensity: 0.5, frequency: 3.0}
       
-      subdivision:
+      subdivide:
         - name: "level_1"
           params: {level: 1}
         - name: "level_2"  
@@ -100,7 +100,7 @@ targets:
         - name: "depth_100"
           params: {depth: 100.0}
       
-      filling:
+      fill:
         - name: "spacing_5"
           params: {spacing: 5.0}
         - name: "spacing_10"
@@ -108,7 +108,7 @@ targets:
         - name: "angle_45"
           params: {spacing: 10.0, angle: 45.0}
       
-      buffer:
+      offset:
         - name: "distance_2"
           params: {distance: 2.0}
         - name: "distance_5"
@@ -116,7 +116,7 @@ targets:
         - name: "distance_10"
           params: {distance: 10.0}
       
-      array:
+      repeat:
         - name: "grid_2x2"
           params: {count_x: 2, count_y: 2, spacing_x: 20.0, spacing_y: 20.0}
         - name: "grid_3x3"

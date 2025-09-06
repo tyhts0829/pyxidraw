@@ -128,7 +128,8 @@ class PipelineBuilder:
         self._steps: List[Step] = []
         # 既定サイズは環境変数から上書き可能
         self._cache_maxsize: int | None = None
-        self._strict: bool = False
+        # クリーン化方針: 既定で厳格検証を有効化
+        self._strict: bool = True
         _env = os.getenv("PXD_PIPELINE_CACHE_MAXSIZE")
         if _env is not None:
             try:
@@ -258,26 +259,28 @@ def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
             if not _is_json_like(v):
                 raise TypeError(f"spec[{i}]['params']['{k}'] は JSON 風の値ではありません: {type(v).__name__}")
 
-        # Validate parameter names against signature if possible
+        # 厳格: 未知パラメータを禁止（**kwargs 許容の特例も廃止）
         try:
             sig = inspect.signature(fn)
-            has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-            if not has_var_kw:
-                # allowed keywords are those after the first positional 'g' argument
-                allowed = {p.name for p in sig.parameters.values() if p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)}
-                if 'g' in allowed:
-                    allowed.remove('g')
-                unknown = [k for k in params.keys() if k not in allowed]
-                if unknown:
-                    allowed_sorted = sorted(allowed)
-                    raise TypeError(
-                        "spec[{}] のエフェクト '{}' に未知のパラメータがあります: {} / 許可: {}".format(
-                            i, name, unknown, allowed_sorted
-                        )
-                    )
         except ValueError:
-            # Builtins or objects without signature: skip strict check
-            pass
+            # 署名を取得できない場合はスキップ（ほぼ発生しない想定）
+            continue
+        allowed = {
+            p.name
+            for p in sig.parameters.values()
+            if p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        }
+        # 効果関数の第1引数 g は外部指定しない
+        if "g" in allowed:
+            allowed.remove("g")
+        unknown = [k for k in params.keys() if k not in allowed]
+        if unknown:
+            allowed_sorted = ", ".join(sorted(allowed))
+            raise TypeError(
+                f"spec[{i}] effect '{name}' has unknown params: {unknown}. Allowed: [{allowed_sorted}]"
+            )
+
+        # （重複させない）この時点で未知パラメータは検出済み
 
         # Optional: param meta validation (type/range/choices) if effect exposes __param_meta__
         meta = getattr(fn, "__param_meta__", None)

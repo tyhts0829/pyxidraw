@@ -1,3 +1,13 @@
+"""
+translate エフェクト（平行移動）
+
+- 入力を XYZ のオフセットだけ移動する純関数です。
+- オフセットがゼロ、または空ジオメトリの場合はコピーを返す高速経路があります。
+
+パラメータ:
+- delta: (dx, dy, dz) [mm]。
+"""
+
 from __future__ import annotations
 
 from .registry import effect

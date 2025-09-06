@@ -1,10 +1,10 @@
 import numpy as np
 
 from engine.core.geometry import Geometry
-from effects.rotation import rotate
-from effects.transform import affine
-from effects.array import repeat
-from effects.translation import translate
+from effects.rotate import rotate
+from effects.affine import affine
+from effects.repeat import repeat
+from effects.translate import translate
 
 
 def _geom():

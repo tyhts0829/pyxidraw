@@ -1,3 +1,17 @@
+"""
+twist エフェクト（位置依存ねじり）
+
+- 指定軸の最小/最大座標で正規化した位置 t∈[0,1] に応じて、
+  -max..+max の回転角を割り当ててねじります（中心付近は 0）。
+
+パラメータ:
+- angle: 最大ねじれ角（度）。
+- axis: 'x' | 'y' | 'z'。
+
+注意:
+- 軸方向の範囲が 0 の場合は無効果です。
+"""
+
 from __future__ import annotations
 
 import math
@@ -8,12 +22,12 @@ from .registry import effect
 
 
 @effect()
-def twist(g: Geometry, *, angle: float = 45.0, axis: str = "y") -> Geometry:
+def twist(g: Geometry, *, angle: float = 60.0, axis: str = "y") -> Geometry:
     """位置に応じて軸回りにねじるエフェクト（角度は度）。
 
     Args:
         g: 入力ジオメトリ
-        angle: 最大ねじれ角（度）
+        angle: 最大ねじれ角（度）。デフォルトは 60°（視認性と過度な破綻のバランス）。
         axis: ねじれ軸（"x"|"y"|"z"）
 
     Returns:

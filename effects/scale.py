@@ -1,3 +1,14 @@
+"""
+scale エフェクト（拡大縮小）
+
+- ピボット点を中心に、各軸の倍率でスケール変換します（非等方スケール可）。
+- 実装は `Geometry.scale` に委譲する純関数です。
+
+パラメータ:
+- pivot: 変換の中心。
+- scale: (sx, sy, sz) 倍率。
+"""
+
 from __future__ import annotations
 
 from typing import Tuple

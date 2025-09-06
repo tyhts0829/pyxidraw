@@ -11,7 +11,7 @@ PyxiDraw ベンチマークシステム コマンドライン界面
     python -m benchmarks run --config custom.yaml
     python -m benchmarks run --parallel        # 並列実行
     python -m benchmarks list                  # 利用可能ターゲット一覧
-    python -m benchmarks run --target effects.noise.high_intensity
+    python -m benchmarks run --target effects.displace.high_intensity
     python -m benchmarks validate results.json # 結果検証
     python -m benchmarks compare baseline.json current.json
 """
@@ -35,7 +35,7 @@ def create_parser() -> argparse.ArgumentParser:
   python -m benchmarks run                           # 全ベンチマーク実行
   python -m benchmarks run --config custom.yaml     # カスタム設定で実行
   python -m benchmarks run --parallel --workers 4   # 並列実行
-  python -m benchmarks run --target effects.noise   # 特定ターゲットのみ
+  python -m benchmarks run --target effects.displace   # 特定ターゲットのみ
   python -m benchmarks list                         # 利用可能ターゲット一覧
   python -m benchmarks validate results.json        # 結果検証
   python -m benchmarks compare old.json new.json    # 結果比較

@@ -33,14 +33,14 @@ def shape(arg: str | Type[BaseShape] | None = None):  # type: ignore[name-define
 
 def get_shape(name: str) -> Type[BaseShape]:
     """登録されたシェイプクラスを取得。
-    
-    Args:
+
+    引数:
         name: シェイプ名
-        
-    Returns:
+
+    返り値:
         シェイプクラス
-        
-    Raises:
+
+    例外:
         KeyError: シェイプが登録されていない場合
     """
     return _shape_registry.get(name)
@@ -48,8 +48,8 @@ def get_shape(name: str) -> Type[BaseShape]:
 
 def list_shapes() -> list[str]:
     """登録されているシェイプの一覧を取得。
-    
-    Returns:
+
+    返り値:
         シェイプ名のリスト
     """
     return _shape_registry.list_all()

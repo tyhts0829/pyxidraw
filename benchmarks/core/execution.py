@@ -130,7 +130,12 @@ class BenchmarkExecutor:
         target_name = target.name.lower()
         
         # エフェクトプリフィックスがある場合は形状ではない
-        effect_prefixes = ['transform.', 'scale.', 'translate.', 'rotate.', 'noise.', 'subdivision.', 'extrude.', 'filling.', 'buffer.', 'array.']
+        effect_prefixes = [
+            # 新名称
+            'transform.', 'scale.', 'translate.', 'rotate.', 'displace.', 'subdivide.', 'extrude.', 'fill.', 'offset.', 'repeat.',
+            # 旧名称（互換不要だが誤判定防止のため残置）
+            'noise.', 'subdivision.', 'filling.', 'buffer.', 'array.',
+        ]
         if any(target_name.startswith(prefix) for prefix in effect_prefixes):
             return False
         

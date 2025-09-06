@@ -70,7 +70,7 @@
 
 - 早期検証の強化: `Pipeline.__init__` 時に `inspect.signature` を用いたパラメータ名チェックを任意で有効化し、実行前に不正パラメータを検知（`validate_spec` 相当の一部を組み込み）。
 - ドキュメントの同期性: README の「キャッシュ制御」に `PXD_PIPELINE_CACHE_MAXSIZE` と `PXD_DISABLE_GEOMETRY_DIGEST` を明記（形状キャッシュ向け `PXD_CACHE_*` とは別物である点を強調）。
-- 互換性レイヤ（任意）: `effects.noise.displace` 内で旧キー（`intensity/frequency/time`）を読み替えて警告発行（ただし、関数署名の厳格性と `validate_spec` の方針を優先するなら現状維持が妥当）。
+- 互換性レイヤ（任意）: `effects.displace.displace` 内で旧キー（`intensity/frequency/time`）を読み替えて警告発行（ただし、関数署名の厳格性と `validate_spec` の方針を優先するなら現状維持が妥当）。
 - `util.utils.load_config`: ファイル非存在時は `{}` を返す軽量ガードを追加（現状は呼び出し側で try/except 済みだが、ユーティリティ側で安全化すると再利用性が上がる）。
 
 ---
@@ -160,7 +160,7 @@
 - [x] `util/utils.load_config()` をフェイルソフト化（非存在/読込失敗で `{}` 返却）。
 - [x] `engine/io/manager.py` が設定未存在時にも安全に動作するよう `get('midi_devices', [])` に変更。
 - [x] `E.pipeline.strict(True)`（`PipelineBuilder.strict`）を実装し、ビルド時に未知キーを検出。
-- [x] `effects.noise.displace` に旧キー（`intensity/frequency/time`）の互換受理＋ `DeprecationWarning` を追加。
+- [x] `effects.displace.displace` に旧キー（`intensity/frequency/time`）の互換受理＋ `DeprecationWarning` を追加。
  - [x] テスト追加：
   - パイプラインキャッシュが「digest 無効 + `rotate` 早期 return」および「empty + `scale` 早期 return」でも有効であること。
   - ベンチマークのシリアライズターゲットが `translate.delta` と `displace.amplitude_mm/spatial_freq` に正しくマップされること（レガシー名入力のスモーク）。

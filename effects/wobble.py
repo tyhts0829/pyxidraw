@@ -1,3 +1,13 @@
+"""
+wobble エフェクト（ゆらぎ）
+
+- サイン波によるゆらぎを各頂点へ加え、線を手書き風にたわませます。
+- 実装は各軸ごとの `sin(2π f * axis + 位相)` を加算する方式で、2D/3D に対応します。
+
+パラメータ:
+- amplitude [mm], frequency (float または Vec3), phase [rad]。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -38,16 +48,20 @@ def _wobble_vertices(
 def wobble(
     g: Geometry,
     *,
-    amplitude: float = 1.0,
-    frequency: float | Vec3 = (0.1, 0.1, 0.1),
+    amplitude: float = 2.5,
+    frequency: float | Vec3 = 0.02,
     phase: float = 0.0,
 ) -> Geometry:
     """線にウォブル/波の歪みを追加（純関数）。
 
-    Notes:
-        - amplitude は座標単位（mm 相当）。0..1 正規化ではありません。
-        - frequency は空間周波数 [cycles per unit]。float なら全軸同一、タプルは (fx, fy, fz)。
-        - phase はラジアン。
+    既定値の方針（2025-09-06 更新・再調整）:
+        - amplitude=2.5mm, frequency=0.02, phase=0.0 を既定とし、
+          300mm 正方キャンバス中央の立方体に適用したときに「効果が分かる最小限」を狙う。
+
+    引数:
+        amplitude: 変位量（座標単位, mm 相当）。0..1 正規化ではありません。
+        frequency: 空間周波数 [cycles per unit]。float なら全軸同一、タプルは (fx, fy, fz)。
+        phase: 位相（ラジアン）。
     """
     coords, offsets = g.as_arrays(copy=False)
 
@@ -72,5 +86,6 @@ def wobble(
 
 wobble.__param_meta__ = {
     "amplitude": {"type": "number", "min": 0.0},
+    "frequency": {"type": "vec3"},
     "phase": {"type": "number"},
 }

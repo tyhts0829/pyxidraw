@@ -1,3 +1,21 @@
+"""
+extrude エフェクト（押し出し）
+
+- 入力ポリラインを指定方向へ距離 `distance` だけ平行移動した「複製線」を作り、
+  元の線との対応頂点をエッジで接続して側面線群を形成します。
+- 複製線にスケールを適用でき、事前細分化でエッジ密度を増やすことができます。
+
+主なパラメータ:
+- direction: 押し出し方向ベクトル。
+- distance: 0..1 → 実距離 [mm] に写像。
+- scale: 複製線のスケール係数（0..1 → 0..MAX_SCALE）。
+- subdivisions: 0..1 → 細分回数（最大 MAX_SUBDIVISIONS=5）。
+- center_mode: 'auto' は複製線の重心基準、'origin' は原点基準でスケール。
+
+注意:
+- 入力各線の頂点数が増えるため、描画コストが上がります。
+"""
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -15,10 +33,10 @@ def extrude(
     g: Geometry,
     *,
     direction: Vec3 = (0.0, 0.0, 1.0),
-    distance: float = 0.5,
-    scale: float = 0.5,
-    subdivisions: float = 0.5,
-    center_mode: Literal["origin", "auto"] = "origin",
+    distance: float = 0.35,
+    scale: float = 0.35,
+    subdivisions: float = 0.3,
+    center_mode: Literal["origin", "auto"] = "auto",
 ) -> Geometry:
     """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
