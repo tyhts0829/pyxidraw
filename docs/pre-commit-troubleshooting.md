@@ -62,16 +62,17 @@
 ## 4) 型チェック（mypy）
 
 - [x] `mypy` を単体実行し、エラー原文を確認。
-- [ ] このリポ固有の注意点:
-  - `pyproject.toml` の `[tool.mypy].files` が `util/utils.py` を指していますが、構成変更で `src/util/utils.py` に移動済みです。
--  - 今回はピンポイント修正（B）で解消:
-      ```toml
-      [tool.mypy]
-      exclude = "...|^src/api/__init__\\.pyi$"
-      files = ["src/util/utils.py"]
-      ```
-- [x] 変更後に再実行: `mypy`
-- [ ] サードパーティ型不足は当面 `ignore_missing_imports = true` で抑制（既定）。必要に応じて `types-*` を追加。
+- [x] このリポ固有の注意点:
+  - `pyproject.toml` の `[tool.mypy].files` を `src/util/utils.py` に修正済み。
+  - `src/api/__init__.pyi` は型チェック対象から除外済み（`exclude` に追加）。
+-  実際の修正内容:
+    ```toml
+    [tool.mypy]
+    exclude = "...|^src/api/__init__\\.pyi$"
+    files = ["src/util/utils.py"]
+    ```
+- [x] 変更後に再実行: `mypy`（pre-commit でも Pass）
+- [x] サードパーティ型不足は `ignore_missing_imports = true` で抑制中。`types-PyYAML` も pre-commit hook に追加済み。
 
 ---
 
