@@ -79,8 +79,8 @@ ignore_missing_imports = true
 python_version = "3.10"
 # リポジトリ全体を対象にした実行でもノイズを抑えるための除外
 # （必要になったら段階的に外していきます）
-exclude = "(^|/)(benchmarks|docs|screenshots|scripts|tutorials|benchmark_results|.pytest_cache)/"
+exclude = "(^|/)(benchmarks|docs|screenshots|scripts|tutorials|benchmark_results|.pytest_cache)/|^src/api/__init__\\.pyi$"
 # 当面は最小範囲から型検査を開始（段階的に拡大する）
 files = [
-  "util/utils.py",
+  "src/util/utils.py",
 ]

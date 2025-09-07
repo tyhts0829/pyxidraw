@@ -61,21 +61,16 @@
 
 ## 4) 型チェック（mypy）
 
-- [ ] `mypy` を単体実行し、エラー原文を確認。
+- [x] `mypy` を単体実行し、エラー原文を確認。
 - [ ] このリポ固有の注意点:
   - `pyproject.toml` の `[tool.mypy].files` が `util/utils.py` を指していますが、構成変更で `src/util/utils.py` に移動済みです。
-  - 次のいずれかで解消できます（推奨は A）：
-    - A) 対象を `src` へ広げる（段階導入しやすい）
+-  - 今回はピンポイント修正（B）で解消:
       ```toml
       [tool.mypy]
-      files = ["src"]
-      ```
-    - B) ピンポイント修正
-      ```toml
-      [tool.mypy]
+      exclude = "...|^src/api/__init__\\.pyi$"
       files = ["src/util/utils.py"]
       ```
-- [ ] 変更後に再実行: `mypy`
+- [x] 変更後に再実行: `mypy`
 - [ ] サードパーティ型不足は当面 `ignore_missing_imports = true` で抑制（既定）。必要に応じて `types-*` を追加。
 
 ---

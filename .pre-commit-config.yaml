@@ -41,3 +41,5 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-PyYAML]
+        pass_filenames: false
+        args: ["--config-file=pyproject.toml"]
