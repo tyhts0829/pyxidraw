@@ -56,12 +56,6 @@ line_length = 100
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-select = [
-  "E",    # pycodestyle errors
-  "F",    # pyflakes
-  "W",    # warnings
-]
-ignore = []
 exclude = [
   ".git",
   ".hypothesis",
@@ -71,7 +65,7 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["F401", "F841", "E9", "E999"]
+select = ["F401", "F841", "E9"]
 
 [tool.mypy]
 # 外部ライブラリの型スタブ欠如による雑音を抑制
