@@ -24,7 +24,7 @@
 
 ## 1) 失敗フックの特定
 
-- [ ] `pre-commit run -a -v` を実行し、失敗した Hook ID とログを記録する。
+- [x] `pre-commit run -a -v` を実行し、失敗した Hook ID とログを記録する。
 - [x] 設定を確認: `.pre-commit-config.yaml`（Hook の順序・除外・固定バージョン）。
 - [x] 失敗の型を分類する:
   - 生成差分（ファイルが自動更新されコミット中断）
@@ -52,9 +52,9 @@
 
 ## 3) 整形・静的検査（black/ruff/isort）
 
-- [ ] 一括修正: `ruff check . --fix && black . && isort .`
+- [x] 一括修正: `ruff check . --fix && black . && isort .`
 - [x] 再ステージ: `git add -A`
-- [ ] もう一度 `pre-commit run -a`。
+- [x] もう一度 `pre-commit run -a`。
 - メモ: フォーマッタがファイルを変更した直後のコミットは拒否されます。必ず再ステージしてやり直す。
 
 ---

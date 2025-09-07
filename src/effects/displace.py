@@ -92,8 +92,7 @@ def perlin_noise_3d(x, y, z, perm_table, grad3_array):
     v = fade(y)
     w = fade(z)
 
-    # Numba最適化：配列長は定数として扱う
-    perm_len = perm_table.shape[0]
+    # Numba最適化: 直接インデックス演算を使用（配列長は未使用）
 
     A = perm_table[X] + Y
     AA = perm_table[A & 511] + Z  # 511 = 2*256-1

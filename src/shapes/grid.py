@@ -27,8 +27,7 @@ def _generate_grid(nx: int, ny: int) -> list[np.ndarray]:
     x_coords = np.linspace(-0.5, 0.5, nx)
     y_coords = np.linspace(-0.5, 0.5, ny)
 
-    # Pre-allocate memory
-    total_lines = nx + ny
+    # Pre-allocate memory（行数は暗黙に nx + ny）
     vertices_list: list[np.ndarray] = []
 
     # Generate vertical lines vectorized
