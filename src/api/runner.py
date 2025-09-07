@@ -12,11 +12,11 @@ from util.constants import CANVAS_SIZES
 
 
 def run_sketch(
-    user_draw: Callable[[float, Mapping[int, int]], Geometry],
+    user_draw: Callable[[float, Mapping[int, float]], Geometry],
     *,
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: int = 4,
-    fps: int = 60,
+    fps: int | None = None,
     background: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     workers: int = 4,
     use_midi: bool = True,
@@ -42,7 +42,20 @@ def run_sketch(
         True で厳格モード（初期化失敗時に SystemExit(2)）。None の場合は
         環境変数 ``PYXIDRAW_MIDI_STRICT`` を参照（未設定は False）。
     """
-    # ---- ① キャンバスサイズ決定 ------------------------------------
+    # ---- ① 設定からFPSを解決 --------------------------------------
+    # 引数fpsがNoneのときだけ、設定 (configs/default.yaml 等) を参照
+    if fps is None:
+        try:
+            from util.utils import load_config  # noqa: WPS433
+
+            cfg = load_config() or {}
+            ccfg = cfg.get("canvas_controller", {}) if isinstance(cfg, dict) else {}
+            # 不正値/未設定に備えつつ int へ
+            fps = int(ccfg.get("fps", 60))
+        except Exception:
+            fps = 60
+
+    # ---- ② キャンバスサイズ決定 ------------------------------------
     if isinstance(canvas_size, str):
         canvas_width, canvas_height = CANVAS_SIZES[canvas_size.upper()]
     else:
@@ -51,7 +64,7 @@ def run_sketch(
         canvas_height * render_scale
     )
 
-    # ---- ② MIDI ---------------------------------------------------
+    # ---- ③ MIDI ---------------------------------------------------
     # 環境変数から厳格モードを補完（未指定時）。
     if midi_strict is None:
         env = os.environ.get("PYXIDRAW_MIDI_STRICT")
@@ -70,14 +83,14 @@ def run_sketch(
 
     # ローカルな Null 実装（型安定のため 1 箇所に定義）
     class _NullMidi:
-        def snapshot(self) -> Mapping[int, int]:  # CC は int→int の想定（外部で正規化）
+        def snapshot(self) -> Mapping[int, float]:  # CC は int→float の正規化値
             return {}
 
         def tick(self, dt: float) -> None:
             return None
 
     midi_service: Tickable
-    cc_snapshot_fn: Callable[[], Mapping[int, int]]
+    cc_snapshot_fn: Callable[[], Mapping[int, float]]
 
     if use_midi:
         try:
@@ -91,8 +104,8 @@ def run_sketch(
                 raise RuntimeError("MIDI デバイスが接続されていません")
             midi_service = MidiService(midi_manager)
             # MidiService は Tickable を実装し、snapshot() を提供する。
-            # 型: Callable[[], Mapping[int, int]] に合わせて渡す。
-            cc_snapshot_fn = midi_service.snapshot  # type: ignore[assignment]
+            # 型に合わせて渡す。
+            cc_snapshot_fn = midi_service.snapshot
         except Exception as e:  # ImportError / InvalidPortError / RuntimeError など
             logger = logging.getLogger(__name__)
             if midi_strict:
@@ -127,14 +140,14 @@ def run_sketch(
     from engine.render.renderer import LineRenderer
     from engine.ui.overlay import OverlayHUD
 
-    # ---- ③ SwapBuffer + Worker/Receiver ---------------------------
+    # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
     swap_buffer = SwapBuffer()
     worker_pool = WorkerPool(
         fps=fps, draw_callback=user_draw, cc_snapshot=cc_snapshot_fn, num_workers=workers
     )
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)
 
-    # ---- ④ Window & ModernGL --------------------------------------
+    # ---- ⑤ Window & ModernGL --------------------------------------
     rendering_window = RenderWindow(window_width, window_height, bg_color=background)  # type: ignore[abstract]
     mgl_ctx: moderngl.Context = moderngl.create_context()
     mgl_ctx.enable(moderngl.BLEND)
@@ -144,7 +157,7 @@ def run_sketch(
     sampler = MetricSampler(swap_buffer)
     overlay = OverlayHUD(rendering_window, sampler)
 
-    # ---- ⑤ 投影行列（正射影） --------------------------------------
+    # ---- ⑥ 投影行列（正射影） --------------------------------------
     proj = np.array(
         [
             [2 / canvas_width, 0, 0, -1],
@@ -161,13 +174,13 @@ def run_sketch(
     rendering_window.add_draw_callback(line_renderer.draw)
     rendering_window.add_draw_callback(overlay.draw)
 
-    # ---- ⑥ FrameCoordinator ---------------------------------------
+    # ---- ⑦ FrameCoordinator ---------------------------------------
     frame_clock = FrameClock(
         [midi_service, worker_pool, stream_receiver, line_renderer, sampler, overlay]
     )
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
 
-    # ---- ⑦ pyglet イベント -----------------------------------------
+    # ---- ⑧ pyglet イベント -----------------------------------------
     @rendering_window.event
     def on_key_press(sym, _mods):  # noqa: ANN001
         if sym == key.ESCAPE:

@@ -1,3 +1,35 @@
+"""
+MIDI コントローラ入出力（IO モジュール）
+
+本モジュールは、外部 MIDI デバイスからの入力を扱い、CC 値を統一的に管理・永続化する
+ための軽量ユーティリティを提供する。7bit/14bit のコントロールチェンジ（CC）を抽象化し、
+アプリ側では数値（0.0–1.0）として参照できるように正規化する。
+
+主な責務:
+- MIDI 入力ポートの検証とオープン（存在しない場合は `InvalidPortError`）。
+- CC 値の受信・更新（7bit/14bit を判別し 0–127 にスケール → 0.0–1.0 へ正規化）。
+- CC 値のスナップショットを JSON で保存/読み込み（スクリプト名・ポート名で分離）。
+- 一部デバイス（例: Intech Grid）向けのノブ初期同期メッセージ送出。
+- デバッグ出力のオン/オフ切り替え。
+
+設計メモ:
+- 14bit CC は MSB/LSB の 2 メッセージから 0–16383 を組み立て、0–127 に線形スケール後
+  0.0–1.0 に正規化する。本モジュールでは整数演算を尊重しつつ最終的に float で保持する。
+- CC 値は `DualKeyDict` を用いて「数値 CC 番号」「論理名」の両方から参照できる。
+- 永続化ファイルは `src/engine/io/cc/` 配下に保存し、壊れている場合は安全側で初期化。
+
+使用例:
+    from engine.io.controller import MidiController
+    ctrl = MidiController(port_name, cc_map, mode="14bit")
+    for msg in ctrl.iter_pending():
+        ctrl.update_cc(msg)
+        # cc 値は ctrl.cc[<cc_number or name>] で取得
+
+注意:
+- 本モジュールは I/O レイヤのユーティリティであり、レンダリングや幾何処理には依存しない。
+- ログ/例外メッセージは実行時の利便性を優先し、最小限の英語出力を残す場合がある。
+"""
+
 import json
 import logging
 import os
@@ -13,7 +45,7 @@ from .helpers import DualKeyDict
 
 
 class InvalidPortError(Exception):
-    """Raised when a requested MIDI port name is not available."""
+    """要求された MIDI ポート名が存在しない場合に送出される例外。"""
 
 
 class MidiController:
@@ -136,7 +168,7 @@ class MidiController:
         control_change_number = msg.control  # type: ignore
 
         if control_change_number < self.MSB_THRESHOLD:  # MSB
-            # MSBを保存
+            # MSB を保持して LSB を待つ
             self.msb_values[control_change_number] = msg.value  # type: ignore
             return None  # LSBがまだ届いていないため、何もしない
         else:  # LSB
@@ -148,7 +180,7 @@ class MidiController:
     def calc_combined_value(self, control_change_number: int, value: int) -> Optional[dict]:
         msb_control = control_change_number - MidiController.MSB_THRESHOLD
         if msb_control in self.msb_values:
-            # MSBとLSBから14ビット値を計算
+            # MSB と LSB から 14 ビット値を計算
             msb = self.msb_values[msb_control]
             lsb = value
             value_14bit = (msb << 7) | lsb
@@ -156,6 +188,8 @@ class MidiController:
                 value_14bit, MidiController.SCALED_14BIT_MIN, MidiController.SCALED_14BIT_MAX
             )
             return {"type": "CC(14bit)", "CC number": msb_control, "value": scaled_value_14bit}
+        # まだ対応する MSB が受信されていない場合は None を返す
+        return None
 
     @staticmethod
     def scale_value(value_14bit: int, min_val: float, max_val: float) -> float:
@@ -198,5 +232,5 @@ class MidiController:
 
 
 if __name__ == "__main__":
-    # Standalone listing without external deps
+    # 外部依存なしで利用可能なポート一覧を出力（スタンドアロン実行用）
     MidiController.show_available_ports()

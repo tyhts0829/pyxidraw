@@ -6,22 +6,27 @@ TOGGLE_CC_NUMBERS = (25, 26, 27, 28, 29, 30, 35)
 
 class DualKeyDict:
     """
-    整数キーと文字列キーの両方で値にアクセスできる辞書。
-    キー間で値が同期される。
+    整数キー（CC 番号）と文字列キー（論理名）の両方で値にアクセスできる辞書。
+
+    値は 0.0〜1.0 の浮動小数（正規化 CC 値）を前提とし、ボタン系は 0.0/1.0 を用いる。
+    一部の呼び出しが整数（0/1 等）を渡してきても、内部では float へ安全に変換する。
+    キー間で値は常に同期される。
     """
 
     def __init__(self):
-        self._int_to_value = {}
-        self._str_to_value = {}
-        self.is_active = None
+        # CC 番号/論理名 → 正規化値（0.0〜1.0）
+        self._int_to_value: dict[int, float] = {}
+        self._str_to_value: dict[str, float] = {}
+        # ボタン活性状態（将来的な UI 用途）
+        self.is_active: Optional[dict[str, bool]] = None
 
     def init_map(self, cc_map):
         self.cc_map = cc_map
         self._reverse_cc_map = {v: k for k, v in cc_map.items()}
         self.reset_activation()
         for cc, name in self.cc_map.items():
-            self._int_to_value[cc] = 0
-            self._str_to_value[name] = 0
+            self._int_to_value[cc] = 0.0
+            self._str_to_value[name] = 0.0
 
     def __repr__(self):
         # _str_to_valueを1行ずつ表示
@@ -33,13 +38,13 @@ class DualKeyDict:
     def reset_activation(self):
         self.is_active = {name: False for name in self.cc_map.values()}
 
-    def __getitem__(self, key: Union[int, str]) -> int:
+    def __getitem__(self, key: Union[int, str]) -> float:
         """
         キーに対応する値を取得。
         引数:
             key (int または str): キー。
         返り値:
-            1〜127 の整数。
+            0.0〜1.0 の浮動小数。
         例外:
             KeyError: サポート外のキー型。
         """
@@ -51,23 +56,27 @@ class DualKeyDict:
         else:
             raise KeyError(f"未対応のキー型です: {type(key)}")
 
-    def __setitem__(self, key: Union[int, str], value: int) -> None:
+    def __setitem__(self, key: Union[int, str], value: float | int) -> None:
         """
         キーに値を設定し、対応するもう一方のキーにも反映。
 
         引数:
             key (int または str): キー。
-            value (int): 設定する値。
+            value (float): 設定する値（正規化 0.0〜1.0）。
 
         例外:
             KeyError: サポート外のキー型。
         """
 
         # ボタンキーの場合はトグルする
+        # 互換性: 整数で渡された場合も float に変換
+        if isinstance(value, int):
+            value = float(value)
+
         if self._is_toggle_key(key):
-            if value == 0:  # ボタンを離したときは何もしない
+            if value == 0 or value == 0.0:  # ボタンを離したときは何もしない
                 return
-            value = self._toggle_value(key)
+            value = float(self._toggle_value(key))
             self._update_value(key, value)
         else:
             self._update_value(key, value)
@@ -85,7 +94,7 @@ class DualKeyDict:
             value = 0
         return value
 
-    def _update_value(self, key: Union[int, str], value: int) -> None:
+    def _update_value(self, key: Union[int, str], value: float) -> None:
         if isinstance(key, int):
             corresponding_str_key = self._get_str_key_from_int_key(key)
             self._int_to_value[key] = value
@@ -110,12 +119,8 @@ class DualKeyDict:
         if isinstance(key, int):
             # 25〜30のbuttonキー、35のshiftキー
             return key in TOGGLE_CC_NUMBERS
-        # if isinstance(key, str):
-        #     # bから始まる文字列がボタンキー
-        #     if key.startswith("b"):
-        #         return True
-        #     else:
-        #         return False
+        # 文字列キーの判定は現状未使用（必要なら名称規約で分岐）
+        return None
 
     def keys(self):
         """整数キーの一覧を返す。"""
@@ -152,14 +157,14 @@ class DualKeyDict:
         else:
             return False
 
-    def get(self, key, default=None):
+    def get(self, key, default: Optional[float] = None) -> Optional[float]:
         """
         キーに対応する値を取得。なければデフォルトを返す。
         引数:
             key (int または str): キー。
-            default (Optional[int]): デフォルト値。
+            default (Optional[float]): デフォルト値。
         返り値:
-            Optional[int]: 値またはデフォルト。
+            Optional[float]: 値またはデフォルト。
         """
         try:
             return self[key]

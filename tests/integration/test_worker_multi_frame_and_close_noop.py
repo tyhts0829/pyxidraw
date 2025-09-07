@@ -18,7 +18,7 @@ def _base() -> Geometry:
     return Geometry.from_lines([l])
 
 
-def _draw(t: float, cc: Mapping[int, int], *, coords, offsets) -> Geometry:  # pragma: no cover
+def _draw(t: float, cc: Mapping[int, float], *, coords, offsets) -> Geometry:  # pragma: no cover
     g = Geometry(coords.copy(), offsets.copy())
     return g.translate(min(t, 1.0) * 0.01, 0.0, 0.0)
 

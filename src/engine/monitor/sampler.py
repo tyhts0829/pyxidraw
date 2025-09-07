@@ -18,7 +18,9 @@ class MetricSampler(Tickable):
         self._swap = swap
         self._proc = psutil.Process(os.getpid())
         self._interval = interval
+        # 前回サンプリング時刻とバージョン（実効FPS算出に使用）
         self._last = 0.0
+        self._last_ver = self._swap.version()
         self.data: dict[str, str] = {}
 
     # -------- Tickable --------
@@ -26,10 +28,19 @@ class MetricSampler(Tickable):
         now = time.time()
         if now - self._last < self._interval:
             return
+        dt = now - self._last if self._last > 0.0 else 0.0
         self._last = now
 
+        # 実効FPS: SwapBuffer.version() の増分 / 経過秒
+        cur_ver = self._swap.version()
+        dv = cur_ver - self._last_ver
+        self._last_ver = cur_ver
+        fps = (dv / dt) if dt > 0.0 else 0.0
+
         verts = self._vertex_count(self._swap.get_front())
+        # 表示順序：FPSを最初にして左下に固定
         self.data.update(
+            FPS=f"{fps:4.1f}",
             VERTEX=f"{verts}",
             CPU=f"{self._proc.cpu_percent(0.0):4.1f}%",
             MEM=self._human(self._proc.memory_info().rss),

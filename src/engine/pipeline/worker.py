@@ -44,7 +44,7 @@ class _WorkerProcess(mp.Process):
         self,
         task_q: mp.Queue,
         result_q: mp.Queue,
-        draw_callback: Callable[[float, Mapping[int, int]], Geometry],
+        draw_callback: Callable[[float, Mapping[int, float]], Geometry],
     ):
         super().__init__(daemon=True)
         self.task_q, self.result_q = task_q, result_q
@@ -76,7 +76,7 @@ class WorkerPool(Tickable):
     def __init__(
         self,
         fps: int,
-        draw_callback: Callable[[float, Mapping[int, int]], Geometry],
+        draw_callback: Callable[[float, Mapping[int, float]], Geometry],
         cc_snapshot,
         num_workers: int = 4,
     ):

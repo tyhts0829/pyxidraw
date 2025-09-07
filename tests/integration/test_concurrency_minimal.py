@@ -26,7 +26,7 @@ def _tiny_base_geom() -> Geometry:
 
 def draw_cb_translate_x(
     t: float,
-    cc: Mapping[int, int],
+    cc: Mapping[int, float],
     *,
     base_coords: np.ndarray,
     base_offsets: np.ndarray,
@@ -53,7 +53,7 @@ def test_worker_receiver_minimal_path() -> None:
     )
 
     # cc snapshot supplier: minimal immutable mapping
-    def cc_snapshot() -> Mapping[int, int]:
+    def cc_snapshot() -> Mapping[int, float]:
         return {}
 
     pool = WorkerPool(fps=60, draw_callback=draw_cb, cc_snapshot=cc_snapshot, num_workers=1)

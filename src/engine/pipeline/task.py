@@ -8,4 +8,4 @@ class RenderTask:
 
     frame_id: int
     t: float
-    cc_state: Mapping[int, int]  # {CC#: value}
+    cc_state: Mapping[int, float]  # {CC#: normalized value 0.0-1.0}
