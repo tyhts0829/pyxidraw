@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: このスクリプトは `pytest -m smoke` に置き換え済みです。
+
 Minimal geometry sanity runner (moved from new_tests/).
 
 Runs a subset of unified-geometry checks without pytest, useful in constrained

@@ -25,7 +25,7 @@
 - 実行: `python main.py`
 - API スタブ更新: `PYTHONPATH=src python -m scripts.gen_g_stubs && git add src/api/__init__.pyi`
 - 静的検査/整形/型: `ruff check . && black . && isort . && mypy .`
-- テスト: `pytest -q`（`pytest.ini` で `tests/` を探索）。簡易チェック: `python -m scripts.run_unified_geometry_check`。
+- テスト: `pytest -q`（`pytest.ini` で `tests/` を探索）。簡易チェック: `pytest -q -m smoke`。
 
 ### 変更ごとのチェック手順（テンプレ）
 

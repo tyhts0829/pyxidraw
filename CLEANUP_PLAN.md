@@ -76,7 +76,7 @@
   - ユニット: `common/`, `util/`, 効果/形状の純粋関数（数値は許容誤差付き）。
   - スナップショット: 幾何ダイジェスト（座標列のハッシュや統計量）で回帰検知。
   - プロパティ: `hypothesis` による不変条件（例: 変換の合成で頂点数不変 など）。
-  - スモーク: `python -m scripts.run_unified_geometry_check` 相当を `pytest -m smoke` 化。
+  - スモーク: `pytest -m smoke` を使用。
 - 命名/配置
   - `tests/test_*.py`、対象モジュールに対応。`@pytest.mark.smoke` を用意。
 - カバレッジ
