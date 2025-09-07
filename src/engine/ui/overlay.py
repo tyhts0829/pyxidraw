@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pyglet
-from pyglet.window import FPSDisplay, Window
+from pyglet.window import Window
 
 from ..core.tickable import Tickable
 from ..monitor.sampler import MetricSampler
@@ -14,7 +14,6 @@ class OverlayHUD(Tickable):
         self,
         window: Window,
         sampler: MetricSampler,
-        show_fps: bool = True,
         font_size: int = 8,
         color=(0, 0, 0, 155),
     ):
@@ -24,10 +23,7 @@ class OverlayHUD(Tickable):
         self._y_cursor = window.height - 10
         self._color = color
         self._font = "HackGenConsoleNF-Regular"
-        if show_fps:
-            self.fps_display = FPSDisplay(window)
-        else:
-            self.fps_display = None
+        self.fps_display = None
         self.font_size = font_size
 
     # -------- Tickable --------
@@ -52,5 +48,3 @@ class OverlayHUD(Tickable):
     def draw(self) -> None:
         for lab in self._labels.values():
             lab.draw()
-        if self.fps_display:
-            self.fps_display.draw()

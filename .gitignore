@@ -21,3 +21,4 @@ benchmark_results/
 engine/io/cc/
 .pytest_cache/
 screenshots/
+src/engine/io/cc/

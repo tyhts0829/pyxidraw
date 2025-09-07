@@ -10,7 +10,7 @@ canvas:
   background_color: [1.0, 1.0, 1.0, 1.0]
 
 canvas_controller:
-  fps: 24
+  fps: 30
 
 midi:
   enabled_default: true

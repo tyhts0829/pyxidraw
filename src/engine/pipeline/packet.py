@@ -1,4 +1,3 @@
-import time
 from dataclasses import dataclass
 
 from engine.core.geometry import Geometry
@@ -10,4 +9,3 @@ class RenderPacket:
 
     geometry: Geometry
     frame_id: int  # ワーカ側で連番付与
-    timestamp: float = time.time()
