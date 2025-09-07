@@ -9,7 +9,6 @@ from engine.core.geometry import Geometry
 # - concat: coords結合とoffsetsシフトの正しさ。
 
 
-
 def _square_points(size: float = 1.0):
     s = float(size)
     return np.array(

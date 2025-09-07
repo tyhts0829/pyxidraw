@@ -9,7 +9,6 @@ from effects.translate import translate
 # - rotate: ピボット距離保存、入力非破壊。
 
 
-
 def test_translate_invariants_and_non_destructive():
     g = G.polygon(n_sides=7)
     coords0, offsets0 = g.as_arrays(copy=True)

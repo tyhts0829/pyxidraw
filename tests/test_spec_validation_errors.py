@@ -7,7 +7,6 @@ from api.pipeline import validate_spec
 # - 既存エフェクトへの未知パラメータで TypeError、未登録エフェクト名で KeyError。
 
 
-
 def test_validate_spec_rejects_type_mismatch_using_param_meta():
     # translate.delta expects a number/1-tuple/3-tuple (vec3). A string is invalid.
     spec = [

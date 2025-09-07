@@ -7,7 +7,6 @@ from tests._utils.dummies import install as install_dummies
 # - A minimal flow `G.polygon -> E.pipeline.rotate(...).build()(g)` returns Geometry.
 
 
-
 def test_api_import_and_min_flow():
     # Install dummies for heavy optional deps before importing api/shapes/effects
     install_dummies()

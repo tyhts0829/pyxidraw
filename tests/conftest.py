@@ -15,9 +15,6 @@ from engine.core.geometry import Geometry
 #   dependency guards (require_moderngl/pyglet/numba).
 
 
-
-
-
 # ---- Optional dependency helpers -------------------------------------------
 
 

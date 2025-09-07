@@ -1,5 +1,10 @@
 # Repository Guidelines
 
+## 一般的な指示
+
+- チェックリストに基づく作業は、完了時にチェックを必ずいれること。
+- 回答は日本語で行うこと。
+
 ## プロジェクト構成 & モジュール配置
 
 - `main.py`: 公開 API を使うエントリーポイント例。
@@ -23,6 +28,7 @@
 - テスト: `pytest -q`（`pytest.ini` で `tests/` を探索）。簡易チェック: `python -m scripts.run_unified_geometry_check`。
 
 ### 変更ごとのチェック手順（テンプレ）
+
 - 整形/静的検査: `ruff check . && black . && isort .`
 - 型チェック（段階導入）: `mypy`
 - テスト（全体）: `pytest -q`
@@ -50,7 +56,7 @@
 - Conventional Commits を推奨（例: `feat(effects): add ripple clamp`）。絵文字は任意（`🎨` 整形、`🚧` WIP）。
 - PR には「何を/なぜ」を明記、関連 Issue をリンク。見た目の変更は `screenshots/` にスクリーンショットを追加。
 - 送信前チェック: 初回 `pre-commit install`、以降 `pre-commit run -a`。CI グリーンかつ `api/__init__.pyi` が最新であること。
-  - 受け入れ基準（本リポのDoD）: lint/format/type/test/stub同期がCIで緑、README/AGENTSが最新、未使用ファイル・コメントが削減。
+  - 受け入れ基準（本リポの DoD）: lint/format/type/test/stub 同期が CI で緑、README/AGENTS が最新、未使用ファイル・コメントが削減。
 
 ## セキュリティ & 設定のヒント
 

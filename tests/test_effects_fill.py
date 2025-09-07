@@ -9,7 +9,6 @@ from effects.fill import fill
 # - 角度 angle_rad により出力が変化する（digest/座標差で確認）。
 
 
-
 def test_fill_density_zero_is_copy():
     g = G.polygon(n_sides=10)
     base_coords, base_offsets = g.as_arrays(copy=True)

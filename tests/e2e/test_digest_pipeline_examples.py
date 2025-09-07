@@ -8,8 +8,6 @@ from api import E, G
 # - End-to-end digest snapshots for representative pipelines to catch broad regressions.
 
 
-
-
 @pytest.mark.e2e
 @pytest.mark.snapshot
 def test_e2e_digest_polygon_fill(snapshot, digest_hex):

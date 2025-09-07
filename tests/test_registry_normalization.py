@@ -7,7 +7,6 @@ from common.base_registry import BaseRegistry
 #   unregistered name KeyError, empty name fallback to class name, underscores preserved.
 
 
-
 def test_camel_and_hyphen_normalization_and_lookup():
     reg = BaseRegistry()
 
