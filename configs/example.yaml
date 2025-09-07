@@ -1,0 +1,24 @@
+# サンプル設定（ローカル上書き）
+# - 実際の実行時には `configs/default.yaml` が読み込まれ、
+#   ここ（config.yaml）やルート `config.yaml` の値で上書きされます。
+
+canvas:
+  background_color: [1.0, 1.0, 1.0, 1.0]
+
+canvas_controller:
+  fps: 30
+
+midi:
+  enabled_default: false
+  strict_default: false
+
+status_manager:
+  font: DejaVuSans
+  font_size: 2
+  color: [0, 0, 0, 155]
+  pos:
+    x: 16
+    y: 2
+  pad:
+    x: 0
+    y: 3

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import logging
 import math
 import numbers
 import operator
@@ -7,7 +8,6 @@ from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
-import logging
 
 ####
 # 直径1の球に内接する正多面体のデータ生成
@@ -48,7 +48,9 @@ class RegularPolyhedron:
             last_vlen = new_vlen
             new_vlen = len(vecs)
 
-        return tuple([v.fixfp() for v in sorted(vecs, key=operator.itemgetter(2, 1, 0), reverse=True)])
+        return tuple(
+            [v.fixfp() for v in sorted(vecs, key=operator.itemgetter(2, 1, 0), reverse=True)]
+        )
 
     # ポリゴン情報の一覧を作成.
     @staticmethod
@@ -124,8 +126,12 @@ class RegularPolyhedron:
         self.normal = self.main_normal
 
         # 正多面体と対の両方の多角形データを作成する.
-        self.main_polygon = S.create_polygon_list(self.main_vertex, self.main_normal, p1.dot(p2), p1.dot(n1))
-        self.dual_polygon = S.create_polygon_list(self.dual_vertex, self.dual_normal, n1.dot(n2), p1.dot(n1))
+        self.main_polygon = S.create_polygon_list(
+            self.main_vertex, self.main_normal, p1.dot(p2), p1.dot(n1)
+        )
+        self.dual_polygon = S.create_polygon_list(
+            self.dual_vertex, self.dual_normal, n1.dot(n2), p1.dot(n1)
+        )
         self.polygon = self.main_polygon
 
         # 正多面体と対の両方の辺データを作成する.
@@ -211,7 +217,9 @@ class Vector3(numbers.Integral):
         if type(rhs) is Matrix33:
             m11, m12, m13, m21, m22, m23, m31, m32, m33 = rhs.value
             return Vector3(
-                x1 * m11 + y1 * m21 + z1 * m31, x1 * m12 + y1 * m22 + z1 * m32, x1 * m13 + y1 * m23 + z1 * m33
+                x1 * m11 + y1 * m21 + z1 * m31,
+                x1 * m12 + y1 * m22 + z1 * m32,
+                x1 * m13 + y1 * m23 + z1 * m33,
             )
         raise NotImplemented
 
@@ -454,7 +462,15 @@ class Matrix33(numbers.Integral):
             m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
             r11, r12, r13, r21, r22, r23, r31, r32, r33 = rhs.value
             return Matrix33(
-                m11 + r11, m12 + r12, m13 + r13, m21 + r21, m22 + r22, m23 + r23, m31 + r31, m32 + r32, m33 + r33
+                m11 + r11,
+                m12 + r12,
+                m13 + r13,
+                m21 + r21,
+                m22 + r22,
+                m23 + r23,
+                m31 + r31,
+                m32 + r32,
+                m33 + r33,
             )
         raise NotImplemented
 
@@ -463,7 +479,15 @@ class Matrix33(numbers.Integral):
             m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
             r11, r12, r13, r21, r22, r23, r31, r32, r33 = rhs.value
             return Matrix33(
-                m11 - r11, m12 - r12, m13 - r13, m21 - r21, m22 - r22, m23 - r23, m31 - r31, m32 - r32, m33 - r33
+                m11 - r11,
+                m12 - r12,
+                m13 - r13,
+                m21 - r21,
+                m22 - r22,
+                m23 - r23,
+                m31 - r31,
+                m32 - r32,
+                m33 - r33,
             )
         raise NotImplemented
 
@@ -471,11 +495,23 @@ class Matrix33(numbers.Integral):
         m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
         if type(rhs) in (int, float):
             return Matrix33(
-                m11 * rhs, m12 * rhs, m13 * rhs, m21 * rhs, m22 * rhs, m23 * rhs, m31 * rhs, m32 * rhs, m33 * rhs
+                m11 * rhs,
+                m12 * rhs,
+                m13 * rhs,
+                m21 * rhs,
+                m22 * rhs,
+                m23 * rhs,
+                m31 * rhs,
+                m32 * rhs,
+                m33 * rhs,
             )
         if type(rhs) is Vector3:
             x, y, z = rhs.value
-            return Vector3(m11 * x + m12 * y + m13 * z, m21 * x + m22 * y + m23 * z, m31 * x + m32 * y + m33 * z)
+            return Vector3(
+                m11 * x + m12 * y + m13 * z,
+                m21 * x + m22 * y + m23 * z,
+                m31 * x + m32 * y + m33 * z,
+            )
         if type(rhs) is Matrix33:
             r11, r12, r13, r21, r22, r23, r31, r32, r33 = rhs.value
             return Matrix33(
@@ -503,7 +539,15 @@ class Matrix33(numbers.Integral):
         if type(rhs) in (int, float):
             m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
             return Matrix33(
-                m11 / rhs, m12 / rhs, m13 / rhs, m21 / rhs, m22 / rhs, m23 / rhs, m31 / rhs, m32 / rhs, m33 / rhs
+                m11 / rhs,
+                m12 / rhs,
+                m13 / rhs,
+                m21 / rhs,
+                m22 / rhs,
+                m23 / rhs,
+                m31 / rhs,
+                m32 / rhs,
+                m33 / rhs,
             )
         raise NotImplemented
 
@@ -527,7 +571,15 @@ class Matrix33(numbers.Integral):
         if type(rhs) in (int, float):
             m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
             return Matrix33(
-                m11 % rhs, m12 % rhs, m13 % rhs, m21 % rhs, m22 % rhs, m23 % rhs, m31 % rhs, m32 % rhs, m33 % rhs
+                m11 % rhs,
+                m12 % rhs,
+                m13 % rhs,
+                m21 % rhs,
+                m22 % rhs,
+                m23 % rhs,
+                m31 % rhs,
+                m32 % rhs,
+                m33 % rhs,
             )
         raise NotImplemented
 
@@ -717,7 +769,15 @@ class Matrix33(numbers.Integral):
     def __round__(self):
         m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
         return Matrix33(
-            round(m11), round(m12), round(m13), round(m21), round(m22), round(m23), round(m31), round(m32), round(m33)
+            round(m11),
+            round(m12),
+            round(m13),
+            round(m21),
+            round(m22),
+            round(m23),
+            round(m31),
+            round(m32),
+            round(m33),
         )
 
     def __trunc__(self):
@@ -746,7 +806,11 @@ class Matrix33(numbers.Integral):
 
     def det(self):
         m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return m11 * (m22 * m33 - m23 * m32) + m12 * (m23 * m31 - m21 * m33) + m13 * (m21 * m32 - m22 * m31)
+        return (
+            m11 * (m22 * m33 - m23 * m32)
+            + m12 * (m23 * m31 - m21 * m33)
+            + m13 * (m21 * m32 - m22 * m31)
+        )
 
     def inverse(self):
         det = self.det()
@@ -818,6 +882,9 @@ if __name__ == "__main__":
         vertices_list = to_vertices_list(mp, mv)
         # npz で保存（arr_0, arr_1, ... として格納）
         out = SAVE_DIR / f"{name}_vertices_list.npz"
-        np.savez(out, **{f"arr_{i}": np.asarray(a, dtype=np.float32) for i, a in enumerate(vertices_list)})
+        np.savez(
+            out,
+            **{f"arr_{i}": np.asarray(a, dtype=np.float32) for i, a in enumerate(vertices_list)},
+        )
         logging.getLogger(__name__).info("%s is saved as npz: %s", name, out)
     logging.getLogger(__name__).info("finish")

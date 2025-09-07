@@ -1,2 +1,0 @@
-"""Engine monitor subpackage."""
-

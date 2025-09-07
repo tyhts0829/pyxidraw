@@ -1,6 +1,53 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyxidraw5"
+version = "0.0.0"
+description = "Procedural line-geometry framework with effects and realtime rendering"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "PyXidraw5 contributors"}]
+license = {text = "MIT"}
+
+# ランタイム最小依存（現状なし／必要になったら追加）
+dependencies = []
+
+[project.optional-dependencies]
+# 開発用一括（ローカル/CI 両用）
+dev = [
+  "numpy",
+  "pytest",
+  "hypothesis",
+  "black",
+  "isort",
+  "ruff",
+  "mypy",
+  "pre-commit",
+  "fonttools",
+  "fontpens",
+  "types-PyYAML",
+]
+# 重い/任意依存をまとめたセット
+optional = [
+  "shapely",
+  "numba",
+  "mido",
+  "fonttools",
+  "fontpens",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.black]
 line-length = 100
 target-version = ["py310"]
+extend-exclude = '.*/api/__init__\.pyi$'
 
 [tool.isort]
 profile = "black"
@@ -33,3 +80,7 @@ python_version = "3.10"
 # リポジトリ全体を対象にした実行でもノイズを抑えるための除外
 # （必要になったら段階的に外していきます）
 exclude = "(^|/)(benchmarks|docs|screenshots|scripts|tutorials|benchmark_results|.pytest_cache)/"
+# 当面は最小範囲から型検査を開始（段階的に拡大する）
+files = [
+  "util/utils.py",
+]

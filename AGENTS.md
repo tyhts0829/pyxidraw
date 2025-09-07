@@ -1,83 +1,58 @@
-instructions = "Think in English, answer in Japanese."
+# Repository Guidelines
 
-# リポジトリ ガイドライン
+## プロジェクト構成 & モジュール配置
 
-## 破壊的変更（2025-09-03）
-
-- **Geometry 統一:** `engine/core/geometry.py` の単一 `Geometry` 型に集約。変換は `translate/scale/rotate/concat` の純関数（新インスタンス返却）。
-- **エフェクト関数化:** クラス継承は廃止し、`@effects.registry.effect` で登録する `Geometry -> Geometry` の関数のみ。
-- **パイプライン一本化:** `E.pipeline ... .build()(g)` に統一（パイプライン単層キャッシュ）。
-- **移行ガイド（主な置換）:** `size→scale`, `at→translate`, `spin→rotate(z=0..1→2π)`, `move→translate`, `grow→scale`。
-- **使用例:**
-  ```python
-  from api import E, G
-  g = G.sphere(subdivisions=0.5).scale(100,100,100).translate(100,100,0)
-  result = (E.pipeline.displace(amplitude_mm=0.3).fill(density=0.5).build())(g)
-  ```
-
-### パイプライン仕様のシリアライズ/検証
-
-- `to_spec(pipeline)`: `[{"name": str, "params": dict}]` に変換
-- `from_spec(spec)`: 検証済み spec から `Pipeline` を生成
-- `validate_spec(spec)`: 仕様を事前に検証（未登録名/不正パラメータを早期失敗）
-
-```python
-from api import E, to_spec, from_spec, validate_spec
-
-pipeline = (E.pipeline.rotate(angles_rad=(0.5 * 3.141592653589793, 0, 0))
-                       .displace(amplitude_mm=0.2)
-                       .build())
-spec = to_spec(pipeline)
-validate_spec(spec)     # 例外が出なければOK
-pipeline2 = from_spec(spec)
-```
-
-## プロジェクト構成とモジュールの整理
-
-- `api/`: 高レベル API サーフェス — `E`（エフェクト）、`G`（シェイプ）、`runner.py`。
-  - `pipeline.py`: `E.pipeline`（パイプライン構築と単層キャッシュ）
-- `shapes/`: シェイプ生成（例: `sphere.py`, `polyhedron.py`, `torus.py`）。
-- `effects/`: エフェクト実装（例: `noise.py`, `rotation.py`, `filling.py`）。
-- `engine/`: コア幾何、I/O（MIDI）、レンダリング内部。
-- `benchmarks/`: ベンチマーク CLI（`python -m benchmarks`）と可視化。
-- `tests/`: モジュールに対応した Pytest スイート。`pytest.ini` を参照。
-- ルートの例: `main.py`（フルデモ）、`simple.py`（最小）。設定: `config.yaml`。
+- `main.py`: 公開 API を使うエントリーポイント例。
+- `api/`: 公開インターフェイス（`E`, `G`, `run`）。`api/__init__.pyi`（スタブ）を最新に維持。
+- `engine/`: ジオメトリ中核、I/O、パイプライン、レンダリング、UI。
+- `effects/`: エフェクト演算子。追加時は `effects/registry.py` に登録。
+- `shapes/`: 形状プリミティブ。追加時は `shapes/registry.py` に登録。
+- `common/`, `util/`: レジストリ、ロギング、数値/幾何ユーティリティ。
+- `scripts/`: 保守・調整用ツール（例: `gen_g_stubs.py`）。
+- `data/`（大きな生成物など）、`screenshots/`（プレビュー）。
+- CI: `.github/workflows/verify-stubs.yml` がスタブとテスト整合を検証。
 
 ## ビルド・テスト・開発コマンド
 
-- デモ実行: `python main.py`（ヘッドレス実行は `--no-midi` を追加）。
-- 簡易デモ: `python simple.py`。
-- テスト（全体/一部）: `python -m pytest` / `python -m pytest tests/test_noise.py -q`。
-- カバレッジ: `python -m pytest --cov=. --cov-report=term`。
-- ベンチマーク: `python -m benchmarks run`（`benchmarks/__main__.py` を参照）。
-- 依存関係: README を参照（固定の `requirements.txt` はありません）。
+- Python 3.10 推奨。初期化:
+  - `python3.10 -m venv .venv && source .venv/bin/activate`
+  - `pip install -U pip && pip install -e .[dev]`
+- 実行: `python main.py`
+- API スタブ更新: `PYTHONPATH=src python -m scripts.gen_g_stubs && git add src/api/__init__.pyi`
+- 静的検査/整形/型: `ruff check . && black . && isort . && mypy .`
+- テスト: `pytest -q`（`pytest.ini` で `tests/` を探索）。簡易チェック: `python -m scripts.run_unified_geometry_check`。
 
-### 開発向け Tips
-- 形状生成の LRU キャッシュを無効化/調整:
-  - `export PXD_CACHE_DISABLED=1`
-  - `export PXD_CACHE_MAXSIZE=64`
+### 変更ごとのチェック手順（テンプレ）
+- 整形/静的検査: `ruff check . && black . && isort .`
+- 型チェック（段階導入）: `mypy`
+- テスト（全体）: `pytest -q`
+- テスト（目的別）:
+  - 並行処理: `pytest -m integration -k worker -q`
+  - スタブ同期: `pytest -q tests/test_g_stub_sync.py tests/test_pipeline_stub_sync.py`
+  - e2e/perf: `pytest -m "e2e or perf" -q`
 
-## コーディングスタイルと命名規則
+## コーディングスタイル & 命名規則
 
-- Python 3.x、インデントは 4 スペース。可能な限り関数は小さく純粋に。
-- 命名: ファイル/モジュールおよび関数は `snake_case`、クラスは `CamelCase`、定数は `UPPER_SNAKE_CASE`。
-- 公開 API: docstring を追加し、型ヒントを推奨。
-- エフェクト: `effects/` に配置し、`@effects.registry.effect` で登録（関数名が登録名）。
-- シェイプ: `shapes/` に追加し、`@shape` デコレータで登録（クラス名が登録名）。
+- インデント 4 スペース、行長 100、Python 3.10 型ヒント必須。
+- 可能な限り純粋・決定的な関数（副作用を避ける）。
+- ファイル/モジュールは `lower_snake_case.py`、クラスは `CamelCase`、関数/変数は `snake_case`。
+- 新規 `effects`/`shapes` は各フォルダに配置し、対応する `registry.py` に追記。
+- 全てのコメント、docstring は日本語とすること。
 
-## テストガイドライン
+## テスト指針
 
-- フレームワーク: `pytest` は `pytest.ini` で構成（テストルートは `tests/`）。
-- テストファイル: `tests/test_*.py`。テスト名は説明的に（例: `test_subdivision_handles_degenerate_faces`）。
-- 新しいシェイプ/エフェクトや重要ユーティリティには単体テストを追加。可能ならモジュールパスをミラー。
-- 再現性のため `--no-midi` 経路を使用。ハードウェア依存を避ける。
+- フレームワークは `pytest`。テスト名は `tests/test_*.py`、対象モジュールと対応させる。
+- 幾何/ノイズ系は乱数固定などで再現性を確保。
+- 公開 API 変更時はスタブ再生成し、スタブ同期テスト（`tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py`）を更新。
 
-## コミットとプルリクエストのガイドライン
+## コミット & プルリクエスト
 
-- コミット: 既存履歴の gitmoji プレフィックスを使用（例: ✨ feature, 🐛 fix, 🎨 style, ⚡️ perf, 🔥 remove, 📝 docs, 🚧 WIP, ⚰️ deprecate）＋短く命令形のサブジェクト。
-- PR: 明確な要約、根拠、関連 Issue、テスト計画、レンダリング変更の前後スクリーンショットを含める。`config.yaml` の変更は明記。
+- Conventional Commits を推奨（例: `feat(effects): add ripple clamp`）。絵文字は任意（`🎨` 整形、`🚧` WIP）。
+- PR には「何を/なぜ」を明記、関連 Issue をリンク。見た目の変更は `screenshots/` にスクリーンショットを追加。
+- 送信前チェック: 初回 `pre-commit install`、以降 `pre-commit run -a`。CI グリーンかつ `api/__init__.pyi` が最新であること。
+  - 受け入れ基準（本リポのDoD）: lint/format/type/test/stub同期がCIで緑、README/AGENTSが最新、未使用ファイル・コメントが削減。
 
-## セキュリティと設定のヒント
+## セキュリティ & 設定のヒント
 
-- 秘密情報や個人デバイスのマッピングをコミットしない。ローカルの MIDI 設定は VCS 外に保つ。
-- `config.yaml` の編集は検証し、安全なデフォルトを提供。破壊的変更は文書化。
+- 機密情報をコミットしない。`config.yaml` はローカル用途—必要に応じて個人情報を避ける。
+- 大容量/生成物は `data/` または `screenshots/` に置き、リポジトリを軽量に維持。

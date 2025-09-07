@@ -1,8 +1,8 @@
+import logging
 from pathlib import Path
 
 import numpy as np
 import trimesh
-import logging
 
 ####
 # 直径1の球のデータ生成
@@ -41,6 +41,9 @@ if __name__ == "__main__":
     data = generate_data()
     for subdivision, vertices_list in data.items():
         save_name = f"sphere_tri_{subdivision}_vertices_list.npz"
-        np.savez(SAVE_DIR / save_name, **{f"arr_{i}": np.asarray(a, dtype=np.float32) for i, a in enumerate(vertices_list)})
+        np.savez(
+            SAVE_DIR / save_name,
+            **{f"arr_{i}": np.asarray(a, dtype=np.float32) for i, a in enumerate(vertices_list)},
+        )
         logging.getLogger(__name__).info("saved npz: %s", SAVE_DIR / save_name)
     logging.getLogger(__name__).info("finish")

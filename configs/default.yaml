@@ -1,0 +1,149 @@
+# 既定の設定（テスト/ハードニング用途も兼ねる）
+# - このファイルはベース設定です。ローカル上書きはリポジトリ直下の `config.yaml` を使用してください。
+# - `util.utils.load_config()` は (1) このファイル → (2) ルートの `config.yaml` の順にディクショナリを上書きマージします。
+
+# tests/integration/test_load_config_fallback.py が存在確認に使うマーカー
+test_marker: true
+
+# 画面/描画の既定
+canvas:
+  background_color: [1.0, 1.0, 1.0, 1.0]
+
+canvas_controller:
+  fps: 24
+
+midi:
+  enabled_default: true
+  strict_default: false
+
+status_manager:
+  font: HackGenConsoleNF-Regular
+  font_size: 2
+  color: [0, 0, 0, 155]
+  pos:
+    x: 16
+    y: 1.5
+  pad:
+    x: 0
+    y: 3
+  info:
+    n_vertices: 0
+    n_lines: 1
+    fps: 2
+    cpu: 3
+    memory: 4
+    midi: 5
+    size: 6
+
+midi_devices:
+  - port_name: "ArcController OUT"
+    mode: "14bit"
+    controller_name: "arc"
+    cc_map:
+      1: 1
+      2: 2
+      3: 3
+      4: 4
+      5: 5
+      6: 6
+      7: 7
+      8: 8
+      9: 9
+      10: 10
+      11: 11
+      12: 12
+      13: 13
+      14: 14
+      15: 15
+      16: 16
+  - port_name: "TX-6 Bluetooth"
+    mode: "7bit"
+    controller_name: "tx6"
+    cc_map:
+      1: "f1" # fader 1
+      2: "f2" # fader 2
+      3: "f3" # fader 3
+      4: "f4" # fader 4
+      5: "f5" # fader 5
+      6: "f6" # fader 6
+      7: "k1t" # knob 1 top
+      8: "k2t" # knob 2 top
+      9: "k3t" # knob 3 top
+      10: "k4t" # knob 4 top
+      11: "k5t" # knob 5 top
+      12: "k6t" # knob 6 top
+      13: "k1m" # knob 1 middle
+      14: "k2m" # knob 2 middle
+      15: "k3m" # knob 3 middle
+      16: "k4m" # knob 4 middle
+      17: "k5m" # knob 5 middle
+      18: "k6m" # knob 6 middle
+      19: "k1b" # knob 1 bottom
+      20: "k2b" # knob 2 bottom
+      21: "k3b" # knob 3 bottom
+      22: "k4b" # knob 4 bottom
+      23: "k5b" # knob 5 bottom
+      24: "k6b" # knob 6 bottom
+      25: "b1" # button 1
+      26: "b2" # button 2
+      27: "b3" # button 3
+      28: "b4" # button 4
+      29: "b5" # button 5
+      30: "b6" # button 6
+      31: "k" # knob
+      # 32: "b"  # button
+      33: "fx1" # fx1 button
+      34: "fx2" # fx2 button
+      35: "shift" # shift button
+      # 36: "aux"  # aux button
+      # 37: "cue"  # cue button
+  - port_name: "Grid"
+    mode: "14bit"
+    controller_name: "grid"
+    cc_range: [1, 16]
+    cc_map:
+      1: k11
+      2: k12
+      3: k13
+      4: k14
+      5: k21
+      6: k22
+      7: k23
+      8: k24
+      9: k31
+      10: k32
+      11: k33
+      12: k34
+      13: k41
+      14: k42
+      15: k43
+      16: k44
+  - port_name: "ROLI Lightpad BLOCK"
+    mode: "14bit"
+    controller_name: "roli"
+    cc_range: [17, 32]
+  - port_name: "16n Port 1"
+    mode: "14bit"
+    controller_name: "fb16n"
+    cc_range: [1, 17]
+    cc_map:
+      1: 1
+      2: 2
+      3: 3
+      4: 4
+      5: 5
+      6: 6
+      7: 7
+      8: 8
+      9: 9
+      10: 10
+      11: 11
+      12: 12
+      13: 13
+      14: 14
+      15: 15
+      16: 16
+  - port_name: "Music Thing m0 Plus 0"
+    mode: "7bit"
+    controller_name: "fb8n"
+    cc_range: [1, 33]

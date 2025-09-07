@@ -1,0 +1,8 @@
+{
+  "seconds": 9.170034900307655e-07,
+  "note": "Auto-updated by tests when PXD_UPDATE_SNAPSHOTS=1",
+  "env": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python": "3.10.15"
+  }
+}

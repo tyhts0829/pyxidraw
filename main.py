@@ -1,34 +1,42 @@
 from __future__ import annotations
 
-import logging
-import os
+import sys
+from pathlib import Path
 from typing import Mapping
 
-import numpy as np
+# src/ レイアウトからシンプルに import できるよう、`python main.py` 実行時にパスを補助
+sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
 
-from api import E, G, run
-from engine.core.geometry import Geometry
+from api import E, G, run  # type: ignore  # after sys.path tweak
+from engine.core.geometry import Geometry  # type: ignore
 
-CANVS_SIZE = 400
+CANVAS_SIZE = 400
 
 
 def draw(t: float, cc: Mapping[int, float]) -> Geometry:
-    t = t * cc[9] * 10
-    print(cc)
-    sphere = G.sphere(subdivisions=cc[1], sphere_type=cc[2])
+    """デモ描画関数（MIDI 未接続でも安全に動作）。"""
+
+    def c(i: int, default: float = 0.0) -> float:
+        return float(cc.get(i, default))
+
+    t = t * c(9, 1.0) * 10
+    sphere = G.sphere(subdivisions=c(1, 0.2), sphere_type=c(2, 0.0))
     pipe = (
-        E.pipeline.rotate(angles_rad=(cc[3], cc[4], cc[5]), pivot=(CANVS_SIZE // 2, CANVS_SIZE // 2, 0))
-        .displace(amplitude_mm=cc[6] * 50, spatial_freq=(cc[7] * 0.01, cc[7] * 0.01, cc[7] * 0.01), t_sec=t)
-        .displace(amplitude_mm=cc[6] * 20, spatial_freq=(cc[7] * 0.05, cc[7] * 0.05, cc[7] * 0.05), t_sec=t * 2)
+        E.pipeline.rotate(
+            angles_rad=(c(3), c(4), c(5)), pivot=(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+        )
+        .displace(
+            amplitude_mm=c(6) * 50, spatial_freq=(c(7) * 0.01, c(7) * 0.01, c(7) * 0.01), t_sec=t
+        )
+        .displace(
+            amplitude_mm=c(6) * 20,
+            spatial_freq=(c(7) * 0.05, c(7) * 0.05, c(7) * 0.05),
+            t_sec=t * 2,
+        )
         .build()
     )
-    return pipe(sphere.scale(400 * cc[8]).translate(CANVS_SIZE // 2, CANVS_SIZE // 2, 0))
+    return pipe(sphere.scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0))
 
 
 if __name__ == "__main__":
-    run(
-        draw,
-        canvas_size=(CANVS_SIZE, CANVS_SIZE),
-        render_scale=4,
-        use_midi=True,
-    )
+    run(draw, canvas_size=(CANVAS_SIZE, CANVAS_SIZE), render_scale=4, use_midi=True)
