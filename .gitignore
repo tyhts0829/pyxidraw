@@ -23,3 +23,4 @@ benchmark_results/
 # CC系キャプチャは追跡除外（src レイアウトのみ）
 src/engine/io/cc/
 data/cc/
+.pydeps/

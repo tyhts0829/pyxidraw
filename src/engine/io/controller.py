@@ -17,7 +17,7 @@ MIDI コントローラ入出力（IO モジュール）
   0.0–1.0 に正規化する。本モジュールでは整数演算を尊重しつつ最終的に float で保持する。
 - CC 値は `DualKeyDict` を用いて「数値 CC 番号」「論理名」の両方から参照できる。
 - 永続化ファイルは `data/cc/` 配下に保存し（プロジェクトルート相対）、壊れている場合は
-  安全側で初期化。環境変数 `PXD_DATA_DIR` で上書き可能。
+  安全側で初期化。保存先は設定ファイルの `io.cc_dir` で上書き可能。
 
 使用例:
     from engine.io.controller import MidiController
@@ -40,6 +40,8 @@ from typing import Optional
 
 import mido
 
+from util.utils import load_config
+
 from .helpers import DualKeyDict
 
 # from midi.ui.controllers.tx6 import TX6Dict
@@ -55,20 +57,16 @@ class MidiController:
     SCALED_14BIT_MAX = 127  # 14ビットのMIDI値をスケール変換したときの最大値
     MAX_14BIT_VAL = 16383  # 14ビットのMIDI値の最大値
 
-    # 既定の保存ディレクトリ（プロジェクトルート/data/cc）。
-    # - まず環境変数 PXD_DATA_DIR を尊重
-    # - 見つからない場合は、`pyproject.toml` を探索してプロジェクトルートを推定
-    # - それも失敗したら CWD の data/cc を使用（pytest 等でも安定動作）
+    # 既定の保存ディレクトリ（シンプル方針）。
+    # 優先度:
+    # 1) 設定 `io.cc_dir`（絶対/相対は実行CWD基準）
+    # 2) フォールバック `CWD/data/cc`
     @staticmethod
     def _default_save_dir() -> Path:
-        env = os.getenv("PXD_DATA_DIR")
-        if env:
-            return Path(env) / "cc"
-
-        here = Path(__file__).resolve()
-        for parent in here.parents:
-            if (parent / "pyproject.toml").exists() and (parent / "src").exists():
-                return parent / "data" / "cc"
+        cfg = load_config() or {}
+        cc_dir = cfg.get("io", {}).get("cc_dir") if isinstance(cfg, dict) else None
+        if cc_dir:
+            return Path(str(cc_dir))
         # フォールバック: 実行ディレクトリ配下
         return Path.cwd() / "data" / "cc"
 
@@ -103,7 +101,7 @@ class MidiController:
         """JSON から CC 値を読み込む。"""
         script_name = os.path.basename(sys.argv[0])[:-3]  # .py を除いたスクリプト名
         file_name = f"{script_name}_{self.port_name}.json"
-        MidiController.SAVE_DIR.mkdir(exist_ok=True)
+        MidiController.SAVE_DIR.mkdir(parents=True, exist_ok=True)
         path = MidiController.SAVE_DIR / file_name
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -126,7 +124,7 @@ class MidiController:
         """CC 値を JSON に保存する。"""
         script_name = os.path.basename(sys.argv[0])[:-3]  # .py を除いたスクリプト名
         save_name = f"{script_name}_{self.port_name}.json"
-        MidiController.SAVE_DIR.mkdir(exist_ok=True)
+        MidiController.SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
         # DualKeyDict から名前ベースでスナップショットを作成
         values_by_name = {}
