@@ -27,13 +27,13 @@ from .registry import effect
 def twist(g: Geometry, *, angle: float = 60.0, axis: str = "y") -> Geometry:
     """位置に応じて軸回りにねじるエフェクト（角度は度）。
 
-    Args:
-        g: 入力ジオメトリ
+    引数:
+        g: 入力ジオメトリ。
         angle: 最大ねじれ角（度）。デフォルトは 60°（視認性と過度な破綻のバランス）。
-        axis: ねじれ軸（"x"|"y"|"z"）
+        axis: ねじれ軸（"x"|"y"|"z"）。
 
-    Returns:
-        Geometry: ねじれ適用後のジオメトリ
+    返り値:
+        ねじれ適用後の `Geometry`。
     """
     coords, offsets = g.as_arrays(copy=False)
     if g.is_empty:

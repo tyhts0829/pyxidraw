@@ -59,11 +59,11 @@ def list_shapes() -> list[str]:
 def is_shape_registered(name: str) -> bool:
     """シェイプが登録されているかチェック。
 
-    Args:
-        name: シェイプ名
+    引数:
+        name: シェイプ名。
 
-    Returns:
-        登録されている場合True
+    返り値:
+        登録されている場合は True。
     """
     return _shape_registry.is_registered(name)
 
@@ -76,7 +76,7 @@ def clear_registry():
 def get_registry() -> BaseRegistry:
     """レジストリインスタンスを取得（ファクトリクラス用）。
 
-    Returns:
-        レジストリインスタンス
+    返り値:
+        レジストリインスタンス。
     """
     return _shape_registry

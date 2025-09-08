@@ -1,3 +1,67 @@
+"""
+E.pipeline — パイプライン実行モジュール（Effects オーケストレーター）
+
+本モジュールは、登録済みエフェクト群（`effects.registry`）を直列に適用する
+「パイプライン」を提供する。入力は唯一の幾何表現 `Geometry`（engine.core.geometry）で、
+各ステップは `Geometry -> Geometry` の純関数として実行される。副作用を避け、
+決定的で再現性の高い処理チェーンを組み立てることを目的とする。
+
+提供コンポーネント:
+- `Pipeline`: 不変な処理定義を保持し、`__call__(g)` で逐次適用する実行体。
+  - 単層 LRU 風キャッシュを内蔵。鍵は `(geometry_digest, pipeline_key)`。
+  - `clear_cache()` でキャッシュを手動クリア可能。
+  - `to_spec()/from_spec()` により JSON 風の仕様へシリアライズ/デシリアライズ可能。
+- `PipelineBuilder`: ビルダー（フルエント API）。`E.pipeline ... .build()` で `Pipeline` を生成。
+  - 動的属性でエフェクト名を受け取り、`adder(**params)` でステップを追加する仕組み。
+  - `.cache(maxsize=...)` で単層キャッシュの上限を設定（`None`=無制限、`0`=無効）。
+  - `.strict(enabled=True)` でビルド時の厳格検証を有効化（未知パラメータを検出して `TypeError`）。
+- `Step`: 1 ステップの定義（`name` と `params`）。
+- `E`: 利用者向けシングルトン（`from api import E`）。`E.pipeline` が `PipelineBuilder` を返す。
+- `validate_spec(spec)`: 仕様配列を検証するユーティリティ（不正時に `TypeError/KeyError`）。
+
+キャッシュ設計:
+- `Geometry.digest`（16B の blake2b 指紋）と、ステップ列から導出した `pipeline_key` を組み合わせる。
+- `Geometry.digest` が無効/未計算の場合でも、配列内容から都度ハッシュを計算してフォールバック。
+- 容量は `PipelineBuilder.cache(maxsize=...)` または環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` で制御。
+  - `None`: 無制限（従来互換）。`0`: キャッシュ無効。
+- 実装は `OrderedDict` による単純な LRU 風。ヒット時は末尾に移動し、上限超過で先頭から追い出し。
+
+厳格検証（strict）:
+- 各ステップの `params` キーを該当エフェクト関数のシグネチャと照合。
+- `g` 引数は内部で供給するため指定不要。`**kwargs` を受け取る関数は未知キー許容（Builder 側）。
+- `validate_spec` はデータ受け渡し境界（設定/ファイル）での安全性確保に重点を置き、
+  JSON 風の値かどうかのヒューリスティックも併せて確認する。
+
+ハッシュと同一性:
+- `pipeline_key` は各ステップの「名前」「関数バイトコード（近似版）」「パラメータ正規化結果」
+  から blake2b（8B）を積み上げて算出し、最終的に 16B にまとめた指紋を使用する。
+- `Geometry` との組み合わせにより処理結果のキャッシュ同一性が安定し、
+  大規模な入出力でも再計算を抑制できる。
+
+スレッド/プロセスについての注意:
+- 現実装のキャッシュはモジュール内 `Pipeline` インスタンスに閉じた `OrderedDict` を使用。
+  マルチスレッドで同一インスタンスを共有する場合は外部でロックを用いるか、
+  スレッドごとに別インスタンスを使用することを推奨。
+
+使用例:
+    from api import E, G
+    g = G.grid(divisions=16)
+    pipe = (
+        E.pipeline
+         .noise(seed=1, amount=0.05)
+         .rotate(z=0.3)
+         .cache(maxsize=128)
+         .strict(True)
+         .build()
+    )
+    out = pipe(g)  # Geometry -> Geometry
+
+モジュール境界:
+- エフェクト解決は `effects.registry.get_effect` に委譲（未登録名は `KeyError`）。
+- ジオメトリ表現は `engine.core.geometry.Geometry` に統一。
+- 本モジュールは I/O を持たず、エフェクト適用の順序・同一性・キャッシュ管理に専念する。
+"""
+
 from __future__ import annotations
 
 import hashlib

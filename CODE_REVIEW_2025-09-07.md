@@ -31,13 +31,14 @@
     ```
 
 2) [HIGH] CC 値の型不一致（int/float）
-- 場所: 
-  - `src/engine/pipeline/task.py` → `cc_state: Mapping[int, int]`
-  - `src/api/runner.py` → `user_draw: Callable[[float, Mapping[int, int]], Geometry]`
-  - `src/engine/io/service.py` → `snapshot() -> Mapping[int, float]`
-- 問題: 実際の CC は `0..1` 正規化 float。型が int で固定されており不整合。
-- 影響: 型チェック破綻/利用側の誤解・バグ誘発。
-- 対応案: すべて `Mapping[int, float]` へ揃える（`task.py` と `runner.py` のシグネチャ修正）。
+- 対応状況: [x] 解消済み（2025-09-07）
+- 変更内容:
+  - `src/engine/pipeline/task.py` の `RenderTask.cc_state` を `Mapping[int, float]` へ統一（確認済）。
+  - `src/api/runner.py` の `run_sketch(user_draw: Callable[[float, Mapping[int, float]], Geometry], ...)` を確認・維持。
+  - `src/engine/io/service.py` の `snapshot() -> Mapping[int, float]` と整合。
+  - ドキュメント `docs/architecture.md` も `Mapping[int, float]`（0.0–1.0 正規化）に更新。
+- 背景: 実際の CC は `0.0..1.0` の正規化 float。かつての 0–127 int 前提表記が残っていたため混乱を招く恐れがあった。
+- 影響: 型の一貫性が保証され、利用側の誤解や mypy の誤検知を抑止。
 
 3) [MID] Shapely 2.x 互換性リスク（`effects/offset.py`）
 - 場所: `LineString.buffer(distance, join_style=..., resolution=...)` に文字列を渡し `# type: ignore`。

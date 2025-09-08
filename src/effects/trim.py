@@ -73,12 +73,12 @@ def trim(g: Geometry, *, start_param: float = 0.1, end_param: float = 0.9) -> Ge
 
     0.0–1.0 の正規化パラメータで開始/終了位置を指定し、その区間の線分を残します。
 
-    Args:
+    引数:
         start_param: 開始位置（0.0–1.0）。0.0 は先頭、1.0 は末尾。
         end_param: 終了位置（0.0–1.0）。`start_param` より大きい値を指定。
 
-    Returns:
-        Geometry: 区間トリム後のジオメトリ
+    返り値:
+        区間トリム後の `Geometry`。
     """
     start_param = clamp01(float(start_param))
     end_param = clamp01(float(end_param))

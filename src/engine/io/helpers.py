@@ -84,7 +84,7 @@ class DualKeyDict:
     def _toggle_value(self, key: Union[int, str]) -> int:
         """
         ボタンキーの値をトグルした値を返す。
-        Args:
+        引数:
             key (int or str): キー。
         """
         current_value = self[key]

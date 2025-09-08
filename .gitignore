@@ -18,7 +18,8 @@ venv/
 *.egg-info/
 *.egg
 benchmark_results/
-engine/io/cc/
+# 生成物/一時
 .pytest_cache/
-screenshots/
+# CC系キャプチャは追跡除外（src レイアウトのみ）
 src/engine/io/cc/
+data/cc/

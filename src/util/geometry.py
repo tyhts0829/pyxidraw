@@ -25,10 +25,10 @@ def transform_to_xy_plane(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray,
     頂点の法線ベクトルがZ軸に沿うように回転させ、
     その後z座標を0に平行移動する。
 
-    Args:
-        vertices: (N, 3) 3D点の配列
+    引数:
+        vertices: (N, 3) 3D点の配列。
 
-    Returns:
+    返り値:
         以下のタプル:
             - transformed_points: (N, 3) XY平面上の配列
             - rotation_matrix: (3, 3) 使用された回転行列
@@ -106,13 +106,13 @@ def transform_back(
 
     transform_to_xy_plane関数の逆変換。
 
-    Args:
-        vertices: (N, 3) 変換された点の配列
-        rotation_matrix: (3, 3) transform_to_xy_planeから得られた回転行列
-        z_offset: transform_to_xy_planeから得られたz方向の平行移動量
+    引数:
+        vertices: (N, 3) 変換された点の配列。
+        rotation_matrix: (3, 3) transform_to_xy_planeから得られた回転行列。
+        z_offset: transform_to_xy_planeから得られたz方向の平行移動量。
 
-    Returns:
-        (N, 3) 元の向きの点の配列
+    返り値:
+        (N, 3) 元の向きの点の配列。
     """
     # Ensure consistent float64 type for calculations
     vertices = vertices.astype(np.float64)

@@ -29,14 +29,14 @@ class _GShapes(Protocol):
         ...
     def attractor(self, *, attractor_type: str = ..., points: int = ..., dt: float = ..., scale: float = ..., **_params: Any) -> Geometry:
         """
-        Generate a strange attractor.
+        各種アトラクタの軌跡を生成する。
 
         引数:
-            attractor_type: Type of attractor ("lorenz", "rossler", "aizawa", "three_scroll", "dejong")
-            points: Number of points to generate
-            dt: Time step for integration
-            scale: Scale factor for the attractor
-            **_params: Additional parameters passed to specific attractors
+            attractor_type: アトラクタ種別（"lorenz"/"rossler"/"aizawa"/"three_scroll"/"dejong"）
+            points: 生成するステップ数（頂点数）
+            dt: 数値積分の時間刻み
+            scale: 出力スケール係数
+            **_params: 個別アトラクタへ渡す追加パラメータ
         """
         ...
     def capsule(self, *, radius: float = ..., height: float = ..., segments: int = ..., latitude_segments: int = ..., **_params: Any) -> Geometry:
@@ -99,7 +99,7 @@ class _GShapes(Protocol):
         ...
     def polygon(self, *, n_sides: int | float = ..., **_params: Any) -> Geometry:
         """
-        直径1の円に内接する正多角形を生成します。
+        直径 1 の円に内接する正多角形を生成します。
 
         引数:
             n_sides: 辺の数

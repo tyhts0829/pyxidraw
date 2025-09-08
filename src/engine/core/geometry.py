@@ -168,10 +168,10 @@ class Geometry:
     def as_arrays(self, *, copy: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """内部配列を返すユーティリティ。
 
-        Args:
+        引数:
             copy: True の場合はディープコピーを返す。
 
-        Returns:
+        返り値:
             `(coords, offsets)` のタプル。
         """
         if copy:
@@ -225,10 +225,10 @@ class Geometry:
     def translate(self, dx: float, dy: float, dz: float = 0.0) -> "Geometry":
         """平行移動（純関数）。
 
-        Args:
+        引数:
             dx, dy, dz: 各軸の移動量。
 
-        Returns:
+        返り値:
             新しい `Geometry`（元は不変）。
         """
         if self.is_empty:
@@ -254,11 +254,11 @@ class Geometry:
     ) -> "Geometry":
         """拡大縮小（純関数）。
 
-        Args:
+        引数:
             sx, sy, sz: 各軸スケール。`sy/sz` 省略時は等方拡大。
             center: 拡大の基準点（pivot）。
 
-        Returns:
+        返り値:
             新しい `Geometry`。
         """
         if sy is None:
@@ -293,11 +293,11 @@ class Geometry:
     ) -> "Geometry":
         """回転（純関数）。X→Y→Z の順に右手系で適用。
 
-        Args:
+        引数:
             x, y, z: 各軸回転角（ラジアン）。
             center: 回転中心（pivot）。
 
-        Returns:
+        返り値:
             新しい `Geometry`。
         """
         if self.is_empty or (x == 0 and y == 0 and z == 0):

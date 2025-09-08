@@ -26,12 +26,12 @@ def scale(
 ) -> Geometry:
     """スケール変換を適用（純関数）。
 
-    Args:
-        pivot: スケーリングの中心（`(x, y, z)`）
-        scale: 各軸の倍率（`(sx, sy, sz)`）
+    引数:
+        pivot: スケーリングの中心（`(x, y, z)`）。
+        scale: 各軸の倍率（`(sx, sy, sz)`）。
 
-    Returns:
-        Geometry: スケーリング後のジオメトリ
+    返り値:
+        スケーリング後の `Geometry`。
     """
     sx, sy, sz = scale
     return g.scale(sx, sy, sz, center=pivot)

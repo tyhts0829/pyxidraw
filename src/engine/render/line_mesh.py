@@ -13,7 +13,8 @@ class LineMesh:
         self,
         ctx: mgl.Context,
         program: mgl.Program,
-        initial_reserve: int = 200 * 1024 * 1024,
+        # 初期GPUメモリ確保量を抑制（既定: 8MB）。必要に応じて自動拡張。
+        initial_reserve: int = 8 * 1024 * 1024,
         primitive_restart_index: int = 0xFFFFFFFF,
     ):
         """

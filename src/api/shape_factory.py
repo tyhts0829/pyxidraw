@@ -110,12 +110,12 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
     def _cached_shape(shape_name: str, params_tuple: ParamsTuple) -> Geometry:
         """登録シェイプを解決・生成し、結果を LRU キャッシュ。
 
-        Args:
-            shape_name: シェイプ名（レジストリキー）
-            params_tuple: `_params_to_tuple(**params)` が返すハッシュ可能タプル
+        引数:
+            shape_name: シェイプ名（レジストリキー）。
+            params_tuple: `_params_to_tuple(**params)` が返すハッシュ可能タプル。
 
-        Returns:
-            Geometry: 生成された形状（必要に応じて `from_lines` でラップ）
+        返り値:
+            生成された形状（必要に応じて `from_lines` でラップ）を表す `Geometry`。
 
         Note:
             - キャッシュキーは `(shape_name, params_tuple)`。
@@ -218,11 +218,11 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
     def from_lines(lines: Iterable[NDArray[Any]]) -> Geometry:
         """線分集合（ポリライン列）から `Geometry` を構築する補助。
 
-        Args:
-            lines: `[(N_i, 3) ndarray]` を要素とするイテラブル
+        引数:
+            lines: `[(N_i, 3) ndarray]` を要素とするイテラブル。
 
-        Returns:
-            Geometry: `coords`/`offsets` を持つ統一 Geometry
+        返り値:
+            `coords` と `offsets` を持つ統一 `Geometry`。
         """
         return Geometry.from_lines(lines)
 

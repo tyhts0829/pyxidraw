@@ -245,15 +245,15 @@ class Capsule(BaseShape):
     ) -> Geometry:
         """カプセル形状を生成する。
 
-        Args:
-            radius: 半球の半径
-            height: 円柱部分の高さ
-            segments: 経度方向のセグメント数（周方向の分割数）
-            latitude_segments: 緯度方向のセグメント数（半球の分割数）
-            **params: 追加パラメータ（無視される）
+        引数:
+            radius: 半球の半径。
+            height: 円柱部分の高さ。
+            segments: 経度方向のセグメント数（周方向の分割数）。
+            latitude_segments: 緯度方向のセグメント数（半球の分割数）。
+            **params: 追加パラメータ（無視される）。
 
-        Returns:
-            Geometry object containing カプセル線
+        返り値:
+            カプセル線を含む `Geometry`。
         """
         # スケーリング係数を計算
         # ユニットカプセルは半径=0.5、高さ=1.0

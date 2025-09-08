@@ -211,9 +211,9 @@ def elastic_relaxation_nb(positions, edges, fixed, iterations, step):
 def build_adjacency_arrays(num_nodes, edges):
     """
     Build adjacency list representation using arrays instead of dictionaries.
-    Returns:
-        - adjacency: 2D array where adjacency[i] contains neighbors of node i (-1 for empty slots)
-        - degrees: array of node degrees
+    返り値:
+        - adjacency: adjacency[i] がノード i の隣接ノードを格納する 2D 配列（空きは -1）。
+        - degrees: 各ノードの次数配列。
     """
     # Count degrees first
     degrees = np.zeros(num_nodes, dtype=np.int32)
@@ -385,12 +385,12 @@ def merge_edges_into_polylines(nodes, edges):
     ノード集合とエッジリストから隣接エッジを連結して、
     ポリライン（np.array(shape=(N,3))）のリストとして返す。
 
-    Args:
-        nodes: Array of node positions (N, 3)
-        edges: Array of edge connections (M, 2)
+    引数:
+        nodes: ノード位置配列 (N, 3)。
+        edges: エッジ接続配列 (M, 2)。
 
-    Returns:
-        List of polylines, each as a numpy array of shape (K, 3)
+    返り値:
+        各ポリラインを shape=(K, 3) の numpy 配列とするリスト。
     """
     num_nodes = nodes.shape[0]
     adjacency, degrees = build_adjacency_arrays(num_nodes, edges)

@@ -13,11 +13,11 @@ from .registry import shape
 
 @shape
 class Polyhedron(BaseShape):
-    """Regular polyhedron shape generator using pre-computed vertex data."""
+    """事前計算済みの頂点データを用いて正多面体の線分群を生成するシェイプ。"""
 
     _vertices_cache = None
 
-    # Polyhedron type mapping
+    # 多面体タイプのマッピング
     _TYPE_MAP = {
         "tetrahedron": "tetrahedron",
         4: "tetrahedron",
@@ -40,30 +40,30 @@ class Polyhedron(BaseShape):
 
     @classmethod
     def _load_vertices_data(cls):
-        """Load pre-computed polyhedron vertex data (.npz only)."""
+        """事前計算済みの多面体頂点データ（.npz のみ）を読み込みます。"""
         if cls._vertices_cache is None:
             cls._vertices_cache = {}
             data_dir = Path(__file__).parents[1] / "data" / "regular_polyhedron"
 
-            # Check if data directory exists
+            # データディレクトリの存在を確認
             if not data_dir.exists():
                 cls._vertices_cache = None
                 return
 
             polyhedrons = ["tetrahedron", "hexahedron", "octahedron", "dodecahedron", "icosahedron"]
             for polyhedron in polyhedrons:
-                # Authoritative npz format
+                # 正式な npz 形式
                 npz_file = data_dir / f"{polyhedron}_vertices_list.npz"
                 if npz_file.exists():
                     with np.load(npz_file) as data:
-                        # Accept either 'arr_i' keys or 'arrays' list
+                        # 'arr_i' 形式の複数配列キーまたは 'arrays' リストのどちらにも対応
                         if "arrays" in data.files:
                             arrays = data["arrays"]
                             cls._vertices_cache[polyhedron] = [
                                 np.array(a, dtype=np.float32) for a in arrays
                             ]
                         else:
-                            # Gather arr_0, arr_1... in order
+                            # arr_0, arr_1... を順序通りに収集
                             keys = sorted(
                                 [k for k in data.files if k.startswith("arr_")],
                                 key=lambda k: int(k.split("_")[1]),
@@ -88,30 +88,30 @@ class Polyhedron(BaseShape):
 
         shape_name = self._TYPE_MAP[polygon_type]
 
-        # Try to load pre-computed data
+        # 事前計算データの読み込みを試行
         self._load_vertices_data()
 
         if self._vertices_cache and shape_name in self._vertices_cache:
             vertices_list = self._vertices_cache[shape_name]
-            # Convert to list of numpy arrays if needed
+            # 必要に応じて numpy 配列のリストへ変換
             if isinstance(vertices_list, list):
                 converted_list = [np.array(v, dtype=np.float32) for v in vertices_list]
                 return Geometry.from_lines(converted_list)
             return Geometry.from_lines(vertices_list)
 
-        # Fallback: generate simple polyhedron
+        # フォールバック: 簡易な多面体を生成
         return Geometry.from_lines(self._generate_simple_polyhedron(shape_name))
 
     def _generate_simple_polyhedron(self, shape_name: str) -> list[np.ndarray]:
-        """Generate simple polyhedron vertices."""
+        """簡易な多面体の頂点・辺リストを生成します。"""
         if shape_name == "tetrahedron":
-            # Simple tetrahedron
+            # 単純な四面体
             vertices = np.array(
                 [[0, 0, 0.5], [0.433, 0, -0.25], [-0.216, 0.375, -0.25], [-0.216, -0.375, -0.25]],
                 dtype=np.float32,
             )
 
-            # Edge connections
+            # 辺の接続定義
             edges = [
                 [vertices[0], vertices[1]],
                 [vertices[0], vertices[2]],
@@ -123,7 +123,7 @@ class Polyhedron(BaseShape):
             return [np.array(edge, dtype=np.float32) for edge in edges]
 
         elif shape_name == "hexahedron" or shape_name == "cube":
-            # Simple cube
+            # 単純な立方体
             d = 0.5
             vertices = np.array(
                 [
@@ -139,36 +139,36 @@ class Polyhedron(BaseShape):
                 dtype=np.float32,
             )
 
-            # Edge connections
+            # 辺の接続定義
             edges = []
-            # Bottom face
+            # 底面
             for i in range(4):
                 edges.append([vertices[i], vertices[(i + 1) % 4]])
-            # Top face
+            # 上面
             for i in range(4):
                 edges.append([vertices[i + 4], vertices[((i + 1) % 4) + 4]])
-            # Vertical edges
+            # 垂直の辺
             for i in range(4):
                 edges.append([vertices[i], vertices[i + 4]])
 
             return [np.array(edge, dtype=np.float32) for edge in edges]
 
         elif shape_name == "octahedron":
-            # Simple octahedron
+            # 単純な八面体
             vertices = np.array(
                 [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0, 0, 0.5], [0, 0, -0.5]],
                 dtype=np.float32,
             )
 
-            # Edge connections
+            # 辺の接続定義
             edges = []
-            # Connect top vertex to middle square
+            # 上側頂点と中間の四角形を接続
             for i in range(4):
                 edges.append([vertices[4], vertices[i]])
-            # Connect bottom vertex to middle square
+            # 下側頂点と中間の四角形を接続
             for i in range(4):
                 edges.append([vertices[5], vertices[i]])
-            # Middle square
+            # 中央の四角形
             edges.append([vertices[0], vertices[2]])
             edges.append([vertices[2], vertices[1]])
             edges.append([vertices[1], vertices[3]])
@@ -177,5 +177,5 @@ class Polyhedron(BaseShape):
             return [np.array(edge, dtype=np.float32) for edge in edges]
 
         else:
-            # Default to tetrahedron for unsupported types
+            # 未対応タイプは四面体にフォールバック
             return self._generate_simple_polyhedron("tetrahedron")

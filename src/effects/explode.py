@@ -25,12 +25,12 @@ from .registry import effect
 def explode(g: Geometry, *, factor: float = 0.3) -> Geometry:
     """中心から外側へ頂点を放射状に移動させるエフェクト。
 
-    Args:
-        g: 入力ジオメトリ
-        factor: 移動係数（0..1 相当のスケールを想定）
+    引数:
+        g: 入力ジオメトリ。
+        factor: 移動係数（0..1 相当のスケールを想定）。
 
-    Returns:
-        Geometry: 変形後のジオメトリ
+    返り値:
+        変形後の `Geometry`。
     """
     coords, offsets = g.as_arrays(copy=False)
     if g.is_empty:

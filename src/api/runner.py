@@ -1,3 +1,78 @@
+"""
+api.runner — スケッチ実行・描画ランナー（リアルタイム UI + MIDI 入力）
+
+本モジュールは、ユーザ定義の描画コールバック（`user_draw`）を中核に、
+ウィンドウ生成・レンダリング・バックグラウンド計算（ワーカー）・MIDI 入力・
+メトリクス表示（HUD）を統合して実行する高水準ランナーを提供する。
+
+主エントリポイント:
+- `run_sketch(user_draw, *, canvas_size="A5", render_scale=4, fps=None, ... )`:
+  - `user_draw(t: float, cc: Mapping[int, float]) -> Geometry` を一定レートで呼び出し、
+    返された `Geometry` を GPU でレンダリングする。
+  - ウィンドウは `pyglet`、描画は `ModernGL` を用いたラインレンダラにより行う。
+  - バックグラウンド側で `WorkerPool` が `user_draw` を実行し、`SwapBuffer` 経由で
+    フレームを主スレッドに受け渡す（`StreamReceiver`）。
+  - MIDI 入力（任意）は `engine.io` サブシステムに委譲。未接続/未導入時は自動フォールバック。
+
+実行フロー（概要）:
+1) FPS/設定解決: `fps is None` の場合は `util.utils.load_config()` から既定値を取得（なければ 60）。
+2) キャンバス設定: `util.constants.CANVAS_SIZES` のキーまたは `(width,height)` [mm] から
+   論理サイズを確定し、`render_scale` 倍でピクセルサイズのウィンドウを作成。
+3) MIDI 初期化: `use_midi` 有効時、デバイス検出・サービス生成。厳格モード（後述）では
+   初期化失敗で `SystemExit(2)`。通常は Null 実装へフォールバックして継続。
+4) パイプライン基盤: `SwapBuffer`・`WorkerPool`・`StreamReceiver` を結線し、
+   ワーカーが生成した `Geometry` を非同期に受け取る。
+5) ウィンドウ/GL: `RenderWindow` を生成し、`ModernGL` のブレンドを有効化。
+6) 投影行列: キャンバス [mm] を直接座標系とする正射影行列を構築（Y 上向きを画面座標へ反映）。
+7) 監視/HUD: `MetricSampler` と `OverlayHUD` をセットアップし、描画コールバックに登録。
+8) フレーム駆動: `FrameClock` により各コンポーネントの `tick(dt)` を `pyglet.clock` で駆動。
+   `ESC` でウィンドウを閉じ、ワーカー停止・MIDI 保存・GL リソース解放を行う。
+
+引数の意味（要点）:
+- `user_draw`: 時刻 `t` [sec] と CC 値辞書（0–127 → 0.0–1.0）を受け取り `Geometry` を返す純関数。
+- `canvas_size`: `"A4"/"A5"/...` などのプリセット名、または `(width_mm, height_mm)` タプル。
+- `render_scale`: mm→画素のスケーリング。見た目の解像度とアンチエイリアス品質に影響。
+- `fps`: 描画更新レート。`None` で設定ファイルから解決、未設定時は 60。
+- `background`: RGBA (0–1)。ウィンドウの背景色。
+- `workers`: バックグラウンド計算の並列度（CPU コア/負荷に応じて調整）。
+- `use_midi`: True で実機 MIDI を試行。未接続/未導入時は警告とともに Null 実装へ。
+- `midi_strict`: True で初期化失敗時に即終了。None なら環境変数を参照（下記）。
+- `init_only`: True で重い依存の初期化をスキップし、作成フェーズの検証だけを行って終了。
+
+環境変数・設定:
+- `PYXIDRAW_MIDI_STRICT`: `"1"/"true"/"on"/"yes"` で厳格モードを有効化。
+- 設定ファイル（`util.utils.load_config()` が読み取る YAML）から `fps` と
+  `midi.strict_default` を補完可能（読み込み失敗時は安全側の既定にフォールバック）。
+
+スレッド/プロセス・安全性:
+- 本モジュールは UI イベントループ（`pyglet`）を主スレッドで回し、
+  幾何生成（`user_draw`）は `WorkerPool` に委譲してメインループから切り離す。
+- 受け渡しには `SwapBuffer` を利用し、フレーム境界での整合性を保つ。
+- MIDI は `Tickable` として `FrameClock` に統合され、`snapshot()` により CC 値を取得。
+
+例（最小スケッチ）:
+    from api.runner import run_sketch
+    import numpy as np
+    from engine.core.geometry import Geometry
+
+    def user_draw(t, cc):
+        # 半径を時間と CC#1 で変調した円
+        r = 50 + 30 * float(cc.get(1, 0.0))
+        theta = np.linspace(0, 2*np.pi, 200, endpoint=False)
+        xy = np.c_[r*np.cos(theta), r*np.sin(theta)]
+        return Geometry.from_lines([xy])
+
+    run_sketch(user_draw, canvas_size="A5", render_scale=4, fps=60)
+
+注意/制限:
+- 3D ではなく 2D 線の正射影描画を前提としている。Z は重なり順の補助程度。
+- ヘッドレス/仮想環境では `pyglet`/`ModernGL` の初期化に失敗する場合がある。
+- 厳格 MIDI モードではデバイス未検出等で即時終了する（非厳格時は警告ログのみ）。
+
+ロギング:
+- 初期化エラーやフォールバックは `logging` で通知。必要に応じてハンドラを設定すること。
+"""
+
 from __future__ import annotations
 
 import logging

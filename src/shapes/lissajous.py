@@ -12,10 +12,10 @@ from .registry import shape
 
 @shape
 class Lissajous(BaseShape):
-    """Lissajous curve shape generator (2D/3D).
+    """リサージュ曲線のシェイプ生成器（2D/3D）。
 
-    - Default behavior matches previous 2D implementation (Z=0).
-    - Provide `freq_z` and `phase_z` to generate a 3D Lissajous figure.
+    - 既定の挙動は従来の 2D 実装に一致（Z=0）。
+    - `freq_z` と `phase_z` を与えると 3D のリサージュ図形を生成します。
     """
 
     def generate(

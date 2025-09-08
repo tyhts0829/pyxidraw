@@ -85,7 +85,7 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 from api import G, E, run
 
 def draw(t, cc):
-    # t は秒、cc は MIDI CC（0-127 の Mapping）。
+    # t は秒、cc は MIDI CC の正規化値（Mapping[int, float], 0.0–1.0）。
     # 時間/CC 依存パラメータがある場合は毎フレーム Pipeline を構築する（キャッシュはほぼミスする前提）。
     g = G.sphere(subdivisions=cc[1])
     pipe = (
@@ -110,7 +110,7 @@ Tips:
 
 ## MIDI と入力（要点）
 - `run(..., use_midi=True)` で可能なら実機 MIDI に接続。未接続時はフォールバック（`midi_strict=True` で失敗を致命扱い）。
-- `draw(t, cc)` の `cc` は `Mapping[int, int]`（0–127）。`engine/io` がスナップショットを供給。
+- `draw(t, cc)` の `cc` は `Mapping[int, float]`（0.0–1.0 の正規化値）。`engine/io` がスナップショットを供給。
 
 ## テストとの接点（要点）
 - `Geometry` はスナップショット（`digest`）で回帰検知しやすい。

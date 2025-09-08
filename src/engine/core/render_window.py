@@ -40,7 +40,7 @@ class RenderWindow(pyglet.window.Window):
     ):
         """ウィンドウを生成する。
 
-        Args:
+        引数:
             width: ウィンドウ幅（ピクセル）。
             height: ウィンドウ高さ（ピクセル）。
             bg_color: 背景色 RGBA（0.0〜1.0）。

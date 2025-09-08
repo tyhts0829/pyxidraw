@@ -16,7 +16,8 @@ MIDI コントローラ入出力（IO モジュール）
 - 14bit CC は MSB/LSB の 2 メッセージから 0–16383 を組み立て、0–127 に線形スケール後
   0.0–1.0 に正規化する。本モジュールでは整数演算を尊重しつつ最終的に float で保持する。
 - CC 値は `DualKeyDict` を用いて「数値 CC 番号」「論理名」の両方から参照できる。
-- 永続化ファイルは `src/engine/io/cc/` 配下に保存し、壊れている場合は安全側で初期化。
+- 永続化ファイルは `data/cc/` 配下に保存し（プロジェクトルート相対）、壊れている場合は
+  安全側で初期化。環境変数 `PXD_DATA_DIR` で上書き可能。
 
 使用例:
     from engine.io.controller import MidiController
@@ -53,7 +54,25 @@ class MidiController:
     SCALED_14BIT_MIN = 0  # 14ビットのMIDI値をスケール変換したときの最小値
     SCALED_14BIT_MAX = 127  # 14ビットのMIDI値をスケール変換したときの最大値
     MAX_14BIT_VAL = 16383  # 14ビットのMIDI値の最大値
-    SAVE_DIR = Path(__file__).parent / "cc"
+
+    # 既定の保存ディレクトリ（プロジェクトルート/data/cc）。
+    # - まず環境変数 PXD_DATA_DIR を尊重
+    # - 見つからない場合は、`pyproject.toml` を探索してプロジェクトルートを推定
+    # - それも失敗したら CWD の data/cc を使用（pytest 等でも安定動作）
+    @staticmethod
+    def _default_save_dir() -> Path:
+        env = os.getenv("PXD_DATA_DIR")
+        if env:
+            return Path(env) / "cc"
+
+        here = Path(__file__).resolve()
+        for parent in here.parents:
+            if (parent / "pyproject.toml").exists() and (parent / "src").exists():
+                return parent / "data" / "cc"
+        # フォールバック: 実行ディレクトリ配下
+        return Path.cwd() / "data" / "cc"
+
+    SAVE_DIR = _default_save_dir.__func__()  # type: ignore[attr-defined]
 
     def __init__(self, port_name, cc_map, mode):
         self.port_name = port_name

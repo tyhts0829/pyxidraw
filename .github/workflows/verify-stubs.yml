@@ -33,11 +33,11 @@ jobs:
         run: python -m scripts.gen_g_stubs
       - name: Ensure stubs are up-to-date
         run: |
-          git diff --exit-code api/__init__.pyi || (echo 'api/__init__.pyi is outdated; run python -m scripts.gen_g_stubs' && exit 1)
+          git diff --exit-code src/api/__init__.pyi || (echo 'src/api/__init__.pyi is outdated; run python -m scripts.gen_g_stubs' && exit 1)
       - name: Lint (ruff)
         run: ruff check .
       - name: Format (black --check)
-        run: black --check . --extend-exclude "^api/__init__\\.pyi$"
+        run: black --check . --extend-exclude "^src/api/__init__\\.pyi$"
       - name: Imports (isort --check-only)
         run: isort --check-only .
       - name: Type check (mypy)

@@ -4,12 +4,12 @@
 - 同じ手順で lint/型/テスト/スタブ生成が再現できる状態を整える。
 
 ## 必要要件
-- Python 3.10 以上（3.11 推奨）
+- Python 3.10 以上（3.10 推奨：CI と整合）
 - `pip`
 
 ## 初期化
 ```
-python3.11 -m venv .venv
+python3.10 -m venv .venv
 . .venv/bin/activate
 python -m pip install -U pip
 pip install -e .[dev]

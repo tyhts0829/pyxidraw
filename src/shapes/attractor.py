@@ -13,7 +13,7 @@ from .registry import shape
 
 @shape
 class Attractor(BaseShape):
-    """Strange attractor shape generator."""
+    """ストレンジアトラクタ（Strange Attractor）の線形状を生成する形状クラス。"""
 
     def generate(
         self,
@@ -23,17 +23,17 @@ class Attractor(BaseShape):
         scale: float = 1.0,
         **params: Any,
     ) -> Geometry:
-        """Generate a strange attractor.
+        """各種アトラクタの軌跡を生成する。
 
-        Args:
-            attractor_type: Type of attractor ("lorenz", "rossler", "aizawa", "three_scroll", "dejong")
-            points: Number of points to generate
-            dt: Time step for integration
-            scale: Scale factor for the attractor
-            **params: Additional parameters passed to specific attractors
+        引数:
+            attractor_type: アトラクタ種別（"lorenz"/"rossler"/"aizawa"/"three_scroll"/"dejong"）。
+            points: 生成するステップ数（頂点数）。
+            dt: 数値積分の時間刻み。
+            scale: 出力スケール係数。
+            **params: 個別アトラクタへ渡す追加パラメータ。
 
-        Returns:
-            Geometry object containing attractor trajectory
+        返り値:
+            生成された軌跡を 1 本のポリラインとして格納した `Geometry`。
         """
         if attractor_type == "lorenz":
             attractor = LorenzAttractor(dt=dt, steps=points, scale=scale, **params)
@@ -58,7 +58,7 @@ class Attractor(BaseShape):
         return Geometry.from_lines([vertices])
 
     def _normalize_vertices(self, vertices: np.ndarray) -> np.ndarray:
-        """Normalize vertices to fit in unit cube centered at origin."""
+        """頂点群を原点中心の単位立方体へ正規化する。"""
         # Find bounds
         min_vals = np.min(vertices, axis=0)
         max_vals = np.max(vertices, axis=0)
