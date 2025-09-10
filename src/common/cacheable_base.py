@@ -15,7 +15,7 @@ import hashlib
 import os
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class CacheableBase(ABC):
@@ -24,7 +24,7 @@ class CacheableBase(ABC):
     def __init__(self):
         self._cache_enabled: bool = True
         self._cache_size: int = 128
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
 
     def enable_cache(self) -> None:
         """キャッシュを有効化"""
@@ -40,7 +40,7 @@ class CacheableBase(ABC):
         params_str = f"{args}_{sorted(kwargs.items())}"
         return hashlib.md5(params_str.encode()).hexdigest()
 
-    def _get_from_cache(self, cache_key: str) -> Optional[Any]:
+    def _get_from_cache(self, cache_key: str) -> Any | None:
         """キャッシュから値を取得"""
         if not self._cache_enabled:
             return None

@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator
 
 import numpy as np
 from numba import njit
@@ -109,7 +109,7 @@ def random_walk_strokes_generator(
     nodes: list[Point3D],
     adjacency: dict,
     config: AsemicGlyphConfig,
-    rng: Optional[random.Random] = None,
+    rng: random.Random | None = None,
 ) -> Iterator[list[int]]:
     """
     RNG上でランダムウォークによりストロークを生成する（ジェネレータ版）。
@@ -162,7 +162,7 @@ def random_walk_strokes(
     nodes: list[Point3D],
     adjacency: dict,
     config: AsemicGlyphConfig,
-    rng: Optional[random.Random] = None,
+    rng: random.Random | None = None,
 ) -> list[list[int]]:
     """
     互換性のためのラッパー関数
@@ -320,7 +320,7 @@ def generate_nodes(
     region: Region,
     cell_margin: float,
     placement_mode: str,
-    config: Optional[AsemicGlyphConfig] = None,
+    config: AsemicGlyphConfig | None = None,
 ) -> list[Point3D]:
     """
     指定された領域と余白、配置モードに応じてノードを生成する。
@@ -651,7 +651,7 @@ class DiacriticFactory:
 
     @classmethod
     def create_random_diacritic(
-        cls, center: Point3D, radius: float, rng: Optional[random.Random] = None
+        cls, center: Point3D, radius: float, rng: random.Random | None = None
     ) -> list[np.ndarray]:
         """ランダムなディアクリティカルを生成する。"""
         if rng is None:
@@ -673,7 +673,7 @@ def add_diacritic(
     used_nodes: set,
     diacritic_probability: float,
     diacritic_radius: float,
-    rng: Optional[random.Random] = None,
+    rng: random.Random | None = None,
 ) -> None:
     """
     使用されたノードの中から、一定の確率でディアクリティカル（アクセント記号）を追加する。

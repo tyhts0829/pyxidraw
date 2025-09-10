@@ -5,7 +5,6 @@ import math
 import numbers
 import operator
 from pathlib import Path
-from typing import List, Tuple
 
 import numpy as np
 
@@ -837,7 +836,7 @@ class Matrix33(numbers.Integral):
 ####
 
 
-def close_polygon(main_polygon: Tuple[tuple]) -> Tuple[tuple]:
+def close_polygon(main_polygon: tuple[tuple, ...]) -> tuple[tuple, ...]:
     """
     正多面体の頂点番号のtupleを受け取り、それに始点を追加したtupleを返す
     """
@@ -851,7 +850,9 @@ def close_polygon(main_polygon: Tuple[tuple]) -> Tuple[tuple]:
     return tuple(new_polygon)
 
 
-def to_vertices_list(main_polygon: Tuple[tuple], main_vertex: Tuple[tuple]) -> List[np.ndarray]:
+def to_vertices_list(
+    main_polygon: tuple[tuple, ...], main_vertex: tuple[tuple, ...]
+) -> list[np.ndarray]:
     """
     正多面体の頂点番号のtupleと頂点座標のtupleを受け取り、頂点座標np.arrayのリストを返す
     """

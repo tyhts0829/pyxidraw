@@ -39,7 +39,7 @@ def _sphere_latlon(subdivisions: int) -> list[np.ndarray]:
         vertices_list.append(np.array(line, dtype=np.float32))
 
     # 緯度線
-    for i in range(1, ring_count):  # Skip poles
+    for i in range(1, ring_count):  # 極は除外
         lat = np.pi * i / ring_count
         line = []
         for j in range(segment_count + 1):
@@ -74,8 +74,8 @@ def _sphere_zigzag(subdivisions: int) -> list[np.ndarray]:
     vertices = []
 
     for i in range(points):
-        # Parametric sphere using controlled spiral
-        y = 1 - (i / float(points - 1)) * 2  # y goes from 1 to -1
+        # パラメトリックな球（制御された螺旋）
+        y = 1 - (i / float(points - 1)) * 2  # y は 1→-1
         radius = np.sqrt(1 - y * y)
 
         # 制御された螺旋角度（1周あたりの点数で制御）
@@ -87,7 +87,7 @@ def _sphere_zigzag(subdivisions: int) -> list[np.ndarray]:
 
         vertices.append([x, y, z])
 
-    # Convert to line segments for smooth drawing
+    # なめらかに描画するため短い線分列へ変換
     vertices_list = []
     vertices_array = np.array(vertices, dtype=np.float32)
 
@@ -110,7 +110,7 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
         アイコスフィア用の頂点配列リスト
     """
     # アイコサヘドロンの頂点から開始
-    phi = (1 + np.sqrt(5)) / 2  # Golden ratio
+    phi = (1 + np.sqrt(5)) / 2  # 黄金比
 
     # アイコサヘドロンの12頂点
     base_vertices = np.array(
@@ -137,19 +137,19 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
 
     # アイコサヘドロンの三角面
     base_faces = [
-        # Top cap triangles
+        # 上部キャップ（三角形）
         (0, 11, 5),
         (0, 5, 1),
         (0, 1, 7),
         (0, 7, 10),
         (0, 10, 11),
-        # Bottom cap triangles
+        # 下部キャップ（三角形）
         (3, 9, 4),
         (3, 4, 2),
         (3, 2, 6),
         (3, 6, 8),
         (3, 8, 9),
-        # Middle band triangles
+        # 中央帯（三角形）
         (1, 5, 9),
         (5, 11, 4),
         (11, 10, 2),
@@ -165,14 +165,14 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
     def subdivide_triangle(v1, v2, v3, level):
         """三角形を再帰的に細分化して小三角形へ分割。"""
         if level <= 0:
-            # Base case: return the triangle edges
+            # ベースケース: 三角形の辺を返す
             return [(v1, v2), (v2, v3), (v3, v1)]
 
         # 中点を計算し球面へ射影
         def midpoint_on_sphere(p1, p2):
             mid = (p1 + p2) / 2
             norm = np.linalg.norm(mid)
-            return mid / norm * 0.5  # Project to sphere radius 0.5
+            return mid / norm * 0.5  # 半径 0.5 の球へ射影
 
         m1 = midpoint_on_sphere(v1, v2)
         m2 = midpoint_on_sphere(v2, v3)
@@ -220,21 +220,21 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
     返り値:
         リングの頂点配列リスト
     """
-    ring_count = 5 + 12 * subdivisions  # Number of slices per axis
-    segment_count = 64  # Points per ring
+    ring_count = 5 + 12 * subdivisions  # 各軸の分割数
+    segment_count = 64  # リングの点数
 
     vertices_list = []
 
-    # Create horizontal rings at different heights
+    # 高さごとに水平リングを作成
     for i in range(ring_count):
-        # Height from -0.5 to 0.5
+        # 高さは -0.5 から 0.5
         y = -0.5 + (i / (ring_count - 1))
 
-        # Radius at this height (sphere equation: x² + y² + z² = r²)
+        # この高さでの半径（球の方程式 x² + y² + z² = r²）
         if abs(y) <= 0.5:
-            radius = np.sqrt(0.25 - y * y)  # radius of circle at height y
+            radius = np.sqrt(0.25 - y * y)  # 高さ y における円の半径
 
-            # Generate circle points
+            # 円周上の点を生成
             ring_points = []
             for j in range(segment_count + 1):  # +1 to close the circle
                 angle = 2 * np.pi * j / segment_count
@@ -244,16 +244,16 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 
             vertices_list.append(np.array(ring_points, dtype=np.float32))
 
-    # Create rings perpendicular to X-axis (slicing along YZ plane)
+    # X 軸に垂直なリング（YZ 平面に沿ったスライス）
     for i in range(ring_count):
-        # X position from -0.5 to 0.5
+        # X 位置は -0.5 から 0.5
         x = -0.5 + (i / (ring_count - 1))
 
-        # Radius at this X position
+        # この X 位置での半径
         if abs(x) <= 0.5:
             radius = np.sqrt(0.25 - x * x)
 
-            # Generate circle points in YZ plane
+            # YZ 平面の円周上の点を生成
             ring_points = []
             for j in range(segment_count + 1):
                 angle = 2 * np.pi * j / segment_count
@@ -263,16 +263,16 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 
             vertices_list.append(np.array(ring_points, dtype=np.float32))
 
-    # Create rings perpendicular to Z-axis (slicing along XY plane)
+    # Z 軸に垂直なリング（XY 平面に沿ったスライス）
     for i in range(ring_count):
-        # Z position from -0.5 to 0.5
+        # Z 位置は -0.5 から 0.5
         z = -0.5 + (i / (ring_count - 1))
 
-        # Radius at this Z position
+        # この Z 位置での半径
         if abs(z) <= 0.5:
             radius = np.sqrt(0.25 - z * z)
 
-            # Generate circle points in XY plane
+            # XY 平面の円周上の点を生成
             ring_points = []
             for j in range(segment_count + 1):
                 angle = 2 * np.pi * j / segment_count
@@ -287,7 +287,7 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 
 @shape
 class Sphere(BaseShape):
-    """Sphere shape generator with multiple drawing styles."""
+    """複数の描画スタイルを備えた球形状ジェネレータ。"""
 
     def generate(
         self, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any
@@ -315,7 +315,7 @@ class Sphere(BaseShape):
         if subdivisions_int > MAX_SUBDIVISIONS:
             subdivisions_int = MAX_SUBDIVISIONS
 
-        # Select sphere generation method based on sphere_type
+        # sphere_type に応じて生成方式を選択
         if sphere_type < 0.2:
             vertices_list = _sphere_latlon(subdivisions_int)
         elif sphere_type < 0.4:

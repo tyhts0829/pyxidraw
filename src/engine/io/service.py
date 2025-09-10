@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Mapping
+from typing import Mapping
 
 from ..core.tickable import Tickable
 from .manager import MidiControllerManager
@@ -38,7 +38,7 @@ class MidiService(Tickable):
             既に接続済みの ``MidiControllerManager`` インスタンス。
         """
         self._manager = controller_manager
-        self._latest_cc_flat_cache: Dict[int, float] = {}
+        self._latest_cc_flat_cache: dict[int, float] = {}
         self._logger = logging.getLogger(__name__)
 
     # ------------------------------------------------------------------ #
@@ -70,7 +70,7 @@ class MidiService(Tickable):
     # ------------------------------------------------------------------ #
     # 内部ユーティリティ                                                 #
     # ------------------------------------------------------------------ #
-    def _flatten_cc_values(self) -> Dict[int, float]:
+    def _flatten_cc_values(self) -> dict[int, float]:
         """複数コントローラの CC 値を “CC 番号ベース” に 1 辞書へ統合。
 
         - **同じ CC 番号が複数デバイスで競合する場合**
@@ -79,7 +79,7 @@ class MidiService(Tickable):
           オーバーライドした派生クラスを作ると良い。
         self._manager.controllersはマルチスレッド環境での共有リソースではないので、スレッドセーフ対策は不要
         """
-        flat: Dict[int, float] = {}
+        flat: dict[int, float] = {}
         for controller in self._manager.controllers.values():
             # DualKeyDictの場合は整数キーのみアクセス可能
             # 文字列キーから対応する整数キーを取得して値を設定

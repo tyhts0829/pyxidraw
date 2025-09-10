@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Callable, Dict, Mapping
+from typing import Callable, Mapping
 
 import numpy as np
 import pytest
@@ -131,7 +131,7 @@ def cc_min() -> Mapping[int, float]:
     Defaults: keys 1..7 -> 0.0, key 8 -> 1.0, key 9 -> 1.0
     """
 
-    base: Dict[int, float] = {i: 0.0 for i in range(1, 10)}
+    base: dict[int, float] = {i: 0.0 for i in range(1, 10)}
     base[8] = 1.0
     base[9] = 1.0
     return base

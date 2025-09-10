@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import hashlib
 from functools import lru_cache
-from typing import Any, Callable, Iterable, List, cast
+from typing import Any, Callable, Iterable, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -251,7 +251,7 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
     @classmethod
-    def list_shapes(cls) -> List[str]:
+    def list_shapes(cls) -> list[str]:
         """利用可能な形状（レジストリ登録済み名）の一覧を返す。"""
         return list_registered_shapes()
 

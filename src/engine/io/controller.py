@@ -36,7 +36,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import mido
 
@@ -167,7 +166,7 @@ class MidiController:
         logger.info("Available input ports: %s", available)
         raise InvalidPortError(f"Invalid port name: {port_name}. Available: {available}")
 
-    def process_midi_message(self, msg: mido.Message) -> Optional[dict]:
+    def process_midi_message(self, msg: mido.Message) -> dict | None:
         if msg.type == "control_change":  # type: ignore
             return self.handle_control_change(msg)
         elif msg.type in ["note_on", "note_off"]:  # type: ignore
@@ -181,7 +180,7 @@ class MidiController:
         elif self.mode == "7bit":
             return self.process_7bit_control_change(msg)
 
-    def process_14bit_control_change(self, msg: mido.Message) -> Optional[dict]:
+    def process_14bit_control_change(self, msg: mido.Message) -> dict | None:
         control_change_number = msg.control  # type: ignore
 
         if control_change_number < self.MSB_THRESHOLD:  # MSB
@@ -194,7 +193,7 @@ class MidiController:
     def process_7bit_control_change(self, msg: mido.Message) -> dict:
         return {"type": "CC(7bit)", "CC number": msg.control, "value": msg.value}  # type: ignore
 
-    def calc_combined_value(self, control_change_number: int, value: int) -> Optional[dict]:
+    def calc_combined_value(self, control_change_number: int, value: int) -> dict | None:
         msb_control = control_change_number - MidiController.MSB_THRESHOLD
         if msb_control in self.msb_values:
             # MSB と LSB から 14 ビット値を計算

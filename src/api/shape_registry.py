@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-from typing import List
-
 from shapes import registry as _shapes_registry
 from shapes.registry import get_shape, list_shapes, shape
 
@@ -21,7 +19,7 @@ def get_shape_generator(name: str):
         raise ValueError(f"未登録のシェイプ名です: {name}")
 
 
-def list_registered_shapes() -> List[str]:
+def list_registered_shapes() -> list[str]:
     """登録されているすべての形状名を返す。"""
     return list_shapes()
 

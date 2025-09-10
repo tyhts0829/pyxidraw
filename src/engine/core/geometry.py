@@ -71,7 +71,7 @@ from __future__ import annotations
 import hashlib
 import os
 from dataclasses import dataclass, field
-from typing import Iterable, Tuple
+from typing import Iterable
 
 import numpy as np
 
@@ -165,7 +165,7 @@ class Geometry:
     # 旧 GeometryData アダプタは撤廃（Geometry 統一）
 
     # ── 基本操作（すべて純粋） ────────
-    def as_arrays(self, *, copy: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    def as_arrays(self, *, copy: bool = False) -> tuple[np.ndarray, np.ndarray]:
         """内部配列を返すユーティリティ。
 
         引数:

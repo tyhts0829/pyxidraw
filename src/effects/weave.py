@@ -210,24 +210,24 @@ def elastic_relaxation_nb(positions, edges, fixed, iterations, step):
 @njit(fastmath=True, cache=True)
 def build_adjacency_arrays(num_nodes, edges):
     """
-    Build adjacency list representation using arrays instead of dictionaries.
+    辞書ではなく配列を用いて隣接リスト表現を構築する。
     返り値:
         - adjacency: adjacency[i] がノード i の隣接ノードを格納する 2D 配列（空きは -1）。
         - degrees: 各ノードの次数配列。
     """
-    # Count degrees first
+    # まず各ノードの次数を数える
     degrees = np.zeros(num_nodes, dtype=np.int32)
     for i in range(edges.shape[0]):
         a, b = edges[i, 0], edges[i, 1]
         degrees[a] += 1
         degrees[b] += 1
 
-    # Allocate adjacency array (max degree assumed to be reasonable, e.g., 10)
+    # 隣接配列を確保（最大次数は適度と仮定、例: 10）
     max_degree = 10
     adjacency = np.full((num_nodes, max_degree), -1, dtype=np.int32)
     adj_counts = np.zeros(num_nodes, dtype=np.int32)
 
-    # Fill adjacency
+    # 隣接配列を埋める
     for i in range(edges.shape[0]):
         a, b = edges[i, 0], edges[i, 1]
         adjacency[a, adj_counts[a]] = b
@@ -240,7 +240,7 @@ def build_adjacency_arrays(num_nodes, edges):
 
 @njit(fastmath=True, cache=True)
 def edge_key_hash(a, b, num_nodes):
-    """Create a unique hash for an edge (unordered pair)."""
+    """無向辺（順序なし組）の一意ハッシュを作成する。"""
     if a > b:
         a, b = b, a
     return a * num_nodes + b
@@ -248,14 +248,14 @@ def edge_key_hash(a, b, num_nodes):
 
 @njit(fastmath=True, cache=True)
 def mark_edge_visited(visited_edges, a, b, num_nodes):
-    """Mark an edge as visited."""
+    """辺を訪問済みにマークする。"""
     hash_val = edge_key_hash(a, b, num_nodes)
     visited_edges[hash_val] = True
 
 
 @njit(fastmath=True, cache=True)
 def is_edge_visited(visited_edges, a, b, num_nodes):
-    """Check if an edge has been visited."""
+    """辺が訪問済みかを判定する。"""
     hash_val = edge_key_hash(a, b, num_nodes)
     return visited_edges[hash_val]
 
@@ -265,8 +265,8 @@ def trace_chain(
     start, first_neighbor, adjacency, degrees, visited_edges, num_nodes, max_chain_length=10000
 ):
     """
-    Trace a chain from start node through first_neighbor.
-    Returns the chain as an array and its length.
+    開始ノードから first_neighbor を経由して鎖を辿る。
+    返り値は鎖を表す配列とその長さ。
     """
     chain = np.empty(max_chain_length, dtype=np.int32)
     chain[0] = start
@@ -279,7 +279,7 @@ def trace_chain(
     current = first_neighbor
 
     while degrees[current] == 2 and chain_length < max_chain_length:
-        # Find next node (not prev)
+        # 直前ノード以外の次ノードを探す
         next_node = -1
         for i in range(adjacency.shape[1]):
             neighbor = adjacency[current, i]
@@ -308,14 +308,14 @@ def trace_chain(
 @njit(fastmath=True, cache=True)
 def trace_cycle(start, adjacency, visited_edges, num_nodes, max_cycle_length=10000):
     """
-    Trace a cycle starting from a given node.
-    Returns the cycle as an array and its length.
+    指定ノードからサイクルを追跡する。
+    返り値はサイクル配列とその長さ。
     """
     cycle = np.empty(max_cycle_length, dtype=np.int32)
     cycle[0] = start
     cycle_length = 1
 
-    # Pick first unvisited neighbor
+    # 最初の未訪問の隣接ノードを選ぶ
     first_neighbor = -1
     for i in range(adjacency.shape[1]):
         neighbor = adjacency[start, i]
@@ -336,7 +336,7 @@ def trace_cycle(start, adjacency, visited_edges, num_nodes, max_cycle_length=100
     current = first_neighbor
 
     while cycle_length < max_cycle_length:
-        # Find next unvisited neighbor
+        # 次の未訪問の隣接ノードを探す
         next_node = -1
         for i in range(adjacency.shape[1]):
             neighbor = adjacency[current, i]
@@ -395,13 +395,13 @@ def merge_edges_into_polylines(nodes, edges):
     num_nodes = nodes.shape[0]
     adjacency, degrees = build_adjacency_arrays(num_nodes, edges)
 
-    # Create visited edges tracking (using hash table approach)
+    # 訪問済み辺の管理（ハッシュ表を利用）
     max_edges = num_nodes * num_nodes  # Upper bound for hash table
     visited_edges = np.zeros(max_edges, dtype=np.bool_)
 
     polylines = List.empty_list(types.float64[:, :])
 
-    # Process chains from endpoints and branch points
+    # 端点・分岐点から鎖を処理
     for i in range(num_nodes):
         if degrees[i] != 2:  # Endpoint or branch
             # Check each neighbor
@@ -416,7 +416,7 @@ def merge_edges_into_polylines(nodes, edges):
                     )
 
                     if chain_length >= 2:
-                        # Convert chain to polyline
+                        # 鎖をポリラインへ変換
                         polyline = np.empty((chain_length, 3), dtype=np.float64)
                         for k in range(chain_length):
                             node_idx = chain[k]
@@ -425,10 +425,10 @@ def merge_edges_into_polylines(nodes, edges):
                             polyline[k, 2] = 0.0  # z=0
                         polylines.append(polyline)
 
-    # Process remaining cycles
+    # 未処理のサイクルを処理
     for i in range(num_nodes):
         if degrees[i] == 2:  # Only process nodes that could be in cycles
-            # Check if this node has unvisited edges
+            # このノードに未訪問辺があるか確認
             has_unvisited = False
             for j in range(adjacency.shape[1]):
                 neighbor = adjacency[i, j]
@@ -442,7 +442,7 @@ def merge_edges_into_polylines(nodes, edges):
                 cycle, cycle_length = trace_cycle(i, adjacency, visited_edges, num_nodes)
 
                 if cycle_length >= 2:
-                    # Convert cycle to polyline
+                    # サイクルをポリラインへ変換
                     polyline = np.empty((cycle_length, 3), dtype=np.float64)
                     for k in range(cycle_length):
                         node_idx = cycle[k]
@@ -604,6 +604,6 @@ def create_web(closed_curve, num_candidate_lines=10, relaxation_iterations=20, s
     nodes, edges = create_web_nb(closed_curve, num_candidate_lines, relaxation_iterations, step)
     # ノードとエッジからポリライン（各頂点が[x,y,0]の形）を生成する
     polylines_numba = merge_edges_into_polylines(nodes, edges)
-    # Convert Numba typed list to regular Python list
+    # Numba の型付きリストを通常の Python リストへ変換
     polylines = list(polylines_numba)
     return polylines

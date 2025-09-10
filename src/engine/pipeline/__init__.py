@@ -1,1 +1,1 @@
-"""Engine pipeline subpackage (workers/buffers/packets)."""
+"""Engine パイプライン サブパッケージ（workers/buffers/packets）。"""

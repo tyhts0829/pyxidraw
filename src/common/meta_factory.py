@@ -3,7 +3,7 @@
 shapes/ と effects/ の両方で使用する統一されたファクトリパターン
 """
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from .base_registry import BaseRegistry
 
@@ -13,7 +13,7 @@ class UnifiedFactoryMeta(type):
 
     def __init__(cls, name: str, bases: tuple, attrs: dict):
         super().__init__(name, bases, attrs)
-        cls._registry: Optional[BaseRegistry] = None
+        cls._registry: BaseRegistry | None = None
 
     def set_registry(cls, registry: BaseRegistry) -> None:
         """レジストリを設定"""

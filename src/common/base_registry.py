@@ -5,7 +5,7 @@ shapes/ と effects/ の両方で使用する統一されたレジストリシ�
 
 import re
 from abc import ABC
-from typing import Any, Callable, Dict, List, Tuple, Type
+from typing import Any, Callable
 
 
 class BaseRegistry(ABC):
@@ -16,7 +16,7 @@ class BaseRegistry(ABC):
     """
 
     def __init__(self):
-        self._registry: Dict[str, Type] = {}
+        self._registry: dict[str, type] = {}
 
     # === 内部ユーティリティ ===
     @staticmethod
@@ -41,7 +41,7 @@ class BaseRegistry(ABC):
     def register(self, name: str | None = None) -> Callable:
         """クラス/関数をレジストリに登録するデコレータ。"""
 
-        def decorator(obj: Type) -> Type:
+        def decorator(obj: type) -> type:
             key = self._normalize_key(name) if name else self._normalize_key(obj.__name__)
             if key in self._registry and self._registry[key] is not obj:
                 raise ValueError(f"'{key}' は既に登録されています")
@@ -50,14 +50,14 @@ class BaseRegistry(ABC):
 
         return decorator
 
-    def get(self, name: str) -> Type:
+    def get(self, name: str) -> type:
         """登録されたクラス/関数を取得。"""
         key = self._normalize_key(name)
         if key not in self._registry:
             raise KeyError(f"'{name}' は登録されていません")
         return self._registry[key]
 
-    def list_all(self) -> List[str]:
+    def list_all(self) -> list[str]:
         """登録されているすべての名前を取得（未ソート）。"""
         return list(self._registry.keys())
 
@@ -76,7 +76,7 @@ class BaseRegistry(ABC):
         self._registry.clear()
 
     @property
-    def registry(self) -> Dict[str, Type]:
+    def registry(self) -> dict[str, type]:
         """レジストリの読み取り専用アクセス"""
         return self._registry.copy()
 
@@ -88,7 +88,7 @@ class CacheableRegistry(BaseRegistry):
 
     def __init__(self):
         super().__init__()
-        self._instance_cache: Dict[Tuple[str, Tuple[Tuple[str, Any], ...]], Any] = {}
+        self._instance_cache: dict[tuple[str, tuple[tuple[str, Any], ...]], Any] = {}
 
     def get_instance(self, name: str, **kwargs) -> Any:
         """インスタンスを取得（キャッシュ機能付き）"""

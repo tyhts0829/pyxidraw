@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import math
-from typing import Iterable, Tuple
+from typing import Iterable
 
 
 def clamp01(x: float) -> float:
@@ -26,7 +26,7 @@ def norm_to_rad(x: float) -> float:
     return float(x) * math.tau
 
 
-def ensure_vec3(v: float | Iterable[float]) -> Tuple[float, float, float]:
+def ensure_vec3(v: float | Iterable[float]) -> tuple[float, float, float]:
     if isinstance(v, (int, float)):
         f = float(v)
         return (f, f, f)

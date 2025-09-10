@@ -27,13 +27,13 @@ def _generate_line_fill(
     vertices: np.ndarray, density: float, angle: float = 0.0
 ) -> list[np.ndarray]:
     """平行線塗りつぶしパターンを生成します。"""
-    # Transform to XY plane for easier processing
+    # 処理を簡素化するため XY 平面へ射影
     vertices_2d, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
 
-    # Get 2D coords
+    # 2D 座標のみ取得
     coords_2d = vertices_2d[:, :2]
 
-    # Apply rotation to polygon if angle is specified
+    # 角度が指定されている場合はポリゴンを回転
     if angle != 0.0:
         cos_a, sin_a = np.cos(-angle), np.sin(-angle)  # Inverse rotation for polygon
         center = np.mean(coords_2d, axis=0)
@@ -41,39 +41,39 @@ def _generate_line_fill(
         rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
         coords_2d = coords_2d_centered @ rot_matrix.T + center
 
-    # Calculate bounding box
+    # バウンディングボックスを計算
     _, min_y = np.min(coords_2d, axis=0)
     _, max_y = np.max(coords_2d, axis=0)
 
-    # Calculate spacing based on density (inversed: 0=few lines, 1=many lines)
-    # density=1.0 -> MAX_FILL_LINES lines, density=0.0 -> very few lines
+    # 密度に基づいて線間隔を算出（逆数的: 0=疎, 1=密）
+    # density=1.0 で MAX_FILL_LINES 本、density=0.0 でごく少数
     if density <= 0:
         return []
 
-    # Calculate spacing: smaller spacing = more lines
-    # At density=1.0, we want MAX_FILL_LINES lines in the bounding box
-    # At density=0.1, we want fewer lines
+    # 間隔計算: 間隔が小さいほど線が多い
+    # density=1.0 → バウンディングボックス内に MAX_FILL_LINES 本を想定
+    # density=0.1 → より少ない本数
     num_lines = max(2, norm_to_int(float(density), 0, MAX_FILL_LINES))
     spacing = (max_y - min_y) / num_lines
     if spacing <= 0:
         return []
 
-    # Generate horizontal lines
+    # 水平ラインを生成
     y_values = np.arange(min_y, max_y, spacing)
     fill_lines = []
 
-    # Use batch processing for better performance
+    # 性能向上のためバッチ処理で交点計算
     intersection_results = generate_line_intersections_batch(coords_2d, y_values)
 
     for y, intersections in intersection_results:
-        # Sort intersections and create line segments
+        # 交点をソートし線分を生成
         intersections_sorted = np.sort(intersections)
         for i in range(0, len(intersections_sorted) - 1, 2):
             if i + 1 < len(intersections_sorted):
                 x1, x2 = intersections_sorted[i], intersections_sorted[i + 1]
                 line_2d = np.array([[x1, y], [x2, y]])
 
-                # Apply forward rotation if needed
+                # 必要に応じて正方向の回転を適用
                 if angle != 0.0:
                     cos_a, sin_a = np.cos(angle), np.sin(angle)
                     center = np.mean(vertices_2d[:, :2], axis=0)  # Use original center
@@ -81,10 +81,10 @@ def _generate_line_fill(
                     rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
                     line_2d = line_2d_centered @ rot_matrix.T + center
 
-                # Convert back to 3D
+                # 3D に戻す
                 line_3d = np.hstack([line_2d, np.zeros((2, 1))])
 
-                # Transform back to original orientation
+                # 元の姿勢に戻す
                 line_final = transform_back(line_3d, rotation_matrix, z_offset)
                 fill_lines.append(line_final)
 
@@ -233,22 +233,22 @@ def _fill_single_polygon(
 # 後方互換クラスは廃止（関数APIのみ）
 
 
-# Numba-compiled functions for performance
+# 高速化のための Numba コンパイル関数群
 @njit(cache=True)
 def find_line_intersections_njit(polygon: np.ndarray, y: float) -> np.ndarray:
     """水平線とポリゴンエッジの交点を検索します（Numba最適化版）。"""
     n = len(polygon)
-    intersections = np.full(n, -1.0)  # Pre-allocate with invalid values
+    intersections = np.full(n, -1.0)  # 無効値で事前確保
     count = 0
 
     for i in range(n):
         p1 = polygon[i]
         p2 = polygon[(i + 1) % n]
 
-        # Check if line segment crosses the horizontal line
+        # 線分が水平線と交差するか判定
         if (p1[1] <= y < p2[1]) or (p2[1] <= y < p1[1]):
-            # Calculate intersection x-coordinate
-            if p2[1] != p1[1]:  # Avoid division by zero
+            # 交点の x 座標を計算
+            if p2[1] != p1[1]:  # 0 除算回避
                 x = p1[0] + (y - p1[1]) * (p2[0] - p1[0]) / (p2[1] - p1[1])
                 intersections[count] = x
                 count += 1
@@ -293,7 +293,7 @@ def find_dots_in_polygon(
     polygon: np.ndarray, x_values: np.ndarray, y_values: np.ndarray
 ) -> np.ndarray:
     """ポリゴン内部のグリッド点を高速に検索（Numba最適化版）。"""
-    # Pre-allocate result array
+    # 結果配列を事前確保
     max_points = len(x_values) * len(y_values)
     points = np.empty((max_points, 2))
     count = 0

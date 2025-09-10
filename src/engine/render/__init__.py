@@ -1,1 +1,1 @@
-"""Engine rendering subpackage."""
+"""Engine レンダリング サブパッケージ。"""

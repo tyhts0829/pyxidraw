@@ -1,9 +1,9 @@
 """
-Lightweight logging utilities for the project (Proposal 7).
+プロジェクト向けの軽量ロギングユーティリティ（提案 7）。
 
-Default behavior: modules import logging and obtain a logger via
-`logging.getLogger(__name__)`. This helper ensures a sane default
-configuration if the application hasn't configured logging yet.
+要点:
+- 既定では各モジュールが `logging.getLogger(__name__)` でロガーを取得する。
+- アプリ側で設定が無い場合でも、妥当な最小構成を 1 度だけ適用するヘルパーを提供する。
 """
 
 from __future__ import annotations
@@ -12,10 +12,10 @@ import logging
 
 
 def setup_default_logging(level: int | str = "INFO") -> None:
-    """Setup a minimal logging configuration once.
+    """最小限のロギング設定を 1 度だけ適用する。
 
-    - No-op if root logger already has handlers
-    - Intended to be called from top-level runners/CLIs
+    - ルートロガーにハンドラが既にあれば何もしない（no-op）
+    - 上位のランナー/CLI から呼び出す想定
     """
     if isinstance(level, str):
         lvl = getattr(logging, level.upper(), logging.INFO)

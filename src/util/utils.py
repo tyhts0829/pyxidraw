@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
 
-def _safe_load_yaml(path: Path) -> Dict[str, Any]:
+def _safe_load_yaml(path: Path) -> dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -32,7 +32,7 @@ def _find_project_root(start: Path) -> Path:
     return cur.parent.parent
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """構成を読み込んで辞書で返す（フェイルソフト）。
 
     優先順:
@@ -43,7 +43,7 @@ def load_config() -> Dict[str, Any]:
     - ネストした辞書のディープマージは行わず、トップレベルのみ上書き。
     """
     project_root = _find_project_root(Path(__file__).parent)
-    base: Dict[str, Any] = {}
+    base: dict[str, Any] = {}
 
     default_path = project_root / "configs" / "default.yaml"
     if default_path.exists():

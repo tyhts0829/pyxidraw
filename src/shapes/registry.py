@@ -7,8 +7,6 @@ effects/ と対称性を保った @shape デコレータの実装。
   エイリアスはサポートしません（明示名のみ）。
 """
 
-from typing import Type
-
 from common.base_registry import BaseRegistry
 
 from .base import BaseShape
@@ -17,7 +15,7 @@ from .base import BaseShape
 _shape_registry = BaseRegistry()
 
 
-def shape(arg: str | Type[BaseShape] | None = None):  # type: ignore[name-defined]
+def shape(arg: str | type[BaseShape] | None = None):  # type: ignore[name-defined]
     """シェイプをレジストリに登録するデコレータ。
 
     使い方:
@@ -32,7 +30,7 @@ def shape(arg: str | Type[BaseShape] | None = None):  # type: ignore[name-define
     return _shape_registry.register(name)
 
 
-def get_shape(name: str) -> Type[BaseShape]:
+def get_shape(name: str) -> type[BaseShape]:
     """登録されたシェイプクラスを取得。
 
     引数:

@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from __future__ import annotations
 
 # ボタン/シフトに相当するトグル系 CC 番号をモジュール定数として定義
 TOGGLE_CC_NUMBERS = (25, 26, 27, 28, 29, 30, 35)
@@ -18,7 +18,7 @@ class DualKeyDict:
         self._int_to_value: dict[int, float] = {}
         self._str_to_value: dict[str, float] = {}
         # ボタン活性状態（将来的な UI 用途）
-        self.is_active: Optional[dict[str, bool]] = None
+        self.is_active: dict[str, bool] | None = None
 
     def init_map(self, cc_map):
         self.cc_map = cc_map
@@ -38,7 +38,7 @@ class DualKeyDict:
     def reset_activation(self):
         self.is_active = {name: False for name in self.cc_map.values()}
 
-    def __getitem__(self, key: Union[int, str]) -> float:
+    def __getitem__(self, key: int | str) -> float:
         """
         キーに対応する値を取得。
         引数:
@@ -56,7 +56,7 @@ class DualKeyDict:
         else:
             raise KeyError(f"未対応のキー型です: {type(key)}")
 
-    def __setitem__(self, key: Union[int, str], value: float | int) -> None:
+    def __setitem__(self, key: int | str, value: float | int) -> None:
         """
         キーに値を設定し、対応するもう一方のキーにも反映。
 
@@ -81,7 +81,7 @@ class DualKeyDict:
         else:
             self._update_value(key, value)
 
-    def _toggle_value(self, key: Union[int, str]) -> int:
+    def _toggle_value(self, key: int | str) -> int:
         """
         ボタンキーの値をトグルした値を返す。
         引数:
@@ -94,7 +94,7 @@ class DualKeyDict:
             value = 0
         return value
 
-    def _update_value(self, key: Union[int, str], value: float) -> None:
+    def _update_value(self, key: int | str, value: float) -> None:
         if isinstance(key, int):
             corresponding_str_key = self._get_str_key_from_int_key(key)
             self._int_to_value[key] = value
@@ -108,7 +108,7 @@ class DualKeyDict:
         else:
             raise KeyError(f"未対応のキー型です: {type(key)}")
 
-    def _is_toggle_key(self, key: Union[int, str]) -> Optional[bool]:
+    def _is_toggle_key(self, key: int | str) -> bool | None:
         """
         キーがボタンキーか確認。
         引数:
@@ -134,15 +134,15 @@ class DualKeyDict:
         """整数キーと値のペアを返す。"""
         return self._int_to_value.items()
 
-    def _get_str_key_from_int_key(self, int_key: int) -> Optional[str]:
+    def _get_str_key_from_int_key(self, int_key: int) -> str | None:
         """整数キーから対応する文字列キーを取得。"""
         return self.cc_map.get(int_key)
 
-    def _get_int_key_from_str_key(self, str_key: str) -> Optional[int]:
+    def _get_int_key_from_str_key(self, str_key: str) -> int | None:
         """文字列キーから対応する整数キーを取得。"""
         return self._reverse_cc_map.get(str_key)
 
-    def __contains__(self, key: Union[int, str]) -> bool:
+    def __contains__(self, key: int | str) -> bool:
         """
         キーが存在するか確認。
         引数:
@@ -157,7 +157,7 @@ class DualKeyDict:
         else:
             return False
 
-    def get(self, key, default: Optional[float] = None) -> Optional[float]:
+    def get(self, key, default: float | None = None) -> float | None:
         """
         キーに対応する値を取得。なければデフォルトを返す。
         引数:

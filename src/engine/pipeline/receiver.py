@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from queue import Empty
-from typing import Optional
 
 from ..core.tickable import Tickable
 from .buffer import SwapBuffer
@@ -20,7 +19,7 @@ class StreamReceiver(Tickable):
         self._buffer = double_buffer
         self._q = result_q
         self._max = max_packets_per_tick
-        self._latest_frame: Optional[int] = None
+        self._latest_frame: int | None = None
 
     # -------- Tickable interface --------
     def tick(self, dt: float) -> None:

@@ -1,1 +1,1 @@
-"""Engine UI subpackage."""
+"""Engine UI サブパッケージ。"""

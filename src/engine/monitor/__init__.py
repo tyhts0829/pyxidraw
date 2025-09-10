@@ -1,1 +1,1 @@
-"""Engine monitor subpackage."""
+"""Engine モニタ サブパッケージ。"""

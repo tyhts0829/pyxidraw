@@ -190,7 +190,7 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: amplitude_mm (type=number, min=0.0)
     # meta: t_sec (type=number, min=0.0)
-    def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | Vec3 = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
+    def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | tuple[float, float, float] = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         3次元頂点にPerlinノイズを追加（クリーンAPI）。
 
@@ -274,7 +274,7 @@ class _PipelineBuilder(Protocol):
     # meta: amplitude (type=number, min=0.0)
     # meta: frequency (type=vec3)
     # meta: phase (type=number)
-    def ripple(self, *, amplitude: float = ..., frequency: float | Vec3 = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
+    def ripple(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         座標値に基づくサイン波ゆらぎ（ウォブル）を各軸に適用する純関数エフェクト。
 
@@ -363,7 +363,7 @@ class _PipelineBuilder(Protocol):
     # meta: amplitude (type=number, min=0.0)
     # meta: frequency (type=vec3)
     # meta: phase (type=number)
-    def wobble(self, *, amplitude: float = ..., frequency: float | Vec3 = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
+    def wobble(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         線にウォブル/波の歪みを追加（純関数）。
 

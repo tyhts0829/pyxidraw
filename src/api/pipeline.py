@@ -69,7 +69,7 @@ import inspect
 import os
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -103,7 +103,7 @@ def _fn_version(fn: Callable[..., Geometry]) -> bytes:
     return hashlib.blake2b(data, digest_size=8).digest()
 
 
-def _params_digest(params: Dict[str, Any]) -> bytes:
+def _params_digest(params: dict[str, Any]) -> bytes:
     # 正規化して決定的にシリアライズ
     def make_hashable(obj):
         if isinstance(obj, dict):
@@ -122,7 +122,7 @@ def _params_digest(params: Dict[str, Any]) -> bytes:
 @dataclass(frozen=True)
 class Step:
     name: str
-    params: Dict[str, Any]
+    params: dict[str, Any]
 
 
 class Pipeline:
@@ -130,7 +130,7 @@ class Pipeline:
         self._steps = list(steps)
         # LRU 互換の単層キャッシュ（maxsize=None なら従来通り無制限）
         self._cache_maxsize: int | None = cache_maxsize
-        self._cache: "OrderedDict[Tuple[bytes, bytes], Geometry]" = OrderedDict()
+        self._cache: "OrderedDict[tuple[bytes, bytes], Geometry]" = OrderedDict()
 
         # パイプラインハッシュを先に計算
         h = hashlib.blake2b(digest_size=16)
@@ -176,21 +176,21 @@ class Pipeline:
     __str__ = __repr__
 
     # ---- Serialization (Proposal 6) ----
-    def to_spec(self) -> List[Dict[str, Any]]:
-        """Return a serializable spec: [{"name": str, "params": dict}]."""
+    def to_spec(self) -> list[dict[str, Any]]:
+        """シリアライズ可能な仕様を返す: `[{"name": str, "params": dict}]`。"""
         return [{"name": s.name, "params": dict(s.params)} for s in self._steps]
 
     @staticmethod
-    def from_spec(spec: Sequence[Dict[str, Any]]) -> "Pipeline":
-        """Create a Pipeline from a spec. Raises on invalid shape or effect name."""
+    def from_spec(spec: Sequence[dict[str, Any]]) -> "Pipeline":
+        """仕様から `Pipeline` を生成。不正な形状/エフェクト名の場合は例外を送出。"""
         validate_spec(spec)
-        steps: List[Step] = [Step(str(entry["name"]), dict(entry.get("params", {}))) for entry in spec]  # type: ignore[arg-type]
+        steps: list[Step] = [Step(str(entry["name"]), dict(entry.get("params", {}))) for entry in spec]  # type: ignore[arg-type]
         return Pipeline(steps)
 
 
 class PipelineBuilder:
     def __init__(self):
-        self._steps: List[Step] = []
+        self._steps: list[Step] = []
         # 既定サイズは環境変数から上書き可能
         self._cache_maxsize: int | None = None
         # クリーン化方針: 既定で厳格検証を有効化
@@ -203,7 +203,7 @@ class PipelineBuilder:
             except ValueError:
                 pass
 
-    def _add(self, name: str, params: Dict[str, Any]) -> "PipelineBuilder":
+    def _add(self, name: str, params: dict[str, Any]) -> "PipelineBuilder":
         self._steps.append(Step(name, params))
         return self
 
@@ -274,17 +274,17 @@ E = Effects()
 
 
 # Helper functions (optional API)
-def to_spec(pipeline: Pipeline) -> List[Dict[str, Any]]:
+def to_spec(pipeline: Pipeline) -> list[dict[str, Any]]:
     return pipeline.to_spec()
 
 
-def from_spec(spec: Sequence[Dict[str, Any]]) -> Pipeline:
+def from_spec(spec: Sequence[dict[str, Any]]) -> Pipeline:
     return Pipeline.from_spec(spec)
 
 
 # ---- Spec validation (Proposal 6) -----------------------------------------
 def _is_json_like(value: Any) -> bool:
-    """Heuristic check whether a value is JSON-like (serializable)."""
+    """値が JSON 風（シリアライズ可能）かをヒューリスティックに検査。"""
     if value is None:
         return True
     if isinstance(value, (bool, int, float, str)):
@@ -296,7 +296,7 @@ def _is_json_like(value: Any) -> bool:
     return False
 
 
-def validate_spec(spec: Sequence[Dict[str, Any]]) -> None:
+def validate_spec(spec: Sequence[dict[str, Any]]) -> None:
     """パイプライン仕様を検証（不正時は TypeError/KeyError）。
 
     仕様:

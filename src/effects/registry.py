@@ -9,13 +9,13 @@
 from __future__ import annotations
 
 from inspect import isfunction
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 from common.base_registry import BaseRegistry
 from engine.core.geometry import Geometry
 
 EffectFn = Callable[[Geometry], Geometry]
-_REGISTRY: Dict[str, Callable[..., Geometry]] = {}
+_REGISTRY: dict[str, Callable[..., Geometry]] = {}
 
 
 def _normalize_key(name: str) -> str:

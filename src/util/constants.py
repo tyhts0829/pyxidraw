@@ -6,11 +6,11 @@ PyLineSketch用の定数定義モジュール
 - Perlinノイズ生成用の定数（順列テーブルと勾配ベクトル）
 """
 
-from typing import Dict, List, Tuple, Union
+from __future__ import annotations
 
 # 用紙サイズ定義（単位: mm）
 # ISO 216規格（A系列）およびJIS規格（B系列）の標準用紙サイズ
-CANVAS_SIZES: Dict[str, Tuple[int, int]] = {
+CANVAS_SIZES: dict[str, tuple[int, int]] = {
     # A系列（ISO 216規格）
     "A4": (210, 297),  # 最も一般的な用紙サイズ
     "A5": (148, 210),  # A4の半分
@@ -33,7 +33,7 @@ PRIMITIVE_RESTART_INDEX = 0xFFFFFFFF  # OpenGLのプリミティブリスター�
 
 # Perlinノイズ用定数
 # Ken Perlinによるimproved noise algorithm (2002) で使用される定数
-NOISE_CONST: Dict[str, Union[List[int], List[List[int]]]] = {
+NOISE_CONST: dict[str, list[int] | list[list[int]]] = {
     # 順列テーブル：0-255の値をランダムに並べ替えたもの
     # ノイズのランダム性を生成するための基礎となる
     "PERM": [
@@ -311,5 +311,5 @@ NOISE_CONST: Dict[str, Union[List[int], List[List[int]]]] = {
 }
 
 # 型エイリアスの定義（より明確な型表現のため）
-PaperSize = Tuple[int, int]  # (幅, 高さ) in mm
-GradientVector = List[int]  # [x, y, z] 成分
+PaperSize = tuple[int, int]  # (幅, 高さ) in mm
+GradientVector = list[int]  # [x, y, z] 成分

@@ -1,1 +1,1 @@
-"""Engine IO subpackage (MIDI services)."""
+"""Engine IO サブパッケージ（MIDI サービス）。"""

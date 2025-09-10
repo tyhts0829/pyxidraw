@@ -1,1 +1,1 @@
-"""Engine core subpackage."""
+"""Engine コア サブパッケージ。"""
