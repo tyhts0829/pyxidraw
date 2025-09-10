@@ -16,7 +16,7 @@
 - [ ] 依存を開発セットで導入: `pip install -e .[dev]`
 - [ ] 一括実行で状況把握: `pre-commit run -a -v`
 - [x] フォーマッタが変更したら再ステージ: `git add -A`
-- [x] スタブを再生成＆同期テスト: `PYTHONPATH=src python -m scripts.gen_g_stubs && pytest -q tests/test_g_stub_sync.py tests/test_pipeline_stub_sync.py`
+- [x] スタブを再生成＆同期テスト: `PYTHONPATH=src python -m scripts.gen_g_stubs && pytest -q tests/stubs/test_g_stub_sync.py tests/stubs/test_pipeline_stub_sync.py`
 - [ ] 型チェックを通す: `mypy`
 - [ ] もう一度: `pre-commit run -a`（成功するまで反復）
 
@@ -42,7 +42,7 @@
 - [x] まずスタブを生成: `PYTHONPATH=src python -m scripts.gen_g_stubs`
 - [x] 差分を確認: `git diff -- src/api/__init__.pyi`
 - [x] 差分がある場合はステージ: `git add src/api/__init__.pyi`
-- [x] 同期テストを実行: `pytest -q tests/test_g_stub_sync.py tests/test_pipeline_stub_sync.py`
+- [x] 同期テストを実行: `pytest -q tests/stubs/test_g_stub_sync.py tests/stubs/test_pipeline_stub_sync.py`
 - [ ] よくある原因と対処:
   - 形状/エフェクトの追加・改名後にスタブ未更新 → 上記生成＋ステージで解消。
   - レジストリに登録漏れ（`effects/registry.py`, `shapes/registry.py`）→ 登録を追加し再生成。
@@ -125,10 +125,10 @@ repos:
         entry: python -m scripts.gen_g_stubs
         env: { PYTHONPATH: src }
       - id: test-g-stub-sync
-        entry: python -m pytest -q tests/test_g_stub_sync.py
+        entry: python -m pytest -q tests/stubs/test_g_stub_sync.py
         env: { PYTHONPATH: src }
       - id: test-pipeline-stub-sync
-        entry: python -m pytest -q tests/test_pipeline_stub_sync.py
+        entry: python -m pytest -q tests/stubs/test_pipeline_stub_sync.py
         env: { PYTHONPATH: src }
       - id: smoke-tests
         entry: python -m pytest -q -m smoke

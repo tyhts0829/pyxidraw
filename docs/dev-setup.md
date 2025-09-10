@@ -25,7 +25,7 @@ pip install -e .[dev,optional]
 - テスト: `pytest -q`（スモークのみ: `pytest -q -m smoke`）
 - スタブ生成/同期検証:
   - 生成: `python -m scripts.gen_g_stubs`
-  - 同期テスト: `pytest -q tests/test_g_stub_sync.py tests/test_pipeline_stub_sync.py`
+  - 同期テスト: `pytest -q tests/stubs/test_g_stub_sync.py tests/stubs/test_pipeline_stub_sync.py`
 
 ## pre-commit（推奨）
 ```

@@ -21,7 +21,7 @@ IDE の補完品質と mypy 等の型検査の精度を高める。
   `tuple[float, float, float]` は `common.types.Vec3` へ正規化する。
 
 CI/テスト連携:
-- `tests/test_g_stub_sync.py` および `tests/test_pipeline_stub_sync.py` により、
+- `tests/stubs/test_g_stub_sync.py` および `tests/stubs/test_pipeline_stub_sync.py` により、
   生成結果文字列（`generate_stubs_str()`）とディスク上の `api/__init__.pyi` の一致が検証される。
 - 本スクリプトのコメントや docstring を日本語化しても、生成されるスタブ文字列の内容を
   変更しない限りテストには影響しない（機能は不変）。

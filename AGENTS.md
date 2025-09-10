@@ -62,7 +62,7 @@
   - `ruff check --fix {changed_files}`、`black {changed_files} && isort {changed_files}`
   - `mypy {changed_files}`（段階導入設定。必要に応じ対象を拡大）
   - `pytest -q -m smoke` もしくは対象テストファイルを直接指定
-  - 公開 API に影響時: スタブ再生成 + `tests/test_g_stub_sync.py` / `tests/test_pipeline_stub_sync.py` を緑化
+  - 公開 API に影響時: スタブ再生成 + `tests/stubs/test_g_stub_sync.py` / `tests/stubs/test_pipeline_stub_sync.py` を緑化
 - CI 成功条件（DoD）:
   - スタブ最新（生成後に差分ゼロ）
   - `ruff/black/isort/mypy` 成功
@@ -94,14 +94,14 @@
 - 公開 API 変更時はスタブ再生成し、スタブ同期テストを更新。
 - マーカー別の実行例:
   - 並行処理: `pytest -q -m integration -k worker`
-  - スタブ同期: `pytest -q tests/test_g_stub_sync.py tests/test_pipeline_stub_sync.py`
+  - スタブ同期: `pytest -q tests/stubs/test_g_stub_sync.py tests/stubs/test_pipeline_stub_sync.py`
   - e2e/perf: `pytest -q -m "e2e or perf"`
 
 ## Good / Bad 実例（本リポ内参照）
 
 - Good:
   - 設計意図が短く端的な docstring と型注釈: `src/engine/core/geometry.py`
-  - API スタブの自動生成とテスト整合: `src/scripts/gen_g_stubs.py` と `tests/test_g_stub_sync.py`
+  - API スタブの自動生成とテスト整合: `src/scripts/gen_g_stubs.py` と `tests/stubs/test_g_stub_sync.py`
 - Bad（避ける）:
   - 重い依存を無断で追加/輸入（optional は `tests/optional` に隔離し、Ask-first）
   - 公開 API 層に肥大ロジックを持ち込む（薄い再エクスポートを保つ）

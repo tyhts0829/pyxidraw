@@ -8,12 +8,12 @@ repos:
         pass_filenames: false
       - id: test-g-stub-sync
         name: Test G stub sync
-        entry: python -m pytest -q tests/test_g_stub_sync.py
+        entry: python -m pytest -q tests/stubs/test_g_stub_sync.py
         language: system
         pass_filenames: false
       - id: test-pipeline-stub-sync
         name: Test pipeline stub sync
-        entry: python -m pytest -q tests/test_pipeline_stub_sync.py
+        entry: python -m pytest -q tests/stubs/test_pipeline_stub_sync.py
         language: system
         pass_filenames: false
       - id: smoke-tests
