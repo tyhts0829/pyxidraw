@@ -16,7 +16,9 @@ class BaseRegistry(ABC):
     """
 
     def __init__(self):
-        self._registry: dict[str, type] = {}
+        # 登録対象の型は統一せず Any とする（関数/クラスの双方を許容）。
+        # これにより shapes/effects の API を同一ポリシーで運用できる。
+        self._registry: dict[str, Any] = {}
 
     # === 内部ユーティリティ ===
     @staticmethod
@@ -41,7 +43,7 @@ class BaseRegistry(ABC):
     def register(self, name: str | None = None) -> Callable:
         """クラス/関数をレジストリに登録するデコレータ。"""
 
-        def decorator(obj: type) -> type:
+        def decorator(obj: Any) -> Any:
             key = self._normalize_key(name) if name else self._normalize_key(obj.__name__)
             if key in self._registry and self._registry[key] is not obj:
                 raise ValueError(f"'{key}' は既に登録されています")
@@ -50,7 +52,7 @@ class BaseRegistry(ABC):
 
         return decorator
 
-    def get(self, name: str) -> type:
+    def get(self, name: str) -> Any:
         """登録されたクラス/関数を取得。"""
         key = self._normalize_key(name)
         if key not in self._registry:
@@ -76,7 +78,7 @@ class BaseRegistry(ABC):
         self._registry.clear()
 
     @property
-    def registry(self) -> dict[str, type]:
+    def registry(self) -> dict[str, Any]:
         """レジストリの読み取り専用アクセス"""
         return self._registry.copy()
 

@@ -1,10 +1,12 @@
-"""3D 変換ユーティリティ（実行時使用部分のみ）。
+"""3D 変換ユーティリティ（エフェクト用の実行時関数群）。
 
 提供関数:
 - `transform_to_xy_plane(vertices)`: 各ラインの XY 平面への姿勢合わせ
 - `transform_back(vertices, R, z_offset)`: 元の姿勢へ戻す
 
-注: 旧互換の Geometry 一括変換ラッパは削除しました（未使用・廃止）。
+注:
+- 旧 `util.geometry` からファイル名を明確化して移設。
+- 依存層は `effects/*` からの数値処理に限定し、`engine/*` には依存しない。
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numba import njit
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover - 型チェック専用
     pass
 
 
@@ -102,18 +104,7 @@ def transform_to_xy_plane(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray,
 def transform_back(
     vertices: np.ndarray, rotation_matrix: np.ndarray, z_offset: float
 ) -> np.ndarray:
-    """頂点を元の向きに戻す。
-
-    transform_to_xy_plane関数の逆変換。
-
-    引数:
-        vertices: (N, 3) 変換された点の配列。
-        rotation_matrix: (3, 3) transform_to_xy_planeから得られた回転行列。
-        z_offset: transform_to_xy_planeから得られたz方向の平行移動量。
-
-    返り値:
-        (N, 3) 元の向きの点の配列。
-    """
+    """頂点を元の向きに戻す（`transform_to_xy_plane` の逆変換）。"""
     # Ensure consistent float64 type for calculations
     vertices = vertices.astype(np.float64)
     rotation_matrix = rotation_matrix.astype(np.float64)

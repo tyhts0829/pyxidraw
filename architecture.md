@@ -313,7 +313,7 @@ Tips:
 - Engine/UI/Monitor: `ui/overlay.py`, `monitor/sampler.py`
 - Effects: `effects/*.py`, `effects/registry.py`
 - Shapes: `shapes/*.py`, `shapes/registry.py`
-- Common/Util: `common/*.py`, `util/*.py`（`constants.py`, `utils.py` など）
+- Common/Util: `common/*.py`, `util/*.py`（`constants.py`, `utils.py`, `geom3d_ops.py` など）
 
 ---
 

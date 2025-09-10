@@ -23,7 +23,7 @@ from shapely.geometry.base import BaseGeometry
 
 from common.param_utils import norm_to_range
 from engine.core.geometry import Geometry
-from util.geometry import transform_back, transform_to_xy_plane
+from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
