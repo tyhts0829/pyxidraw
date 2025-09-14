@@ -162,8 +162,6 @@ class Geometry:
         _set_digest_if_enabled(obj)
         return obj
 
-    # 旧 GeometryData アダプタは撤廃（Geometry 統一）
-
     # ── 基本操作（すべて純粋） ────────
     def as_arrays(self, *, copy: bool = False) -> tuple[np.ndarray, np.ndarray]:
         """内部配列を返すユーティリティ。
