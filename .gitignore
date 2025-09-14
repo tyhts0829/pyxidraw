@@ -25,3 +25,4 @@ src/engine/io/cc/
 data/cc/
 .pydeps/
 .coverage
+previous_code/

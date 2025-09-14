@@ -203,10 +203,10 @@ class Geometry:
     #   同一性判定の安定性のために採用しています。
     def _compute_digest(self) -> bytes:
         """`coords/offsets` から決定的なダイジェストを計算（blake2b-128）。"""
-        c = np.ascontiguousarray(self.coords).view(np.uint8)
-        o = np.ascontiguousarray(self.offsets).view(np.uint8)
+        c = np.ascontiguousarray(self.coords)
+        o = np.ascontiguousarray(self.offsets)
         h = hashlib.blake2b(digest_size=16)
-        # mypy: ndarray を bytes に変換して渡す（コピー発生は一度きりのため許容）
+        # ndarray を安定したバイト列に変換してハッシュ（view(np.uint8) は不要）
         h.update(c.tobytes())
         h.update(o.tobytes())
         return h.digest()
@@ -403,3 +403,26 @@ class Geometry:
     def __len__(self) -> int:
         """ポリライン本数（`M`）を返す。"""
         return int(self.offsets.shape[0] - 1) if self.offsets.size > 0 else 0
+
+    # ---- DX 向上の小道具 -------------------------------------------------
+    @property
+    def n_vertices(self) -> int:
+        """頂点数 `N` を返す。"""
+        return int(self.coords.shape[0])
+
+    @property
+    def n_lines(self) -> int:
+        """ポリライン本数 `M` を返す。`len(self)` と同義。"""
+        return len(self)
+
+    def __repr__(self) -> str:  # pragma: no cover - 表示用
+        """形状/件数中心の簡素な表現。
+
+        例: ``Geometry(N=12345, M=120, float32/int32)``
+        """
+        n = self.n_vertices
+        m = self.n_lines
+        # dtype 表示は短く（float32/int32）
+        c_dt = str(self.coords.dtype)
+        o_dt = str(self.offsets.dtype)
+        return f"Geometry(N={n}, M={m}, {c_dt}/{o_dt})"
