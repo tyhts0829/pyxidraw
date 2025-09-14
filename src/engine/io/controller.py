@@ -226,14 +226,7 @@ class MidiController:
             msg = mido.Message("control_change", channel=0, control=64, value=127)
             outport.send(msg)
 
-    # 後方互換: enable_debug をプロパティで保持
-    @property
-    def enable_debug(self) -> bool:  # deprecated
-        return self.debug_enabled
-
-    @enable_debug.setter
-    def enable_debug(self, value: bool) -> None:  # deprecated
-        self.debug_enabled = value
+    # 注: 旧プロパティ `enable_debug` は削除（直接 `debug_enabled` を使用する）
 
     @staticmethod
     def show_available_ports() -> None:

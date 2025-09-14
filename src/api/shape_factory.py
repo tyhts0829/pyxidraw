@@ -14,8 +14,8 @@ G - 形状ファクトリ（高レベル API エントリ）
 - 形状生成の単一入口: `G` が「どのシェイプをどう作るか」を一手に引き受ける。
 - 責務の境界: "生成" は `G`/各 `Shape`、"変換" は `Geometry.translate/scale/rotate/concat`、
   "加工" は `E.pipeline` に委譲。シェイプ側での変換パラメータは互換のため残るが推奨しない。
-- キャッシュの責務: 形状生成の LRU は本モジュール（`ShapeFactory._cached_shape`）に集約
-  （ADR 0011）。`BaseShape` 側の LRU は既定で無効化（必要時のみ opt-in）。
+- キャッシュの責務: 形状生成の LRU は本モジュール（`ShapeFactory._cached_shape`）に集約する。
+  `BaseShape` はキャッシュを持たない。
 
 設計上のポイント:
 - 動的ディスパッチ: メタクラス `ShapeFactoryMeta` とインスタンス `__getattr__` の双方で
@@ -38,7 +38,6 @@ G - 形状ファクトリ（高レベル API エントリ）
 
 運用メモ:
 - 本モジュールの LRU は `functools.lru_cache(maxsize=128)` 固定（環境変数では切り替えない）。
-  `BaseShape` の LRU（無効が既定）は `PXD_CACHE_DISABLED`/`PXD_CACHE_MAXSIZE` で調整可能（共通基盤）。
 - スレッドセーフティ: CPython の `lru_cache` は内部ロックを持つため、並列呼び出しでも基本安全。
   ただし各シェイプの `generate` は純粋関数（副作用なし）であることを前提にする。
 """

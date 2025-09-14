@@ -25,3 +25,4 @@
 - クラスは `shapes.base.BaseShape` を継承。
 - `generate()` は副作用なし・決定的であること。
 - 2D 入力は Z=0 を付与して (N,3) に正規化すること。
+ - キャッシュは `api.shape_factory.ShapeFactory`（`G`）に集約し、`BaseShape` 自体はキャッシュを持たない。
