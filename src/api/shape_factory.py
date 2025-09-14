@@ -1,45 +1,43 @@
 """
 G - 形状ファクトリ（高レベル API エントリ）
 
-概要:
-- ユーザコードからは `from api import G` として利用し、`G.sphere(...)` のような
-  「関数的」な呼び出しで `Geometry` を生成する。
-- 実体はレジストリ（`shapes.registry`）に登録済みの各シェイプクラス（`BaseShape` 派生）を
-  動的ディスパッチで解決し、インスタンス化→`generate(**params)` を呼ぶ薄いファサード。
-- 生成結果は必ず `engine.core.geometry.Geometry`（以下 Geometry）に揃える。
-  旧実装の互換として、`(coords, offsets)` 等の「線分リスト」形式が返る場合は
-  `Geometry.from_lines(...)` で包む。
+Notes
+-----
+- 利用者は `from api import G` として、`G.sphere(...)` のように関数的に呼び出して
+  `Geometry` を生成する。
+- 実体はレジストリ（`shapes.registry`）に登録済みの `BaseShape` 派生クラスを動的に解決し、
+  インスタンス化→`generate(**params)` を呼ぶ薄いファサード。
+- 生成結果は常に `engine.core.geometry.Geometry`（以下 Geometry）。Geometry 以外を返す
+  シェイプがある場合は「ポリライン列（list/ndarray の列）」のみ `Geometry.from_lines(...)`
+  で受け付ける。旧タプル形式 `(coords, offsets)` は非サポート。
+- LRU は `functools.lru_cache(maxsize=128)` 固定。
+- CPython の `lru_cache` は内部ロックを持ち、並列呼び出しでも基本安全。
+  各シェイプの `generate` は純粋関数（副作用なし）であることを前提にする。
 
-プロジェクト内での役割（architecture.md 要約）:
-- 形状生成の単一入口: `G` が「どのシェイプをどう作るか」を一手に引き受ける。
-- 責務の境界: "生成" は `G`/各 `Shape`、"変換" は `Geometry.translate/scale/rotate/concat`、
-  "加工" は `E.pipeline` に委譲。シェイプ側での変換パラメータは互換のため残るが推奨しない。
-- キャッシュの責務: 形状生成の LRU は本モジュール（`ShapeFactory._cached_shape`）に集約する。
-  `BaseShape` はキャッシュを持たない。
-
-設計上のポイント:
+Design
+------
+- 単一入口: 形状生成は `G` が一手に引き受ける。
+- 責務境界: 生成は `G`/各 `Shape`、変換は `Geometry`、加工は `E.pipeline`。
+- キャッシュ: 形状生成結果の LRU（maxsize=128）は本モジュールに集約。`BaseShape` はキャッシュを持たない。
 - 動的ディスパッチ: メタクラス `ShapeFactoryMeta` とインスタンス `__getattr__` の双方で
-  `G.sphere(...)`/`ShapeFactory.sphere(...)` をサポート（クラス/インスタンスどちらからでも可）。
-- 高速化と再現性: `_params_to_tuple()` でパラメータを「順序安定かつハッシュ可能」へ正規化し、
-  `functools.lru_cache` による 1 プロセス内 LRU キャッシュを掛ける。
-- 例外方針: 未登録名は `AttributeError`（動的属性の一貫性）、生成器側の失敗は各シェイプが責任。
+  `G.sphere(...)`/`ShapeFactory.sphere(...)` をサポート。
+- 再現性と性能: `_params_to_tuple()` でパラメータを決定的・ハッシュ可能に正規化し、
+  プロセス内 LRU を適用。
+- 例外方針: 未登録名は `AttributeError`。生成器側の失敗は各シェイプが責任。
 
-使用例:
+Examples
+--------
     from api import G, E
 
-    # 形状の生成と Geometry 変換
-    g = G.sphere(subdivisions=0.5).scale(100, 100, 100).translate(100, 100, 0)
+    g = (G.sphere(subdivisions=0.5)
+           .scale(100, 100, 100)
+           .translate(100, 100, 0))
 
-    # パイプラインの適用（加工は E.pipeline に委譲）
-    pipe = (E.pipeline.displace(amplitude_mm=0.2)
-                        .fill(density=0.5)
-                        .build())
+    pipe = (E.pipeline
+              .displace(amplitude_mm=0.2)
+              .fill(density=0.5)
+              .build())
     g2 = pipe(g)
-
-運用メモ:
-- 本モジュールの LRU は `functools.lru_cache(maxsize=128)` 固定（環境変数では切り替えない）。
-- スレッドセーフティ: CPython の `lru_cache` は内部ロックを持つため、並列呼び出しでも基本安全。
-  ただし各シェイプの `generate` は純粋関数（副作用なし）であることを前提にする。
 """
 
 from __future__ import annotations
@@ -53,10 +51,13 @@ from numpy.typing import NDArray
 import shapes  # noqa: F401  (登録目的の副作用)
 from common.param_utils import params_to_tuple as _params_to_tuple
 from engine.core.geometry import Geometry
+from shapes.registry import is_shape_registered  # ガード付きメモ化用（登録状態の即時反映）
 
 from .shape_registry import get_shape_generator, list_registered_shapes
 
-ParamsTuple = tuple[tuple[str, object], ...]
+# 形状生成のキャッシュ鍵として用いる正規化済みパラメータ列。
+# プロジェクト規約に合わせ、値の型は `Any` を用いる。
+ParamsTuple = tuple[tuple[str, Any], ...]
 
 
 class ShapeFactoryMeta(type):
@@ -72,19 +73,43 @@ class ShapeFactoryMeta(type):
         """クラスレベルでの動的属性アクセス。
 
         指定された `name` がシェイプレジストリに存在する場合、
-        `shape_method(**params) -> Geometry` を返す。存在しない場合は `AttributeError`。
+        `shape_method(**params) -> Geometry` を返す。
+        存在しない場合は `AttributeError`。
         """
         try:
             # 存在確認のみ（実体の生成は _cached_shape に委譲）
-            get_shape_generator(name)
+            shape_cls = get_shape_generator(name)
 
-            # 動的にクラスメソッドを生成
-            def shape_method(**params: object) -> Geometry:
+            # 動的にクラスメソッドを生成し、クラス属性としてメモ化する。
+            # 注意（重要）:
+            # - この関数は staticmethod としてクラスにバインドする。これによりインスタンスから
+            #   参照しても `self` が暗黙に注入されず、`G.sphere(...)`/`ShapeFactory.sphere(...)`
+            #   の双方で同一実装を安全に共有できる。
+            # - ランタイムでの登録解除に対応するため、呼び出し時に `is_shape_registered(name)` を
+            #   検査するガードを設置。未登録ならクラス属性を削除して `AttributeError` を投げ、
+            #   動的属性の整合性（未登録=属性なし）を保つ。（メモ化の副作用を相殺するための安全策）
+            def _shape_method_impl(**params: Any) -> Geometry:
+                if not is_shape_registered(name):
+                    # 登録が解除されていた場合はメモ化を破棄して AttributeError へ整合
+                    try:
+                        delattr(cls, name)
+                    except Exception:
+                        pass
+                    raise AttributeError(f"'{cls.__name__}' has no attribute '{name}'")
                 params_tuple = cls._params_to_tuple(**params)
-                # サブクラス差し替えを可能にするため cls 経由で呼び出す
                 return cls._cached_shape(name, params_tuple)
 
-            return shape_method
+            # ヘルプ/補完のためにメタデータを持たせる
+            _shape_method_impl.__name__ = name
+            _shape_method_impl.__qualname__ = f"{cls.__name__}.{name}"
+            _doc = getattr(getattr(shape_cls, "generate", None), "__doc__", None)
+            if _doc:
+                _shape_method_impl.__doc__ = _doc
+
+            # クラスへ staticmethod としてメモ化
+            setattr(cls, name, staticmethod(_shape_method_impl))
+            # 実際に返すのはクラス属性（staticmethod 解決後の関数オブジェクト）
+            return getattr(cls, name)
         except ValueError:
             raise AttributeError(f"'{cls.__name__}' has no attribute '{name}'")
 
@@ -131,7 +156,7 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
         return Geometry.from_lines(data)
 
     @staticmethod
-    def _params_to_tuple(**params: object) -> ParamsTuple:
+    def _params_to_tuple(**params: Any) -> ParamsTuple:
         """パラメータ辞書を「順序安定・ハッシュ可能」なタプルへ正規化（共通実装）。"""
         return _params_to_tuple(dict(params))
 
@@ -162,17 +187,11 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
         `G.<name>(**params) -> Geometry` を提供。クラスレベルと同じロジックで
         レジストリ解決とキャッシュを行う。
         """
-        # レジストリに登録されているか確認
+        # クラス側の __getattr__ に委譲してメモ化を行い、取得する。
+        # 未登録名の場合はクラス側が AttributeError を投げる。
         try:
-            get_shape_generator(name)
-
-            # 動的にメソッドを生成
-            def shape_method(**params: object) -> Geometry:
-                params_tuple = self._params_to_tuple(**params)
-                return self._cached_shape(name, params_tuple)
-
-            return shape_method
-        except ValueError:
+            return getattr(type(self), name)
+        except AttributeError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
     @classmethod

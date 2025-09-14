@@ -1,5 +1,4 @@
-"""
-Effects レジストリ（関数専用）
+"""Effects レジストリ（関数専用）。
 
 概要:
 - キー正規化（Camel→snake、小文字化、`-`→`_`）を行う共通基盤 `BaseRegistry` で管理する。
@@ -14,7 +13,7 @@ Effects レジストリ（関数専用）
 
 from __future__ import annotations
 
-from inspect import isfunction
+import inspect
 from typing import Any, Callable, Mapping
 
 from common.base_registry import BaseRegistry
@@ -30,26 +29,37 @@ def effect(arg: Any | None = None, /, name: str | None = None):
     """エフェクト関数を登録するデコレータ。
 
     使用例:
-    - `@effect`            → 関数名から自動推論
-    - `@effect()`          → 同上
-    - `@effect("custom")` → 明示名で登録
+    - `@effect` / `@effect()`                → 関数名から自動推論。
+    - `@effect("custom")` / `@effect(name="custom")` → 明示名で登録。
 
     例外:
     - TypeError: 関数以外を登録しようとした場合。
     """
 
-    def _wrap_register(obj: Any):
-        if not isfunction(obj):
-            raise TypeError("@effect は関数のみ登録可能です（クラス/インスタンスは不可）")
-        # BaseRegistry に登録（キー正規化は内部で実施）
-        return _effect_registry.register(name)(obj)
+    def _register_checked(obj: Any, resolved_name: str | None = None):
+        if not inspect.isfunction(obj):
+            raise TypeError(
+                f"@effect は関数のみ登録可能です（クラス/インスタンスは不可）: got {obj!r}"
+            )
+        return _effect_registry.register(resolved_name)(obj)
 
-    # 直付け (@effect) の場合
-    if callable(arg) and name is None:
-        return _wrap_register(arg)
+    # 直付け (@effect)
+    if inspect.isfunction(arg) and name is None:
+        return _register_checked(arg, None)
 
-    # 引数付き (@effect() / @effect("name")) の場合
-    return _wrap_register
+    # 位置引数で名前を渡した (@effect("name"))
+    if isinstance(arg, str) and name is None:
+
+        def _decorator(obj: Any):
+            return _register_checked(obj, arg)
+
+        return _decorator
+
+    # name キーワード引数、または引数なし
+    def _decorator(obj: Any):
+        return _register_checked(obj, name)
+
+    return _decorator
 
 
 def get_effect(name: str) -> Callable[..., Geometry]:
@@ -79,3 +89,13 @@ def clear_registry() -> None:
 def get_registry() -> Mapping[str, Any]:
     """読み取り専用ビューとしてレジストリ辞書を返す。"""
     return _effect_registry.registry
+
+
+__all__ = [
+    "effect",
+    "get_effect",
+    "list_effects",
+    "is_effect_registered",
+    "clear_registry",
+    "get_registry",
+]

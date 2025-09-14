@@ -198,7 +198,9 @@ Tips:
 ## レジストリと公開 API
 - Shapes（`shapes/registry.py`）
   - `@shape`/`@shape()`/`@shape("name")` で登録。キーは Camel→snake 小文字化で正規化。
-  - 形状は `BaseShape.generate(**params)` を実装し、戻り値は `Geometry` または `Geometry.from_lines()` 可能な線分集合。
+  - 形状は `BaseShape.generate(**params)` を実装し、戻り値は `Geometry` または
+    `Geometry.from_lines()` 可能な「ポリライン列（list/ndarray の列）」とする。
+    旧形式の `(coords, offsets)` タプルは非サポート（参照: `src/api/shape_factory.py`）。
   - 高水準 API `G` は `ShapeFactory` のインスタンス。`G.circle(...) -> Geometry` のように関数的に呼び出す。
 - Effects（`effects/registry.py`）
   - `@effect` で `def effect_name(g: Geometry, *, ...) -> Geometry` な関数を登録。
