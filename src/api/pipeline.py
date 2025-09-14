@@ -45,11 +45,11 @@ E.pipeline — パイプライン実行モジュール（Effects オーケスト
 
 使用例:
     from api import E, G
-    g = G.grid(divisions=16)
+    g = G.grid(subdivisions=(0.5, 0.5))
     pipe = (
         E.pipeline
-         .noise(seed=1, amount=0.05)
-         .rotate(z=0.3)
+         .displace(amplitude_mm=0.05)
+         .rotate(angles_rad=(0.0, 0.0, 0.3))
          .cache(maxsize=128)
          .strict(True)
          .build()
