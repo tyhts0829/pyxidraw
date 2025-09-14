@@ -23,7 +23,6 @@ class OverlayHUD(Tickable):
         self._y_cursor = window.height - 10
         self._color = color
         self._font = "HackGenConsoleNF-Regular"
-        self.fps_display = None
         self.font_size = font_size
 
     # -------- Tickable --------

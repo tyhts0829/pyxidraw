@@ -85,24 +85,4 @@ class BaseRegistry(ABC):
     # 後方互換のためのリネーム機能は提供しない（明示的な再登録を推奨）
 
 
-class CacheableRegistry(BaseRegistry):
-    """キャッシング機能付きレジストリ"""
-
-    def __init__(self):
-        super().__init__()
-        self._instance_cache: dict[tuple[str, tuple[tuple[str, Any], ...]], Any] = {}
-
-    def get_instance(self, name: str, **kwargs) -> Any:
-        """インスタンスを取得（キャッシュ機能付き）"""
-        cache_key = (name, tuple(sorted(kwargs.items())))
-
-        if cache_key not in self._instance_cache:
-            cls = self.get(name)
-            instance = cls(**kwargs)
-            self._instance_cache[cache_key] = instance
-
-        return self._instance_cache[cache_key]
-
-    def clear_instance_cache(self) -> None:
-        """インスタンスキャッシュをクリア"""
-        self._instance_cache.clear()
+# 以前は CacheableRegistry を提供していたが、現在は未使用のため削除。

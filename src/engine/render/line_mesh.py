@@ -75,11 +75,4 @@ class LineMesh:
         self.ibo.release()
         self.vao.release()
 
-    # 後方互換: 旧属性名 prim_restart_idx をプロパティで提供
-    @property
-    def prim_restart_idx(self) -> int:  # deprecated
-        return self.primitive_restart_index
-
-    @prim_restart_idx.setter
-    def prim_restart_idx(self, value: int) -> None:  # deprecated
-        self.primitive_restart_index = value
+    # 旧プロパティ `prim_restart_idx` は削除（`primitive_restart_index` を直接使用）
