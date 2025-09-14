@@ -1,5 +1,28 @@
 # アーキテクチャ概要（Purpose & Architecture）
 
+## アーキテクチャキャンバス（1-pager）
+- 層（数値は内外の序数。小さいほど内側）
+  - L0 Core/Base: `common/`, `util/`, `engine/core/`
+  - L1 Domain/Transforms: `shapes/`, `effects/`（純関数 `Geometry -> Geometry`）
+  - L2 Infra & Runtime: `engine/render/`, `engine/pipeline/`, `engine/ui/`, `engine/io/`, `engine/monitor/`
+  - L3 API/Entry: `api/`, `main.py`
+- 許可する依存方向
+  - 外側 → 内側（同層は許可）。数値で表すと「ソース層 ≥ ターゲット層」。
+  - 例: L3→L2/L1/L0, L2→L1/L0（ただし下記の個別禁止エッジに従う）。
+- 不変条件（抜粋）
+  - 循環依存を作らない。
+  - `print()` を禁止（ログは `logging` 経由）。
+  - `common/` と `util/` は上位層（`api/`, `engine/*`, `effects/`, `shapes/`）に依存しない。
+
+### 個別禁止エッジ（本リポ特化の契約）
+- `engine/*` → `api/*` を禁止（エンジン層は公開APIを知らない）。
+- `engine/*` → `effects/*`, `shapes/*` を禁止（設計の一方向性維持）。
+- `effects/*`, `shapes/*` → `engine/render/*`, `engine/pipeline/*`, `engine/ui/*`, `engine/io/*`, `engine/monitor/*` を禁止。
+- `engine/pipeline/*` が `effects/*` の関数を直接呼ぶことを禁止（パイプライン適用は `api` の責務）。
+- `effects.registry`/`shapes.registry` の参照は `api/*`, `effects/*`, `shapes/*` に限定。
+  - `engine/*`, `common/*`, `util/*` からの参照は禁止（登録/解決の境界を越えない）。
+- 例外が必要な場合は ADR を追加し、ここ（キャンバス）にも例外行を追記すること。
+
 ## 目的（What & Why）
 - プロシージャルな線描（ラインベース）の幾何を生成・加工・描画するための軽量フレームワーク。
 - 形状（Shapes）→ エフェクト（Effects）→ レンダリング（Engine）の責務分離により、再利用性とテスト容易性を確保。
@@ -208,6 +231,7 @@ Tips:
 - 公開面
   - 利用者は `from api import G, E, run, Geometry, to_spec, from_spec, validate_spec` のみに依存。
   - 上位（api）→下位（engine/common/util/effects/shapes）と一方向の依存。`engine` は `api` を知らない。
+  - 破壊的変更はスタブ同期テストが検出する。意図的な場合はスタブ再生成手順に従う。
 
 ## スタブ生成と CI（型の同期）
 - 目的
@@ -216,6 +240,15 @@ Tips:
   - `PYTHONPATH=src python -m scripts.gen_g_stubs && git add src/api/__init__.pyi`
 - CI/テスト
   - `.github/workflows/verify-stubs.yml` が `tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py` を実行し、スタブ・実装の不整合を検知。
+
+## 設計ガードレール（検証）
+- アーキテクチャテスト
+  - `tests/test_architecture.py`（導入時）で import グラフを静的解析し、数値レイヤ規則（外側→内側のみ）と上記「個別禁止エッジ」を検証する。
+  - 本リポはトップレベルで `api|engine|effects|shapes|common|util` の6種ディレクトリを起点に層付けする。
+- スタブ同期
+  - 公開 API の形状はスタブ生成＋同期テストで検証（破壊的変更の早期検知）。
+- ヘルスチェック（ローカル運用の目安）
+  - 変更後に `ruff`/`mypy`/`pytest` の最小セットを回す。死蔵コードの検知には `vulture` を随時使用。
 
 ## 設定と環境変数
 - 設定ファイル
@@ -320,6 +353,12 @@ Tips:
 - Effects: `effects/*.py`, `effects/registry.py`
 - Shapes: `shapes/*.py`, `shapes/registry.py`
 - Common/Util: `common/*.py`, `util/*.py`（`constants.py`, `utils.py`, `geom3d_ops.py` など）
+
+---
+
+## ADR（設計決定メモ）
+- 例外やルール変更は `docs/adr/` にミニ ADR（10 行程度）を追加し、背景/決定/代替/影響を残す。
+- 例外追加時は「アーキテクチャキャンバス」の個別禁止エッジにも例外を1行追記して整合を保つ。
 
 ---
 
