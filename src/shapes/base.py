@@ -44,16 +44,33 @@ from engine.core.geometry import Geometry
 class BaseShape(ABC):
     """すべてのシェイプのベースクラス。
 
-    方針: 形状生成のキャッシュは `api.shape_factory.ShapeFactory` 側に一本化し、
-    本クラスはキャッシュを持たない。
+    概要
+    -----
+    - 各派生クラスは :meth:`generate` を実装し、原点基準の「素の形状」を返す。
+    - 変換（中心移動・拡大縮小・回転）は :meth:`__call__` に集約する。
+    - キャッシュは上位の ``api.shape_factory.ShapeFactory`` に集約し、本クラスは持たない。
+
+    設計方針
+    -------
+    - 生成は純関数（副作用なし）でテスト容易性を優先する。
+    - 変換順序は「スケール → 回転 → 平行移動（center）」で固定。
+    - 角度単位はラジアン。
     """
 
     @abstractmethod
     def generate(self, **params: Any) -> Geometry:
         """形状の頂点を生成します。
 
-        返り値:
-            形状データを含む `Geometry`。
+        Parameters
+        ----------
+        **params : Any
+            派生クラス固有の生成パラメータ。原点基準・Z=0（必要に応じて）で
+            形状を表現するために用いられる。
+
+        Returns
+        -------
+        Geometry
+            生成したポリライン集合を表す :class:`engine.core.geometry.Geometry`。
         """
         pass
 
@@ -64,10 +81,35 @@ class BaseShape(ABC):
         rotate: Vec3 = (0.0, 0.0, 0.0),
         **params: Any,
     ) -> Geometry:
-        """形状を生成し、必要に応じて変換を適用して返す。"""
+        """形状を生成し、必要に応じて変換を適用して返す。
+
+        Parameters
+        ----------
+        center : Vec3, default (0.0, 0.0, 0.0)
+            最終的な平行移動ベクトル（原点基準での配置先）。
+        scale : Vec3, default (1.0, 1.0, 1.0)
+            各軸のスケール係数（原点中心に適用）。
+        rotate : Vec3, default (0.0, 0.0, 0.0)
+            各軸の回転角（ラジアン、原点中心、X→Y→Z の順）。
+        **params : Any
+            :meth:`generate` にそのまま渡す生成パラメータ。
+
+        Returns
+        -------
+        Geometry
+            変換後（または未変換）の :class:`Geometry`。
+
+        Notes
+        -----
+        変換の適用順は「スケール → 回転 → 平行移動」。すべてデフォルト値の場合、
+        生成結果をそのまま返す（コスト最小化）。
+        """
         geometry_data = self.generate(**params)
-        if center != (0, 0, 0) or scale != (1, 1, 1) or rotate != (0, 0, 0):
+        if center != (0.0, 0.0, 0.0) or scale != (1.0, 1.0, 1.0) or rotate != (0.0, 0.0, 0.0):
             from engine.core import transform_utils as _tf
 
             return _tf.transform_combined(geometry_data, center, scale, rotate)
         return geometry_data
+
+
+__all__ = ["BaseShape"]
