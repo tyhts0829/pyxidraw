@@ -40,4 +40,4 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
 
 
 if __name__ == "__main__":
-    run(draw, canvas_size=(CANVAS_SIZE, CANVAS_SIZE), render_scale=3, use_midi=True)
+    run(draw, canvas_size=(CANVAS_SIZE, CANVAS_SIZE), render_scale=3, use_midi=True, workers=1)
