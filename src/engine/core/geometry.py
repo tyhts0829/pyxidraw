@@ -84,17 +84,7 @@ def _digest_enabled() -> bool:
     return v not in ("1", "true", "TRUE", "True")
 
 
-def _set_digest_if_enabled(obj: "Geometry") -> None:
-    """必要なら `obj._digest` を計算してセットするヘルパ。
-
-    - コンストラクタ直後/変換直後に呼び出す。
-    - 無効化時（ベンチ比較用）には何もしない。
-    """
-    if _digest_enabled():
-        obj._digest = obj._compute_digest()
-
-
-@dataclass(slots=True)
+@dataclass(eq=False, slots=True)
 class Geometry:
     """統一幾何データ構造。
 
@@ -115,20 +105,26 @@ class Geometry:
     # ── ファクトリ ───────────────────
     @classmethod
     def from_lines(cls, lines: Iterable[np.ndarray]) -> "Geometry":
-        """多様な線分入力を `Geometry` に正規化するファクトリ。
+        """線分集合を統一表現に正規化して `Geometry` を生成する。
 
-        受け入れる入力:
-        - 各要素は座標列（list/ndarray いずれも可）。
-        - 2D は Z=0 を補完。
-        - 1D ベクトルは長さが 3 の倍数である必要があり、(x,y,z) の並びとして
-          `(-1, 3)` にリシェイプされる。
+        Parameters
+        ----------
+        lines : Iterable[np.ndarray]
+            各要素は座標列。`list`/`ndarray` いずれも可。形状は
+            - `(K, 2)` の場合は `Z=0` を補完して `(K, 3)` に正規化。
+            - `(K, 3)` の場合はそのまま使用。
+            - `(3K,)` の 1 次元ベクトルは `(x, y, z)` の並びとして `(-1, 3)` に整形。
 
-        戻り値:
-        - `coords (N,3) float32` と `offsets (M+1,) int32` を持つ `Geometry`。
+        Returns
+        -------
+        Geometry
+            `coords (N, 3) float32` と `offsets (M+1,) int32` を持つジオメトリ。
 
-        例外:
-        - `ValueError`: 列の shape が (K,2)/(K,3)/(3K,) いずれにも適合しない場合、
-          または 1D ベクトル長が 3 の倍数でない場合。
+        Raises
+        ------
+        ValueError
+            形状が `(K,2)/(K,3)/(3K,)` いずれにも適合しない場合、または 1D ベクトル長が
+            3 の倍数でない場合。
         """
         np_lines: list[np.ndarray] = []
         for line in lines:
@@ -149,34 +145,37 @@ class Geometry:
         if not np_lines:
             coords = np.empty((0, 3), dtype=np.float32)
             offsets = np.array([0], dtype=np.int32)
-            obj = cls(coords, offsets)
-            _set_digest_if_enabled(obj)
-            return obj
+            return cls(coords, offsets)
 
         offsets = np.empty(len(np_lines) + 1, dtype=np.int32)
         offsets[0] = 0
         for i, arr in enumerate(np_lines, start=1):
             offsets[i] = offsets[i - 1] + arr.shape[0]
         coords = np.concatenate(np_lines, axis=0)
-        obj = cls(coords.astype(np.float32, copy=False), offsets.astype(np.int32, copy=False))
-        _set_digest_if_enabled(obj)
-        return obj
+        return cls(
+            coords.astype(np.float32, copy=False),
+            offsets.astype(np.int32, copy=False),
+        )
 
     # ── 基本操作（すべて純粋） ────────
     def as_arrays(self, *, copy: bool = False) -> tuple[np.ndarray, np.ndarray]:
-        """内部配列を返すユーティリティ。
+        """内部配列を返す。
 
-        引数:
-            copy: True の場合はディープコピーを返す。False の場合は読み取り専用ビューを返す。
+        Parameters
+        ----------
+        copy : bool, default False
+            True の場合はディープコピーを返す。False の場合は読み取り専用ビューを返す。
 
-        返り値:
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
             `(coords, offsets)` のタプル。
 
-        注意:
-            - `copy=False` は読み取り専用ビュー（`setflags(write=False)`）を返す。
-              これにより外部からの誤った就地書き換えによる `digest` 不整合や
-              キャッシュキーの破壊を防ぐ。
-            - 書き込みが必要な場合は `copy=True` を指定すること。
+        Notes
+        -----
+        `copy=False` は読み取り専用ビュー（`setflags(write=False)`）を返す。外部からの
+        就地変更による `digest` 不整合やキャッシュキー破壊を防ぐ。書き込みが必要な場合は
+        `copy=True` を指定する。
         """
         if copy:
             return self.coords.copy(), self.offsets.copy()
@@ -214,13 +213,23 @@ class Geometry:
 
     @property
     def digest(self) -> bytes:
-        """ジオメトリのダイジェスト（必要時に遅延計算）。
+        """ジオメトリ内容のハッシュ指紋（blake2b-128）。
 
-        注意:
-        - `PXD_DISABLE_GEOMETRY_DIGEST=1` 設定時は例外を送出する。
-          その場合でも `api.pipeline` 側は配列からの都度計算でフォールバックするため、
-          キャッシュ機構は有効に保たれる。
-        - 通常は初回アクセスで計算して保持し、以後の同一性判定を高速化する。
+        Returns
+        -------
+        bytes
+            `coords/offsets` の内容から計算した 16 バイトのダイジェスト。初回アクセス時に
+            遅延計算し、以後はキャッシュを再利用する。
+
+        Raises
+        ------
+        RuntimeError
+            環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` が設定されている場合。
+
+        Notes
+        -----
+        digest が無効化されている場合でもパイプライン側は配列から都度ハッシュを計算して
+        フォールバックするため、キャッシュ機構は動作を継続する。
         """
         # 環境変数で無効化可能（ベンチ用）
         if not _digest_enabled():
@@ -234,25 +243,25 @@ class Geometry:
     def translate(self, dx: float, dy: float, dz: float = 0.0) -> "Geometry":
         """平行移動（純関数）。
 
-        引数:
-            dx, dy, dz: 各軸の移動量。
+        Parameters
+        ----------
+        dx, dy, dz : float
+            各軸の移動量。
 
-        返り値:
+        Returns
+        -------
+        Geometry
             新しい `Geometry`（元は不変）。
         """
         if self.is_empty:
             # 空ジオメトリは移動しても内容は変わらない（no-op）。
             # ただし本APIは常に“新しいインスタンス”を返す純関数で統一しているため、
             # ここでもコピーを作成して返す。これにより呼び出し側での別参照性が保証され、
-            # digest（有効時）の一貫性や、配列共有による意図せぬエイリアシングを避けられる。
-            obj = Geometry(self.coords.copy(), self.offsets.copy())
-            _set_digest_if_enabled(obj)
-            return obj
+            # 配列共有による意図せぬエイリアシングを避けられる。
+            return Geometry(self.coords.copy(), self.offsets.copy())
         vec = np.array([dx, dy, dz], dtype=np.float32)
         new_coords = self.coords + vec
-        obj = Geometry(new_coords, self.offsets.copy())
-        _set_digest_if_enabled(obj)
-        return obj
+        return Geometry(new_coords, self.offsets.copy())
 
     def scale(
         self,
@@ -263,11 +272,18 @@ class Geometry:
     ) -> "Geometry":
         """拡大縮小（純関数）。
 
-        引数:
-            sx, sy, sz: 各軸スケール。`sy/sz` 省略時は等方拡大。
-            center: 拡大の基準点（pivot）。
+        Parameters
+        ----------
+        sx : float
+            X 軸スケール。`sy/sz` 省略時は等方拡大の係数。
+        sy, sz : float, optional
+            Y/Z 軸スケール。省略時は `sx` を使用。
+        center : Vec3, default (0.0, 0.0, 0.0)
+            拡大の基準点（pivot）。
 
-        返り値:
+        Returns
+        -------
+        Geometry
             新しい `Geometry`。
         """
         if sy is None:
@@ -275,9 +291,7 @@ class Geometry:
         if sz is None:
             sz = sx
         if self.is_empty:
-            obj = Geometry(self.coords.copy(), self.offsets.copy())
-            _set_digest_if_enabled(obj)
-            return obj
+            return Geometry(self.coords.copy(), self.offsets.copy())
         cx, cy, cz = center
         new = self.coords.copy()
         new[:, 0] -= cx
@@ -289,9 +303,7 @@ class Geometry:
         new[:, 0] += cx
         new[:, 1] += cy
         new[:, 2] += cz
-        obj = Geometry(new, self.offsets.copy())
-        _set_digest_if_enabled(obj)
-        return obj
+        return Geometry(new, self.offsets.copy())
 
     def rotate(
         self,
@@ -302,17 +314,24 @@ class Geometry:
     ) -> "Geometry":
         """回転（純関数）。X→Y→Z の順に右手系で適用。
 
-        引数:
-            x, y, z: 各軸回転角（ラジアン）。
-            center: 回転中心（pivot）。
+        Parameters
+        ----------
+        x, y, z : float, default 0.0
+            各軸回転角（ラジアン）。
+        center : Vec3, default (0.0, 0.0, 0.0)
+            回転中心（pivot）。
 
-        返り値:
+        Returns
+        -------
+        Geometry
             新しい `Geometry`。
+
+        Notes
+        -----
+        適用順は X→Y→Z。例として `(1, 0, 0)` を Z 軸に `π/2` 回転すると `(0, 1, 0)` に一致。
         """
         if self.is_empty or (x == 0 and y == 0 and z == 0):
-            obj = Geometry(self.coords.copy(), self.offsets.copy())
-            _set_digest_if_enabled(obj)
-            return obj
+            return Geometry(self.coords.copy(), self.offsets.copy())
 
         cx, cy, cz = center
         c = self.coords.copy()
@@ -323,21 +342,21 @@ class Geometry:
 
         # X 回転
         if x != 0:
-            cxr, sxr = np.cos(x), np.sin(x)
+            cxr, sxr = np.float32(np.cos(x)), np.float32(np.sin(x))
             y_new = c[:, 1] * cxr - c[:, 2] * sxr
             z_new = c[:, 1] * sxr + c[:, 2] * cxr
             c[:, 1], c[:, 2] = y_new, z_new
 
         # Y 回転
         if y != 0:
-            cyr, syr = np.cos(y), np.sin(y)
+            cyr, syr = np.float32(np.cos(y)), np.float32(np.sin(y))
             x_new = c[:, 0] * cyr + c[:, 2] * syr
             z_new = -c[:, 0] * syr + c[:, 2] * cyr
             c[:, 0], c[:, 2] = x_new, z_new
 
         # Z 回転
         if z != 0:
-            czr, szr = np.cos(z), np.sin(z)
+            czr, szr = np.float32(np.cos(z)), np.float32(np.sin(z))
             x_new = c[:, 0] * czr - c[:, 1] * szr
             y_new = c[:, 0] * szr + c[:, 1] * czr
             c[:, 0], c[:, 1] = x_new, y_new
@@ -346,31 +365,35 @@ class Geometry:
         c[:, 0] += cx
         c[:, 1] += cy
         c[:, 2] += cz
-        obj = Geometry(c, self.offsets.copy())
-        _set_digest_if_enabled(obj)
-        return obj
+        return Geometry(c, self.offsets.copy())
 
     def concat(self, other: "Geometry") -> "Geometry":
         """ポリライン集合の連結（純関数）。
 
-        - `coords` を縦方向に結合し、`offsets` は後段の先頭をシフトして統合する。
-        - 空集合に対しては相手のコピー/自己のコピーを返す。
+        Parameters
+        ----------
+        other : Geometry
+            連結する相手ジオメトリ。
+
+        Returns
+        -------
+        Geometry
+            連結後のジオメトリ。
+
+        Notes
+        -----
+        `coords` は縦方向に結合し、`offsets` は後段の先頭を `len(self.coords)` だけ
+        シフトして統合する。いずれかが空集合の場合は他方のコピーを返す。
         """
         if self.is_empty:
-            obj = Geometry(other.coords.copy(), other.offsets.copy())
-            _set_digest_if_enabled(obj)
-            return obj
+            return Geometry(other.coords.copy(), other.offsets.copy())
         if other.is_empty:
-            obj = Geometry(self.coords.copy(), self.offsets.copy())
-            _set_digest_if_enabled(obj)
-            return obj
+            return Geometry(self.coords.copy(), self.offsets.copy())
         offset_shift = self.coords.shape[0]
         new_coords = np.vstack([self.coords, other.coords]).astype(np.float32, copy=False)
         adjusted_other_offsets = other.offsets[1:] + offset_shift
         new_offsets = np.hstack([self.offsets, adjusted_other_offsets]).astype(np.int32, copy=False)
-        obj = Geometry(new_coords, new_offsets)
-        _set_digest_if_enabled(obj)
-        return obj
+        return Geometry(new_coords, new_offsets)
 
     # 演算子糖衣
     def __add__(self, other: "Geometry") -> "Geometry":
