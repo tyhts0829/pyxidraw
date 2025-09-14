@@ -25,12 +25,8 @@ def list_registered_shapes() -> list[str]:
 
 
 def unregister_shape(name: str):
-    """形状の登録を解除（主にテスト用）。"""
-    try:
-        _shapes_registry.get_registry().unregister(name)
-    except Exception:
-        # 存在しない場合は無視（安全側）
-        return
+    """形状の登録を解除（主にテスト用）。未登録名は無視。"""
+    _shapes_registry.unregister(name)
 
 
 __all__ = [

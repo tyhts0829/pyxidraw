@@ -69,10 +69,12 @@ import inspect
 import os
 from collections import OrderedDict
 from dataclasses import dataclass
+from threading import RLock
 from typing import Any, Callable, Sequence
 
 import numpy as np
 
+from common.param_utils import params_to_tuple as _params_to_tuple
 from effects.registry import get_effect
 from engine.core.geometry import Geometry
 
@@ -104,17 +106,8 @@ def _fn_version(fn: Callable[..., Geometry]) -> bytes:
 
 
 def _params_digest(params: dict[str, Any]) -> bytes:
-    # 正規化して決定的にシリアライズ
-    def make_hashable(obj):
-        if isinstance(obj, dict):
-            return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
-        if isinstance(obj, (list, tuple)):
-            return tuple(make_hashable(x) for x in obj)
-        if isinstance(obj, np.ndarray):
-            return tuple(obj.flatten().tolist())
-        return obj
-
-    normalized = make_hashable(params)
+    """パラメータを共通実装で正規化し、短いハッシュへ圧縮。"""
+    normalized = _params_to_tuple(params)
     data = repr(normalized).encode()
     return hashlib.blake2b(data, digest_size=8).digest()
 
@@ -131,6 +124,7 @@ class Pipeline:
         # LRU 互換の単層キャッシュ（maxsize=None なら従来通り無制限）
         self._cache_maxsize: int | None = cache_maxsize
         self._cache: "OrderedDict[tuple[bytes, bytes], Geometry]" = OrderedDict()
+        self._lock = RLock()
 
         # パイプラインハッシュを先に計算
         h = hashlib.blake2b(digest_size=16)
@@ -143,11 +137,12 @@ class Pipeline:
 
     def __call__(self, g: Geometry) -> Geometry:
         key = (_geometry_hash(g), self._pipeline_key)
-        if key in self._cache:
-            # LRU: 参照を末尾へ
-            out = self._cache.pop(key)
-            self._cache[key] = out
-            return out
+        with self._lock:
+            if key in self._cache:
+                # LRU: 参照を末尾へ
+                out = self._cache.pop(key)
+                self._cache[key] = out
+                return out
 
         out = g
         for st in self._steps:
@@ -157,15 +152,22 @@ class Pipeline:
         # 単層キャッシュ（LRU 風）
         if self._cache_maxsize == 0:
             return out  # キャッシュ無効
-        self._cache[key] = out
-        if self._cache_maxsize is not None and self._cache_maxsize > 0:
-            while len(self._cache) > self._cache_maxsize:
-                self._cache.popitem(last=False)  # 先頭（最古）を追い出す
+        with self._lock:
+            self._cache[key] = out
+            if self._cache_maxsize is not None and self._cache_maxsize > 0:
+                while len(self._cache) > self._cache_maxsize:
+                    self._cache.popitem(last=False)  # 先頭（最古）を追い出す
         return out
 
     def clear_cache(self) -> None:
         """パイプラインの単層キャッシュをクリア。"""
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
+
+    def cache_info(self) -> dict[str, int]:
+        """簡易キャッシュ情報（サイズのみ）。"""
+        with self._lock:
+            return {"size": len(self._cache)}
 
     def __repr__(self) -> str:  # 開発時の可読性向上
         steps = ", ".join(
@@ -199,7 +201,7 @@ class PipelineBuilder:
         if _env is not None:
             try:
                 val = int(_env)
-                self._cache_maxsize = val
+                self._cache_maxsize = 0 if val < 0 else val
             except ValueError:
                 pass
 
@@ -216,7 +218,10 @@ class PipelineBuilder:
 
     # オプション: 単層キャッシュの上限を設定（None で無制限・従来互換）
     def cache(self, *, maxsize: int | None) -> "PipelineBuilder":
-        self._cache_maxsize = maxsize
+        if maxsize is not None and maxsize < 0:
+            self._cache_maxsize = 0
+        else:
+            self._cache_maxsize = maxsize
         return self
 
     # オプション: 厳格検証を有効化（ビルド時にパラメータ名を検査）

@@ -81,8 +81,3 @@ class BaseRegistry(ABC):
     def registry(self) -> dict[str, Any]:
         """レジストリの読み取り専用アクセス"""
         return self._registry.copy()
-
-    # 後方互換のためのリネーム機能は提供しない（明示的な再登録を推奨）
-
-
-# 以前は CacheableRegistry を提供していたが、現在は未使用のため削除。

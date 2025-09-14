@@ -17,17 +17,21 @@
   - すべての変換は純関数（新しい Geometry を返す）。`digest: bytes` により内容指紋を保持（キャッシュ鍵）。
   - 不変条件: `offsets[0]==0` かつ `offsets[-1]==len(coords)`。i 本目の線は `coords[offsets[i]:offsets[i+1]]`。
   - 2D 入力は Z=0 で補完し常に (N,3) へ正規化。空集合は `coords.shape==(0,3)`, `offsets=[0]`。
+  - `as_arrays(copy=False)` は読み取り専用ビューを返す（digest/キャッシュ整合性を維持）。
+    書き込みが必要な場合は `copy=True` を使用する。
 - ファクトリとレジストリ
   - Shapes: `shapes/` + `@shape` で登録、`G.<name>(...) -> Geometry` を提供。
   - Effects: `effects/` + `@effect` で登録、`E.pipeline.<name>(...)` でチェーン可能。
-  - 正規化キー（Camel→snake, lower）で一貫性を担保（`common/base_registry.py`）。
+  - 正規化キー（Camel→snake, lower, `-`→`_`）で一貫性を担保（`common/base_registry.py`）。
   - Effects はオプションで `__param_meta__` を公開でき、`validate_spec` が型/範囲/choices を追加検証。
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
   - 厳格モード（既定 `strict=True`）で未知パラメータを検出。`to_spec/from_spec/validate_spec` でシリアライズと検証。
-  - LRU 風の単層キャッシュ（インスタンス内）: 入力 `Geometry.digest` × パイプライン定義ハッシュでヒット判定。
+  - 単層 LRU キャッシュ（インスタンス内）: 入力 `Geometry.digest` × パイプライン定義ハッシュでヒット判定。
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
-    - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能。
+    - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
+    - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
+  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「正規化パラメータ（`common.param_utils.params_to_tuple`）の blake2b-64」を積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
 
 ## データフロー（概略）

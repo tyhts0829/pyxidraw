@@ -44,15 +44,14 @@ G - 形状ファクトリ（高レベル API エントリ）
 
 from __future__ import annotations
 
-import hashlib
 from functools import lru_cache
-from typing import Any, Callable, Iterable, cast
+from typing import Any, Callable, Iterable
 
-import numpy as np
 from numpy.typing import NDArray
 
 # レジストリ登録の副作用を発火させるため、shapes パッケージを 1 度だけ import すれば十分
 import shapes  # noqa: F401  (登録目的の副作用)
+from common.param_utils import params_to_tuple as _params_to_tuple
 from engine.core.geometry import Geometry
 
 from .shape_registry import get_shape_generator, list_registered_shapes
@@ -133,81 +132,8 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
 
     @staticmethod
     def _params_to_tuple(**params: object) -> ParamsTuple:
-        """パラメータ辞書を「順序安定・ハッシュ可能」なタプルへ正規化。
-
-        - dict は key でソートし `(key, value)` のタプル列に。
-        - list/tuple は要素ごとに再帰変換。
-        - NumPy 配列は `("nd", shape, dtype, blake2b-128 digest)` という短い指紋に変換。
-          `dtype` と `shape` を含めるため、単なるフラット化による情報欠落を避けられる。
-
-        注意:
-        - オブジェクト配列（`dtype=object`）は `tolist()` で中身を列挙して再帰的に正規化する。
-        - 未対応/非ハッシュ可能オブジェクトは安全側フォールバックで
-          `('obj', <qualified_class_name>, id(obj))` のタプルに変換する（同一インスタンスのみヒット）。
-        """
-
-        # ネストした値も含めて再帰的にソート・変換
-        def _key_for_sorting_object_key(k: object) -> str:
-            return f"{type(k).__name__}:{repr(k)}"
-
-        def _sort_key_item(kv: tuple[str, object]) -> str:
-            return _key_for_sorting_object_key(kv[0])
-
-        def make_hashable(obj: object) -> object:
-            # dict: キー型が混在しても安定比較できるよう型名+reprでソート
-            if isinstance(obj, dict):
-                items_iter = cast(Iterable[tuple[object, object]], obj.items())
-                items = sorted(items_iter, key=lambda kv: _key_for_sorting_object_key(kv[0]))
-                return tuple((k, make_hashable(v)) for k, v in items)
-
-            # シーケンス: 再帰的にタプル化
-            if isinstance(obj, (list, tuple)):
-                return tuple(make_hashable(item) for item in obj)
-
-            # NumPy スカラーは Python 組込みへ
-            if isinstance(obj, np.generic):
-                return obj.item()
-
-            # NumPy 配列: dtype/shape を含む指紋化で巨大キー化と衝突を回避
-            if isinstance(obj, np.ndarray):
-                if obj.dtype.kind == "O":
-                    # オブジェクト配列は素直に中身を列挙
-                    return ("nd_obj", tuple(make_hashable(x) for x in obj.tolist()))
-                arr = np.ascontiguousarray(obj)
-                h = hashlib.blake2b(digest_size=16)
-                h.update(arr.view(np.uint8).tobytes())
-                return ("nd", arr.shape, str(arr.dtype), h.digest())
-
-            # set/frozenset: 並びに依らず安定化
-            if isinstance(obj, (set, frozenset)):
-                return (
-                    "set",
-                    tuple(
-                        sorted(
-                            (make_hashable(x) for x in obj),
-                            key=_key_for_sorting_object_key,
-                        )
-                    ),
-                )
-
-            # bytes/bytearray
-            if isinstance(obj, (bytes, bytearray)):
-                return bytes(obj)
-
-            # ハッシュ可能であればそのまま返す
-            try:
-                hash(obj)  # type: ignore[arg-type]
-                return obj
-            except Exception:
-                # 非ハッシュ可能（例: ユーザ定義の __hash__=None）の場合でも
-                # lru_cache のキー化で落ちないように安全側フォールバック。
-                # 内容同値性よりも「プロセス内で同一インスタンスを同一視」を優先する。
-                cls_name = getattr(obj, "__class__", type(obj)).__qualname__
-                return ("obj", cls_name, id(obj))
-
-        params_dict: dict[str, object] = dict(params)
-        items = sorted(params_dict.items(), key=_sort_key_item)
-        return tuple((k, make_hashable(v)) for k, v in items)
+        """パラメータ辞書を「順序安定・ハッシュ可能」なタプルへ正規化（共通実装）。"""
+        return _params_to_tuple(dict(params))
 
     # === レジストリベース形状生成（メタクラスによる動的アクセス） ===
 

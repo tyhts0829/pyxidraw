@@ -1,11 +1,14 @@
 """
-シェイプレジストリ - 統一されたレジストリシステム
-effects/ と対称性を保った @shape デコレータの実装。
+シェイプレジストリ — 統一レジストリと型安全な登録
 
-改善点:
-- 名前省略可: `@shape` や `@shape()` でクラス名から自動推論（例: `Sphere` -> `sphere`）。
-  エイリアスはサポートしません（明示名のみ）。
+概要:
+- effects と対称の API（`@shape` / `get_shape` / `list_shapes` / `is_shape_registered`）。
+- 登録対象は `BaseShape` 派生クラスに限定（誤登録を早期検出）。
+- デコレータは名前省略可（`@shape` / `@shape()`）。
+  エイリアスはサポートしない（明示名のみ）。
 """
+
+from typing import Any, Mapping
 
 from common.base_registry import BaseRegistry
 
@@ -16,18 +19,35 @@ _shape_registry = BaseRegistry()
 
 
 def shape(arg: str | type[BaseShape] | None = None):  # type: ignore[name-defined]
-    """シェイプをレジストリに登録するデコレータ。
+    """シェイプをレジストリに登録するデコレータ（型安全）。
 
     使い方:
-    - 省略名で登録: `@shape` または `@shape()` -> クラス名から推論（`Sphere` -> `sphere`）
-    - 明示名で登録: `@shape("sphere")` も可能（必要な場合のみ）
+    - 省略名で登録: `@shape` または `@shape()` -> クラス名から推論（`Sphere` -> `sphere`）。
+    - 明示名で登録: `@shape("sphere")`。
+
+    制約:
+    - 登録できるのは `BaseShape` の派生クラスのみ。
     """
-    # @shape のように引数なしで使われたケース
-    if callable(arg):
-        return _shape_registry.register(None)(arg)  # type: ignore[arg-type]
-    # @shape() / @shape("name") のケース
+
+    def _register_checked(obj: Any) -> Any:
+        if not isinstance(obj, type) or not issubclass(obj, BaseShape):
+            raise TypeError("@shape は BaseShape 派生クラスのみ登録可能です")
+        # BaseRegistry に登録（キー正規化は内部で実施）
+        return _shape_registry.register(None)(obj)
+
+    # 直付け (@shape) の場合
+    if isinstance(arg, type):
+        return _register_checked(arg)
+
+    # 引数付き (@shape() / @shape("name")) の場合
     name = arg if isinstance(arg, str) else None
-    return _shape_registry.register(name)
+
+    def _decorator(obj: Any) -> Any:
+        if not isinstance(obj, type) or not issubclass(obj, BaseShape):
+            raise TypeError("@shape は BaseShape 派生クラスのみ登録可能です")
+        return _shape_registry.register(name)(obj)
+
+    return _decorator
 
 
 def get_shape(name: str) -> type[BaseShape]:
@@ -51,7 +71,7 @@ def list_shapes() -> list[str]:
     返り値:
         シェイプ名のリスト
     """
-    return _shape_registry.list_all()
+    return sorted(_shape_registry.list_all())
 
 
 def is_shape_registered(name: str) -> bool:
@@ -71,10 +91,11 @@ def clear_registry():
     _shape_registry.clear()
 
 
-def get_registry() -> BaseRegistry:
-    """レジストリインスタンスを取得（ファクトリクラス用）。
+def unregister(name: str) -> None:
+    """名前を指定して登録を解除（存在しない場合は無視）。"""
+    _shape_registry.unregister(name)
 
-    返り値:
-        レジストリインスタンス。
-    """
-    return _shape_registry
+
+def get_registry() -> Mapping[str, Any]:
+    """読み取り専用ビューとしてレジストリ辞書を返す。"""
+    return _shape_registry.registry

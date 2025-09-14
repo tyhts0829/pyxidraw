@@ -167,14 +167,25 @@ class Geometry:
         """内部配列を返すユーティリティ。
 
         引数:
-            copy: True の場合はディープコピーを返す。
+            copy: True の場合はディープコピーを返す。False の場合は読み取り専用ビューを返す。
 
         返り値:
             `(coords, offsets)` のタプル。
+
+        注意:
+            - `copy=False` は読み取り専用ビュー（`setflags(write=False)`）を返す。
+              これにより外部からの誤った就地書き換えによる `digest` 不整合や
+              キャッシュキーの破壊を防ぐ。
+            - 書き込みが必要な場合は `copy=True` を指定すること。
         """
         if copy:
             return self.coords.copy(), self.offsets.copy()
-        return self.coords, self.offsets
+        # 読み取り専用ビューを返す（元配列の可変性には影響しない）
+        coords_view = self.coords.view()
+        offsets_view = self.offsets.view()
+        coords_view.setflags(write=False)
+        offsets_view.setflags(write=False)
+        return coords_view, offsets_view
 
     @property
     def is_empty(self) -> bool:
