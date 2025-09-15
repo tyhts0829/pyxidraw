@@ -3,7 +3,7 @@
 
 from typing import Any, Protocol, TypedDict, TypeAlias
 from engine.core.geometry import Geometry as Geometry
-from api.pipeline import Pipeline as Pipeline
+from api.effects import Pipeline as Pipeline
 
 JSONScalar: TypeAlias = int | float | str | bool | None
 JSONLike: TypeAlias = JSONScalar | list['JSONLike'] | dict[str, 'JSONLike']
@@ -272,17 +272,17 @@ class _Effects(Protocol):
     @property
     def pipeline(self) -> _PipelineBuilder: ...
 
-from .shape_factory import ShapeFactory as ShapeFactory
+from .shapes import ShapesAPI as ShapesAPI
 
 G: _GShapes
 E: _Effects
 from shapes.registry import shape as shape
 from effects.registry import effect as effect
-from .runner import run_sketch as run_sketch, run_sketch as run
+from .sketch import run_sketch as run_sketch, run_sketch as run
 def to_spec(pipeline: Pipeline) -> PipelineSpec: ...
 def from_spec(spec: PipelineSpec) -> Pipeline: ...
 def validate_spec(spec: PipelineSpec) -> None: ...
 
 __all__ = [
-    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapeFactory', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',
+    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',
 ]

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from api import E
-from api.pipeline import Pipeline, _is_json_like, from_spec, to_spec, validate_spec
+from api.effects import Pipeline, _is_json_like, from_spec, to_spec, validate_spec
 from engine.core.geometry import Geometry
 
 

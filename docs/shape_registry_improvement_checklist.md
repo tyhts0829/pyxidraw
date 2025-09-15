@@ -1,4 +1,9 @@
 ［Legacy/Archived as of v6.0］
+（注意）本ドキュメントは旧 API/旧ファイル名を前提にしたレビュー用メモです。
+現行の名称対応:
+- `api/shape_factory.py` → `api/shapes.py`
+- `ShapeFactory` → `ShapesAPI`
+- 実レジストリ参照は `shapes/registry.py`
 
 本チェックリストは BaseShape 前提の旧 API 用です。v6.0 以降は shape は関数ベースに統一されました。
 現行の設計/実装に合わせたレビューは `docs/proposals/shape_function_only_migration.md` を参照してください。
@@ -18,7 +23,7 @@ Read shape_registry.py, registry.py
 Search 公開 API|shape_registry|shape factory|shape_registry.py|薄く委譲|再エクスポート in architecture.md
 Read architecture.md, **init**.py
 Search shape_registry
-Read shape_factory.py, base.py, test_shape_registry_extra.py, gen_g_stubs.py, **init**.py
+Read shapes.py, base.py, test_shape_registry_extra.py, gen_g_stubs.py, **init**.py
 
 > 総評
 

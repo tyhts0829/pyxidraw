@@ -32,7 +32,7 @@
 - 単位はミリメートル[mm]が既定。`util.constants.CANVAS_SIZES` の定義を基にキャンバスの実寸を決める。
 - ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`。つまり 1mm は `render_scale` ピクセルに相当。
 - 座標系はスクリーン座標: 原点はキャンバス左上、+X 右、+Y 下、Z は奥行き（深度テストは既定で未使用）。
-  - ライン描画は正射影。`api.runner` で ModernGL の射影行列を設定しており、mm→NDC 変換を一意に定義。
+  - ライン描画は正射影。`api.sketch` で ModernGL の射影行列を設定しており、mm→NDC 変換を一意に定義。
 
 ## 中核コンセプト
 - Geometry（統一表現）
@@ -79,9 +79,9 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 ## 主なモジュール
 - `api/`
   - `__init__.py`: 公開面（`G`, `E`, `run`/`run_sketch`, `Geometry`）。
-  - `pipeline.py`: `Pipeline`, `PipelineBuilder`, 仕様検証（`validate_spec`）。
-  - `shape_factory.py`: 形状ファクトリ。
-  - `runner.py`: 実行エンジンの束ね（ModernGL/Pyglet、MIDI、ワーカー、HUD）。
+  - `effects.py`: `Pipeline`, `PipelineBuilder`, 仕様検証（`validate_spec`）。
+  - `shapes.py`: 形状 API。
+  - `sketch.py`: 実行エンジンの束ね（ModernGL/Pyglet、MIDI、ワーカー、HUD）。
 - `engine/`
   - `core/geometry.py`: 統一 `Geometry`、基本変換、`digest`。
   - `core/frame_clock.py`, `core/tickable.py`: フレーム調停と更新インターフェース。
@@ -156,7 +156,7 @@ Tips:
 ## 座標変換と投影（詳細）
 - 物理単位は mm。ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`。
 - 投影は正射影（擬似 2D）。Y 軸はスクリーン座標に合わせて上が負になる変換を適用。
-  - `api.runner.run_sketch()` が ModernGL 用の 4x4 行列を構築し、`engine.render.renderer.LineRenderer` に渡す。
+  - `api.sketch.run_sketch()` が ModernGL 用の 4x4 行列を構築し、`engine.render.renderer.LineRenderer` に渡す。
   - 実装行列（転置後にシェーダへ書き込み）:
     ```python
     proj = [[ 2/w,   0,   0, -1],
@@ -224,7 +224,7 @@ Tips:
   - `@shape`/`@shape()`/`@shape("name")` で登録。キーは Camel→snake 小文字化で正規化。
   - 形状は関数として `@shape` で登録し、戻り値は `Geometry` または `Geometry.from_lines()` 可能な
     「ポリライン列（list/ndarray の列）」とする。旧形式 `(coords, offsets)` は非サポート。
-  - 高水準 API `G` は `ShapeFactory` のインスタンス。`G.polygon(...) -> Geometry` のように関数的に呼び出す。
+  - 高水準 API `G` は `ShapesAPI` のインスタンス。`G.polygon(...) -> Geometry` のように関数的に呼び出す。
 - Effects（`effects/registry.py`）
   - `@effect` で `def effect_name(g: Geometry, *, ...) -> Geometry` な関数を登録。
   - パラメータメタ `__param_meta__`（任意）を公開すれば `validate_spec()` が型/範囲/選択肢を追加検証。
@@ -336,7 +336,7 @@ Tips:
 
 ## スレッド/プロセス安全性
 - `Pipeline` の内部キャッシュはインスタンスローカル。複数スレッドから共有する場合は外部ロックで保護するか、スレッドごとに別インスタンスを使う。
-- `ShapeFactory` の LRU は CPython 実装のロックで基本安全。`generate()` は純関数であること。
+- `ShapesAPI` の LRU は CPython 実装のロックで基本安全。`generate()` は純関数であること。
 - `SwapBuffer` はロック/イベントでスレッドセーフ。`try_swap()` は非ブロッキング。
 
 ## 既知の制限/非目標（補足）
@@ -345,7 +345,7 @@ Tips:
 - ワーカは Python マルチプロセスのため、起動コストや共有メモリの制約がある。短時間のスケッチでは `workers=1` も検討。
 
 ## 参考: 主要モジュールの対応表
-- API: `src/api/__init__.py`, `pipeline.py`, `runner.py`, `shape_factory.py`
+- API: `src/api/__init__.py`, `effects.py`, `sketch.py`, `shapes.py`
 - Engine/Core: `core/geometry.py`, `core/frame_clock.py`, `core/render_window.py`, `core/tickable.py`
 - Engine/Pipeline: `pipeline/worker.py`, `pipeline/receiver.py`, `pipeline/buffer.py`
 - Engine/Render: `render/renderer.py`, `render/line_mesh.py`, `render/shader.py`

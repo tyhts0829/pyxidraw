@@ -20,7 +20,7 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         return float(cc.get(i, default))
 
     t = t * c(9, 1.0) * 10
-    t = 10  # メモリリーク確認のために固定値を使用
+    # t = 10  # メモリリーク確認のために固定値を使用
     sphere = G.sphere(subdivisions=c(1, 0.2), sphere_type=c(2, 0.0))
     pipe = (
         E.pipeline.rotate(

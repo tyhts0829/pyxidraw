@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
-from api.runner import run_sketch
+from api.sketch import run_sketch
 from engine.core.geometry import Geometry
 
 

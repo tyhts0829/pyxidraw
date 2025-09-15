@@ -22,12 +22,12 @@ from shapes.registry import (
     shape as shape,
 )  # 公開唯一経路（api.shape）。shape_registry では再輸出しない。
 
-from .pipeline import E, from_spec, to_spec, validate_spec
-from .runner import run_sketch as run
-from .runner import run_sketch as run_sketch
+from .effects import E, from_spec, to_spec, validate_spec
 
 # 主要API
-from .shape_factory import G, ShapeFactory
+from .shapes import G, ShapesAPI
+from .sketch import run_sketch as run
+from .sketch import run_sketch as run_sketch
 
 __all__ = [
     # メインAPI
@@ -38,7 +38,7 @@ __all__ = [
     "run_sketch",  # 実行（詳細指定）
     "run",  # 実行（エイリアス、簡易）
     # クラス（高度な使用）
-    "ShapeFactory",
+    "ShapesAPI",
     "Geometry",
     # シリアライズ補助
     "to_spec",

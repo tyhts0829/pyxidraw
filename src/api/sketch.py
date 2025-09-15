@@ -1,5 +1,5 @@
 """
-api.runner — スケッチ実行・描画ランナー（リアルタイム UI + MIDI 入力）
+api.sketch — スケッチ実行・描画ランナー（リアルタイム UI + MIDI 入力）
 
 本モジュールは、ユーザ定義の描画コールバック（`user_draw`）を中核に、
 ウィンドウ生成・レンダリング・バックグラウンド計算（ワーカー）・MIDI 入力・
@@ -51,7 +51,7 @@ api.runner — スケッチ実行・描画ランナー（リアルタイム UI +
 - MIDI は `Tickable` として `FrameClock` に統合され、`snapshot()` により CC 値を取得。
 
 例（最小スケッチ）:
-    from api.runner import run_sketch
+    from api.sketch import run_sketch
     import numpy as np
     from engine.core.geometry import Geometry
 

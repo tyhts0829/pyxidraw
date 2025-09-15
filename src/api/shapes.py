@@ -1,5 +1,5 @@
 """
-G - 形状ファクトリ（高レベル API エントリ）
+api.shapes — 形状生成の入口（高レベル API）
 
 Notes
 -----
@@ -19,8 +19,8 @@ Design
 - 単一入口: 形状生成は `G` が一手に引き受ける。
 - 責務境界: 生成は `G`/各 shape 関数、変換は `Geometry`、加工は `E.pipeline`。
 - キャッシュ: 形状生成結果の LRU（maxsize=128）は本モジュールに集約。
-- 動的ディスパッチ: メタクラス `ShapeFactoryMeta` とインスタンス `__getattr__` の双方で
-  `G.sphere(...)`/`ShapeFactory.sphere(...)` をサポート。
+- 動的ディスパッチ: メタクラス `ShapesAPIMeta` とインスタンス `__getattr__` の双方で
+  `G.sphere(...)`/`ShapesAPI.sphere(...)` をサポート。
 - 再現性と性能: `_params_to_tuple()` でパラメータを決定的・ハッシュ可能に正規化し、
   プロセス内 LRU を適用。
 - 例外方針: 未登録名は `AttributeError`。生成器側の失敗は各シェイプが責任。
@@ -60,13 +60,13 @@ from shapes.registry import list_shapes as list_registered_shapes
 ParamsTuple = tuple[tuple[str, Any], ...]
 
 
-class ShapeFactoryMeta(type):
-    """ShapeFactory のメタクラス。
+class ShapesAPIMeta(type):
+    """ShapesAPI のメタクラス。
 
     目的:
-    - クラスレベル（`ShapeFactory.sphere(...)` のような呼び出し）でも動的属性を解決し、
+    - クラスレベル（`ShapesAPI.sphere(...)` のような呼び出し）でも動的属性を解決し、
       レジストリにあるシェイプ名を関数として露出する。
-    - 返す関数は `ShapeFactory._cached_shape(...)` を経由し、LRU キャッシュの恩恵を受ける。
+    - 返す関数は `ShapesAPI._cached_shape(...)` を経由し、LRU キャッシュの恩恵を受ける。
     """
 
     def __getattr__(cls, name: str) -> Callable[..., Geometry]:
@@ -83,7 +83,7 @@ class ShapeFactoryMeta(type):
             # 動的にクラスメソッドを生成し、クラス属性としてメモ化する。
             # 注意（重要）:
             # - この関数は staticmethod としてクラスにバインドする。これによりインスタンスから
-            #   参照しても `self` が暗黙に注入されず、`G.sphere(...)`/`ShapeFactory.sphere(...)`
+            #   参照しても `self` が暗黙に注入されず、`G.sphere(...)`/`ShapesAPI.sphere(...)`
             #   の双方で同一実装を安全に共有できる。
             # - ランタイムでの登録解除に対応するため、呼び出し時に `is_shape_registered(name)` を
             #   検査するガードを設置。未登録ならクラス属性を削除して `AttributeError` を投げ、
@@ -114,8 +114,8 @@ class ShapeFactoryMeta(type):
             raise AttributeError(f"'{cls.__name__}' has no attribute '{name}'")
 
 
-class ShapeFactory(metaclass=ShapeFactoryMeta):
-    """高性能キャッシュ付き形状ファクトリ（`G` の実体）。
+class ShapesAPI(metaclass=ShapesAPIMeta):
+    """高性能キャッシュ付き形状 API（`G` の実体）。
 
     責務:
     - 形状名→生成関数の動的ディスパッチ
@@ -220,4 +220,4 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
 
 
 # シングルトンインスタンス（`from api import G` で公開）
-G = ShapeFactory()
+G = ShapesAPI()

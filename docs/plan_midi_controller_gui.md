@@ -40,9 +40,9 @@
   - `MidiControllersPanel`（`Tickable` + `draw()` 実装）。
   - 受け取り: `device_specs: list[DeviceSpec]`, `cc_snapshot: Callable[[], Mapping[int,float]]`。
   - 機能: `tick()` で `cc = cc_snapshot()` を取得 → 各 `ControllerUI.apply_cc(cc)` を呼ぶ。
-  - 表示切替: 既定オフ、`U` キーでトグル（`api.runner` でバインド）。
+  - 表示切替: 既定オフ、`U` キーでトグル（`api.sketch` でバインド）。
 
-- `api/runner.py`（統合）
+- `api/sketch.py`（統合）
   - MIDI 構築後に `device_specs` を抽出して `MidiControllersPanel` を生成。
   - `FrameClock` へ `panel` を追加し、`rendering_window.add_draw_callback(panel.draw)` を登録。
   - UI は I/O 型を import しない。`device_specs` はランナー側で `engine.io.manager` から最小情報を取り出して渡す。
@@ -81,7 +81,7 @@
 - [ ] 3. デバイス別 UI 実装（`tx6`, `fb8n`, `fb16n`, `grid`, `arc`）
 - [ ] 4. レジストリ実装と初期登録（`controller_registry.py`）
 - [ ] 5. `MidiControllersPanel` 実装（`tick/draw/toggle`）
-- [ ] 6. `api/runner.py` 統合（デバイス検出→`DeviceSpec`抽出→パネル生成→描画登録）
+- [ ] 6. `api/sketch.py` 統合（デバイス検出→`DeviceSpec`抽出→パネル生成→描画登録）
 - [ ] 7. 入力系イベント登録（`U` キーで表示切替）
 - [ ] 8. 軽量スモークテスト（MIDI 無し/有りでエラー無）
 - [ ] 9. ドキュメント更新（`architecture.md` 差分同期、`README.md` 使い方に追記）
@@ -124,7 +124,7 @@
   - `src/engine/ui/controller_registry.py`
   - `src/engine/ui/midi_panel.py`
 - 変更
-  - `src/api/runner.py`（統合点の最小変更）
+- `src/api/sketch.py`（統合点の最小変更）
   - `architecture.md`（導入後に更新）
 
 ---
@@ -156,4 +156,3 @@
 
 更新履歴
 - v0.1 初稿（計画・チェックリスト）
-

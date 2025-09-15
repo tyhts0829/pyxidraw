@@ -1,5 +1,5 @@
 """
-E.pipeline — パイプライン実行モジュール（Effects オーケストレーター）
+api.effects — パイプライン実行モジュール（Effects オーケストレーター）
 
 本モジュールは、登録済みエフェクト群（`effects.registry`）を直列に適用する
 「パイプライン」を提供する。入力は唯一の幾何表現 `Geometry`（engine.core.geometry）で、
@@ -15,7 +15,7 @@ E.pipeline — パイプライン実行モジュール（Effects オーケスト
   - 動的属性でエフェクト名を受け取り、`adder(**params)` でステップを追加する仕組み。
   - `.cache(maxsize=...)` で単層キャッシュの上限を設定（`None`=無制限、`0`=無効）。
   - `.strict(enabled=True)` でビルド時の厳格検証を有効化（未知パラメータを検出して `TypeError`）。
-- `Step`: 1 ステップの定義（`name` と `params`）。
+- `PipelineStep`: 1 ステップの定義（`name` と `params`）。
 - `E`: 利用者向けシングルトン（`from api import E`）。`E.pipeline` が `PipelineBuilder` を返す。
 - `validate_spec(spec)`: 仕様配列を検証するユーティリティ（不正時に `TypeError/KeyError`）。
 
@@ -113,13 +113,13 @@ def _params_digest(params: dict[str, Any]) -> bytes:
 
 
 @dataclass(frozen=True)
-class Step:
+class PipelineStep:
     name: str
     params: dict[str, Any]
 
 
 class Pipeline:
-    def __init__(self, steps: Sequence[Step], *, cache_maxsize: int | None = None):
+    def __init__(self, steps: Sequence[PipelineStep], *, cache_maxsize: int | None = None):
         self._steps = list(steps)
         # LRU 互換の単層キャッシュ（maxsize=None なら従来通り無制限）
         self._cache_maxsize: int | None = cache_maxsize
@@ -186,13 +186,15 @@ class Pipeline:
     def from_spec(spec: Sequence[dict[str, Any]]) -> "Pipeline":
         """仕様から `Pipeline` を生成。不正な形状/エフェクト名の場合は例外を送出。"""
         validate_spec(spec)
-        steps: list[Step] = [Step(str(entry["name"]), dict(entry.get("params", {}))) for entry in spec]  # type: ignore[arg-type]
+        steps: list[PipelineStep] = [
+            PipelineStep(str(entry["name"]), dict(entry.get("params", {}))) for entry in spec  # type: ignore[arg-type]
+        ]
         return Pipeline(steps)
 
 
 class PipelineBuilder:
     def __init__(self):
-        self._steps: list[Step] = []
+        self._steps: list[PipelineStep] = []
         # 既定サイズは環境変数から上書き可能
         self._cache_maxsize: int | None = None
         # クリーン化方針: 既定で厳格検証を有効化
@@ -206,7 +208,7 @@ class PipelineBuilder:
                 pass
 
     def _add(self, name: str, params: dict[str, Any]) -> "PipelineBuilder":
-        self._steps.append(Step(name, params))
+        self._steps.append(PipelineStep(name, params))
         return self
 
     def __getattr__(self, name: str):
@@ -268,14 +270,14 @@ class PipelineBuilder:
         return self.build()(g)
 
 
-class Effects:
+class EffectsAPI:
     @property
     def pipeline(self) -> PipelineBuilder:
         return PipelineBuilder()
 
 
-# シングルトンインスタンス（従来の `from api import E` に対応）
-E = Effects()
+# シングルトンインスタンス（`from api import E`）
+E = EffectsAPI()
 
 
 # Helper functions (optional API)

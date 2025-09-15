@@ -5,15 +5,15 @@
 - `G`（形状ファクトリ）、`E.pipeline`（エフェクトパイプライン）、`run`/`run_sketch` の薄いファサードを提供。
 
 外部とのつながり（依存関係）
-- 依存可: `engine.core.Geometry`、`effects.registry`、`shapes.registry`、`api.runner`。
+- 依存可: `engine.core.Geometry`、`effects.registry`、`shapes.registry`、`api.sketch`。
 - 依存原則: `api/*` から `engine/*` への依存は最小限（公開 API の薄いファサードに限定）。
-- 例外（runner.py のみ許可）:
-  - `api/runner.py` は「実行オーケストレータ」として、以下のサブシステムへ遅延 import で依存してよい。
+- 例外（sketch.py のみ許可）:
+  - `api/sketch.py` は「実行オーケストレータ」として、以下のサブシステムへ遅延 import で依存してよい。
     - `engine.render/*`、`engine.pipeline/*`、`engine.ui/*`、`engine.io/*`、`engine.monitor/*`
   - 条件:
     - 依存は関数内の遅延 import とし、モジュールトップで import しない（ヘッドレス/未導入環境の互換確保）。
     - `engine/*` 側から `api/*` を参照しない（依存の一方向性を維持）。
-    - `api/runner.py` は `engine/*` の詳細型を再エクスポートしない（公開 API の表面を汚さない）。
+    - `api/sketch.py` は `engine/*` の詳細型を再エクスポートしない（公開 API の表面を汚さない）。
   - 上記以外の `api/*` モジュールは従来どおり `engine.render/*` および `engine.pipeline/*` への直接依存を禁止。
 
 方針/Do

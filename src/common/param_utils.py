@@ -1,7 +1,7 @@
 """
 0–1 正規化パラメータの共通変換ユーティリティ（提案5）
 
-および、キャッシュ鍵向けのパラメータ正規化（ShapeFactory / Pipeline 共有）。
+および、キャッシュ鍵向けのパラメータ正規化（ShapesAPI / Pipeline 共有）。
 """
 
 from __future__ import annotations

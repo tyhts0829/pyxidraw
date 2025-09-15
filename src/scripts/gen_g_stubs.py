@@ -454,7 +454,7 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     lines: list[str] = [header]
     lines.append("from typing import Any, Protocol, TypedDict, TypeAlias\n")
     lines.append("from engine.core.geometry import Geometry as Geometry\n")
-    lines.append("from api.pipeline import Pipeline as Pipeline\n\n")
+    lines.append("from api.effects import Pipeline as Pipeline\n\n")
     # ---- 共有の Spec/JSON 型 ----
     lines.append("JSONScalar: TypeAlias = int | float | str | bool | None\n")
     lines.append("JSONLike: TypeAlias = JSONScalar | list['JSONLike'] | dict[str, 'JSONLike']\n\n")
@@ -519,14 +519,14 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     lines.append(proto_body)
 
     # 実行時 API の表面と整合する再エクスポート
-    lines.append("from .shape_factory import ShapeFactory as ShapeFactory\n")
+    lines.append("from .shapes import ShapesAPI as ShapesAPI\n")
     lines.append("\n")
     lines.append("G: _GShapes\n")
     lines.append("E: _Effects\n")
     # shape/effect デコレータは API ルートで公開
     lines.append("from shapes.registry import shape as shape\n")
     lines.append("from effects.registry import effect as effect\n")
-    lines.append("from .runner import run_sketch as run_sketch, run_sketch as run\n")
+    lines.append("from .sketch import run_sketch as run_sketch, run_sketch as run\n")
     # Pipeline Spec ヘルパ関数の厳密なシグネチャ
     lines.append("def to_spec(pipeline: Pipeline) -> PipelineSpec: ...\n")
     lines.append("def from_spec(spec: PipelineSpec) -> Pipeline: ...\n")
@@ -535,7 +535,7 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     # 実行時の `__all__` と整合させる
     lines.append(
         "__all__ = [\n"
-        "    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapeFactory', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',\n"
+        "    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',\n"
         "]\n"
     )
 

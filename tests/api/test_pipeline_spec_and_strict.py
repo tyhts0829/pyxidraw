@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from api import E
-from api.pipeline import validate_spec
+from api.effects import validate_spec
 
 
 def test_strict_unknown_param_raises() -> None:

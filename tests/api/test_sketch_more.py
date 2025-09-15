@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-from api.runner import run_sketch
+from api.sketch import run_sketch
 
 
 def _dummy_draw(t: float, cc):  # noqa: ANN001

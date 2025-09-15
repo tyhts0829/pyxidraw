@@ -17,7 +17,7 @@
 - `effects`/`shapes` はレジストリとデコレータで拡張一貫性あり。スタブ同期テストで公開面が守られている。
 
 ## 気になった点（混乱の芽）
-- `api/shape_factory.py` と `api/shape_registry.py` が役割近接で二重窓口に見える（利用者は `G` で十分）。
+- `api/shapes.py` と `shapes/registry.py` が役割近接で二重窓口に見える（利用者は `G` で十分）。
 - `common/` と `util/` の境界が名称だけだと直感しづらい（どちらも“共通”に見える）。
 - ルート直下の `previous_code/` が現行と混在（アーカイブであることが一見わかりにくい）。
 - `pyproject.toml` の `project.name` が `pyxidraw5` のまま（リポ名と不一致）。
@@ -32,7 +32,7 @@
 - [ ] `previous_code/` を `docs/attic/` へ移動し「過去コード置き場」と明記（履歴保持）。
       - Ask-first（破壊的移動）: 実施前に承認が必要。
 - [ ] `pyproject.toml` の `project.name` を現行に合わせて更新（例: `pyxidraw6`）。
-- [ ] `examples/` を新設し最小スケッチを配置（`api.runner` の導線を明確化）。
+- [ ] `examples/` を新設し最小スケッチを配置（`api.sketch` の導線を明確化）。
 
 ## 中期提案（任意・相談）
 - [ ] `engine/monitor` を `engine/ui` 直下へ論理統合（UI 系の探索コスト低減）。

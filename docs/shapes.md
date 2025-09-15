@@ -25,4 +25,4 @@
 - 形状は `@shape` で関数登録する（継承不要）。
 - 関数は副作用なし・決定的であること。
 - 2D 入力は Z=0 を付与して (N,3) に正規化すること。
-- キャッシュは `api.shape_factory.ShapeFactory`（`G`）に集約される。
+- キャッシュは `api.shapes.ShapesAPI`（`G`）に集約される。

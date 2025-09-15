@@ -37,7 +37,7 @@
 
 - 位置:
   - `src/engine/core/geometry.py::Geometry._compute_digest`（`h.update(c.tobytes())` 等）
-  - `src/api/pipeline.py::_geometry_hash`（digest 例外時フォールバックでも `tobytes()` 実行）
+  - `src/api/effects.py::_geometry_hash`（digest 例外時フォールバックでも `tobytes()` 実行）
 - 仕組みと症状適合:
   - `Pipeline.__call__` はキャッシュ有無に関係なく毎回 `key = (_geometry_hash(g), self._pipeline_key)` を先に計算するため、1 フレームにつき「入力 Geometry 全体」をバイト列化してハッシュ化する経路が必ず走る。
   - `PXD_DISABLE_GEOMETRY_DIGEST=1` を設定しても、`_geometry_hash` のフォールバックで `tobytes()` が発生（効果なし）。
@@ -97,7 +97,7 @@
 
 ### 5) 設計上のリスク: `Pipeline` 無制限キャッシュ
 
-- 位置: `src/api/pipeline.py`（`PipelineBuilder.cache(maxsize=...)` 未指定＝`None`＝無制限）
+- 位置: `src/api/effects.py`（`PipelineBuilder.cache(maxsize=...)` 未指定＝`None`＝無制限）
 - 備考:
   - `pipeline_key` にステップのパラメータが入るため、時間 `t_sec` が含まれるとフレーム毎にキーが変わりキャッシュが増殖しうる。
   - ただし main.py は毎フレーム `build()` で新しい `Pipeline` を作り、1 回適用して破棄するため、今回の直接原因になりにくい。
@@ -179,7 +179,7 @@
 - `src/shapes/sphere.py`（`_sphere_icosphere`）
 - `src/engine/render/renderer.py`（`_geometry_to_vertices_indices`）
 - `src/effects/displace.py`（一時配列）
-- `src/api/pipeline.py`（無制限キャッシュ）
+- `src/api/effects.py`（無制限キャッシュ）
 
 ---
 
