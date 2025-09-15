@@ -5,10 +5,10 @@ Notes
 -----
 - 利用者は `from api import G` として、`G.sphere(...)` のように関数的に呼び出して
   `Geometry` を生成する。
-- 実体はレジストリ（`shapes.registry`）に登録済みの `BaseShape` 派生クラスを動的に解決し、
-  インスタンス化→`generate(**params)` を呼ぶ薄いファサード。
+- 実体はレジストリ（`shapes.registry`）に登録済みの shape 関数を解決し、
+  `fn(**params)` を直接呼ぶ薄いファサード。
 - 生成結果は常に `engine.core.geometry.Geometry`（以下 Geometry）。Geometry 以外を返す
-  シェイプがある場合は「ポリライン列（list/ndarray の列）」のみ `Geometry.from_lines(...)`
+  シェイプ関数がある場合は「ポリライン列（list/ndarray の列）」のみ `Geometry.from_lines(...)`
   で受け付ける。旧タプル形式 `(coords, offsets)` は非サポート。
 - LRU は `functools.lru_cache(maxsize=128)` 固定。
 - CPython の `lru_cache` は内部ロックを持ち、並列呼び出しでも基本安全。
@@ -17,8 +17,8 @@ Notes
 Design
 ------
 - 単一入口: 形状生成は `G` が一手に引き受ける。
-- 責務境界: 生成は `G`/各 `Shape`、変換は `Geometry`、加工は `E.pipeline`。
-- キャッシュ: 形状生成結果の LRU（maxsize=128）は本モジュールに集約。`BaseShape` はキャッシュを持たない。
+- 責務境界: 生成は `G`/各 shape 関数、変換は `Geometry`、加工は `E.pipeline`。
+- キャッシュ: 形状生成結果の LRU（maxsize=128）は本モジュールに集約。
 - 動的ディスパッチ: メタクラス `ShapeFactoryMeta` とインスタンス `__getattr__` の双方で
   `G.sphere(...)`/`ShapeFactory.sphere(...)` をサポート。
 - 再現性と性能: `_params_to_tuple()` でパラメータを決定的・ハッシュ可能に正規化し、
@@ -51,9 +51,9 @@ from numpy.typing import NDArray
 import shapes  # noqa: F401  (登録目的の副作用)
 from common.param_utils import params_to_tuple as _params_to_tuple
 from engine.core.geometry import Geometry
+from shapes.registry import get_shape as get_shape_generator
 from shapes.registry import is_shape_registered  # ガード付きメモ化用（登録状態の即時反映）
-
-from .shape_registry import get_shape_generator, list_registered_shapes
+from shapes.registry import list_shapes as list_registered_shapes
 
 # 形状生成のキャッシュ鍵として用いる正規化済みパラメータ列。
 # プロジェクト規約に合わせ、値の型は `Any` を用いる。
@@ -78,7 +78,7 @@ class ShapeFactoryMeta(type):
         """
         try:
             # 存在確認のみ（実体の生成は _cached_shape に委譲）
-            shape_cls = get_shape_generator(name)
+            _ = get_shape_generator(name)
 
             # 動的にクラスメソッドを生成し、クラス属性としてメモ化する。
             # 注意（重要）:
@@ -102,7 +102,7 @@ class ShapeFactoryMeta(type):
             # ヘルプ/補完のためにメタデータを持たせる
             _shape_method_impl.__name__ = name
             _shape_method_impl.__qualname__ = f"{cls.__name__}.{name}"
-            _doc = getattr(getattr(shape_cls, "generate", None), "__doc__", None)
+            _doc = None  # 関数ベースへ移行後は docstring の転写は省略（任意で将来対応）
             if _doc:
                 _shape_method_impl.__doc__ = _doc
 
@@ -110,7 +110,7 @@ class ShapeFactoryMeta(type):
             setattr(cls, name, staticmethod(_shape_method_impl))
             # 実際に返すのはクラス属性（staticmethod 解決後の関数オブジェクト）
             return getattr(cls, name)
-        except ValueError:
+        except Exception:
             raise AttributeError(f"'{cls.__name__}' has no attribute '{name}'")
 
 
@@ -142,14 +142,13 @@ class ShapeFactory(metaclass=ShapeFactoryMeta):
 
         Note:
             - キャッシュキーは `(shape_name, params_tuple)`。
-            - 生成器（`BaseShape.generate`）が Geometry 以外の互換形式を返すケースを吸収する。
+            - 生成器（shape 関数）が Geometry 以外の互換形式を返すケースを吸収する。
         """
         params_dict = dict(params_tuple)
 
-        # レジストリから形状クラスを取得し、インスタンスを生成
-        shape_cls = get_shape_generator(shape_name)
-        instance = shape_cls()
-        data = instance.generate(**params_dict)
+        # レジストリから形状関数を取得して呼び出す
+        fn = get_shape_generator(shape_name)
+        data = fn(**params_dict)
         # 生成器は Geometry を返す前提
         if isinstance(data, Geometry):
             return data

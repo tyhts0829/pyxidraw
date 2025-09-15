@@ -27,22 +27,21 @@ def my_fx(g: Geometry) -> Geometry:
 ```python
 from __future__ import annotations
 
-from api import shape  # 唯一の公開経路（破壊的変更後）
-from shapes.base import BaseShape  # 現状は内部提供。将来 api 経由の再エクスポートを検討。
+from api import shape  # 唯一の公開経路
 from engine.core.geometry import Geometry
 
-@shape(name="MyStar")
-class MyStar(BaseShape):
-    def generate(self, *, points: int = 5, r: float = 50) -> Geometry:
-        import numpy as np
-        th = np.linspace(0, 2*np.pi, points*2, endpoint=False)
-        rr = np.where(np.arange(points*2) % 2 == 0, r, r*0.5)
-        xy = np.c_[rr*np.cos(th), rr*np.sin(th)]
-        return Geometry.from_lines([xy])
+@shape(name="my_star")
+def my_star(*, points: int = 5, r: float = 50, inner: float = 0.5) -> Geometry:
+    import numpy as np
+    n = points * 2
+    th = np.linspace(0, 2*np.pi, n, endpoint=False)
+    rr = np.where(np.arange(n) % 2 == 0, r, r*inner)
+    xy = np.c_[rr*np.cos(th), rr*np.sin(th)]
+    return Geometry.from_lines([xy])
 ```
 
-- 名前は省略可能（`@shape` / `@shape()`）。クラス名から推論されます（`CamelCase → snake_case`）。
-- 実体は `shapes.registry.shape` に委譲。
+- 名前は省略可能（`@shape` / `@shape()`）。関数名から推論されます（`snake_case`）。
+- 実体は `shapes.registry.shape` に委譲（api 経由で利用可能）。
 
 ## 3) 使い方（登録後）
 

@@ -16,138 +16,28 @@ PipelineSpec: TypeAlias = list[PipelineSpecStep]
 
 class _GShapes(Protocol):
     def asemic_glyph(self, *, region: tuple[float, float, float, float] = ..., smoothing_radius: float = ..., diacritic_probability: float = ..., diacritic_radius: float = ..., random_seed: float = ..., **_params: Any) -> Geometry:
-        """
-        アセミック文字形状を生成する。
-
-        引数:
-            region: (x0, y0, x1, y1) の領域
-            smoothing_radius: 補間用Bézier曲線の半径
-            diacritic_probability: 使用ノード付近にディアクリティカルを追加する確率
-            diacritic_radius: ディアクリティカル用のサイズ
-            random_seed: 乱数シード
-        """
         ...
     def attractor(self, *, attractor_type: str = ..., points: int = ..., dt: float = ..., scale: float = ..., **_params: Any) -> Geometry:
-        """
-        各種アトラクタの軌跡を生成する。
-
-        引数:
-            attractor_type: アトラクタ種別（"lorenz"/"rossler"/"aizawa"/"three_scroll"/"dejong"）
-            points: 生成するステップ数（頂点数）
-            dt: 数値積分の時間刻み
-            scale: 出力スケール係数
-            **_params: 個別アトラクタへ渡す追加パラメータ
-        """
         ...
     def capsule(self, *, radius: float = ..., height: float = ..., segments: int = ..., latitude_segments: int = ..., **_params: Any) -> Geometry:
-        """
-        カプセル形状を生成する。
-
-        引数:
-            radius: 半球の半径
-            height: 円柱部分の高さ
-            segments: 経度方向のセグメント数（周方向の分割数）
-            latitude_segments: 緯度方向のセグメント数（半球の分割数）
-            **_params: 追加パラメータ（無視される）
-        """
         ...
     def cone(self, *, radius: float = ..., height: float = ..., segments: int = ..., **_params: Any) -> Geometry:
-        """
-        円錐を生成します。
-
-        引数:
-            radius: 底面の半径
-            height: 高さ
-            segments: 周方向の分割数
-            **_params: 追加パラメータ（未使用）
-        """
         ...
     def cylinder(self, *, radius: float = ..., height: float = ..., segments: int = ..., **_params: Any) -> Geometry:
-        """
-        円柱を生成します。
-
-        引数:
-            radius: 半径
-            height: 高さ
-            segments: 周方向の分割数
-            **_params: 追加パラメータ（未使用）
-        """
         ...
     def grid(self, *, subdivisions: tuple[float, float] = ..., **_params: Any) -> Geometry:
-        """
-        1x1 の正方形グリッドを生成します。
-
-        引数:
-            subdivisions: (x方向の分割, y方向の分割) を 0.0–1.0 浮動小数で指定
-            **_params: 追加パラメータ（未使用）
-        """
         ...
     def lissajous(self, *, freq_x: float = ..., freq_y: float = ..., freq_z: float = ..., phase: float = ..., phase_y: float = ..., phase_z: float = ..., points: int = ..., **_params: Any) -> Geometry:
-        """
-        2D/3D リサージュ曲線を生成します。
-
-        引数:
-            freq_x: X 軸の周波数（a）
-            freq_y: Y 軸の周波数（b）
-            freq_z: Z 軸の周波数（c）
-            phase: X の位相（ラジアン, δx）
-            phase_y: Y の位相（ラジアン, δy）
-            phase_z: Z の位相（ラジアン, δz）
-            points: サンプル点数
-            **_params: 追加パラメータ（未使用）
-        """
         ...
     def polygon(self, *, n_sides: int | float = ..., **_params: Any) -> Geometry:
-        """
-        直径 1 の円に内接する正多角形を生成します。
-
-        引数:
-            n_sides: 辺の数
-            **_params: 追加パラメータ（未使用）
-        """
         ...
     def polyhedron(self, *, polygon_type: str | int = ..., **_params: Any) -> Geometry:
-        """
-        正多面体を生成します。
-
-        引数:
-            polygon_type: 多面体の種類（名前または面数）
-            **_params: 追加パラメータ（未使用）
-        """
         ...
     def sphere(self, *, subdivisions: float = ..., sphere_type: float = ..., **_params: Any) -> Geometry:
-        """
-        半径1の球を生成します。
-
-        引数:
-            subdivisions: 細分化レベル（0.0–1.0 を 0–5 に写像）
-            sphere_type: 描画スタイル（0.0–1.0）: 0.0–0.2: 緯経線（デフォルト） 0.2–0.4: ワイヤーフレーム 0.4–0.6: ジグザグ 0.6–0.8: アイコスフィア 0.8–1.0: リング
-        """
         ...
     def text(self, *, text: str = ..., font_size: float = ..., font: str = ..., font_number: int = ..., align: str = ..., **_params: Any) -> Geometry:
-        """
-        フォントのアウトラインから線分として文字列を生成します。
-
-        引数:
-            text: レンダリングする文字列
-            font_size: 文字サイズ（キャンバスに対する相対）
-            font: フォント名またはパス
-            font_number: TTC ファイルのフォント番号
-            align: 行揃え（'left' | 'center' | 'right'）
-            **_params: 追加パラメータ（未使用）
-        """
         ...
     def torus(self, *, major_radius: float = ..., minor_radius: float = ..., major_segments: int = ..., minor_segments: int = ..., **_params: Any) -> Geometry:
-        """
-        トーラスを生成します。
-
-        引数:
-            major_radius: 主半径（トーラス中心からチューブ中心まで）
-            minor_radius: 従半径（チューブ半径）
-            major_segments: 主円周方向の分割数
-            minor_segments: 従円周方向の分割数
-            **_params: 追加パラメータ（未使用）
-        """
         ...
 
 from common.types import Vec3

@@ -1,69 +1,68 @@
-"""シェイプレジストリ — 統一レジストリと型安全な登録。
+"""シェイプレジストリ（関数専用）。
 
 概要:
-- effects と対称の API (`@shape` / `get_shape` / `list_shapes` / `is_shape_registered`)。
-- 登録対象は `BaseShape` 派生クラスに限定（誤登録を早期検出）。
+- Effect と対称の API（`@shape` / `get_shape` / `list_shapes` / `is_shape_registered`）。
+- 登録対象は「関数」のみ（`Geometry` もしくはポリライン列を返す）。
 - デコレータは名前省略可（`@shape` / `@shape()`）に加え、
-  明示名指定（`@shape("name")` / `@shape(name="name")`）の双方をサポート。
+  明示名指定（`@shape("name")` / `@shape(name="name")`）をサポート。
 """
 
 from __future__ import annotations
 
 import inspect
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from common.base_registry import BaseRegistry
 
-from .base import BaseShape
+ShapeFn = Callable[..., Any]
 
 # 統一されたレジストリシステム
 _shape_registry = BaseRegistry()
 
 
 def shape(arg: Any | None = None, /, name: str | None = None):
-    """シェイプをレジストリに登録するデコレータ（型安全）。
+    """シェイプ関数をレジストリに登録するデコレータ。
 
     使用例:
-    - `@shape` / `@shape()`                      → クラス名から自動推論（`Sphere` → `sphere`）。
+    - `@shape` / `@shape()`                      → 関数名から自動推論。
     - `@shape("custom")` / `@shape(name="custom")` → 明示名で登録。
 
-    制約:
-    - 登録できるのは `BaseShape` の派生クラスのみ。
+    例外:
+    - TypeError: 関数以外を登録しようとした場合。
     """
 
-    def _register_checked(obj: Any, resolved_name: str | None = None) -> Any:
-        if not (inspect.isclass(obj) and issubclass(obj, BaseShape)):
-            raise TypeError(f"@shape は BaseShape 派生クラスのみ登録可能です: got {obj!r}")
-        # BaseRegistry に登録（キー正規化は内部で実施）
+    def _register_checked(obj: Any, resolved_name: str | None = None):
+        if not inspect.isfunction(obj):
+            raise TypeError(f"@shape は関数のみ登録可能です: got {obj!r}")
         return _shape_registry.register(resolved_name)(obj)
 
-    # 直付け (@shape) の場合
-    if inspect.isclass(arg) and issubclass(arg, BaseShape) and name is None:
+    # 直付け (@shape)
+    if inspect.isfunction(arg) and name is None:
         return _register_checked(arg, None)
 
-    # 引数付き（@shape() / @shape("name") / @shape(name="name")）
+    # 位置引数で名前を渡した (@shape("name"))
     if isinstance(arg, str) and name is None:
-        # 位置引数で名前が与えられたケース
-        def _decorator(obj: Any) -> Any:
+
+        def _decorator_named(obj: Any):
             return _register_checked(obj, arg)
 
-        return _decorator
+        return _decorator_named
 
-    # name キーワード引数、もしくは引数なし
-    def _decorator(obj: Any) -> Any:
+    # name キーワード引数、または引数なし
+    def _decorator_generic(obj: Any):
         return _register_checked(obj, name)
 
-    return _decorator
+    return _decorator_generic
 
 
-def get_shape(name: str) -> type[BaseShape]:
-    """登録されたシェイプクラスを取得。
+def get_shape(name: str) -> ShapeFn:
+    """登録されたシェイプ関数を取得。
 
     引数:
         name: シェイプ名
 
     返り値:
-        シェイプクラス
+        シェイプ関数
 
     例外:
         KeyError: シェイプが登録されていない場合

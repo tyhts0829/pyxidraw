@@ -7,7 +7,6 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 
-from .base import BaseShape
 from .registry import shape
 
 
@@ -286,45 +285,39 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 
 
 @shape
-class Sphere(BaseShape):
-    """複数の描画スタイルを備えた球形状ジェネレータ。"""
+def sphere(*, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any) -> Geometry:
+    """半径1の球を生成します（関数版）。
 
-    def generate(
-        self, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any
-    ) -> Geometry:
-        """半径1の球を生成します。
+    引数:
+        subdivisions: 細分化レベル（0.0–1.0 を 0–5 に写像）
+        sphere_type: 描画スタイル（0.0–1.0）:
+                    0.0–0.2: 緯経線（デフォルト）
+                    0.2–0.4: ワイヤーフレーム
+                    0.4–0.6: ジグザグ
+                    0.6–0.8: アイコスフィア
+                    0.8–1.0: リング
 
-        引数:
-            subdivisions: 細分化レベル（0.0–1.0 を 0–5 に写像）
-            sphere_type: 描画スタイル（0.0–1.0）:
-                        0.0–0.2: 緯経線（デフォルト）
-                        0.2–0.4: ワイヤーフレーム
-                        0.4–0.6: ジグザグ
-                        0.6–0.8: アイコスフィア
-                        0.8–1.0: リング
-            **_params: 追加パラメータ（未使用）
+    返り値:
+        球のジオメトリを含む Geometry
+    """
+    MIN_SUBDIVISIONS = 0
+    MAX_SUBDIVISIONS = 5
+    subdivisions_int = int(subdivisions * MAX_SUBDIVISIONS)
+    if subdivisions_int < MIN_SUBDIVISIONS:
+        subdivisions_int = MIN_SUBDIVISIONS
+    if subdivisions_int > MAX_SUBDIVISIONS:
+        subdivisions_int = MAX_SUBDIVISIONS
 
-        返り値:
-            球のジオメトリを含む Geometry
-        """
-        MIN_SUBDIVISIONS = 0
-        MAX_SUBDIVISIONS = 5
-        subdivisions_int = int(subdivisions * MAX_SUBDIVISIONS)
-        if subdivisions_int < MIN_SUBDIVISIONS:
-            subdivisions_int = MIN_SUBDIVISIONS
-        if subdivisions_int > MAX_SUBDIVISIONS:
-            subdivisions_int = MAX_SUBDIVISIONS
+    # sphere_type に応じて生成方式を選択
+    if sphere_type < 0.2:
+        vertices_list = _sphere_latlon(subdivisions_int)
+    elif sphere_type < 0.4:
+        vertices_list = _sphere_zigzag(subdivisions_int)
+    elif sphere_type < 0.6:
+        vertices_list = _sphere_icosphere(subdivisions_int)
+    elif sphere_type < 0.8:
+        vertices_list = _sphere_rings(subdivisions_int)
+    else:
+        vertices_list = _sphere_latlon(subdivisions_int)
 
-        # sphere_type に応じて生成方式を選択
-        if sphere_type < 0.2:
-            vertices_list = _sphere_latlon(subdivisions_int)
-        elif sphere_type < 0.4:
-            vertices_list = _sphere_zigzag(subdivisions_int)
-        elif sphere_type < 0.6:
-            vertices_list = _sphere_icosphere(subdivisions_int)
-        elif sphere_type < 0.8:
-            vertices_list = _sphere_rings(subdivisions_int)
-        else:
-            vertices_list = _sphere_latlon(subdivisions_int)
-
-        return Geometry.from_lines(vertices_list)
+    return Geometry.from_lines(vertices_list)

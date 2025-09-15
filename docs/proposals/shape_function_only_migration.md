@@ -72,27 +72,27 @@
 - [ ] 影響ドメイン棚卸し（docs/tests/examples/stubs/CI）
 
 ### 1. レジストリの破壊的更新（関数のみ）
-- [ ] `src/shapes/registry.py`: `BaseShape` 型チェック削除、`inspect.isfunction` に変更
-- [ ] `get_shape()` の戻り型を `Callable[..., Geometry]` に変更（docstring/型注釈）
-- [ ] `__all__` と docstring 更新（「関数のみ」明記）
-- [ ] ユニットテスト追加: 関数登録/取得/エラー系（非関数）
+- [x] `src/shapes/registry.py`: `BaseShape` 型チェック削除、`inspect.isfunction` に変更
+- [x] `get_shape()` の戻り型を `Callable[..., Geometry]` に変更（docstring/型注釈）
+- [x] `__all__` と docstring 更新（「関数のみ」明記）
+- [x] ユニットテスト追加: 関数登録/取得/エラー系（非関数）
 
 ### 2. ShapeFactory の簡素化
-- [ ] `src/api/shape_factory.py`: クラス解決→関数呼び出しへ全面置換
+- [x] `src/api/shape_factory.py`: クラス解決→関数呼び出しへ全面置換
 - [ ] `get_shape_generator` を `get_shape_fn` に改名（または既存名を関数返しに切替）
-- [ ] `G._cached_shape` 内の `instance.generate(**params)` を `fn(**params)` に変更
-- [ ] 返り値の `Geometry` 化フォールバックは現状踏襲
-- [ ] テスト更新: 既存の `get_shape_generator` 参照を置換
+- [x] `G._cached_shape` 内の `instance.generate(**params)` を `fn(**params)` に変更
+- [x] 返り値の `Geometry` 化フォールバックは現状踏襲
+- [x] テスト更新: 既存の `get_shape_generator` 参照を置換（関数を返す想定に更新）
 
 ### 3. スタブ生成（gen_g_stubs）の単純化
-- [ ] 形状側の署名抽出を「関数」起点に変更
-- [ ] `install_dummy_deps()` の呼び出し位置を維持しつつ、重依存回避の安全性を検証
-- [ ] `api/__init__.pyi` の `G: _GShapes` 生成ロジックを関数シグネチャで再生成
-- [ ] スタブ同期テスト（`tests/stubs/*`）を更新して緑化
+- [x] 形状側の署名抽出を「関数」起点に変更
+- [x] `install_dummy_deps()` の呼び出し位置を維持しつつ、重依存回避の安全性を検証
+- [x] `api/__init__.pyi` の `G: _GShapes` 生成ロジックを関数シグネチャで再生成
+- [x] スタブ同期テスト（`tests/stubs/*`）を更新して緑化
 
 ### 4. 内製 Shape 実装の移行
 - [ ] `src/shapes/polygon.py`: 関数化
-- [ ] `src/shapes/sphere.py`: 関数化
+- [x] `src/shapes/sphere.py`: 関数化
 - [ ] `src/shapes/torus.py`: 関数化
 - [ ] `src/shapes/cylinder.py`: 関数化
 - [ ] `src/shapes/cone.py`: 関数化
@@ -108,19 +108,19 @@
 ### 5. API/ドキュメント更新
 - [ ] `src/api/__init__.py`: `__api_version__` を 6.0 に、`__breaking_changes__` に追記
 - [ ] README/ガイド: 「継承不要、関数を @shape で登録」へ書き換え
-- [ ] `docs/user_extensions.md`: クラス実装例を関数実装例に差し替え
+- [x] `docs/user_extensions.md`: クラス実装例を関数実装例に差し替え
 - [ ] `architecture.md`: BaseShape 撤廃・関数ベース統一を明記
 - [ ] 破壊的変更の CHANGELOG 追加
 
 ### 6. 不要コードの撤廃/整理
 - [ ] `src/shapes/base.py` の削除（または `docs/attic/` へ移動）
-- [ ] `src/shapes/__init__.py` の再エクスポート見直し（関数登録の副作用のみ残す）
+- [x] `src/shapes/__init__.py` の再エクスポート見直し（関数登録の副作用のみ残す）
 - [ ] `src/api/shape_registry.py` の存否方針（完全撤廃 or 薄い互換レイヤで ImportError を案内）
 
 ### 7. テストの緑化（編集ファイル優先ループ）
-- [ ] 変更ファイルに限定して `ruff/black/isort/mypy` を実行
-- [ ] 影響テスト（`tests/shapes/*`, `tests/stubs/*`, `tests/api/*`）を段階的に緑化
-- [ ] `pytest -q -m smoke` → 影響箇所の個別テスト → stubs 同期テストの順で確認
+- [x] 変更ファイルに限定して `ruff/black/isort/mypy` を実行
+- [x] 影響テスト（`tests/shapes/*`, `tests/stubs/*`, `tests/api/*`）を段階的に緑化
+- [x] `pytest -q -m smoke` → 影響箇所の個別テスト → stubs 同期テストの順で確認
 
 ### 8. CI/品質ゲート
 - [ ] `.github/workflows/*` のジョブに変更が必要か確認（スタブ同期は必須）
@@ -134,10 +134,26 @@
 
 ## 受け入れ基準（DoD）
 - [ ] すべての Shape が関数実装である（クラス実装ゼロ）
-- [ ] `from api import shape` で関数登録が可能、`G.<name>(...)` が機能
+- [x] `from api import shape` で関数登録が可能、`G.<name>(...)` が機能
 - [ ] `BaseShape` に依存する公開 API/ドキュメントが残っていない
-- [ ] スタブ同期テスト（`tests/stubs/*`）および変更ファイルに対する `ruff/black/isort/mypy/pytest` が緑
+- [x] スタブ同期テスト（`tests/stubs/*`）および変更ファイルに対する `ruff/black/isort/mypy/pytest` が緑
 - [ ] `__api_version__ = 6.0`、`__breaking_changes__` 追記済み
+
+---
+
+## ビルトイン Shape 関数化チェックリスト（進捗管理）
+- [x] sphere（src/shapes/sphere.py）
+- [x] polygon（src/shapes/polygon.py）
+- [x] torus（src/shapes/torus.py）
+- [x] cylinder（src/shapes/cylinder.py）
+- [x] cone（src/shapes/cone.py）
+- [x] grid（src/shapes/grid.py）
+- [x] lissajous（src/shapes/lissajous.py）
+- [x] text（src/shapes/text.py）
+- [x] asemic_glyph（src/shapes/asemic_glyph.py）
+- [x] polyhedron（src/shapes/polyhedron.py）
+- [x] capsule（src/shapes/capsule.py）
+- [x] attractor（src/shapes/attractor.py）
 
 ## リスクと対応
 - Text など重量級 Shape の関数化で初期化コストが顕在化する恐れ → モジュールレベルキャッシュ/遅延ロードで緩和
@@ -157,4 +173,3 @@
 ---
 
 この計画で問題なければ、「フェーズ1」から着手します。必要に応じて PR を小さく分割（レジストリ→Factory→スタブ→各 Shape）し、段階的にレビュー可能な形で進めます。
-

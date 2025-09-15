@@ -7,7 +7,6 @@ from numba import njit
 
 from engine.core.geometry import Geometry
 
-from .base import BaseShape
 from .registry import shape
 
 
@@ -232,40 +231,19 @@ def _generate_unit_capsule_fast(segments: int, latitude_segments: int) -> np.nda
 
 
 @shape
-class Capsule(BaseShape):
-    """数学的計算によるカプセル（半球+円柱）形状生成器。njitで高速化済み。"""
-
-    def generate(
-        self,
-        radius: float = 0.4,
-        height: float = 0.8,
-        segments: int = 32,
-        latitude_segments: int = 16,
-        **params: Any,
-    ) -> Geometry:
-        """カプセル形状を生成する。
-
-        引数:
-            radius: 半球の半径。
-            height: 円柱部分の高さ。
-            segments: 経度方向のセグメント数（周方向の分割数）。
-            latitude_segments: 緯度方向のセグメント数（半球の分割数）。
-            **params: 追加パラメータ（無視される）。
-
-        返り値:
-            カプセル線を含む `Geometry`。
-        """
-        # スケーリング係数を計算
-        # ユニットカプセルは半径=0.5、高さ=1.0
-        scale_xy = radius / 1.0  # 半径のスケール
-        scale_z = height / 2.0  # 高さのスケール
-
-        # njitで高速化されたスケーリング済みカプセルを直接生成
-        scaled_lines_array = _generate_scaled_capsule_fast(
-            segments, latitude_segments, scale_xy, scale_xy, scale_z
-        )
-
-        # numpy配列のリストに変換（互換性のため）
-        lines = [scaled_lines_array[i] for i in range(scaled_lines_array.shape[0])]
-
-        return Geometry.from_lines(lines)
+def capsule(
+    *,
+    radius: float = 0.4,
+    height: float = 0.8,
+    segments: int = 32,
+    latitude_segments: int = 16,
+    **params: Any,
+) -> Geometry:
+    """カプセル形状を生成する。"""
+    scale_xy = radius / 1.0
+    scale_z = height / 2.0
+    scaled_lines_array = _generate_scaled_capsule_fast(
+        segments, latitude_segments, scale_xy, scale_xy, scale_z
+    )
+    lines = [scaled_lines_array[i] for i in range(scaled_lines_array.shape[0])]
+    return Geometry.from_lines(lines)

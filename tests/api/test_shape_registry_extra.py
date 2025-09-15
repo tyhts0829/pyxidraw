@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from api.shape_registry import get_shape_generator, unregister_shape
+from shapes.registry import get_shape as get_shape_fn
+from shapes.registry import unregister as unregister_shape
 
 
 def test_unregister_shape_ignores_missing() -> None:
@@ -11,5 +12,5 @@ def test_unregister_shape_ignores_missing() -> None:
 
 
 def test_get_shape_generator_unknown_raises_value_error() -> None:
-    with pytest.raises(ValueError):
-        get_shape_generator("__does_not_exist__")
+    with pytest.raises(KeyError):
+        get_shape_fn("__does_not_exist__")

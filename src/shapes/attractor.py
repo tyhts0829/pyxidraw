@@ -7,72 +7,46 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 
-from .base import BaseShape
 from .registry import shape
 
 
 @shape
-class Attractor(BaseShape):
-    """ストレンジアトラクタ（Strange Attractor）の線形状を生成する形状クラス。"""
+def attractor(
+    *,
+    attractor_type: str = "aizawa",
+    points: int = 10000,
+    dt: float = 0.01,
+    scale: float = 1.0,
+    **params: Any,
+) -> Geometry:
+    """各種アトラクタの軌跡を生成する。"""
+    if attractor_type == "lorenz":
+        att = LorenzAttractor(dt=dt, steps=points, scale=scale, **params)
+    elif attractor_type == "rossler":
+        att = RosslerAttractor(dt=dt, steps=points, scale=scale, **params)
+    elif attractor_type == "aizawa":
+        att = AizawaAttractor(dt=dt, steps=points, scale=scale, **params)
+    elif attractor_type == "three_scroll":
+        att = ThreeScrollAttractor(dt=dt, steps=points, scale=scale, **params)
+    elif attractor_type == "dejong":
+        att = DeJongAttractor(steps=points, scale=scale, **params)
+    else:
+        att = LorenzAttractor(dt=dt, steps=points, scale=scale, **params)
+    vertices = att.integrate()
+    if scale == 1.0:
+        vertices = _normalize_vertices(vertices)
+    return Geometry.from_lines([vertices])
 
-    def generate(
-        self,
-        attractor_type: str = "aizawa",
-        points: int = 10000,
-        dt: float = 0.01,
-        scale: float = 1.0,
-        **params: Any,
-    ) -> Geometry:
-        """各種アトラクタの軌跡を生成する。
 
-        引数:
-            attractor_type: アトラクタ種別（"lorenz"/"rossler"/"aizawa"/"three_scroll"/"dejong"）。
-            points: 生成するステップ数（頂点数）。
-            dt: 数値積分の時間刻み。
-            scale: 出力スケール係数。
-            **params: 個別アトラクタへ渡す追加パラメータ。
-
-        返り値:
-            生成された軌跡を 1 本のポリラインとして格納した `Geometry`。
-        """
-        if attractor_type == "lorenz":
-            attractor = LorenzAttractor(dt=dt, steps=points, scale=scale, **params)
-        elif attractor_type == "rossler":
-            attractor = RosslerAttractor(dt=dt, steps=points, scale=scale, **params)
-        elif attractor_type == "aizawa":
-            attractor = AizawaAttractor(dt=dt, steps=points, scale=scale, **params)
-        elif attractor_type == "three_scroll":
-            attractor = ThreeScrollAttractor(dt=dt, steps=points, scale=scale, **params)
-        elif attractor_type == "dejong":
-            attractor = DeJongAttractor(steps=points, scale=scale, **params)
-        else:
-            # Default to Lorenz
-            attractor = LorenzAttractor(dt=dt, steps=points, scale=scale, **params)
-
-        vertices = attractor.integrate()
-
-        # Normalize to fit in unit cube if scale is 1.0
-        if scale == 1.0:
-            vertices = self._normalize_vertices(vertices)
-
-        return Geometry.from_lines([vertices])
-
-    def _normalize_vertices(self, vertices: np.ndarray) -> np.ndarray:
-        """頂点群を原点中心の単位立方体へ正規化する。"""
-        # Find bounds
-        min_vals = np.min(vertices, axis=0)
-        max_vals = np.max(vertices, axis=0)
-
-        # Center and scale
-        center = (min_vals + max_vals) * 0.5
-        scale = np.max(max_vals - min_vals)
-
-        if scale > 0:
-            normalized = (vertices - center) / scale
-        else:
-            normalized = vertices - center
-
-        return normalized
+def _normalize_vertices(vertices: np.ndarray) -> np.ndarray:
+    """頂点群を原点中心の単位立方体へ正規化する。"""
+    min_vals = np.min(vertices, axis=0)
+    max_vals = np.max(vertices, axis=0)
+    center = (min_vals + max_vals) * 0.5
+    rng = np.max(max_vals - min_vals)
+    if rng > 0:
+        return (vertices - center) / rng
+    return vertices - center
 
 
 class BaseAttractor(ABC):

@@ -7,7 +7,6 @@ def test_api_shape_import_and_registration():
     from api import G, shape
     from engine.core.geometry import Geometry
     from shapes import registry as reg
-    from shapes.base import BaseShape
 
     NAME = "tmp_shape_smoke"
 
@@ -15,11 +14,10 @@ def test_api_shape_import_and_registration():
     reg.unregister(NAME)
 
     @shape(NAME)
-    class _TmpShape(BaseShape):
-        def generate(self, *, n: int = 3, r: float = 1.0, **_):
-            th = np.linspace(0, 2 * np.pi, n, endpoint=False, dtype=np.float32)
-            xy = np.c_[r * np.cos(th), r * np.sin(th)]
-            return Geometry.from_lines([xy])
+    def _tmp_shape(*, n: int = 3, r: float = 1.0, **_):
+        th = np.linspace(0, 2 * np.pi, n, endpoint=False, dtype=np.float32)
+        xy = np.c_[r * np.cos(th), r * np.sin(th)]
+        return Geometry.from_lines([xy])
 
     # レジストリに登録されていること
     assert reg.is_shape_registered(NAME)

@@ -6,7 +6,6 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 
-from .base import BaseShape
 from .registry import shape
 
 
@@ -51,26 +50,14 @@ def _generate_grid(nx: int, ny: int) -> list[np.ndarray]:
     return vertices_list
 
 
+MAX_DIVISIONS = 50
+
+
 @shape
-class Grid(BaseShape):
-    """Grid shape generator."""
-
-    MAX_DIVISIONS = 50
-
-    def generate(self, subdivisions: tuple[float, float] = (0.1, 0.1), **params: Any) -> Geometry:
-        """1x1 の正方形グリッドを生成します。
-
-        引数:
-            subdivisions: (x方向の分割, y方向の分割) を 0.0–1.0 浮動小数で指定
-            **params: 追加パラメータ（未使用）
-
-        返り値:
-            グリッド線を含む Geometry
-        """
-        nx, ny = subdivisions
-        nx = int(nx * Grid.MAX_DIVISIONS)
-        ny = int(ny * Grid.MAX_DIVISIONS)
-
-        # Generate grid (caching handled by BaseShape)
-        vertices_list = _generate_grid(nx, ny)
-        return Geometry.from_lines(vertices_list)
+def grid(subdivisions: tuple[float, float] = (0.1, 0.1), **params: Any) -> Geometry:
+    """1x1 の正方形グリッドを生成します。"""
+    nx, ny = subdivisions
+    nx = int(nx * MAX_DIVISIONS)
+    ny = int(ny * MAX_DIVISIONS)
+    vertices_list = _generate_grid(nx, ny)
+    return Geometry.from_lines(vertices_list)

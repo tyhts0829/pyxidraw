@@ -7,13 +7,14 @@ from typing import Any, Iterator
 
 import numpy as np
 from numba import njit
-from scipy.spatial import cKDTree
 
 from common.types import Vec3
 from engine.core.geometry import Geometry
 
-from .base import BaseShape
 from .registry import shape
+
+# SciPy は重いため、必要時に遅延 import（相互依存/CI 安定性のため）
+
 
 # 型エイリアス（共通定義を使用）
 Point3D = Vec3
@@ -62,20 +63,32 @@ def relative_neighborhood_graph(
     if n < 2:
         return [], {i: [] for i in range(n)}
 
-    # 2D座標のみを抽出してKD-Treeを構築
-    points_2d = np.array([(node[0], node[1]) for node in nodes])
-    tree = cKDTree(points_2d)
+    # 2D座標のみを抽出
+    points_2d = np.array([(node[0], node[1]) for node in nodes], dtype=np.float32)
+
+    # 遅延 import で SciPy を試行
+    tree = None
+    try:
+        from scipy.spatial import cKDTree  # type: ignore
+
+        tree = cKDTree(points_2d)
+    except Exception:
+        tree = None  # フォールバックに切替
 
     edges: list[tuple[int, int]] = []
     adjacency = {i: [] for i in range(n)}
 
     for i in range(n):
-        # 近傍ノードを効率的に取得（最大距離で制限）
-        max_search_radius = max(
-            abs(points_2d[:, 0].max() - points_2d[:, 0].min()),
-            abs(points_2d[:, 1].max() - points_2d[:, 1].min()),
-        )
-        neighbors = tree.query_ball_point(points_2d[i], max_search_radius)
+        # 近傍候補の取得
+        if tree is not None:
+            max_search_radius = max(
+                float(points_2d[:, 0].max() - points_2d[:, 0].min()),
+                float(points_2d[:, 1].max() - points_2d[:, 1].min()),
+            )
+            neighbors = tree.query_ball_point(points_2d[i], max_search_radius)
+        else:
+            # フォールバック: 全てのノードを候補に（O(n^2)）
+            neighbors = range(n)
 
         for j in neighbors:
             if j <= i:  # 重複を避ける
@@ -85,10 +98,14 @@ def relative_neighborhood_graph(
             if dij < config.min_distance:
                 continue
 
-            # RNG条件チェック：より効率的な近傍探索
+            # RNG条件チェック
             edge_valid = True
             # dijより小さい距離の点のみをチェック
-            potential_blockers = tree.query_ball_point(points_2d[i], dij)
+            if tree is not None:
+                potential_blockers = tree.query_ball_point(points_2d[i], dij)
+            else:
+                # フォールバック: 全点（O(n)）
+                potential_blockers = range(n)
 
             for k in potential_blockers:
                 if k == i or k == j:
@@ -704,67 +721,44 @@ def add_diacritic(
 
 
 @shape
-class AsemicGlyph(BaseShape):
-    """アセミック文字（抽象的文字）形状生成器。"""
+def asemic_glyph(
+    *,
+    region: tuple[float, float, float, float] = (-0.5, -0.5, 0.5, 0.5),
+    smoothing_radius: float = 0.05,
+    diacritic_probability: float = 0.3,
+    diacritic_radius: float = 0.04,
+    random_seed: float = 42.0,
+    **_params: Any,
+) -> Geometry:
+    """アセミック文字形状を生成する（関数版）。"""
+    rng = random.Random(int(random_seed))
+    config = AsemicGlyphConfig()
+    vertices_list: list[np.ndarray] = []
 
-    def generate(
-        self,
-        region: tuple[float, float, float, float] = (-0.5, -0.5, 0.5, 0.5),
-        smoothing_radius: float = 0.05,
-        diacritic_probability: float = 0.3,
-        diacritic_radius: float = 0.04,
-        random_seed: float = 42.0,
-        **_params: Any,
-    ) -> Geometry:
-        """アセミック文字形状を生成する。
+    x0, y0, x1, y1 = region
+    cell_width = x1 - x0
+    cell_height = y1 - y0
+    cell_margin = min(0.025, cell_width / 8, cell_height / 8)
 
-        引数:
-            region: (x0, y0, x1, y1) の領域
-            smoothing_radius: 補間用Bézier曲線の半径
-            diacritic_probability: 使用ノード付近にディアクリティカルを追加する確率
-            diacritic_radius: ディアクリティカル用のサイズ
-            random_seed: 乱数シード
-            **_params: 追加パラメータ（無視される）
+    placement_mode = "poisson"
+    # generate_nodes が global random を使うため、一時的に状態を差し替え
+    old_state = random.getstate()
+    random.setstate(rng.getstate())
+    nodes = generate_nodes(region, cell_margin, placement_mode, config)
+    rng.setstate(random.getstate())
+    random.setstate(old_state)
 
-        返り値:
-            Geometry object containing アセミック文字
-        """
-        # 乱数状態の初期化（テスト可能性のために分離）
-        rng = random.Random(int(random_seed))
-        config = AsemicGlyphConfig()
-        vertices_list = []
+    _, adjacency = relative_neighborhood_graph(nodes, config)
+    strokes_indices = random_walk_strokes(nodes, adjacency, config, rng)
+    used_nodes = {i for stroke in strokes_indices for i in stroke}
 
-        x0, y0, x1, y1 = region
-        cell_width = x1 - x0
-        cell_height = y1 - y0
-        cell_margin = min(0.025, cell_width / 8, cell_height / 8)
+    for stroke in strokes_indices:
+        if len(stroke) < 2:
+            continue
+        original_stroke = [nodes[i] for i in stroke]
+        snapped_stroke = snap_stroke(original_stroke, config)
+        smoothed = smooth_polyline(snapped_stroke, smoothing_radius, config)
+        vertices_list.append(np.array(smoothed, dtype=np.float32))
 
-        # ノード生成（配置モードを選択："grid", "hexagon", "poisson" など）
-        placement_mode = "poisson"
-        # グローバルrandom状態を一時的に設定（generate_nodesがglobal randomを使用するため）
-        old_state = random.getstate()
-        random.setstate(rng.getstate())
-        nodes = generate_nodes(region, cell_margin, placement_mode, config)
-        rng.setstate(random.getstate())
-        random.setstate(old_state)
-
-        # RNG の構築とランダムウォークによるストローク生成
-        _, adjacency = relative_neighborhood_graph(nodes, config)
-        strokes_indices = random_walk_strokes(nodes, adjacency, config, rng)
-        used_nodes = {i for stroke in strokes_indices for i in stroke}
-
-        # 各ストロークの生成（スナップ & スムージング）
-        for stroke in strokes_indices:
-            if len(stroke) < 2:
-                continue
-            original_stroke = [nodes[i] for i in stroke]
-            snapped_stroke = snap_stroke(original_stroke, config)
-            smoothed = smooth_polyline(snapped_stroke, smoothing_radius, config)
-            vertices_list.append(np.array(smoothed))
-
-        # ディアクリティカルの追加
-        add_diacritic(
-            vertices_list, nodes, used_nodes, diacritic_probability, diacritic_radius, rng
-        )
-
-        return Geometry.from_lines(vertices_list)
+    add_diacritic(vertices_list, nodes, used_nodes, diacritic_probability, diacritic_radius, rng)
+    return Geometry.from_lines(vertices_list)

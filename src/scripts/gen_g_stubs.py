@@ -6,7 +6,7 @@
 IDE の補完品質と mypy 等の型検査の精度を高める。
 
 概要:
-- 形状: `api.shape_registry.list_registered_shapes()` から登録済み Shape 名を収集し、
+- 形状: `shapes.registry.list_shapes()` から登録済み Shape 名を収集し、
   `class _GShapes(Protocol)` に各 Shape 名のメソッドを生成する（戻り値は `Geometry`）。
 - エフェクト/パイプライン: `effects.registry.list_effects()` を参照し、
   `class _PipelineBuilder(Protocol)` と `class _Effects(Protocol)` を生成する。
@@ -468,17 +468,42 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     # 生成時の ImportError を避けるため、重い依存の最小ダミーを注入
     install_dummy_deps()
     import shapes  # noqa: F401
-    from api.shape_registry import get_shape_generator
+    from shapes.registry import get_shape as _get_shape_fn
 
     for name in sorted(shape_names):
         try:
-            shape_cls = get_shape_generator(name)
+            shape_fn = _get_shape_fn(name)
         except Exception:
-            shape_cls = None  # type: ignore
-        if shape_cls is None:
+            shape_fn = None  # type: ignore
+        if shape_fn is None:
             lines.append(f"    def {name}(self, **_params: Any) -> Geometry: ...\n")
         else:
-            lines.append(_render_method_from_generate(name, shape_cls))
+            # 関数シグネチャからメソッドを組み立て
+            try:
+                sig = inspect.signature(shape_fn)
+                hints: dict[str, Any] = {}
+                try:
+                    hints = get_type_hints(shape_fn, globalns=getattr(shape_fn, "__globals__", {}))
+                except Exception:
+                    hints = {}
+                params_out: list[str] = []
+                for p in sig.parameters.values():
+                    if p.kind in (inspect.Parameter.VAR_POSITIONAL,):
+                        continue
+                    if p.kind in (inspect.Parameter.VAR_KEYWORD,):
+                        continue
+                    ann = hints.get(p.name, p.annotation)
+                    ann_s = _format_type(ann) if ann is not inspect._empty else "Any"
+                    default_s = " = ..." if p.default is not inspect._empty else ""
+                    params_out.append(f"{p.name}: {ann_s}{default_s}")
+                if params_out:
+                    paramlist = "*, " + ", ".join(params_out) + ", **_params: Any"
+                else:
+                    paramlist = "**_params: Any"
+                lines.append(f"    def {name}(self, {paramlist}) -> Geometry:\n")
+                lines.append("        ...\n")
+            except Exception:
+                lines.append(f"    def {name}(self, **_params: Any) -> Geometry: ...\n")
     lines.append("\n")
 
     # エフェクト用 Pipeline Protocol 群
@@ -527,7 +552,7 @@ def generate_stubs_str() -> str:
     # 副作用的な登録を確実に行う
     import effects  # noqa: F401
     import shapes  # noqa: F401
-    from api.shape_registry import list_registered_shapes
+    from shapes.registry import list_shapes as list_registered_shapes
 
     all_names = list_registered_shapes()
     valid = [n for n in all_names if _is_valid_identifier(n)]
@@ -538,7 +563,7 @@ def main() -> None:
     # テストと同じパス解決で一貫した挙動を担保
     content = generate_stubs_str()
     # ログ表示用にスキップ一覧を再計算
-    from api.shape_registry import list_registered_shapes
+    from shapes.registry import list_shapes as list_registered_shapes
 
     all_names = list_registered_shapes()
     valid = [n for n in all_names if _is_valid_identifier(n)]

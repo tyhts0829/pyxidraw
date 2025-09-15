@@ -1,5 +1,7 @@
 # @shape デコレータの公開インポート方針（提案）
 
+注意（v6.0 以降）: 本ドキュメントには歴史的経緯として BaseShape 併存案を含みますが、現行の実装は「関数ベースに統一」されています。最新の設計は `docs/proposals/shape_function_only_migration.md` を参照してください。
+
 日付: 2025-09-14
 作成: pyxidraw6 チーム（提案）
 対象: `src/api/shape_registry.py`, `src/shapes/registry.py`, `src/api/__init__.py`

@@ -26,18 +26,17 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
 
 - `generate_stubs_str()`
   - 依存の薄い環境でも動作するよう `scripts.dummy_deps.install()` を先に実行。
-  - `effects`/`shapes` を import（レジストリ副作用を確実化）。
-  - `api.shape_registry.list_registered_shapes()` で全シェイプ名を取得し、Python 識別子のみ採用。
+- `effects`/`shapes` を import（レジストリ副作用を確実化）。
+- `shapes.registry.list_shapes()` で全シェイプ名を取得し、Python 識別子のみ採用。
   - `_render_pyi(valid_names)` で最終文字列を構築して返す。
 - `_render_pyi(shape_names)`
   - ヘッダ/共通 import/型別名を出力。
-  - 形状: `api.shape_registry.get_shape_generator(name)` からクラスを取得し、
-    `_render_method_from_generate(name, shape_cls)` でメソッド定義＋docstring を生成。
+- 形状: 関数シグネチャから `G.<name>(...)` を生成（関数ベース統一後）。
   - エフェクト: `effects.registry.list_effects()` を列挙し、
     `_render_pipeline_protocol(effect_names)` でビルダ/Effects の Protocol 本体を生成。
   - 末尾で `G/E` や `run`、Spec ヘルパー関数を再エクスポート。
-- `_render_method_from_generate(shape_name, shape_cls)`
-  - `inspect.signature` と `get_type_hints` から `generate()` のシグネチャを復元。
+- 形状関数の解析
+  - `inspect.signature` と `get_type_hints` から関数シグネチャを復元。
   - 既定値はスタブ上では `= ...` に正規化し API 表面を安定化。
   - 位置可変は無視、キーワード専用＋`**_params: Any` を常に付与（将来拡張/偽陰性回避）。
   - `_extract_param_docs(gen_obj)` で docstring を解析し、要約/引数説明をメソッド直下の
@@ -77,18 +76,19 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
 
 ## 書き方のガイド（作者が行うこと）
 
-- 形状（`generate()`）の docstring 例:
+- 形状（関数）の docstring 例:
 
 ```python
-class Sphere(BaseShape):
-    def generate(self, *, radius: float = 1.0, segments: int = 64) -> Geometry:
-        """球を生成。
+from engine.core.geometry import Geometry
 
-        引数:
-            radius: 半径。
-            segments: 分割数。大きいほど滑らか。
-        """
-        ...
+def sphere(*, radius: float = 1.0, segments: int = 64) -> Geometry:
+    """球を生成。
+
+    引数:
+        radius: 半径。
+        segments: 分割数。大きいほど滑らか。
+    """
+    ...
 ```
 
 - エフェクト関数の docstring / メタ例:
@@ -139,4 +139,3 @@ rotate.__param_meta__ = {
   - エフェクト: `_render_pipeline_protocol()` / `_annotation_for_effect_param()`
 - 設定: `.pre-commit-config.yaml`
 - 検証: `tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py`
-

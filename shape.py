@@ -23,27 +23,16 @@ import numpy as np
 sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
 from api import G, run_sketch, shape
 from engine.core.geometry import Geometry
-from shapes.base import BaseShape
 
 
 @shape("my_star")
-class MyStar(BaseShape):
+def my_star(*, points: int = 7, r: float = 80.0, inner: float = 0.5) -> Geometry:
     """正多角形の頂点を結んだ簡易スター（星形）。"""
-
-    def generate(
-        self,
-        *,
-        points: int = 7,
-        r: float = 80.0,
-        inner: float = 0.5,
-        **_: object,
-    ) -> Geometry:
-        # points*2 個の交互半径で星形を作る
-        n = int(points) * 2
-        th = np.linspace(0.0, 2 * np.pi, n, endpoint=False, dtype=np.float32)
-        rr = np.where(np.arange(n) % 2 == 0, float(r), float(r) * float(inner))
-        xy = np.c_[rr * np.cos(th), rr * np.sin(th)]
-        return Geometry.from_lines([xy])
+    n = int(points) * 2
+    th = np.linspace(0.0, 2 * np.pi, n, endpoint=False, dtype=np.float32)
+    rr = np.where(np.arange(n) % 2 == 0, float(r), float(r) * float(inner))
+    xy = np.c_[rr * np.cos(th), rr * np.sin(th)]
+    return Geometry.from_lines([xy])
 
 
 def user_draw(t: float, cc: dict[int, float]) -> Geometry:  # noqa: D401 - 簡潔

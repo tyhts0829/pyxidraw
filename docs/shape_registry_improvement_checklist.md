@@ -1,3 +1,10 @@
+［Legacy/Archived as of v6.0］
+
+本チェックリストは BaseShape 前提の旧 API 用です。v6.0 以降は shape は関数ベースに統一されました。
+現行の設計/実装に合わせたレビューは `docs/proposals/shape_function_only_migration.md` を参照してください。
+
+---
+
 src/api/shape_registry.py コードレビューして
 
 > 対象ファイルの内容を確認してから、観点別にレビューします。

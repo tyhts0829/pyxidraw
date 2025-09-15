@@ -48,12 +48,4 @@ __all__ = [
 
 # バージョン情報
 __version__ = "2025.09"
-__api_version__ = "5.0"
-
-# 互換性情報（破壊的変更）
-__breaking_changes__ = [
-    "後方互換引数を廃止しクリーンAPIへ統一",
-    "PipelineBuilder を既定 strict=True に変更",
-    "Text 形状の size を font_size に改名",
-    "shape デコレータの公開経路を 'from api import shape' に統一（api.shape_registry からの再輸出と register_shape を廃止）",
-]
+__api_version__ = "6.0"

@@ -19,10 +19,10 @@
 - `asemic_glyph(...)`: 擬似文字。
 - `attractor(attractor_type, ...)`: ストレンジアトラクタ。
 
-実装は `shapes/*.py` を参照。各クラスは `generate(**params) -> Geometry` を実装し、`@shapes.registry.shape()` で登録します。スタブは `generate()` の docstring を解析して `G.<name>(...)` の引数説明を自動付与します。
+実装は `shapes/*.py` を参照。各シェイプは「関数」として `@shapes.registry.shape()` で登録します。スタブは関数のシグネチャを解析して `G.<name>(...)` の引数を自動生成します。
 
 ## 開発ガイド
-- クラスは `shapes.base.BaseShape` を継承。
-- `generate()` は副作用なし・決定的であること。
+- 形状は `@shape` で関数登録する（継承不要）。
+- 関数は副作用なし・決定的であること。
 - 2D 入力は Z=0 を付与して (N,3) に正規化すること。
- - キャッシュは `api.shape_factory.ShapeFactory`（`G`）に集約し、`BaseShape` 自体はキャッシュを持たない。
+- キャッシュは `api.shape_factory.ShapeFactory`（`G`）に集約される。
