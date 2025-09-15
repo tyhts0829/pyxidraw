@@ -386,11 +386,13 @@ from .shape_factory import ShapeFactory as ShapeFactory
 
 G: _GShapes
 E: _Effects
+from shapes.registry import shape as shape
+from effects.registry import effect as effect
 from .runner import run_sketch as run_sketch, run_sketch as run
 def to_spec(pipeline: Pipeline) -> PipelineSpec: ...
 def from_spec(spec: PipelineSpec) -> Pipeline: ...
 def validate_spec(spec: PipelineSpec) -> None: ...
 
 __all__ = [
-    'G', 'E', 'run_sketch', 'run', 'ShapeFactory', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',
+    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapeFactory', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',
 ]

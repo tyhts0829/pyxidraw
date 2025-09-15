@@ -386,30 +386,30 @@ def _render_pipeline_protocol(effect_names: Iterable[str]) -> tuple[str, list[st
                 if not text:
                     rules = meta_map.get(key) if isinstance(meta_map, dict) else None
                     if isinstance(rules, dict):
-                        parts: list[str] = []
+                        parts2: list[str] = []
                         if "type" in rules:
-                            parts.append(str(rules["type"]))
+                            parts2.append(str(rules["type"]))
                         if "min" in rules or "max" in rules:
                             lo = rules.get("min")
                             hi = rules.get("max")
                             if lo is not None and hi is not None:
-                                parts.append(f"range [{lo}, {hi}]")
+                                parts2.append(f"range [{lo}, {hi}]")
                             elif lo is not None:
-                                parts.append(f"min {lo}")
+                                parts2.append(f"min {lo}")
                             elif hi is not None:
-                                parts.append(f"max {hi}")
+                                parts2.append(f"max {hi}")
                         ch = rules.get("choices") if isinstance(rules, dict) else None
-                        seq: list[Any] = []
+                        seq2: list[Any] = []
                         try:
                             if isinstance(ch, IterableABC):
-                                seq = list(ch)  # 型検査用に Iterable を確認
+                                seq2 = list(ch)  # 型検査用に Iterable を確認
                         except Exception:
-                            seq = []
-                        if seq:
-                            preview = ", ".join(map(repr, seq[:6]))
-                            parts.append(f"choices {{ {preview}{' …' if len(seq) > 6 else ''} }}")
-                        if parts:
-                            text = ", ".join(parts)
+                            seq2 = []
+                        if seq2:
+                            preview = ", ".join(map(repr, seq2[:6]))
+                            parts2.append(f"choices {{ {preview}{' …' if len(seq2) > 6 else ''} }}")
+                        if parts2:
+                            text = ", ".join(parts2)
                 if text:
                     arg_docs.append(f"    {key}: {text}")
 
@@ -498,6 +498,9 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     lines.append("\n")
     lines.append("G: _GShapes\n")
     lines.append("E: _Effects\n")
+    # shape/effect デコレータは API ルートで公開
+    lines.append("from shapes.registry import shape as shape\n")
+    lines.append("from effects.registry import effect as effect\n")
     lines.append("from .runner import run_sketch as run_sketch, run_sketch as run\n")
     # Pipeline Spec ヘルパ関数の厳密なシグネチャ
     lines.append("def to_spec(pipeline: Pipeline) -> PipelineSpec: ...\n")
@@ -507,7 +510,7 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     # 実行時の `__all__` と整合させる
     lines.append(
         "__all__ = [\n"
-        "    'G', 'E', 'run_sketch', 'run', 'ShapeFactory', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',\n"
+        "    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapeFactory', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',\n"
         "]\n"
     )
 

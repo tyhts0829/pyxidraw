@@ -1,18 +1,37 @@
 """
-形状レジストリシステム - レジストリパターンによる拡張可能な形状管理。
-`shapes.registry` の公開APIへ薄く委譲するエントリポイント。
+形状レジストリ API（公開エントリポイント）
+
+目的:
+- `from api import shape` を唯一の公開経路とし、ユーザー拡張（@shape デコレータ）を簡潔に。
+- ここでは shape デコレータを再輸出しない（破壊的変更）。
+- 既存のレジストリ操作は薄い委譲として提供する。
 """
 
 from __future__ import annotations
 
 from shapes import registry as _shapes_registry
-from shapes.registry import get_shape, list_shapes, shape
+from shapes.base import BaseShape
+from shapes.registry import get_shape, list_shapes
 
-register_shape = shape
 
+def get_shape_generator(name: str) -> type[BaseShape]:
+    """登録済みシェイプ“クラス”を取得（薄い委譲）。
 
-def get_shape_generator(name: str):
-    """登録された形状生成器を取得（薄い委譲 API）。"""
+    Parameters
+    ----------
+    name : str
+        シェイプ名。
+
+    Returns
+    -------
+    type[BaseShape]
+        登録済みのシェイプクラス。
+
+    Raises
+    ------
+    ValueError
+        指定名のシェイプが未登録の場合。
+    """
     try:
         return get_shape(name)
     except KeyError:
@@ -20,17 +39,30 @@ def get_shape_generator(name: str):
 
 
 def list_registered_shapes() -> list[str]:
-    """登録されているすべての形状名を返す。"""
+    """登録されているシェイプ名の一覧（昇順）。
+
+    Returns
+    -------
+    list[str]
+        登録名（snake_case）の昇順リスト。
+    """
     return list_shapes()
 
 
-def unregister_shape(name: str):
-    """形状の登録を解除（主にテスト用）。未登録名は無視。"""
+def unregister_shape(name: str) -> None:
+    """シェイプの登録を解除（主にテスト用）。
+
+    未登録名は無視する。
+
+    Parameters
+    ----------
+    name : str
+        登録解除するシェイプ名。
+    """
     _shapes_registry.unregister(name)
 
 
 __all__ = [
-    "register_shape",
     "get_shape_generator",
     "list_registered_shapes",
     "unregister_shape",

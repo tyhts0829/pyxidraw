@@ -25,7 +25,7 @@
 ---
 
 ## すぐ効く提案（軽微・ノンブレイキング）
-- [ ] `api` の導線を `G` に一本化し、登録は `api.register_shape / api.register_effect` を推奨（すでに re-export を追加）。
+- [ ] `api` の導線を `G` に一本化し、登録は `from api import shape` を唯一の経路として推奨（破壊的変更で統一）。
 - [ ] `architecture.md` に「`common` と `util` の役割境界」を 1 文追記。
       - `common`: 型/レジストリ/両翼（effects・shapes）から参照される“土台”。
       - `util`: アプリ運用・設定・小物ユーティリティ（上位からのみ参照）。

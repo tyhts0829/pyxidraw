@@ -10,16 +10,16 @@
 ```python
 from __future__ import annotations
 
-from api import register_effect
+from api import effect  # 将来: ルート公開を予定（現状は effects.registry.effect を直接使っても可）
 from engine.core.geometry import Geometry  # 型ヒント用（任意）
 
-@register_effect(name="my_fx")
+@effect(name="my_fx")
 def my_fx(g: Geometry) -> Geometry:
     # ここで g を加工して新しい Geometry を返す
     return g
 ```
 
-- 名前は省略可能（`@register_effect` / `@register_effect()`）。省略時は関数名から推論。
+- 名前は省略可能（`@effect` / `@effect()`）。省略時は関数名から推論。
 - 実体は `effects.registry.effect` に委譲。api から import できるため、依存の表面が安定します。
 
 ## 2) Shape を追加（推奨エントリ）
@@ -27,11 +27,11 @@ def my_fx(g: Geometry) -> Geometry:
 ```python
 from __future__ import annotations
 
-from api import register_shape
-from api.shape_base import BaseShape  # 型・ベースクラス（api サブモジュール経由）
+from api import shape  # 唯一の公開経路（破壊的変更後）
+from shapes.base import BaseShape  # 現状は内部提供。将来 api 経由の再エクスポートを検討。
 from engine.core.geometry import Geometry
 
-@register_shape(name="MyStar")
+@shape(name="MyStar")
 class MyStar(BaseShape):
     def generate(self, *, points: int = 5, r: float = 50) -> Geometry:
         import numpy as np
@@ -41,7 +41,7 @@ class MyStar(BaseShape):
         return Geometry.from_lines([xy])
 ```
 
-- 名前は省略可能（`@register_shape` / `@register_shape()`）。クラス名から推論されます（`CamelCase → snake_case`）。
+- 名前は省略可能（`@shape` / `@shape()`）。クラス名から推論されます（`CamelCase → snake_case`）。
 - 実体は `shapes.registry.shape` に委譲。
 
 ## 3) 使い方（登録後）

@@ -50,16 +50,16 @@ def effect(arg: Any | None = None, /, name: str | None = None):
     # 位置引数で名前を渡した (@effect("name"))
     if isinstance(arg, str) and name is None:
 
-        def _decorator(obj: Any):
+        def _decorator_named(obj: Any):
             return _register_checked(obj, arg)
 
-        return _decorator
+        return _decorator_named
 
     # name キーワード引数、または引数なし
-    def _decorator(obj: Any):
+    def _decorator_generic(obj: Any):
         return _register_checked(obj, name)
 
-    return _decorator
+    return _decorator_generic
 
 
 def get_effect(name: str) -> Callable[..., Geometry]:
@@ -86,6 +86,11 @@ def clear_registry() -> None:
     _effect_registry.clear()
 
 
+def unregister(name: str) -> None:
+    """名前を指定して登録を解除（存在しない場合は無視）。"""
+    _effect_registry.unregister(name)
+
+
 def get_registry() -> Mapping[str, Any]:
     """読み取り専用ビューとしてレジストリ辞書を返す。"""
     return _effect_registry.registry
@@ -97,5 +102,6 @@ __all__ = [
     "list_effects",
     "is_effect_registered",
     "clear_registry",
+    "unregister",
     "get_registry",
 ]

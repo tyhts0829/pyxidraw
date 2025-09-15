@@ -47,6 +47,7 @@
   - Effects: `effects/` + `@effect` で登録、`E.pipeline.<name>(...)` でチェーン可能。
   - 正規化キー（Camel→snake, lower, `-`→`_`）で一貫性を担保（`common/base_registry.py`）。
   - Effects はオプションで `__param_meta__` を公開でき、`validate_spec` が型/範囲/choices を追加検証。
+  - 公開インポート経路の単一路線: ユーザー拡張の登録デコレータは `from api import shape` のみを公式に提供（破壊的変更で統一）。
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
   - 厳格モード（既定 `strict=True`）で未知パラメータを検出。`to_spec/from_spec/validate_spec` でシリアライズと検証。

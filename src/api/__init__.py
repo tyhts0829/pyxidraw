@@ -14,8 +14,13 @@ Usage:
     result = pipeline(g)
 """
 
+from effects.registry import effect as effect  # 公開唯一経路（api.effect）
+
 # コアクラス（高度な使用）
 from engine.core.geometry import Geometry
+from shapes.registry import (
+    shape as shape,
+)  # 公開唯一経路（api.shape）。shape_registry では再輸出しない。
 
 from .pipeline import E, from_spec, to_spec, validate_spec
 from .runner import run_sketch as run
@@ -28,6 +33,8 @@ __all__ = [
     # メインAPI
     "G",  # 形状ファクトリ
     "E",  # エフェクトファクトリ
+    "shape",  # ユーザー拡張用デコレータ（唯一の公開経路）
+    "effect",  # ユーザー拡張用デコレータ（唯一の公開経路）
     "run_sketch",  # 実行（詳細指定）
     "run",  # 実行（エイリアス、簡易）
     # クラス（高度な使用）
@@ -41,11 +48,12 @@ __all__ = [
 
 # バージョン情報
 __version__ = "2025.09"
-__api_version__ = "4.0"
+__api_version__ = "5.0"
 
 # 互換性情報（破壊的変更）
 __breaking_changes__ = [
     "後方互換引数を廃止しクリーンAPIへ統一",
     "PipelineBuilder を既定 strict=True に変更",
     "Text 形状の size を font_size に改名",
+    "shape デコレータの公開経路を 'from api import shape' に統一（api.shape_registry からの再輸出と register_shape を廃止）",
 ]
