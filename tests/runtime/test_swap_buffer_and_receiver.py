@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 
 from engine.core.geometry import Geometry
-from engine.pipeline.buffer import SwapBuffer
-from engine.pipeline.packet import RenderPacket
-from engine.pipeline.receiver import StreamReceiver
+from engine.runtime.buffer import SwapBuffer
+from engine.runtime.packet import RenderPacket
+from engine.runtime.receiver import StreamReceiver
 
 
 def test_swap_buffer_push_and_swap() -> None:

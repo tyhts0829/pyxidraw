@@ -8,7 +8,7 @@ import psutil
 from engine.core.geometry import Geometry
 
 from ..core.tickable import Tickable
-from ..pipeline.buffer import SwapBuffer
+from ..runtime.buffer import SwapBuffer
 
 
 class MetricSampler(Tickable):

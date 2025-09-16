@@ -1,1 +1,1 @@
-"""Engine パッケージ（core/io/pipeline/render/ui/monitor）。"""
+"""Engine パッケージ（core/io/runtime/render/ui）。"""

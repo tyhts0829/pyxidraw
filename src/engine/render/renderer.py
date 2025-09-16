@@ -27,7 +27,7 @@ from engine.core.geometry import Geometry
 from util.constants import PRIMITIVE_RESTART_INDEX
 
 from ..core.tickable import Tickable
-from ..pipeline.buffer import SwapBuffer
+from ..runtime.buffer import SwapBuffer
 from .line_mesh import LineMesh
 from .shader import Shader
 

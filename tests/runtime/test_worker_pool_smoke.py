@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from engine.core.geometry import Geometry
-from engine.pipeline.worker import WorkerPool
+from engine.runtime.worker import WorkerPool
 
 
 def _draw_cb(t: float, _cc: Mapping[int, float]) -> Geometry:  # noqa: ANN001

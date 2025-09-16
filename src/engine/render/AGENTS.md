@@ -4,7 +4,7 @@
 - `Geometry` を VBO/IBO に変換し、ModernGL で線描画する。
 
 外部とのつながり
-- 入力: `engine.pipeline.SwapBuffer`（front バッファ）。
+- 入力: `engine.runtime.SwapBuffer`（front バッファ）。
 - 依存可: `util.constants.PRIMITIVE_RESTART_INDEX`。
 - 依存不可: `effects/*`, `shapes/*`, `api/*`。
 
@@ -13,4 +13,3 @@
 
 Don’t
 - 形状生成・加工のロジックを持ち込まない。
-

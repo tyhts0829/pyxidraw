@@ -208,11 +208,11 @@ def run_sketch(
 
     from engine.core.frame_clock import FrameClock
     from engine.core.render_window import RenderWindow
-    from engine.monitor.sampler import MetricSampler
-    from engine.pipeline.buffer import SwapBuffer
-    from engine.pipeline.receiver import StreamReceiver
-    from engine.pipeline.worker import WorkerPool
+    from engine.runtime.buffer import SwapBuffer
+    from engine.runtime.receiver import StreamReceiver
+    from engine.runtime.worker import WorkerPool
     from engine.render.renderer import LineRenderer
+    from engine.ui.monitor import MetricSampler
     from engine.ui.overlay import OverlayHUD
 
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------

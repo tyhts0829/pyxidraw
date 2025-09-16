@@ -5,7 +5,7 @@
 
 外部とのつながり
 - 依存可: `engine.core.Geometry`, `common/*`。
-- 依存不可: `effects/*`, `engine/render/*`, `engine/pipeline/*`。
+- 依存不可: `effects/*`, `engine/render/*`, `engine/runtime/*`。
 
 方針/Do
 - 形状関数は純粋関数的（副作用なし）で `Geometry` を返す（または `Geometry.from_lines()` 互換のポリライン列）。

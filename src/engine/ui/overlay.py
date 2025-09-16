@@ -4,7 +4,7 @@ import pyglet
 from pyglet.window import Window
 
 from ..core.tickable import Tickable
-from ..monitor.sampler import MetricSampler
+from .monitor import MetricSampler
 
 
 class OverlayHUD(Tickable):

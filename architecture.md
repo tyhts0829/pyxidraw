@@ -4,7 +4,7 @@
 - 層（数値は内外の序数。小さいほど内側）
   - L0 Core/Base: `common/`, `util/`, `engine/core/`
   - L1 Domain/Transforms: `shapes/`, `effects/`（純関数 `Geometry -> Geometry`）
-  - L2 Infra & Runtime: `engine/render/`, `engine/pipeline/`, `engine/ui/`, `engine/io/`, `engine/monitor/`
+  - L2 Infra & Runtime: `engine/render/`, `engine/runtime/`, `engine/ui/`, `engine/io/`
   - L3 API/Entry: `api/`, `main.py`
 - 許可する依存方向
   - 外側 → 内側（同層は許可）。数値で表すと「ソース層 ≥ ターゲット層」。
@@ -17,8 +17,8 @@
 ### 個別禁止エッジ（本リポ特化の契約）
 - `engine/*` → `api/*` を禁止（エンジン層は公開APIを知らない）。
 - `engine/*` → `effects/*`, `shapes/*` を禁止（設計の一方向性維持）。
-- `effects/*`, `shapes/*` → `engine/render/*`, `engine/pipeline/*`, `engine/ui/*`, `engine/io/*`, `engine/monitor/*` を禁止。
-- `engine/pipeline/*` が `effects/*` の関数を直接呼ぶことを禁止（パイプライン適用は `api` の責務）。
+- `effects/*`, `shapes/*` → `engine/render/*`, `engine/runtime/*`, `engine/ui/*`, `engine/io/*` を禁止。
+- `engine/runtime/*` が `effects/*` の関数を直接呼ぶことを禁止（パイプライン適用は `api` の責務）。
 - `effects.registry`/`shapes.registry` の参照は `api/*`, `effects/*`, `shapes/*` に限定。
   - `engine/*`, `common/*`, `util/*` からの参照は禁止（登録/解決の境界を越えない）。
 - 例外が必要な場合は ADR を追加し、ここ（キャンバス）にも例外行を追記すること。
@@ -85,9 +85,9 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 - `engine/`
   - `core/geometry.py`: 統一 `Geometry`、基本変換、`digest`。
   - `core/frame_clock.py`, `core/tickable.py`: フレーム調停と更新インターフェース。
-  - `pipeline/`: `WorkerPool`, `StreamReceiver`, `buffer` 等の並行処理。
+  - `runtime/`: `WorkerPool`, `StreamReceiver`, `buffer` 等の並行処理。
   - `render/renderer.py`: ライン描画（正射影行列、倍精度→GPU転送）。
-  - `ui/overlay.py`, `monitor/`: HUD とメトリクス。
+  - `ui/overlay.py`, `ui/monitor.py`: HUD とメトリクス。
   - `io/`: MIDI 接続・スナップショット取得。
 - `effects/`: 幾何処理のオペレータ群と `registry.py`。
 - `shapes/`: プリミティブ形状と `registry.py`。
@@ -348,9 +348,9 @@ Tips:
 ## 参考: 主要モジュールの対応表
 - API: `src/api/__init__.py`, `effects.py`, `sketch.py`, `shapes.py`
 - Engine/Core: `core/geometry.py`, `core/frame_clock.py`, `core/render_window.py`, `core/tickable.py`
-- Engine/Pipeline: `pipeline/worker.py`, `pipeline/receiver.py`, `pipeline/buffer.py`
+- Engine/Runtime: `runtime/worker.py`, `runtime/receiver.py`, `runtime/buffer.py`
 - Engine/Render: `render/renderer.py`, `render/line_mesh.py`, `render/shader.py`
-- Engine/UI/Monitor: `ui/overlay.py`, `monitor/sampler.py`
+- Engine/UI/Monitor: `ui/overlay.py`, `ui/monitor.py`
 - Effects: `effects/*.py`, `effects/registry.py`
 - Shapes: `shapes/*.py`, `shapes/registry.py`
 - Common/Util: `common/*.py`, `util/*.py`（`constants.py`, `utils.py`, `geom3d_ops.py` など）

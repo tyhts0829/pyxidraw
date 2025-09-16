@@ -51,7 +51,7 @@
 - 形状/エフェクト登録: `src/shapes/registry.py`, `src/effects/registry.py`
 - 中核ジオメトリ: `src/engine/core/geometry.py`
 - レンダリング: `src/engine/render/`
-- パイプライン/ワーカー: `src/engine/pipeline/`
+- ランタイム/ワーカー: `src/engine/runtime/`
 - 共通型/ユーティリティ: `src/common/`, `src/util/`
 - 設定: `config.yaml`, `configs/default.yaml`
 - テスト: `tests/`（`smoke`/`integration`/`e2e`/`perf`/`optional`）
