@@ -70,7 +70,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-from dataclasses import dataclass, field
 from typing import Iterable
 
 import numpy as np
@@ -84,7 +83,35 @@ def _digest_enabled() -> bool:
     return v not in ("1", "true", "TRUE", "True")
 
 
-@dataclass(eq=False, slots=True)
+def _normalize_geometry_input(
+    coords: np.ndarray,
+    offsets: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """`Geometry` 生成時の内部正規化ヘルパ。"""
+
+    coords_arr = np.asarray(coords, dtype=np.float32)
+    if coords_arr.ndim != 2 or coords_arr.shape[1] != 3:
+        raise ValueError("coords は形状 (N, 3) の配列である必要があります。")
+    if not coords_arr.flags.c_contiguous:
+        coords_arr = np.ascontiguousarray(coords_arr, dtype=np.float32)
+
+    offsets_arr = np.asarray(offsets, dtype=np.int32)
+    if offsets_arr.ndim != 1:
+        raise ValueError("offsets は 1 次元配列である必要があります。")
+    if offsets_arr.size == 0:
+        raise ValueError("offsets は少なくとも1要素を含む必要があります。")
+    if offsets_arr[0] != 0:
+        raise ValueError("offsets[0] は常に 0 である必要があります。")
+    if offsets_arr[-1] != coords_arr.shape[0]:
+        raise ValueError("offsets[-1] は coords の行数と一致する必要があります。")
+    if np.any(np.diff(offsets_arr) < 0):
+        raise ValueError("offsets は単調非減少である必要があります。")
+    if not offsets_arr.flags.c_contiguous:
+        offsets_arr = np.ascontiguousarray(offsets_arr, dtype=np.int32)
+
+    return coords_arr, offsets_arr
+
+
 class Geometry:
     """統一幾何データ構造。
 
@@ -96,11 +123,20 @@ class Geometry:
     設計意図:
     - 表現を 1 種に統一し、Shapes/E.pipeline/Renderer 間の境界を単純化する。
     - 変換はインスタンスを複製する純関数（テスト容易・キャッシュ容易）。
+    - 生成時に dtype/形状を検証し、正規化済み状態だけを許容する。
     """
 
-    coords: np.ndarray  # (N, 3) float32
-    offsets: np.ndarray  # (M+1,) int32
-    _digest: bytes | None = field(default=None, repr=False, compare=False, init=False)
+    __slots__ = ("coords", "offsets", "_digest")
+
+    coords: np.ndarray
+    offsets: np.ndarray
+    _digest: bytes | None
+
+    def __init__(self, coords: np.ndarray, offsets: np.ndarray) -> None:
+        norm_coords, norm_offsets = _normalize_geometry_input(coords, offsets)
+        self.coords = norm_coords
+        self.offsets = norm_offsets
+        self._digest = None
 
     # ── ファクトリ ───────────────────
     @classmethod
@@ -152,10 +188,7 @@ class Geometry:
         for i, arr in enumerate(np_lines, start=1):
             offsets[i] = offsets[i - 1] + arr.shape[0]
         coords = np.concatenate(np_lines, axis=0)
-        return cls(
-            coords.astype(np.float32, copy=False),
-            offsets.astype(np.int32, copy=False),
-        )
+        return cls(coords, offsets)
 
     # ── 基本操作（すべて純粋） ────────
     def as_arrays(self, *, copy: bool = False) -> tuple[np.ndarray, np.ndarray]:

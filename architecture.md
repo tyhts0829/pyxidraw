@@ -173,6 +173,7 @@ Tips:
 - 不変条件/規約
   - `offsets[0]==0`、`offsets[-1]==len(coords)`、2D 入力は `Z=0` 補完、空集合は `coords.shape==(0,3)`, `offsets=[0]`。
   - 変換は純関数（`translate/scale/rotate/concat`）。常に新インスタンスを返す。
+  - コンストラクタで dtype/形状を検証し、`coords` は float32 C-contig、`offsets` は int32 C-contig へ強制正規化。
 - ダイジェスト（キャッシュ協調）
   - `digest: bytes` は `blake2b(digest_size=16)` による内容指紋。初回遅延計算→以後再利用。
   - 無効化: `PXD_DISABLE_GEOMETRY_DIGEST=1`。この場合 `g.digest` アクセスは例外、ただしパイプライン側が配列から都度ハッシュでフォールバック。

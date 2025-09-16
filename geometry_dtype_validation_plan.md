@@ -15,22 +15,22 @@
 - `architecture.md` / `Geometry` docstring: 新しい前提へ更新。
 
 ## 実装タスクリスト
-- [ ] 現行 `Geometry` 利用箇所（特に `Geometry(...)` 直接呼び出し）を洗い出し、新しい厳格仕様に合わせて書き換えの影響を把握する。
-- [ ] `Geometry` を dataclass から通常クラスへ置換し、`__slots__ = ("coords", "offsets", "_digest")` を定義。
-- [ ] `_normalize_geometry_input(coords, offsets)` を実装。
-  - `coords`: `np.asarray(coords, dtype=np.float32)` → `ndim==2`, `shape[1]==3`, C-contiguous を保証。
-  - `offsets`: `np.asarray(offsets, dtype=np.int32)` → `ndim==1`, 先頭0/末尾`len(coords)`/単調非減少を検証。
-  - 条件違反時は即 `ValueError`。必要最小限の `astype(copy=False)`/`np.ascontiguousarray` でコピー回数を抑制。
-- [ ] `__init__` で上記ヘルパの戻り値を受け、内部状態を直接設定。`from_lines` は入力構築後に `cls(coords, offsets)` を呼ぶだけにする。
-- [ ] `translate/scale/rotate/concat/as_arrays` 等の内部実装を新仕様に合わせて調整（戻り値も厳格化維持）。
-- [ ] 破壊的変更に合わせ tests を更新/追加。
-  - float64/int64/不正形状 → `ValueError`
-  - 正常入力は float32/int32 に落ちること、C-contiguous であること
-  - `concat` 等の結果 dtype を確認
-- [ ] `architecture.md` と docstring を新しい「コンストラクタが正規化を担保する」記述へ同期。
-- [ ] 完了後に実行する検証コマンドを決定（`ruff`/`mypy`/`pytest tests/core/test_geometry*.py`）。
+- [x] 現行 `Geometry` 利用箇所（特に `Geometry(...)` 直接呼び出し）を洗い出し、新しい厳格仕様に合わせて書き換えの影響を把握する。
+- [x] `Geometry` を dataclass から通常クラスへ置換し、`__slots__ = ("coords", "offsets", "_digest")` を定義。
+- [x] `_normalize_geometry_input(coords, offsets)` を実装。
+-  - `coords`: `np.asarray(coords, dtype=np.float32)` → `ndim==2`, `shape[1]==3`, C-contiguous を保証。
+-  - `offsets`: `np.asarray(offsets, dtype=np.int32)` → `ndim==1`, 先頭0/末尾`len(coords)`/単調非減少を検証。
+-  - 条件違反時は即 `ValueError`。必要最小限の `astype(copy=False)`/`np.ascontiguousarray` でコピー回数を抑制。
+- [x] `__init__` で上記ヘルパの戻り値を受け、内部状態を直接設定。`from_lines` は入力構築後に `cls(coords, offsets)` を呼ぶだけにする。
+- [x] `translate/scale/rotate/concat/as_arrays` 等の内部実装を新仕様に合わせて調整（戻り値も厳格化維持）。
+- [x] 破壊的変更に合わせ tests を更新/追加。
+-  - float64/int64/不正形状 → `ValueError`
+-  - 正常入力は float32/int32 に落ちること、C-contiguous であること
+-  - `concat` 等の結果 dtype を確認
+- [x] `architecture.md` と docstring を新しい「コンストラクタが正規化を担保する」記述へ同期。
+- [x] 完了後に実行する検証コマンドを決定（`ruff`/`mypy`/`pytest tests/core/test_geometry*.py`）。
 
 ## 未決事項・検討
-- offsets の平坦化：ゼロ長セグメント（`offsets[i]==offsets[i+1]`）を許容するか要確認。単調非減少の範囲で現仕様を踏襲する想定。
-- `concat` の内部で `np.vstack`/`np.hstack` する際も最終的に `_normalize_geometry_input` を通すか、既に規約を満たす配列を直接利用するか（パフォーマンス vs 一貫性）。
-- API 破壊の周知: 外部で float64 を期待している既存コードへの影響がないか確認（配布前リポのため重大ではない想定）。
+- offsets の平坦化: ゼロ長セグメントは `np.diff(...)<0` の検査で引き続き許容（単調非減少条件に収束）。
+- `concat` の内部は新規ヘルパを通さず、既存ロジックが規約を保つことを確認済み（追加コピーを避ける）。
+- API 破壊の周知: 現時点で利用者不在のため追加対応不要と判断。

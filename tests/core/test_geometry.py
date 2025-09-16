@@ -14,6 +14,31 @@ def test_from_lines_normalizes_2d_and_offsets() -> None:
     assert np.allclose(g.coords[:, 2], 0.0)
 
 
+def test_constructor_normalizes_dtype_and_contiguity() -> None:
+    coords = np.asfortranarray(np.array([[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]], dtype=np.float64))
+    offsets = np.array([0, 2], dtype=np.int64)
+    g = Geometry(coords, offsets)
+    assert g.coords.dtype == np.float32
+    assert g.offsets.dtype == np.int32
+    assert g.coords.flags.c_contiguous is True
+    assert g.offsets.flags.c_contiguous is True
+    assert np.allclose(g.coords, coords)
+
+
+def test_constructor_invalid_coords_shape_raises() -> None:
+    coords = np.zeros((2, 2), dtype=np.float32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    with pytest.raises(ValueError):
+        Geometry(coords, offsets)
+
+
+def test_constructor_invalid_offsets_raises() -> None:
+    coords = np.zeros((2, 3), dtype=np.float32)
+    bad_offsets = np.array([0, 1], dtype=np.int32)
+    with pytest.raises(ValueError):
+        Geometry(coords, bad_offsets)
+
+
 def test_from_lines_1d_invalid_raises() -> None:
     bad = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)  # 4 は 3 の倍数でない
     with pytest.raises(ValueError):
