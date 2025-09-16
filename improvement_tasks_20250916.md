@@ -6,10 +6,9 @@
   - 影響: `from api import E` を使った最初のパイプライン構築が失敗し、API 一貫性（`G` 側は副作用 import 済み）も崩れている。
   - 確認結果: `src/api/effects.py:78` の `from effects.registry import get_effect` でパッケージ全体が読み込まれ、`effects/__init__.py` の副作用 import が発火しているためレジストリは初期化済み。`PYTHONPATH=src python - <<'PY' ...` による手動検証でも `E.pipeline.rotate().build()` は `KeyError` なく成功し、`sys.modules` に `effects.*` が展開されていることを確認。
 
-- [ ] `src` 配下に混入している `__pycache__` などのビルド生成物を削除し、`.gitignore` で再発を防ぐ。併せて実体のない `src/scripts/` の扱いを整理する。
-  - 現状: `src/scripts/__pycache__/gen_g_stubs.cpython-*.pyc` や `src/engine/ui/__pycache__/overlay.cpython-*.pyc` などがリポジトリにコミットされている。
-  - 問題: 生成物がバージョン管理されており、ディレクトリ構成がノイズで膨らんでいる。`src/scripts/` は `.pyc` のみで構成され実装が存在しない。
-  - 影響: クリーンなビルドが困難になり、不要な差分や環境依存のバイトコードがレビュー負荷を増大させる。構造のシンプルさというリポ方針にも反する。
+- [x] `src` 配下に混入している `__pycache__` などのビルド生成物を削除し、`.gitignore` で再発を防ぐ。併せて実体のない `src/scripts/` の扱いを整理する。
+  - 対応: `.gitignore` を整理して `__pycache__/`・`*.py[cod]`・`*$py.class` など Python 生成物の除外を明確化。`find`/Python スクリプトで 30 箇所の `__pycache__` を一括削除し、空になった `src/scripts/` ディレクトリを参照調査後に削除済み。
+  - 備考: `git ls-files` では該当生成物はいずれも追跡されておらず、今回の作業は物理クリーンアップと再発防止設定の強化に留まる。
 
 - [ ] `Geometry` コンストラクタで `coords`/`offsets` の dtype・形状を検証し、不正入力を例外または正規化で吸収できるようにする。
   - 現状: `Geometry` は dataclass のフィールドに直接 ndarray を渡すだけで、dtype を float32/int32 に制約していない。

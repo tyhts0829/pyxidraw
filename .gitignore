@@ -1,14 +1,15 @@
 .DS_Store
+# Python build artifacts
 __pycache__/
+*.py[cod]
+*$py.class
+
 .hypothesis/
 .ipynb_checkpoints/
 .vscode/
 env/
 venv/
 .venv/
-*.pyc
-*.pyo
-*.pyd
 *.sqlite3
 *.log
 *.pot
