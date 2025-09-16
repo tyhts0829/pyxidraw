@@ -19,8 +19,7 @@ Design
 - 単一入口: 形状生成は `G` が一手に引き受ける。
 - 責務境界: 生成は `G`/各 shape 関数、変換は `Geometry`、加工は `E.pipeline`。
 - キャッシュ: 形状生成結果の LRU（maxsize=128）は本モジュールに集約。
-- 動的ディスパッチ: メタクラス `ShapesAPIMeta` とインスタンス `__getattr__` の双方で
-  `G.sphere(...)`/`ShapesAPI.sphere(...)` をサポート。
+- 動的ディスパッチ: インスタンス `__getattr__` で遅延解決し、`G.sphere(...)` の形で提供。
 - 再現性と性能: `_params_to_tuple()` でパラメータを決定的・ハッシュ可能に正規化し、
   プロセス内 LRU を適用。
 - 例外方針: 未登録名は `AttributeError`。生成器側の失敗は各シェイプが責任。
@@ -60,65 +59,11 @@ from shapes.registry import list_shapes as list_registered_shapes
 ParamsTuple = tuple[tuple[str, Any], ...]
 
 
-class ShapesAPIMeta(type):
-    """ShapesAPI のメタクラス。
-
-    目的:
-    - クラスレベル（`ShapesAPI.sphere(...)` のような呼び出し）でも動的属性を解決し、
-      レジストリにあるシェイプ名を関数として露出する。
-    - 返す関数は `ShapesAPI._cached_shape(...)` を経由し、LRU キャッシュの恩恵を受ける。
-    """
-
-    def __getattr__(cls, name: str) -> Callable[..., Geometry]:
-        """クラスレベルでの動的属性アクセス。
-
-        指定された `name` がシェイプレジストリに存在する場合、
-        `shape_method(**params) -> Geometry` を返す。
-        存在しない場合は `AttributeError`。
-        """
-        try:
-            # 存在確認のみ（実体の生成は _cached_shape に委譲）
-            _ = get_shape_generator(name)
-
-            # 動的にクラスメソッドを生成し、クラス属性としてメモ化する。
-            # 注意（重要）:
-            # - この関数は staticmethod としてクラスにバインドする。これによりインスタンスから
-            #   参照しても `self` が暗黙に注入されず、`G.sphere(...)`/`ShapesAPI.sphere(...)`
-            #   の双方で同一実装を安全に共有できる。
-            # - ランタイムでの登録解除に対応するため、呼び出し時に `is_shape_registered(name)` を
-            #   検査するガードを設置。未登録ならクラス属性を削除して `AttributeError` を投げ、
-            #   動的属性の整合性（未登録=属性なし）を保つ。（メモ化の副作用を相殺するための安全策）
-            def _shape_method_impl(**params: Any) -> Geometry:
-                if not is_shape_registered(name):
-                    # 登録が解除されていた場合はメモ化を破棄して AttributeError へ整合
-                    try:
-                        delattr(cls, name)
-                    except Exception:
-                        pass
-                    raise AttributeError(f"'{cls.__name__}' has no attribute '{name}'")
-                params_tuple = cls._params_to_tuple(**params)
-                return cls._cached_shape(name, params_tuple)
-
-            # ヘルプ/補完のためにメタデータを持たせる
-            _shape_method_impl.__name__ = name
-            _shape_method_impl.__qualname__ = f"{cls.__name__}.{name}"
-            _doc = None  # 関数ベースへ移行後は docstring の転写は省略（任意で将来対応）
-            if _doc:
-                _shape_method_impl.__doc__ = _doc
-
-            # クラスへ staticmethod としてメモ化
-            setattr(cls, name, staticmethod(_shape_method_impl))
-            # 実際に返すのはクラス属性（staticmethod 解決後の関数オブジェクト）
-            return getattr(cls, name)
-        except Exception:
-            raise AttributeError(f"'{cls.__name__}' has no attribute '{name}'")
-
-
-class ShapesAPI(metaclass=ShapesAPIMeta):
+class ShapesAPI:
     """高性能キャッシュ付き形状 API（`G` の実体）。
 
     責務:
-    - 形状名→生成関数の動的ディスパッチ
+    - 形状名→生成関数の動的ディスパッチ（インスタンス属性で遅延解決）
     - 生成結果の型統一（常に `Geometry` を返す）
     - 形状生成結果の LRU キャッシュ（maxsize=128）
 
@@ -159,7 +104,20 @@ class ShapesAPI(metaclass=ShapesAPIMeta):
         """パラメータ辞書を「順序安定・ハッシュ可能」なタプルへ正規化（共通実装）。"""
         return _params_to_tuple(dict(params))
 
-    # === レジストリベース形状生成（メタクラスによる動的アクセス） ===
+    def _build_shape_method(self, name: str) -> Callable[..., Geometry]:
+        """指定されたレジストリ名から形状生成関数を構築するヘルパー。"""
+
+        def _shape_method(**params: Any) -> Geometry:
+            if not is_shape_registered(name):
+                # 登録解除と整合を取るため、キャッシュ済みの属性を破棄して AttributeError を送出
+                self.__dict__.pop(name, None)
+                raise AttributeError(f"'{self.__class__.__name__}' has no attribute '{name}'")
+            params_tuple = self._params_to_tuple(**params)
+            return self._cached_shape(name, params_tuple)
+
+        _shape_method.__name__ = name
+        _shape_method.__qualname__ = f"{self.__class__.__name__}.{name}"
+        return _shape_method
 
     # === ユーザー拡張 ===
 
@@ -183,15 +141,15 @@ class ShapesAPI(metaclass=ShapesAPIMeta):
     def __getattr__(self, name: str) -> Callable[..., Geometry]:
         """インスタンスレベルでの動的属性アクセス。
 
-        `G.<name>(**params) -> Geometry` を提供。クラスレベルと同じロジックで
-        レジストリ解決とキャッシュを行う。
+        `G.<name>(**params) -> Geometry` を提供。レジストリ状態を確認しながら
+        一度構築した呼び出し可能をインスタンス属性としてキャッシュする。
         """
-        # クラス側の __getattr__ に委譲してメモ化を行い、取得する。
-        # 未登録名の場合はクラス側が AttributeError を投げる。
-        try:
-            return getattr(type(self), name)
-        except AttributeError:
+        if not is_shape_registered(name):
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+        method = self._build_shape_method(name)
+        self.__dict__[name] = method
+        return method
 
     @classmethod
     def list_shapes(cls) -> list[str]:
