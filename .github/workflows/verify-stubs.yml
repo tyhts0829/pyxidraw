@@ -30,10 +30,10 @@ jobs:
       - name: Generate stubs
         env:
           PYTHONPATH: src
-        run: python -m scripts.gen_g_stubs
+        run: python -m tools.gen_g_stubs
       - name: Ensure stubs are up-to-date
         run: |
-          git diff --exit-code src/api/__init__.pyi || (echo 'src/api/__init__.pyi is outdated; run python -m scripts.gen_g_stubs' && exit 1)
+          git diff --exit-code src/api/__init__.pyi || (echo 'src/api/__init__.pyi is outdated; run python -m tools.gen_g_stubs' && exit 1)
       - name: Lint (ruff)
         run: ruff check .
       - name: Format (black --check)

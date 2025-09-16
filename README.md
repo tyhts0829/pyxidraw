@@ -26,7 +26,7 @@ pip install -e .[dev]
 
 2) スタブ生成とスモークテスト:
 ```
-PYTHONPATH=src python -m scripts.gen_g_stubs
+PYTHONPATH=src python -m tools.gen_g_stubs
 pytest -q -m smoke
 ```
 
@@ -66,4 +66,4 @@ g = G.ring(r=80)
 
 - スタブ検証 CI: `.github/workflows/verify-stubs.yml`
 
-バグ報告/提案は Issue にお願いします。スタブ更新が必要な変更では `python -m scripts.gen_g_stubs` を実行し、`api/__init__.pyi` を更新してください。
+バグ報告/提案は Issue にお願いします。スタブ更新が必要な変更では `python -m tools.gen_g_stubs` を実行し、`api/__init__.pyi` を更新してください。

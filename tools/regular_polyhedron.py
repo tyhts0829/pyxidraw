@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 
-import logging
 import math
 import numbers
 import operator
-from pathlib import Path
 
-import numpy as np
 
 ####
 # 直径1の球に内接する正多面体のデータ生成
@@ -126,10 +123,16 @@ class RegularPolyhedron:
 
         # 正多面体と対の両方の多角形データを作成する.
         self.main_polygon = S.create_polygon_list(
-            self.main_vertex, self.main_normal, p1.dot(p2), p1.dot(n1)
+            self.main_vertex,
+            self.main_normal,
+            math.cos(2 * PPN),
+            math.cos(2 * PPF),
         )
         self.dual_polygon = S.create_polygon_list(
-            self.dual_vertex, self.dual_normal, n1.dot(n2), p1.dot(n1)
+            self.dual_vertex,
+            self.dual_normal,
+            math.cos(2 * PPF),
+            math.cos(2 * PPN),
         )
         self.polygon = self.main_polygon
 
@@ -385,20 +388,21 @@ class Vector3(numbers.Integral):
         return x1 * x2 + y1 * y2 + z1 * z2
 
     def neareq(self, rhs, thr=(1 / (1 << 20))):
-        return abs(1.0 - self.dot(rhs)) < thr
+        x1, y1, z1 = self.value
+        x2, y2, z2 = rhs.value
+        return math.fabs(x1 - x2) < thr and math.fabs(y1 - y2) < thr and math.fabs(z1 - z2) < thr
 
-    def doteq(self, rhs, cos, thr=(1 / (1 << 20))):
-        return abs(cos - self.dot(rhs)) < thr
+    def doteq(self, rhs, thr):
+        return math.fabs(self.dot(rhs) - thr) <= 1 / (1 << 20)
 
     def normalize(self):
-        return self.__truediv__(self.__abs__())
+        x, y, z = self.value
+        l = math.sqrt(x * x + y * y + z * z)
+        return Vector3(x / l, y / l, z / l)
 
     def fixfp(self):
-        return Vector3([Vector3.vfixfp(v) for v in self.value])
-
-    @staticmethod
-    def vfixfp(v):
-        return round(v) if (abs(v - round(v)) < (1 / (1 << 24))) else v
+        x, y, z = [int(v * (1 << 20)) / (1 << 20) for v in self.value]
+        return Vector3(x, y, z)
 
 
 ####
@@ -407,8 +411,6 @@ class Vector3(numbers.Integral):
 
 
 class Matrix33(numbers.Integral):
-    MESSAGE_FORMAT = "((%+.6e, %+.6e, %+.6e), (%+.6e, %+.6e, %+.6e), (%+.6e, %+.6e, %+.6e))"
-
     def __init__(self, *args):
         if len(args) == 9:
             self.value = list(args)
@@ -417,10 +419,8 @@ class Matrix33(numbers.Integral):
             self.value = [1, 0, 0, 0, 1, 0, 0, 0, 1]
             return
         if len(args) == 1:
-            arg = args[0]
-            if type(arg) is Matrix33:
-                self.value = arg.value * 1
-                return
+            self.value = args[0]
+            return
         raise TypeError
 
     def __int__(self):
@@ -430,10 +430,32 @@ class Matrix33(numbers.Integral):
         return self.__str__()
 
     def __str__(self):
-        return Matrix33.MESSAGE_FORMAT % tuple(self.value)
+        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
+        return "[[%.6e, %.6e, %.6e], [%.6e, %.6e, %.6e], [%.6e, %.6e, %.6e]]" % (
+            m11,
+            m12,
+            m13,
+            m21,
+            m22,
+            m23,
+            m31,
+            m32,
+            m33,
+        )
 
     def __bool__(self):
-        return sum(self.value) != 0
+        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
+        return (
+            (m11 != 0)
+            or (m12 != 0)
+            or (m13 != 0)
+            or (m21 != 0)
+            or (m22 != 0)
+            or (m23 != 0)
+            or (m31 != 0)
+            or (m32 != 0)
+            or (m33 != 0)
+        )
 
     def __eq__(self, rhs):
         if type(rhs) is Matrix33:
@@ -454,7 +476,7 @@ class Matrix33(numbers.Integral):
         return Matrix33(self)
 
     def __invert__(self):
-        return self.inverse()
+        raise NotImplemented
 
     def __add__(self, rhs):
         if type(rhs) is Matrix33:
@@ -617,275 +639,3 @@ class Matrix33(numbers.Integral):
 
     def __rpow__(self, lhs):
         raise NotImplemented
-
-    def __rand__(self, lhs):
-        raise NotImplemented
-
-    def __rxor__(self, lhs):
-        raise NotImplemented
-
-    def __ror__(self, lhs):
-        raise NotImplemented
-
-    def __rlshift__(self, lhs):
-        raise NotImplemented
-
-    def __rrshift__(self, lhs):
-        raise NotImplemented
-
-    def __iadd__(self, rhs):
-        if type(rhs) is Vector3:
-            m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-            r11, r12, r13, r21, r22, r23, r31, r32, r33 = rhs.value
-            self.value = [
-                m11 + r11,
-                m12 + r12,
-                m13 + r13,
-                m21 + r21,
-                m22 + r22,
-                m23 + r23,
-                m31 + r31,
-                m32 + r32,
-                m33 + r33,
-            ]
-            return self
-        raise NotImplemented
-
-    def __isub__(self, rhs):
-        if type(rhs) is Matrix33:
-            m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-            r11, r12, r13, r21, r22, r23, r31, r32, r33 = rhs.value
-            self.value = [
-                m11 - r11,
-                m12 - r12,
-                m13 - r13,
-                m21 - r21,
-                m22 - r22,
-                m23 - r23,
-                m31 - r31,
-                m32 - r32,
-                m33 - r33,
-            ]
-            return self
-        raise NotImplemented
-
-    def __imul__(self, rhs):
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        if type(rhs) in (int, float):
-            self.value = [
-                m11 * rhs,
-                m12 * rhs,
-                m13 * rhs,
-                m21 * rhs,
-                m22 * rhs,
-                m23 * rhs,
-                m31 * rhs,
-                m32 * rhs,
-                m33 * rhs,
-            ]
-            return self
-        if type(rhs) is Matrix33:
-            r11, r12, r13, r21, r22, r23, r31, r32, r33 = rhs.value
-            self.value = [
-                m11 * r11 + m12 * r21 + m13 * r31,
-                m21 * r11 + m22 * r21 + m23 * r31,
-                m31 * r11 + m32 * r21 + m33 * r31,
-                m11 * r12 + m12 * r22 + m13 * r32,
-                m21 * r12 + m22 * r22 + m23 * r32,
-                m31 * r12 + m32 * r22 + m33 * r32,
-                m11 * r13 + m12 * r23 + m13 * r33,
-                m21 * r13 + m22 * r23 + m23 * r33,
-                m31 * r13 + m32 * r23 + m33 * r33,
-            ]
-            return self
-        raise NotImplemented
-
-    def __itruediv__(self, rhs):
-        if type(rhs) in (int, float):
-            m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-            self.value = [
-                m11 / rhs,
-                m12 / rhs,
-                m13 / rhs,
-                m21 / rhs,
-                m22 / rhs,
-                m23 / rhs,
-                m31 / rhs,
-                m32 / rhs,
-                m33 / rhs,
-            ]
-            return self
-        raise NotImplemented
-
-    def __imod__(self, rhs):
-        if type(rhs) in (int, float):
-            m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-            self.value = [
-                m11 % rhs,
-                m12 % rhs,
-                m13 % rhs,
-                m21 % rhs,
-                m22 % rhs,
-                m23 % rhs,
-                m31 % rhs,
-                m32 % rhs,
-                m33 % rhs,
-            ]
-            return self
-        raise NotImplemented
-
-    def __abs__(self):
-        return self.det()
-
-    def __ceil__(self):
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return Matrix33(
-            math.ceil(m11),
-            math.ceil(m12),
-            math.ceil(m13),
-            math.ceil(m21),
-            math.ceil(m22),
-            math.ceil(m23),
-            math.ceil(m31),
-            math.ceil(m32),
-            math.ceil(m33),
-        )
-
-    def __floor__(self):
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return Matrix33(
-            math.floor(m11),
-            math.floor(m12),
-            math.floor(m13),
-            math.floor(m21),
-            math.floor(m22),
-            math.floor(m23),
-            math.floor(m31),
-            math.floor(m32),
-            math.floor(m33),
-        )
-
-    def __round__(self):
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return Matrix33(
-            round(m11),
-            round(m12),
-            round(m13),
-            round(m21),
-            round(m22),
-            round(m23),
-            round(m31),
-            round(m32),
-            round(m33),
-        )
-
-    def __trunc__(self):
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return Matrix33(
-            math.trunc(m11),
-            math.trunc(m12),
-            math.trunc(m13),
-            math.trunc(m21),
-            math.trunc(m22),
-            math.trunc(m23),
-            math.trunc(m31),
-            math.trunc(m32),
-            math.trunc(m33),
-        )
-
-    def __getitem__(self, key):
-        if type(key) is tuple:
-            key = key[0] * 3 + key[1]
-        return self.value[key]
-
-    def __setitem__(self, key, value):
-        if type(key) is tuple:
-            key = key[0] * 3 + key[1]
-        self.value[key] = value
-
-    def det(self):
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return (
-            m11 * (m22 * m33 - m23 * m32)
-            + m12 * (m23 * m31 - m21 * m33)
-            + m13 * (m21 * m32 - m22 * m31)
-        )
-
-    def inverse(self):
-        det = self.det()
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return Matrix33(
-            (m22 * m33 - m23 * m32) / det,
-            (m23 * m31 - m21 * m33) / det,
-            (m21 * m32 - m22 * m31) / det,
-            (m32 * m13 - m33 * m12) / det,
-            (m33 * m11 - m31 * m13) / det,
-            (m31 * m12 - m32 * m11) / det,
-            (m12 * m23 - m13 * m22) / det,
-            (m13 * m21 - m11 * m23) / det,
-            (m11 * m22 - m12 * m21) / det,
-        )
-
-    def transpose(self):
-        m11, m12, m13, m21, m22, m23, m31, m32, m33 = self.value
-        return Matrix33(m11, m21, m31, m12, m22, m32, m13, m23, m33)
-
-
-####
-# Main
-####
-
-
-def close_polygon(main_polygon: tuple[tuple, ...]) -> tuple[tuple, ...]:
-    """
-    正多面体の頂点番号のtupleを受け取り、それに始点を追加したtupleを返す
-    """
-    new_polygon = []
-    for vertex_numbers in main_polygon:
-        new_vertex_numbers = []
-        for vertex_number in vertex_numbers:
-            new_vertex_numbers.append(vertex_number)
-        new_vertex_numbers.append(vertex_numbers[0])
-        new_polygon.append(tuple(new_vertex_numbers))
-    return tuple(new_polygon)
-
-
-def to_vertices_list(
-    main_polygon: tuple[tuple, ...], main_vertex: tuple[tuple, ...]
-) -> list[np.ndarray]:
-    """
-    正多面体の頂点番号のtupleと頂点座標のtupleを受け取り、頂点座標np.arrayのリストを返す
-    """
-    vertices_list = []
-    for vertex_numbers in main_polygon:
-        vertices = []
-        for vertex_number in vertex_numbers:
-            vertex = [float(x) / 2 for x in main_vertex[vertex_number]]  # floatのlistに変換
-            vertices.append(vertex)
-        vertices_list.append(np.array(vertices).astype(np.float64))
-    return vertices_list
-
-
-if __name__ == "__main__":
-    regular_polyhedrons = {
-        4: "tetrahedron",
-        6: "hexahedron",
-        8: "octahedron",
-        12: "dodecahedron",
-        20: "icosahedron",
-    }
-    # 頂点リストを .npz で保存する（pickle 非採用）
-    SAVE_DIR = Path(r"data/regular_polyhedron")
-    for M, name in regular_polyhedrons.items():
-        rp = RegularPolyhedron(M)
-        mp = close_polygon(rp.main_polygon)
-        mv = rp.main_vertex
-        vertices_list = to_vertices_list(mp, mv)
-        # npz で保存（arr_0, arr_1, ... として格納）
-        out = SAVE_DIR / f"{name}_vertices_list.npz"
-        np.savez(
-            out,
-            **{f"arr_{i}": np.asarray(a, dtype=np.float32) for i, a in enumerate(vertices_list)},
-        )
-        logging.getLogger(__name__).info("%s is saved as npz: %s", name, out)
-    logging.getLogger(__name__).info("finish")

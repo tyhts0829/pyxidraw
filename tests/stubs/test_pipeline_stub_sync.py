@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.gen_g_stubs import generate_stubs_str
+from tools.gen_g_stubs import generate_stubs_str
 
 
 def test_pipeline_builder_protocol_contains_registered_effects() -> None:

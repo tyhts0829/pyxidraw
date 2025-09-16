@@ -129,7 +129,7 @@ Read shapes.py, base.py, test_shape_registry_extra.py, gen_g_stubs.py, **init**.
 - [ ] 6. （任意）`get_shape_class` エイリアス追加と `__all__` 更新
 - [ ] 7. 変更ファイルに限定して `ruff/black/isort/mypy` 実行
 - [ ] 8. 対象テスト（`tests/api/test_shape_registry_extra.py`）を実行
-- [ ] 9. 影響範囲の最終確認（`scripts/gen_g_stubs.py` 参照部の型だけ確認）
+- [ ] 9. 影響範囲の最終確認（`tools/gen_g_stubs.py` 参照部の型だけ確認）
 
 ## 受け入れ基準（DoD）
 
@@ -164,7 +164,7 @@ pytest -q tests/api/test_shape_registry_extra.py
 
 - ランタイム挙動は不変。型注釈と docstring の追加のみ
 - `ShapeFactory` など上位はより強い型恩恵（`type[BaseShape]`）を受ける
-- `scripts/gen_g_stubs.py` の挙動は不変（呼び出し名/戻り値の実体は同じ）
+- `tools/gen_g_stubs.py` の挙動は不変（呼び出し名/戻り値の実体は同じ）
 
 ## 備考
 

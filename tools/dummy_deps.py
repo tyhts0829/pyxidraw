@@ -24,7 +24,7 @@ from __future__ import annotations
 - いずれも `# pragma: no cover` を付け、分岐網羅をテスト対象から除外している。
 
 使い方:
-    from scripts.dummy_deps import install
+    from tools.dummy_deps import install
     install()  # 必要に応じて早期に呼び出し、欠落依存を埋める
 
 関連:

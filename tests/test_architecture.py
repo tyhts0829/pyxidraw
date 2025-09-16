@@ -6,7 +6,7 @@
 - 個別禁止エッジ（architecture.md の契約）
 
 注:
-- `src/scripts/` は対象外（開発補助のための例外を許容）。
+- `tools/` は `src/` 外のため対象外（開発補助のための例外を許容）。
 """
 
 from __future__ import annotations

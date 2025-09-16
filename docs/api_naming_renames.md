@@ -86,7 +86,7 @@
   - [x] `tests/api/test_runner_more.py` → `tests/api/test_sketch_more.py`
   - [x] `tests/api/test_shape_factory.py` → `tests/api/test_shapes_api.py`
 - [x] スタブ再生成（必要に応じて）
-  - [x] `PYTHONPATH=src python -m scripts.gen_g_stubs && git add src/api/__init__.pyi`
+  - [x] `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
 - [x] 変更ファイル限定のチェックを緑化
   - [x] `ruff check --fix {changed_files}`
   - [x] `black {changed_files} && isort {changed_files}`

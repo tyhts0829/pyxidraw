@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.gen_g_stubs import generate_stubs_str
+from tools.gen_g_stubs import generate_stubs_str
 
 
 def test_api_stub_file_is_in_sync_with_generator() -> None:

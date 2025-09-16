@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: gen-g-stubs
         name: Generate G stubs (api/__init__.pyi)
-        entry: bash -lc "PYTHONPATH=src python -m scripts.gen_g_stubs"
+        entry: bash -lc "PYTHONPATH=src python -m tools.gen_g_stubs"
         language: system
         pass_filenames: false
       - id: test-g-stub-sync

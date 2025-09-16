@@ -50,6 +50,6 @@ assert restored(G.grid())  # 実行可能
 - `PXD_PIPELINE_CACHE_MAXSIZE` で既定値を上書き可能。
 
 ## スタブと IDE 補助
-- `api/__init__.pyi` は `scripts/gen_g_stubs.py` により自動生成。
+- `api/__init__.pyi` は `tools/gen_g_stubs.py` により自動生成。
 - 形状 `G` とエフェクト `E.pipeline` のメソッドには引数の短い説明を含む。
 - スタブは CI で同期検証（`tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py`）。

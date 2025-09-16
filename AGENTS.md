@@ -16,7 +16,7 @@
 
 - 環境: Python 3.10。初期化: `python3.10 -m venv .venv && source .venv/bin/activate && pip install -U pip && pip install -e .[dev]`
 - 実行: `python main.py`
-- スタブ再生成: `PYTHONPATH=src python -m scripts.gen_g_stubs && git add src/api/__init__.pyi`
+- スタブ再生成: `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
 - プロジェクト全体チェック（明示要求時のみ）:
   - Lint/Format/Type: `ruff check . && black . && isort . && mypy .`
   - Test: `pytest -q -m "not optional"`
@@ -47,7 +47,7 @@
 
 - 入口: `main.py`
 - 公開 API: `src/api/__init__.py`（エクスポート）、`src/api/__init__.pyi`（自動生成スタブ）
-- スタブ生成: `src/scripts/gen_g_stubs.py`（`python -m scripts.gen_g_stubs`）
+- スタブ生成: `tools/gen_g_stubs.py`（`python -m tools.gen_g_stubs`）
 - 形状/エフェクト登録: `src/shapes/registry.py`, `src/effects/registry.py`
 - 中核ジオメトリ: `src/engine/core/geometry.py`
 - レンダリング: `src/engine/render/`
@@ -103,7 +103,7 @@
 
 - Good:
   - 設計意図が短く端的な docstring と型注釈: `src/engine/core/geometry.py`
-  - API スタブの自動生成とテスト整合: `src/scripts/gen_g_stubs.py` と `tests/stubs/test_g_stub_sync.py`
+  - API スタブの自動生成とテスト整合: `tools/gen_g_stubs.py` と `tests/stubs/test_g_stub_sync.py`
 - Bad（避ける）:
   - 重い依存を無断で追加/輸入（optional は `tests/optional` に隔離し、Ask-first）
   - 公開 API 層に肥大ロジックを持ち込む（薄い再エクスポートを保つ）

@@ -237,7 +237,7 @@ Tips:
 - 目的
   - `api/__init__.pyi` に「利用者が見る API 形状」を自動生成し、実装と同期を保つ。
 - 更新手順
-  - `PYTHONPATH=src python -m scripts.gen_g_stubs && git add src/api/__init__.pyi`
+  - `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
 - CI/テスト
   - `.github/workflows/verify-stubs.yml` が `tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py` を実行し、スタブ・実装の不整合を検知。
 
@@ -321,7 +321,7 @@ Tips:
   ```
 - 追加後の手順
   - `effects/registry.py`/`shapes/registry.py` は自動登録済み（デコレータ）。
-  - スタブ更新: `python -m scripts.gen_g_stubs`。
+- スタブ更新: `python -m tools.gen_g_stubs`。
   - テスト: `pytest -q -m smoke` で簡易確認→ `pytest -q`。
 
 ## シリアライズ仕様（詳細）

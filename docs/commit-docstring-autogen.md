@@ -4,7 +4,7 @@
 `G`（形状ファクトリ）や `E.pipeline`（エフェクトビルダ）の各メソッドに要約と引数説明の
 docstring を自動付与。IDE 補完/ツールチップと型検査の体験を高める。
 
-- 生成スクリプト: `src/scripts/gen_g_stubs.py`
+- 生成スクリプト: `tools/gen_g_stubs.py`
 - 出力先: `src/api/__init__.pyi`（自動生成ファイル、手編集しない）
 - 起動タイミング: `.pre-commit-config.yaml` の `gen-g-stubs` フック（commit 前）
 - 同期検証: `tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py`
@@ -22,10 +22,10 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
 
 ## 実装の流れ（How）
 
-`src/scripts/gen_g_stubs.py` の主役関数/責務:
+`tools/gen_g_stubs.py` の主役関数/責務:
 
 - `generate_stubs_str()`
-  - 依存の薄い環境でも動作するよう `scripts.dummy_deps.install()` を先に実行。
+  - 依存の薄い環境でも動作するよう `tools.dummy_deps.install()` を先に実行。
 - `effects`/`shapes` を import（レジストリ副作用を確実化）。
 - `shapes.registry.list_shapes()` で全シェイプ名を取得し、Python 識別子のみ採用。
   - `_render_pyi(valid_names)` で最終文字列を構築して返す。
@@ -59,7 +59,7 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
 
 `.pre-commit-config.yaml` 抜粋:
 
-- `gen-g-stubs`: `PYTHONPATH=src python -m scripts.gen_g_stubs`
+- `gen-g-stubs`: `PYTHONPATH=src python -m tools.gen_g_stubs`
 - `test-g-stub-sync`: `pytest -q tests/test_g_stub_sync.py`
 - `test-pipeline-stub-sync`: `pytest -q tests/test_pipeline_stub_sync.py`
 
@@ -126,14 +126,14 @@ rotate.__param_meta__ = {
 ## 手動実行/トラブルシュート
 
 - 手動実行:
-  - `PYTHONPATH=src python -m scripts.gen_g_stubs && git add src/api/__init__.pyi`
+  - `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
 - すべてのフックを通す:
   - `pre-commit run -a -v`
 - 失敗時のチェックリストは `docs/pre-commit-troubleshooting.md` を参照。
 
 ## 参考（関連ファイル）
 
-- スクリプト: `src/scripts/gen_g_stubs.py`
+- スクリプト: `tools/gen_g_stubs.py`
   - 抽出: `_extract_param_docs()`
   - 形状: `_render_method_from_generate()`
   - エフェクト: `_render_pipeline_protocol()` / `_annotation_for_effect_param()`
