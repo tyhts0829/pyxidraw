@@ -77,6 +77,7 @@ import numpy as np
 from common.param_utils import params_to_tuple as _params_to_tuple
 from effects.registry import get_effect
 from engine.core.geometry import Geometry
+from engine.ui.parameters import get_active_runtime
 
 
 def _geometry_hash(g: Geometry) -> bytes:
@@ -144,10 +145,19 @@ class Pipeline:
                 self._cache[key] = out
                 return out
 
+        runtime = get_active_runtime()
         out = g
-        for st in self._steps:
+        for idx, st in enumerate(self._steps):
             fn = get_effect(st.name)
-            out = fn(out, **st.params)
+            params = st.params
+            if runtime is not None:
+                params = runtime.before_effect_call(
+                    step_index=idx,
+                    effect_name=st.name,
+                    fn=fn,
+                    params=params,
+                )
+            out = fn(out, **params)
 
         # 単層キャッシュ（LRU 風）
         if self._cache_maxsize == 0:

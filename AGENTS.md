@@ -28,6 +28,7 @@
   - 例: `pytest -q tests/test_geometry_model.py::test_from_lines_normalizes_shapes`
 - テストマーカーの活用:
   - `-m smoke`（最小確認）、`-m integration`、`-m e2e`、`-m perf`、`-m optional`
+- パラメータ GUI 変更時の高速チェック: `pytest -q tests/ui/parameters`
 - 完了条件（変更単位）: 変更ファイルに対する ruff/mypy/pytest が成功し、必要時にスタブ再生成済み。
 
 ## Safety & Permissions（許可境界）

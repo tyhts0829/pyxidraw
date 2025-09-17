@@ -57,6 +57,11 @@
     - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
   - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「正規化パラメータ（`common.param_utils.params_to_tuple`）の blake2b-64」を積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
+- パラメータ GUI
+  - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、独立ウィンドウでスライダー表示。
+  - `ParameterRuntime` は `ShapesAPI`/`Pipeline` をフックして呼び出し毎にメタデータを生成し、GUI override を適用してから元の関数へ委譲。
+  - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
+  - 多プロセスとの相性を考慮し、GUI 有効時は `WorkerPool` が Inline モード（単一プロセス実行）に切替わる。
 
 ## データフロー（概略）
 ```
@@ -71,7 +76,7 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 
 ### 実行ループと並行性（Frame/Tick モデル）
 - `FrameClock` が登録された Tickable を固定順序で毎フレーム実行。
-- `WorkerPool`（multiprocessing）が `draw(t, cc)` を非同期に実行して `Geometry` を生成。
+- `WorkerPool`（既定は multiprocessing。パラメータ GUI 有効時は Inline モード）が `draw(t, cc)` を実行して `Geometry` を生成。
 - `StreamReceiver` は結果キューを読み、最新フレームのみを `SwapBuffer` に反映（古いフレームは棄却）。
 - `LineRenderer` は `SwapBuffer` の front を検知して GPU に頂点群を一括転送し、`LINE_STRIP + primitive restart` で描画。
 - 例外はワーカ側で `WorkerTaskError` に包んでメインスレッドに再送出（デバッグ容易性と失敗の早期顕在化）。

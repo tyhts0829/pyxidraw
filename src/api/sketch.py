@@ -85,6 +85,8 @@ from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
 from util.constants import CANVAS_SIZES
 
+from engine.ui.parameters.manager import ParameterManager
+
 
 def run_sketch(
     user_draw: Callable[[float, Mapping[int, float]], Geometry],
@@ -97,6 +99,7 @@ def run_sketch(
     use_midi: bool = True,
     midi_strict: bool | None = None,
     init_only: bool = False,
+    use_parameter_gui: bool = False,
 ) -> None:
     """
     user_draw :
@@ -110,12 +113,14 @@ def run_sketch(
     background :
         RGBA (0‑1)。Processing の ``background()`` と同義。
     workers :
-        バックグラウンド計算プロセス数。
+        バックグラウンド計算プロセス数（パラメータ GUI 有効時は 0 固定でシングルスレッド実行）。
     use_midi :
         True の場合は可能なら実機 MIDI を使用。未接続/未導入時は既定でフォールバック。
     midi_strict :
         True で厳格モード（初期化失敗時に SystemExit(2)）。None の場合は
         環境変数 ``PYXIDRAW_MIDI_STRICT`` を参照（未設定は False）。
+    use_parameter_gui :
+        True で描画パラメータ編集ウィンドウを有効化し、`user_draw` の呼び出しをラップする。
     """
     # ---- ① 設定からFPSを解決 --------------------------------------
     # 引数fpsがNoneのときだけ、設定 (configs/default.yaml 等) を参照
@@ -198,6 +203,20 @@ def run_sketch(
         cc_snapshot_fn = midi_service.snapshot
 
     # init_only の場合は重い依存を読み込まずに早期リターン
+    parameter_manager: ParameterManager | None = None
+    if use_parameter_gui and not init_only:
+        try:
+            initial_cc = dict(cc_snapshot_fn())
+        except Exception:
+            initial_cc = {}
+        parameter_manager = ParameterManager(user_draw)
+        parameter_manager.initialize(initial_cc)
+        draw_callable = parameter_manager.draw
+        worker_count = 0
+    else:
+        draw_callable = user_draw
+        worker_count = workers
+
     if init_only:
         return None
 
@@ -218,7 +237,10 @@ def run_sketch(
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
     swap_buffer = SwapBuffer()
     worker_pool = WorkerPool(
-        fps=fps, draw_callback=user_draw, cc_snapshot=cc_snapshot_fn, num_workers=workers
+        fps=fps,
+        draw_callback=draw_callable,
+        cc_snapshot=cc_snapshot_fn,
+        num_workers=worker_count,
     )
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)
 
@@ -243,7 +265,11 @@ def run_sketch(
         dtype="f4",
     ).T  # 転置を適用
 
-    line_renderer = LineRenderer(mgl_context=mgl_ctx, projection_matrix=proj, double_buffer=swap_buffer)  # type: ignore
+    line_renderer = LineRenderer(
+        mgl_context=mgl_ctx,
+        projection_matrix=proj,
+        double_buffer=swap_buffer,
+    )  # type: ignore
 
     # ---- Draw callbacks ----------------------------------
     rendering_window.add_draw_callback(line_renderer.draw)
@@ -267,6 +293,8 @@ def run_sketch(
         if use_midi and midi_manager is not None:
             midi_manager.save_cc()
         line_renderer.release()
+        if parameter_manager is not None:
+            parameter_manager.shutdown()
         pyglet.app.exit()
 
     pyglet.app.run()

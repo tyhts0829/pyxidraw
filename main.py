@@ -26,18 +26,17 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         E.pipeline.rotate(
             angles_rad=(c(3), c(4), c(5)), pivot=(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
         )
-        .displace(
-            amplitude_mm=c(6) * 50, spatial_freq=(c(7) * 0.01, c(7) * 0.01, c(7) * 0.01), t_sec=t
-        )
-        .displace(
-            amplitude_mm=c(6) * 20,
-            spatial_freq=(c(7) * 0.05, c(7) * 0.05, c(7) * 0.05),
-            t_sec=t * 2,
-        )
+        .displace()
         .build()
     )
     return pipe(sphere.scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0))
 
 
 if __name__ == "__main__":
-    run(draw, canvas_size=(CANVAS_SIZE, CANVAS_SIZE), render_scale=3, use_midi=True, workers=1)
+    run(
+        draw,
+        canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
+        render_scale=3,
+        use_midi=True,
+        use_parameter_gui=True,
+    )
