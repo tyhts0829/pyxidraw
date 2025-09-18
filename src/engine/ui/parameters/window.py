@@ -7,7 +7,7 @@ from typing import Iterable
 import pyglet
 from pyglet.window import key, mouse
 
-from .panel import ParameterPanel, SliderWidget
+from .panel import ParameterPanel, ParameterWidget
 from .state import ParameterLayoutConfig, ParameterStore
 
 
@@ -27,8 +27,7 @@ class ParameterWindow(pyglet.window.Window):
         self._layout = layout
         self._panel = ParameterPanel(store, layout)
         self._needs_refresh = True
-        self._active_widget: SliderWidget | None = None
-        self._hover_widget: SliderWidget | None = None
+        self._active_widget: ParameterWidget | None = None
         self._store.subscribe(self._on_store_change)
         pyglet.clock.schedule_interval(self._tick, 1 / 30)
         self.set_location(40, 40)
