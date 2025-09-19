@@ -58,8 +58,8 @@
   - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「正規化パラメータ（`common.param_utils.params_to_tuple`）の blake2b-64」を積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
 - パラメータ GUI
-  - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、独立ウィンドウでスライダー表示。
-  - `ParameterRuntime` は `ShapesAPI`/`Pipeline` をフックして呼び出し毎にメタデータを生成し、GUI override を適用してから元の関数へ委譲。
+  - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、独立ウィンドウでスライダー表示。
+  - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と値正規化を委譲し、GUI override を適用してから元の関数へ委譲。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
   - 多プロセスとの相性を考慮し、GUI 有効時は `WorkerPool` が Inline モード（単一プロセス実行）に切替わる。
 

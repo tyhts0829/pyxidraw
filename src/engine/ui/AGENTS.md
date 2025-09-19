@@ -8,3 +8,4 @@
 - 依存不可: 幾何処理や I/O への直接依存。
 
 - 描画コールバックとメトリクス更新の順序を管理し、副作用を UI 層内に閉じ込める。
+- `parameters` サブパッケージでは `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と値適用を分離し、`ParameterRuntime` はオーケストレーションのみに専念する。
