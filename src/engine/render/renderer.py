@@ -127,7 +127,8 @@ def _geometry_to_vertices_indices(
     Geometry オブジェクトを VBO/IBO に変換。
     GPUは多数のデータを個別に扱うよりも、大きなデータを一括で送った方が高速。
     そのため、この関数でデータをまとめて効率よくGPUに渡す。"""
-    coords = geometry.coords.astype(np.float32)
+    # Geometry は生成時に float32/C 連続へ正規化されるため追加変換は不要。
+    coords = geometry.coords
     offsets = geometry.offsets
 
     num_lines = len(offsets) - 1

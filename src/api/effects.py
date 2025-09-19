@@ -120,7 +120,7 @@ class PipelineStep:
 
 
 class Pipeline:
-    def __init__(self, steps: Sequence[PipelineStep], *, cache_maxsize: int | None = None):
+    def __init__(self, steps: Sequence[PipelineStep], *, cache_maxsize: int | None = 128):
         self._steps = list(steps)
         # LRU 互換の単層キャッシュ（maxsize=None なら従来通り無制限）
         self._cache_maxsize: int | None = cache_maxsize
