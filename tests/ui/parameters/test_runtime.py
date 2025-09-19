@@ -22,6 +22,12 @@ def dummy_effect_with_defaults(
     return g
 
 
+dummy_effect_with_defaults.__param_meta__ = {
+    "amplitude_mm": {"min": 0.0, "max": 5.0, "step": 0.5},
+    "enable": {"min": 0, "max": 1, "step": 1},
+}
+
+
 def test_parameter_runtime_tracks_shape_overrides():
     store = ParameterStore()
     runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
@@ -31,11 +37,11 @@ def test_parameter_runtime_tracks_shape_overrides():
     updated = runtime.before_shape_call("circle", dummy_shape, params)
     assert updated["radius"] == 2.0
     descriptor_id = "shape.circle#0.radius"
-    store.set_override(descriptor_id, 1.5)
+    store.set_override(descriptor_id, 0.5)
 
     runtime.begin_frame()
     updated = runtime.before_shape_call("circle", dummy_shape, params)
-    assert updated["radius"] == 1.5
+    assert updated["radius"] == 0.5
     deactivate_runtime()
 
 
@@ -91,4 +97,40 @@ def test_parameter_runtime_registers_default_effect_parameters():
     descriptor_ids = {desc.id for desc in store.descriptors()}
     assert "effect.displace#0.amplitude_mm" in descriptor_ids
     assert "effect.displace#0.enable" in descriptor_ids
+    deactivate_runtime()
+
+
+def test_parameter_runtime_applies_meta_range_hints():
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    runtime.begin_frame()
+
+    runtime.before_effect_call(
+        step_index=0,
+        effect_name="displace",
+        fn=dummy_effect_with_defaults,
+        params={},
+    )
+
+    descriptor = store.get_descriptor("effect.displace#0.amplitude_mm")
+    assert descriptor.range_hint is not None
+    assert descriptor.range_hint.min_value == 0.0
+    assert descriptor.range_hint.max_value == 5.0
+    assert descriptor.range_hint.step == 0.5
+    deactivate_runtime()
+
+
+def test_parameter_runtime_uses_fallback_range_for_missing_meta():
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    runtime.begin_frame()
+
+    runtime.before_shape_call("capsule", dummy_shape_with_defaults, {})
+
+    descriptor = store.get_descriptor("shape.capsule#0.radius")
+    assert descriptor.range_hint is not None
+    assert descriptor.range_hint.min_value == 0.0
+    assert descriptor.range_hint.max_value == 1.0
     deactivate_runtime()

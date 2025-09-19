@@ -20,7 +20,7 @@ class OverlayHUD(Tickable):
         self.window = window
         self.sampler = sampler
         self._labels: dict[str, pyglet.text.Label] = {}
-        self._y_cursor = window.height - 10
+        self._y_cursor = 10
         self._color = color
         self._font = "HackGenConsoleNF-Regular"
         self.font_size = font_size
@@ -30,17 +30,17 @@ class OverlayHUD(Tickable):
         # ラベル生成 & 更新
         for key, txt in self.sampler.data.items():
             if key not in self._labels:
-                self._y_cursor -= 18
                 self._labels[key] = pyglet.text.Label(
                     text="",
                     x=10,
                     y=self._y_cursor,
                     anchor_x="left",
-                    anchor_y="top",
+                    anchor_y="bottom",
                     font_name=self._font,
                     font_size=self.font_size,
                     color=self._color,
                 )
+                self._y_cursor += 18
             self._labels[key].text = f"{key} : {txt}"
 
     # -------- draw --------

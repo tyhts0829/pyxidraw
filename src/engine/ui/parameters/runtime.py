@@ -11,6 +11,7 @@ from engine.ui.parameters.state import (
     ParameterLayoutConfig,
     ParameterRegistry,
     ParameterStore,
+    RangeHint,
     ValueType,
 )
 
@@ -53,6 +54,7 @@ class ParameterRuntime:
         self._effect_registry = ParameterRegistry()
         self._lazy = True
         self._doc_cache: dict[str, str | None] = {}
+        self._meta_cache: dict[str, dict[str, Any]] = {}
 
     def set_lazy(self, lazy: bool) -> None:
         self._lazy = lazy
@@ -75,6 +77,8 @@ class ParameterRuntime:
             doc = self._extract_doc(fn)
             self._doc_cache[shape_name] = doc
         sig = self._safe_signature(fn)
+        meta_key = f"shape::{shape_name}"
+        param_meta = self._get_param_meta(cache_key=meta_key, fn=fn)
         normalized = self._merge_with_defaults(params, sig)
         updated: dict[str, Any] = {}
         for key, value in normalized.items():
@@ -82,6 +86,7 @@ class ParameterRuntime:
             default_value = self._default_from_signature(sig, key, value)
             group: str | None = None
             descriptors: list[tuple[ParameterDescriptor, Any, str | None]] = []
+            meta_entry = param_meta.get(key)
             if self._is_vector(value):
                 group = descriptor_id
                 seq = list(value)
@@ -93,20 +98,22 @@ class ParameterRuntime:
                     default=default_value,
                     doc=doc,
                     group=group,
+                    param_meta=meta_entry,
                 )
                 descriptors.extend(desc)
             elif self._supported_scalar(value):
+                value_type = self._value_type(value)
                 descriptor = ParameterDescriptor(
                     id=descriptor_id,
                     label=f"{shape_name}#{index} · {key}",
                     source="shape",
                     category="shape",
-                    value_type=self._value_type(value),
+                    value_type=value_type,
                     default_value=default_value,
-                    range_hint=self._layout.derive_range(
-                        name=key,
-                        value_type=self._value_type(value),
-                        default_value=default_value,
+                    range_hint=self._range_hint_from_meta(
+                        value_type=value_type,
+                        meta=meta_entry,
+                        component_index=None,
                     ),
                     help_text=doc,
                     vector_group=group,
@@ -146,6 +153,7 @@ class ParameterRuntime:
             doc = self._extract_doc(fn)
             self._doc_cache[doc_key] = doc
         sig = self._safe_signature(fn)
+        param_meta = self._get_param_meta(cache_key=doc_key, fn=fn)
         normalized = self._merge_with_defaults(
             params,
             sig,
@@ -157,6 +165,7 @@ class ParameterRuntime:
             default_value = self._default_from_signature(sig, key, value)
             group: str | None = None
             descriptors: list[tuple[ParameterDescriptor, Any, str | None]] = []
+            meta_entry = param_meta.get(key)
             if self._is_vector(value):
                 group = descriptor_id
                 desc = self._build_vector_descriptors(
@@ -167,20 +176,22 @@ class ParameterRuntime:
                     default=default_value,
                     doc=doc,
                     group=group,
+                    param_meta=meta_entry,
                 )
                 descriptors.extend(desc)
             elif self._supported_scalar(value):
+                value_type = self._value_type(value)
                 descriptor = ParameterDescriptor(
                     id=descriptor_id,
                     label=f"{effect_name}#{step_index} · {key}",
                     source="effect",
                     category="effect",
-                    value_type=self._value_type(value),
+                    value_type=value_type,
                     default_value=default_value,
-                    range_hint=self._layout.derive_range(
-                        name=key,
-                        value_type=self._value_type(value),
-                        default_value=default_value,
+                    range_hint=self._range_hint_from_meta(
+                        value_type=value_type,
+                        meta=meta_entry,
+                        component_index=None,
                     ),
                     help_text=doc,
                     vector_group=group,
@@ -308,6 +319,7 @@ class ParameterRuntime:
         default: Any,
         doc: str | None,
         group: str | None,
+        param_meta: Mapping[str, Any] | None,
     ) -> list[tuple[ParameterDescriptor, Any, str | None]]:
         descriptors: list[tuple[ParameterDescriptor, Any, str | None]] = []
         for idx, value in enumerate(values):
@@ -328,13 +340,88 @@ class ParameterRuntime:
                 category="shape" if base_id.startswith("shape") else "effect",
                 value_type=component_type,
                 default_value=default_value,
-                range_hint=self._layout.derive_range(
-                    name=f"{param_name}.{suffix}",
+                range_hint=self._range_hint_from_meta(
                     value_type=component_type,
-                    default_value=default_value,
+                    meta=param_meta,
+                    component_index=idx,
                 ),
                 help_text=doc,
                 vector_group=group,
             )
             descriptors.append((descriptor, value, suffix))
         return descriptors
+
+    def _get_param_meta(self, *, cache_key: str, fn: Any) -> dict[str, Any]:
+        if cache_key in self._meta_cache:
+            return self._meta_cache[cache_key]
+        meta_raw = getattr(fn, "__param_meta__", None)
+        if not isinstance(meta_raw, Mapping):
+            meta: dict[str, Any] = {}
+        else:
+            # フィールドはシンプルな dict のみに絞る
+            meta = {
+                str(param_name): value
+                for param_name, value in meta_raw.items()
+                if isinstance(value, Mapping)
+            }
+        self._meta_cache[cache_key] = meta
+        return meta
+
+    def _range_hint_from_meta(
+        self,
+        *,
+        value_type: ValueType,
+        meta: Mapping[str, Any] | None,
+        component_index: int | None,
+    ) -> RangeHint:
+        min_value: float | int | None = None
+        max_value: float | int | None = None
+        step: float | int | None = None
+        if meta:
+            min_value = self._extract_meta_component(meta.get("min"), component_index)
+            max_value = self._extract_meta_component(meta.get("max"), component_index)
+            step = self._extract_meta_component(meta.get("step"), component_index)
+
+        default_min, default_max, default_step = self._default_range(value_type)
+        if min_value is None:
+            min_value = default_min
+        if max_value is None:
+            max_value = default_max
+        if step is None:
+            step = default_step
+
+        if value_type == "bool":
+            # bool は 0/1 トグルとして扱う
+            return RangeHint(int(min_value), int(max_value), step=1)
+        if value_type == "int":
+            return RangeHint(
+                int(min_value), int(max_value), step=int(step) if step is not None else 1
+            )
+        return RangeHint(
+            float(min_value), float(max_value), step=float(step) if step is not None else None
+        )
+
+    @staticmethod
+    def _default_range(
+        value_type: ValueType,
+    ) -> tuple[float | int, float | int, float | int | None]:
+        if value_type == "bool":
+            return 0, 1, 1
+        if value_type == "int":
+            return 0, 1, 1
+        return 0.0, 1.0, None
+
+    @staticmethod
+    def _extract_meta_component(value: Any, component_index: int | None) -> float | int | None:
+        if component_index is None:
+            if isinstance(value, (int, float)):
+                return value
+            return None
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            if component_index < len(value):
+                component_value = value[component_index]
+                if isinstance(component_value, (int, float)):
+                    return component_value
+        if isinstance(value, (int, float)):
+            return value
+        return None

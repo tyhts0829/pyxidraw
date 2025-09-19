@@ -25,7 +25,7 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         E.pipeline.rotate(
             angles_rad=(c(3), c(4), c(5)), pivot=(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
         )
-        .displace()
+        .displace(spatial_freq=c(6, 0.5))
         .build()
     )
     return pipe(sphere.scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0))
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
-        render_scale=6,
+        render_scale=5,
         use_midi=True,
         use_parameter_gui=True,
     )

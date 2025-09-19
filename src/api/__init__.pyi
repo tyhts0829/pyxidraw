@@ -78,14 +78,16 @@ class _PipelineBuilder(Protocol):
             gap_length: number, min 0.0
         """
         ...
-    # meta: amplitude_mm (type=number, min=0.0)
+    # meta: amplitude_mm (type=number, range=[0.0, 50.0])
+    # meta: spatial_freq (type=number, range=[0.0, 0.05])
     # meta: t_sec (type=number, min=0.0)
     def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | tuple[float, float, float] = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         3次元頂点にPerlinノイズを追加（クリーンAPI）。
 
         引数:
-            amplitude_mm: number, min 0.0
+            amplitude_mm: number, range [0.0, 50.0]
+            spatial_freq: number, range [0.0, 0.05]
             t_sec: number, min 0.0
         """
         ...
