@@ -188,7 +188,7 @@ def displace(
     g: Geometry,
     *,
     amplitude_mm: float = 0.5,
-    spatial_freq: float | Vec3 = (0.5, 0.5, 0.5),
+    spatial_freq: float | Vec3 = (0.05, 0.05, 0.05),
     t_sec: float = 0.0,
 ) -> Geometry:
     """3次元頂点にPerlinノイズを追加（クリーンAPI）。"""

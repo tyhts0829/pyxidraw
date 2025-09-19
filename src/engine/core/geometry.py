@@ -70,11 +70,14 @@ from __future__ import annotations
 
 import hashlib
 import os
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import numpy as np
 
 from common.types import Vec3
+
+NumberLike = float | int
+LineLike = np.ndarray | Sequence[NumberLike] | Sequence[Sequence[NumberLike]]
 
 
 def _digest_enabled() -> bool:
@@ -140,13 +143,13 @@ class Geometry:
 
     # ── ファクトリ ───────────────────
     @classmethod
-    def from_lines(cls, lines: Iterable[np.ndarray]) -> "Geometry":
+    def from_lines(cls, lines: Iterable[LineLike]) -> "Geometry":
         """線分集合を統一表現に正規化して `Geometry` を生成する。
 
         Parameters
         ----------
-        lines : Iterable[np.ndarray]
-            各要素は座標列。`list`/`ndarray` いずれも可。形状は
+        lines : Iterable[LineLike]
+            各要素は座標列。`list`/`tuple`/`ndarray` いずれも可。形状は
             - `(K, 2)` の場合は `Z=0` を補完して `(K, 3)` に正規化。
             - `(K, 3)` の場合はそのまま使用。
             - `(3K,)` の 1 次元ベクトルは `(x, y, z)` の並びとして `(-1, 3)` に整形。

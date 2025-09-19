@@ -44,12 +44,10 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Callable, Iterable
 
-from numpy.typing import NDArray
-
 # レジストリ登録の副作用を発火させるため、shapes パッケージを 1 度だけ import すれば十分
 import shapes  # noqa: F401  (登録目的の副作用)
 from common.param_utils import params_to_tuple as _params_to_tuple
-from engine.core.geometry import Geometry
+from engine.core.geometry import Geometry, LineLike
 from engine.ui.parameters import get_active_runtime
 from shapes.registry import get_shape as get_shape_generator
 from shapes.registry import is_shape_registered  # ガード付きメモ化用（登録状態の即時反映）
@@ -86,7 +84,7 @@ class ShapesAPI:
         runtime = get_active_runtime()
         fn = get_shape_generator(shape_name)
         if runtime is not None:
-            params_dict = runtime.before_shape_call(shape_name, fn, params_dict)
+            params_dict = dict(runtime.before_shape_call(shape_name, fn, params_dict))
 
         data = fn(**params_dict)
         if isinstance(data, Geometry):
@@ -119,11 +117,11 @@ class ShapesAPI:
     # === ユーザー拡張 ===
 
     @staticmethod
-    def from_lines(lines: Iterable[NDArray[Any]]) -> Geometry:
+    def from_lines(lines: Iterable[LineLike]) -> Geometry:
         """線分集合（ポリライン列）から `Geometry` を構築する補助。
 
         引数:
-            lines: `[(N_i, 3) ndarray]` を要素とするイテラブル。
+            lines: `list`/`tuple`/`ndarray` の混在を許容する座標列のイテラブル。
 
         返り値:
             `coords` と `offsets` を持つ統一 `Geometry`。

@@ -10,7 +10,7 @@ from engine.core.geometry import Geometry
 def test_pipeline_to_from_spec_roundtrip() -> None:
     p = (
         E.pipeline.rotate(pivot=(1.0, 2.0, 3.0), angles_rad=(0.1, 0.2, 0.3))
-        .displace(amplitude_mm=0.0, spatial_freq=0.5, t_sec=0.0)
+        .displace(amplitude_mm=0.0, spatial_freq=0.05, t_sec=0.0)
         .build()
     )
     spec = to_spec(p)
@@ -24,7 +24,7 @@ def test_validate_spec_param_meta_min_max_choices_and_type() -> None:
     ok = [
         {"name": "rotate", "params": {"pivot": (0.0, 0.0, 0.0), "angles_rad": (0.0, 0.0, 0.0)}},
         {"name": "offset", "params": {"join": "round", "segments_per_circle": 12, "distance": 0.1}},
-        {"name": "displace", "params": {"amplitude_mm": 0.1, "spatial_freq": 0.5, "t_sec": 0.0}},
+        {"name": "displace", "params": {"amplitude_mm": 0.1, "spatial_freq": 0.05, "t_sec": 0.0}},
     ]
     validate_spec(ok)
 
