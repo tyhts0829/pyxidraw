@@ -75,7 +75,7 @@ class ParameterRuntime:
             doc = self._extract_doc(fn)
             self._doc_cache[shape_name] = doc
         sig = self._safe_signature(fn)
-        normalized = dict(params)
+        normalized = self._merge_with_defaults(params, sig)
         updated: dict[str, Any] = {}
         for key, value in normalized.items():
             descriptor_id = f"shape.{shape_name}#{index}.{key}"
@@ -146,7 +146,11 @@ class ParameterRuntime:
             doc = self._extract_doc(fn)
             self._doc_cache[doc_key] = doc
         sig = self._safe_signature(fn)
-        normalized = dict(params)
+        normalized = self._merge_with_defaults(
+            params,
+            sig,
+            skip={"g"},
+        )
         updated: dict[str, Any] = {}
         for key, value in normalized.items():
             descriptor_id = f"effect.{effect_name}#{step_index}.{key}"
@@ -242,6 +246,38 @@ class ParameterRuntime:
         if param.default is inspect._empty:  # type: ignore[attr-defined]
             return fallback
         return param.default
+
+    @staticmethod
+    def _merge_with_defaults(
+        params: Mapping[str, Any],
+        sig: inspect.Signature | None,
+        *,
+        skip: set[str] | None = None,
+    ) -> dict[str, Any]:
+        if sig is None:
+            return dict(params)
+        skip = skip or set()
+        merged: dict[str, Any] = {}
+        for name, parameter in sig.parameters.items():
+            if name in skip:
+                continue
+            if parameter.kind in (
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+                inspect.Parameter.POSITIONAL_ONLY,
+            ):
+                continue
+            if name in params:
+                merged[name] = params[name]
+                continue
+            if parameter.default is inspect._empty:  # type: ignore[attr-defined]
+                continue
+            merged[name] = parameter.default
+        for name, value in params.items():
+            if name in skip or name in merged:
+                continue
+            merged[name] = value
+        return merged
 
     @staticmethod
     def _supported_scalar(value: Any) -> bool:

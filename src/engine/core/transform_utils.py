@@ -12,46 +12,74 @@ from __future__ import annotations
 from .geometry import Geometry
 
 
-def translate(g: Geometry, dx: float, dy: float, dz: float = 0) -> Geometry:
+def translate(g: Geometry, dx: float, dy: float, dz: float = 0.0) -> Geometry:
     """平行移動（薄いラッパ）: `Geometry.translate` に委譲。"""
     return g.translate(dx, dy, dz)
 
 
-def scale_uniform(g: Geometry, factor: float, center=(0, 0, 0)) -> Geometry:
+def scale_uniform(
+    g: Geometry,
+    factor: float,
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Geometry:
     """一様スケーリング（薄いラッパ）: `Geometry.scale` に委譲。"""
     return g.scale(factor, factor, factor, center)
 
 
-def scale(g: Geometry, sx: float, sy: float, sz: float = 1.0, center=(0, 0, 0)) -> Geometry:
+def scale(
+    g: Geometry,
+    sx: float,
+    sy: float,
+    sz: float = 1.0,
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Geometry:
     """非一様スケーリング（薄いラッパ）: `Geometry.scale` に委譲。"""
     return g.scale(sx, sy, sz, center)
 
 
-def rotate_z(g: Geometry, angle_rad: float, center=(0, 0, 0)) -> Geometry:
+def rotate_z(
+    g: Geometry,
+    angle_rad: float,
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Geometry:
     """Z軸回りの回転（薄いラッパ）: `Geometry.rotate` に委譲。"""
     return g.rotate(z=angle_rad, center=center)
 
 
-def rotate_x(g: Geometry, angle_rad: float, center=(0, 0, 0)) -> Geometry:
+def rotate_x(
+    g: Geometry,
+    angle_rad: float,
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Geometry:
     """X軸回りの回転（薄いラッパ）: `Geometry.rotate` に委譲。"""
     return g.rotate(x=angle_rad, center=center)
 
 
-def rotate_y(g: Geometry, angle_rad: float, center=(0, 0, 0)) -> Geometry:
+def rotate_y(
+    g: Geometry,
+    angle_rad: float,
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Geometry:
     """Y軸回りの回転（薄いラッパ）: `Geometry.rotate` に委譲。"""
     return g.rotate(y=angle_rad, center=center)
 
 
-def rotate_xyz(g: Geometry, rx: float, ry: float, rz: float, center=(0, 0, 0)) -> Geometry:
+def rotate_xyz(
+    g: Geometry,
+    rx: float,
+    ry: float,
+    rz: float,
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Geometry:
     """XYZ まとめ回転（薄いラッパ）: `Geometry.rotate` に委譲。"""
     return g.rotate(x=rx, y=ry, z=rz, center=center)
 
 
 def transform_combined(
     g: Geometry,
-    center=(0, 0, 0),
-    scale_factors=(1, 1, 1),
-    rotate_angles=(0, 0, 0),
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    scale_factors: tuple[float, float, float] = (1.0, 1.0, 1.0),
+    rotate_angles: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> Geometry:
     """複合変換：スケール → 回転 → 移動を順次適用。
 

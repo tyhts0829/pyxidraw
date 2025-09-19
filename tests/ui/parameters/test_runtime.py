@@ -12,6 +12,16 @@ def dummy_effect(g, *, amplitude_mm: float = 0.5):  # noqa: ANN001
     return g
 
 
+def dummy_shape_with_defaults(radius: float = 1.0, segments: int = 12) -> Mapping[str, float]:
+    return {"radius": radius, "segments": float(segments)}
+
+
+def dummy_effect_with_defaults(
+    g, *, amplitude_mm: float = 0.5, enable: bool = True
+):  # noqa: ANN001
+    return g
+
+
 def test_parameter_runtime_tracks_shape_overrides():
     store = ParameterStore()
     runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
@@ -44,4 +54,41 @@ def test_parameter_runtime_handles_effect_vectors():
     assert updated["angles_rad"] == (0.1, 0.2, 0.3)
     descriptor_ids = {desc.id for desc in store.descriptors()}
     assert "effect.rotate#0.angles_rad.x" in descriptor_ids
+    deactivate_runtime()
+
+
+def test_parameter_runtime_registers_default_shape_parameters():
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    runtime.begin_frame()
+
+    updated = runtime.before_shape_call("capsule", dummy_shape_with_defaults, {})
+
+    assert updated["radius"] == 1.0
+    assert updated["segments"] == 12
+    descriptor_ids = {desc.id for desc in store.descriptors()}
+    assert "shape.capsule#0.radius" in descriptor_ids
+    assert "shape.capsule#0.segments" in descriptor_ids
+    deactivate_runtime()
+
+
+def test_parameter_runtime_registers_default_effect_parameters():
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    runtime.begin_frame()
+
+    updated = runtime.before_effect_call(
+        step_index=0,
+        effect_name="displace",
+        fn=dummy_effect_with_defaults,
+        params={},
+    )
+
+    assert updated["amplitude_mm"] == 0.5
+    assert updated["enable"] is True
+    descriptor_ids = {desc.id for desc in store.descriptors()}
+    assert "effect.displace#0.amplitude_mm" in descriptor_ids
+    assert "effect.displace#0.enable" in descriptor_ids
     deactivate_runtime()
