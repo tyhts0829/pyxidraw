@@ -332,7 +332,7 @@ def _glyph_commands_to_vertices(glyph_commands: list, units_per_em: float) -> li
 
 
 text.__param_meta__ = {
-    "font_size": {"type": "number", "min": 0.1, "max": 1.0},
+    "font_size": {"type": "number", "min": 5, "max": 50},
     "font": {"type": "string"},
     "font_number": {"type": "integer", "min": 0, "max": 10},
     "align": {"type": "string", "choices": ["left", "center", "right"]},
