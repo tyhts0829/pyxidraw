@@ -115,7 +115,7 @@
 
 ## engine/io/
 
-- 良い点
+<!-- - 良い点
 
   - `manager.connect_midi_controllers()` が遅延 import を用い、未導入環境への配慮あり。例外方針が分かりやすい。
   - `controller.MidiController` は 7bit/14bit の正規化、永続化（JSON）を持ち、実用十分。
@@ -134,13 +134,13 @@
 
 - 直 import（`mido`）を遅延化。`manager.py` と同様のガードにより import 時失敗を回避しつつ、例外は「使用時」に限定。
 - `MidiController` 内の `process_7bit_control_change`/`process_14bit_control_change`/`calc_combined_value` は構造化が良い。行数削減のみ目的なら 7bit/14bit 分岐を 1 関数に合流できるが、可読性低下の恐れあり。現状維持推奨。
-- JSON 永続化の `by_name` 以外の構造は未使用。将来的な拡張予定が無ければキーを固定化してローダの分岐を簡略化可（数行削減）。
+- JSON 永続化の `by_name` 以外の構造は未使用。将来的な拡張予定が無ければキーを固定化してローダの分岐を簡略化可（数行削減）。 -->
 
 ---
 
 ## engine/render/
 
-- 良い点
+<!-- - 良い点
 
   - `LineRenderer` に描画責務集約。`LineMesh` が VBO/IBO/VAO を一括管理し、Primitive Restart でライン群を効率描画。
   - シェーダは最小構成で可読性が高い。投影行列は上位（API 側）で設定済み。
@@ -158,13 +158,13 @@
 — 簡素化/削減の観点 —
 
 - 現行は Geometry Shader でライン太さを実装。プラットフォーム互換性を最大化するなら GS 無し + `LINE_STRIP` + 固定幅に落とす選択肢もある（コードは若干減る）。ただし見た目品質/太さ可変性が落ちるため要トレードオフ検討。
-- `renderer._geometry_to_vertices_indices` は明快。微小削減案として `np.add`/`np.arange` の一括生成と `indices[::line+1]=restart` のようなベクトル化があるが、可読性とバグリスクを考えると現状維持で良い。
+- `renderer._geometry_to_vertices_indices` は明快。微小削減案として `np.add`/`np.arange` の一括生成と `indices[::line+1]=restart` のようなベクトル化があるが、可読性とバグリスクを考えると現状維持で良い。 -->
 
 ---
 
 ## engine/runtime/
 
-- 良い点
+<!-- - 良い点
 
   - `SwapBuffer` + `WorkerPool` + `StreamReceiver` の結線がシンプル。`WorkerTaskError` で文脈付き例外を親に伝播する設計が丁寧。
   - `WorkerPool` の `inline`（num_workers<1）モードは依存のない軽量実行に便利。
@@ -181,13 +181,13 @@
 — 簡素化/削減の観点 —
 
 - `WorkerTaskError.__reduce__` によるメッセージ再構築は堅牢。簡素化優先なら、例外オブジェクト自体を送らず `(frame_id, error_str)` のタプルに統一し、受信側で例外化する方式にできる（数行削減・pickle 安定）。
-- `WorkerPool.inline` 分岐は価値が高く、行数は最小限。現状維持推奨。
+- `WorkerPool.inline` 分岐は価値が高く、行数は最小限。現状維持推奨。 -->
 
 ---
 
 ## engine/ui/parameters/
 
-- 良い点
+<!-- - 良い点
 
   - `ParameterRuntime`/`ValueResolver`/`RangeHint` による「正規化（0..1）↔ 実レンジ」変換が体系化されており、提案ルールと合致。
   - 既定値・メタ無し時のフォールバックや、ベクトル値のコンポーネント分解など、実用的な細部が詰められている。
@@ -204,7 +204,7 @@
 — 簡素化/削減の観点 —
 
 - 大きいのは `value_resolver.py`。ロジックは整理されているため大規模削減は非推奨だが、`_range_hint_from_meta` 近傍のデフォルト/推測処理を 2–3 個の小関数へ分割して見通しを改善可能（コード行数は横ばい、可読性向上）。
-- UI 未対応型（enum/vector 以外）の分岐は明示的で読みやすい。削減対象ではない。
+- UI 未対応型（enum/vector 以外）の分岐は明示的で読みやすい。削減対象ではない。 -->
 
 ---
 

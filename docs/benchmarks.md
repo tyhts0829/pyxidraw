@@ -169,6 +169,100 @@ def test_pipeline_cache_hit_vs_miss(benchmark):
 - 詳細なアロケーション統計（`tracemalloc` snapshot の比較）
 - GPU パスのベンチ（実機ラボ/CI マトリクス）
 
+### ベンチ結果の可視化（計画 / Ask-first）
+- 目的: ローカル/PR で性能の傾向を素早く把握できる簡易レポートを用意する。
+- データソース: autosave（`.benchmarks/`）と `--benchmark-json=perf.json` の結果。
+- 導入段階:
+  - Step A（最小）: 既存機能の活用のみ
+    - 列調整: `--benchmark-columns=min,median,mean,stddev,ops,rounds`
+    - ヒストグラム: `--benchmark-histogram=benchmark_results/hist`（PNG/HTML 保存）
+  - Step B（軽量スクリプト）: JSON 要約の生成（追加依存なし）
+    - `tools/bench/summarize.py` を追加し、`perf.json` から Markdown/CSV を出力
+    - 例: `benchmark_results/summary.md`（name/case/N/M/mean/median/stddev/rounds）、`summary.csv`
+  - Step C（任意・静的 HTML）: Chart.js 同梱でシングルファイルダッシュボード
+    - `benchmark_results/index.html` にグラフ（miss/hit、digest on/off、cache on/off など）
+- 配置と管理:
+  - 出力先: `benchmark_results/`（既に Lint 除外済み）。 `.gitignore` へも追加して大容量生成物のコミットを回避（Ask-first）。
+  - CI ではアーティファクト化のみ（将来の Stage 6 と連動）。
+- 運用例:
+  - 実行＋JSON: `pytest -q tests/perf -m perf --benchmark-only --benchmark-json=perf.json`
+  - ヒスト出力: `pytest -q tests/perf -m perf --benchmark-only --benchmark-histogram=benchmark_results/hist`
+  - 要約出力（実装後）: `python -m tools.bench.summarize perf.json --out-md benchmark_results/summary.md --out-csv benchmark_results/summary.csv`
+
+---
+
+## 実装チェックリスト（Stages と完了指標）
+
+本ベンチ運用の導入・拡張を段階ごとに管理するチェックリスト。依存追加や CI 変更は Ask-first（別PR）。
+
+- 進捗サマリ
+- [x] Stage 0: 仕様合意（ドキュメント整備）
+- [x] Stage 1: 依存追加（dev）【Ask-first】
+- [x] Stage 2: ユーティリティ＋最小ベンチ（Geometry）
+- [x] Stage 3: Pipeline ベンチ
+- [x] Stage 4: Renderer 前処理ベンチ
+- [x] Stage 5: ベースライン保存と比較手順整備
+- [ ] Stage 6: CI 連携（別PR・Ask-first）
+- [ ] Stage 7: 回帰ゲート（オプトイン）
+- [ ] Stage 8: 可視化レポート（ローカル中心・Ask-first）
+- [ ] Stage 6: CI 連携（別PR・Ask-first）
+- [ ] Stage 7: 回帰ゲート（オプトイン）
+
+Stage 0: 仕様合意（このドキュメント）
+- [x] `docs/benchmarks.md` を pytest-benchmark＋メモリ計測前提に更新
+- [x] チェックリスト統合（本節）
+- 完了指標: ユーザー承認（依存追加とテスト方針への合意）
+
+Stage 1: 依存追加（dev）【Ask-first】
+- [x] `pyproject.toml` dev へ `pytest-benchmark>=4.0.0` を追加
+- [x] `pyproject.toml` dev へ `psutil>=5.9` を追加
+- [x] ローカル導入: `python3.10 -m venv .venv && source .venv/bin/activate && pip install -U pip && pip install -e .[dev]`
+- [x] 動作確認: `pytest --help` に benchmark オプション表示
+- [x] 動作確認: `python -c "import psutil"` 成功
+- 完了指標: すべての動作確認 OK
+
+Stage 2: ユーティリティ＋最小ベンチ（Geometry）
+- [x] `tests/perf/_mem.py` に `measure_memory(fn, *args, **kwargs)` を実装
+- [x] `tests/perf/test_geometry_perf.py` に `Geometry.from_lines`（S/M）を追加
+- [x] `tests/perf/test_geometry_perf.py` に `rotate/scale/concat` Micro を追加
+- [x] 乱数固定（必要時）と `benchmark.extra_info` へ `N/M`＋メモリ指標を付与
+- 完了指標: `pytest -q -m perf --benchmark-only tests/perf/test_geometry_perf.py` 緑（extra_info 出力確認）
+
+Stage 3: Pipeline ベンチ
+- [x] `tests/perf/test_pipeline_perf.py` に miss/hit 計測
+- [x] digest on/off 計測（`PXD_DISABLE_GEOMETRY_DIGEST`）
+- [x] cache on/off 計測（`E.pipeline.cache(maxsize=...)`）
+- 完了指標: `pytest -q -m perf --benchmark-only tests/perf/test_pipeline_perf.py` 緑（miss/hit 差分の可視化）
+
+Stage 4: Renderer 前処理ベンチ
+- [x] `tests/perf/test_renderer_utils_perf.py` に `_geometry_to_vertices_indices`（S/M）
+- 完了指標: テスト緑、`ops/rounds` と extra_info が付与される
+
+Stage 5: ベースライン保存と比較手順整備
+- [x] autosave 実行: `pytest -q tests/perf -m perf --benchmark-only --benchmark-autosave`
+- [x] 比較実行: `pytest -q tests/perf -m perf --benchmark-only --benchmark-compare`
+- [x] JSON 出力: `pytest -q tests/perf -m perf --benchmark-only --benchmark-json=perf.json`
+- [x] 本ドキュメントにコマンド例と出力位置を同期
+- 完了指標: `.benchmarks/` 生成・比較・`perf.json` 出力を確認
+
+Stage 6: CI 連携（別PR・Ask-first）
+- [ ] perf ジョブ追加（`pytest -q -m perf --benchmark-only --benchmark-autosave --benchmark-json=perf.json`）
+- [ ] `.benchmarks/` と `perf.json` をアーティファクト化
+- 完了指標: CI 上で perf 実行とアーティファクト保存を確認
+
+Stage 7: 回帰ゲート（オプトイン）
+- [ ] 閾値方針を決定（例: 直近中央値比 +20%）
+- [ ] 環境変数でゲート有効化（例: `PXD_PERF_ENFORCE=1`）と判定実装
+- [ ] ローカルで意図的負荷により失敗を再現（正常系通過を確認）
+- 完了指標: 有効化時に回帰検知で失敗、無効時はスモークとして通過
+
+Stage 8: 可視化レポート（ローカル中心・Ask-first）
+- [ ] Step A: `--benchmark-histogram` の利用手順と出力先（`benchmark_results/hist*`）を整備
+- [ ] Step B: `tools/bench/summarize.py` で `perf.json` から Markdown/CSV を生成
+- [ ] Step C（任意）: `Chart.js` 同梱の静的 HTML ダッシュボードを `benchmark_results/index.html` に出力
+- [ ] `.gitignore` に `benchmark_results/` を追加（大容量生成物のコミット回避）
+- 完了指標: ローカルでヒスト/Markdown/CSV/HTML のいずれかを生成・閲覧できる
+
 ---
 
 運用メモ
