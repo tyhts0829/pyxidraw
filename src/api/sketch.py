@@ -35,7 +35,7 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 引数の意味（要点）:
 - `user_draw`: 時刻 `t` [sec] と CC 値辞書（0–127 → 0.0–1.0）を受け取り `Geometry` を返す純関数。
 - `canvas_size`: `"A4"/"A5"/...` などのプリセット名、または `(width_mm, height_mm)` タプル。
-- `render_scale`: mm→画素のスケーリング。見た目の解像度とアンチエイリアス品質に影響。
+- `render_scale`: mm→画素のスケーリング（px/mm, float 可）。見た目の解像度とアンチエイリアス品質に影響。
 - `fps`: 描画更新レート。`None` で設定ファイルから解決、未設定時は 60。
 - `background`: RGBA (0–1)。ウィンドウの背景色。
 - `workers`: バックグラウンド計算の並列度（CPU コア/負荷に応じて調整）。
@@ -95,7 +95,7 @@ def run_sketch(
     user_draw: Callable[[float, Mapping[int, float]], Geometry],
     *,
     canvas_size: str | tuple[int, int] = "A5",
-    render_scale: int = 4,
+    render_scale: float = 4.0,
     line_thickness: float = 0.0006,
     fps: int | None = None,
     background: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
@@ -111,7 +111,7 @@ def run_sketch(
     canvas_size :
         既定キー("A4","A5"...）または ``(width, height)`` mm。
     render_scale :
-        mm単位の頂点座標群をレンダリングするときの拡大率。
+        mm→px のスケーリング係数（px/mm）。float 可。小数点はウィンドウ解像度に丸めて適用。
     line_thickness :
         線の太さ（クリップ空間 -1..1 基準の半幅相当）。既定は 0.0006。
         将来的に mm 指定のサポートを検討（`thickness_clip ≈ 2*mm/canvas_height`）。
@@ -147,8 +147,8 @@ def run_sketch(
         canvas_width, canvas_height = CANVAS_SIZES[canvas_size.upper()]
     else:
         canvas_width, canvas_height = canvas_size
-    window_width, window_height = int(canvas_width * render_scale), int(
-        canvas_height * render_scale
+    window_width, window_height = int(round(canvas_width * render_scale)), int(
+        round(canvas_height * render_scale)
     )
 
     # ---- ③ MIDI ---------------------------------------------------

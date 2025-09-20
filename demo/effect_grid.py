@@ -38,10 +38,10 @@ REFERENCE_SHAPE_PARAMS: dict[str, Any] = {"polygon_type": "dodecahedron"}
 # レイアウト
 CELL_SIZE = (100.0, 100.0)  # (w, h)
 COLUMNS = 5  # 1 行あたりのセル数（列数）
-PADDING = 5.0  # セル内の余白（内側マージン）—フィット時に上下左右から差し引く
-GAP = 5.0  # セル間の間隔（外側ギャップ）—レイアウト時にセル間へ加算
+PADDING = 10.0  # セル内の余白（内側マージン）—フィット時に上下左右から差し引く
+GAP = 10.0  # セル間の間隔（外側ギャップ）—レイアウト時にセル間へ加算
 LINE_THICKNESS = 0.0006  # 描画線の太さ（スクリーン座標に対する比率）
-EDGE_MARGIN = 40.0  # ウィンドウ外枠の余白（上下左右, px 相当）
+EDGE_MARGIN = 30.0  # ウィンドウ外枠の余白（上下左右, px 相当）
 
 # パラメータ解決
 NORMALIZED_DEFAULT = 0.5  # 0..1 の既定値
@@ -268,7 +268,7 @@ def draw(t: float, _cc: Mapping[int, float]) -> Geometry:
     for g, (cx, cy) in zip(_CELL_GEOMS, _CELL_CENTERS):
         if g.is_empty:
             continue
-        out = out.concat(g.rotate(z=theta, center=(cx, cy, 0.0)))
+        out = out.concat(g.rotate(x=theta, y=theta, z=theta, center=(cx, cy, 0.0)))
 
     if _LABELS_GEO is not None and not _LABELS_GEO.is_empty:
         out = out.concat(_LABELS_GEO)
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(width, height),
-        render_scale=2,
+        render_scale=2.5,
         use_midi=False,
         use_parameter_gui=False,
         workers=1,

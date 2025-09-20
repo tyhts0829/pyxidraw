@@ -136,7 +136,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(400, 400),
-        render_scale=4,
+        render_scale=4,  # float 可（例: 2.5）
         use_midi=True,
         # クリップ空間基準の線幅（既定 0.0006）。mm 指定は将来拡張予定。
         line_thickness=0.0006,
@@ -170,7 +170,7 @@ Tips:
 ---
 
 ## 座標変換と投影（詳細）
-- 物理単位は mm。ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`。
+- 物理単位は mm。ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`（render_scale は float 可）。
 - 投影は正射影（擬似 2D）。Y 軸はスクリーン座標に合わせて上が負になる変換を適用。
   - `api.sketch.run_sketch()` が ModernGL 用の 4x4 行列を構築し、`engine.render.renderer.LineRenderer` に渡す。
   - 実装行列（転置後にシェーダへ書き込み）:

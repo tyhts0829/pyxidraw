@@ -3,7 +3,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+.mypy_cache/
+.ruff_cache/
 .hypothesis/
 .ipynb_checkpoints/
 .vscode/
