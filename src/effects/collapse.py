@@ -138,7 +138,11 @@ def _apply_collapse_to_coords(
         return coords.copy(), offsets.copy()
 
     combined_coords = np.vstack(all_coords)
-    combined_offsets = np.cumsum(np.concatenate(all_offsets))
+    lengths = np.concatenate(all_offsets)
+    # offsets は先頭に 0 を置き、以後は累積和（Geometry の不変条件）
+    combined_offsets = np.empty(lengths.size + 1, dtype=offsets.dtype)
+    combined_offsets[0] = 0
+    np.cumsum(lengths, out=combined_offsets[1:])
 
     return combined_coords, combined_offsets
 

@@ -179,8 +179,10 @@ def test_pipeline_cache_hit_vs_miss(benchmark):
   - Step B（軽量スクリプト）: JSON 要約の生成（追加依存なし）
     - `tools/bench/summarize.py` を追加し、`perf.json` から Markdown/CSV を出力
     - 例: `benchmark_results/summary.md`（name/case/N/M/mean/median/stddev/rounds）、`summary.csv`
-  - Step C（任意・静的 HTML）: Chart.js 同梱でシングルファイルダッシュボード
-    - `benchmark_results/index.html` にグラフ（miss/hit、digest on/off、cache on/off など）
+  - Step C（任意・静的 HTML）: Chart.js（CDN）で単一 HTML ダッシュボードを生成
+    - `python -m tools.bench.html_report benchmark_results/summary.json --out benchmark_results/index.html`
+    - グラフ: All cases、miss/hit、digest on/off、cache on/off、geometry micro ops
+    - 備考: ネットワークがない環境では表のみ表示（CDN 読み込み不可のため）
 - 配置と管理:
   - 出力先: `benchmark_results/`（既に Lint 除外済み）。 `.gitignore` へも追加して大容量生成物のコミットを回避（Ask-first）。
   - CI ではアーティファクト化のみ（将来の Stage 6 と連動）。
@@ -257,10 +259,10 @@ Stage 7: 回帰ゲート（オプトイン）
 - 完了指標: 有効化時に回帰検知で失敗、無効時はスモークとして通過
 
 Stage 8: 可視化レポート（ローカル中心・Ask-first）
-- [ ] Step A: `--benchmark-histogram` の利用手順と出力先（`benchmark_results/hist*`）を整備
-- [ ] Step B: `tools/bench/summarize.py` で `perf.json` から Markdown/CSV を生成
-- [ ] Step C（任意）: `Chart.js` 同梱の静的 HTML ダッシュボードを `benchmark_results/index.html` に出力
-- [ ] `.gitignore` に `benchmark_results/` を追加（大容量生成物のコミット回避）
+- [x] Step A: `--benchmark-histogram` の利用手順と出力先（`benchmark_results/hist*`）を整備
+- [x] Step B: `tools/bench/summarize.py` で `perf.json` から Markdown/CSV/JSON を生成
+- [x] Step C（任意）: `tools/bench/html_report.py` により静的 HTML ダッシュボードを出力
+- [x] `.gitignore` に `benchmark_results/` を追加（大容量生成物のコミット回避）
 - 完了指標: ローカルでヒスト/Markdown/CSV/HTML のいずれかを生成・閲覧できる
 
 ---
