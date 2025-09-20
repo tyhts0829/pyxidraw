@@ -504,6 +504,9 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
                 lines.append("        ...\n")
             except Exception:
                 lines.append(f"    def {name}(self, **_params: Any) -> Geometry: ...\n")
+    # 追加: ユーティリティメソッド（実装 ShapesAPI に合わせて公開）
+    lines.append("    def empty(self) -> Geometry: ...\n")
+    lines.append("    def from_lines(self, lines: Any) -> Geometry: ...\n")
     lines.append("\n")
 
     # エフェクト用 Pipeline Protocol 群
