@@ -10,7 +10,8 @@ import pyglet.shapes
 from pyglet.graphics import Batch, Group
 from pyglet.window import key
 
-from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore
+from .normalization import clamp_normalized, denormalize_scalar, normalize_scalar
+from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore, RangeHint
 
 # スクロール量（ピクセル）
 _SCROLL_STEP = 40
@@ -68,26 +69,36 @@ class SliderWidget:
         self.height = height
         self._dirty_bounds = True
 
-    def _range(self) -> tuple[float, float]:
-        hint = self.descriptor.range_hint
-        if hint is None:
-            return 0.0, 1.0
-        return float(hint.min_value), float(hint.max_value)
+    def _hint(self) -> RangeHint | None:
+        return self.descriptor.range_hint
 
-    def current_value(self) -> Any:
+    def _current_normalized(self) -> float:
         value = self.store.current_value(self.descriptor.id)
         if value is None:
-            return self.descriptor.default_value
-        return value
+            value = self.descriptor.default_value
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, bool):
+            return 1.0 if value else 0.0
+        return 0.0
+
+    def _current_actual(self) -> Any:
+        hint = self._hint()
+        normalized = self._current_normalized()
+        if hint is None:
+            if self.descriptor.value_type == "int":
+                return int(round(normalized))
+            if self.descriptor.value_type == "bool":
+                return bool(normalized)
+            return normalized
+        return denormalize_scalar(normalized, hint, value_type=self.descriptor.value_type)
 
     def _normalized(self) -> float:
-        value = self.current_value()
-        if not isinstance(value, (int, float)):
-            return 0.0
-        lo, hi = self._range()
-        if hi == lo:
-            return 0.0
-        return max(0.0, min(1.0, (float(value) - lo) / (hi - lo)))
+        hint = self._hint()
+        normalized = self._current_normalized()
+        if hint is None:
+            return max(0.0, min(1.0, normalized))
+        return clamp_normalized(normalized, hint)
 
     def begin_drag(self) -> None:
         self.dragging = True
@@ -98,9 +109,6 @@ class SliderWidget:
         self.dragging = False
 
     def drag_to(self, x: float, *, modifiers: int = 0) -> None:
-        lo, hi = self._range()
-        if hi == lo:
-            return
         width = max(self.width, 1.0)
         delta = (x - self._drag_origin_x) / width
         factor = 1.0
@@ -109,12 +117,29 @@ class SliderWidget:
         if modifiers & (key.MOD_COMMAND | key.MOD_CTRL):
             factor *= 10.0
         normalized = self._drag_start_normalized + delta * factor
-        normalized = max(0.0, min(1.0, normalized))
-        value = lo + normalized * (hi - lo)
+        hint = self._hint()
+        if hint is None:
+            normalized = max(0.0, min(1.0, normalized))
+            actual_value: Any = normalized
+        else:
+            normalized = clamp_normalized(normalized, hint)
+            actual_value = denormalize_scalar(
+                normalized, hint, value_type=self.descriptor.value_type
+            )
+
         if self.descriptor.value_type == "int":
-            value = int(round(value))
-        self.store.set_override(self.descriptor.id, value, source="gui")
-        self._drag_start_normalized = normalized
+            actual_value = int(round(actual_value))
+
+        if hint is None:
+            new_normalized = float(actual_value)
+        else:
+            new_normalized = normalize_scalar(
+                actual_value,
+                hint,
+                value_type=self.descriptor.value_type,
+            )
+        self.store.set_override(self.descriptor.id, new_normalized, source="gui")
+        self._drag_start_normalized = float(new_normalized)
         self._drag_origin_x = x
 
     def reset(self) -> None:
@@ -188,9 +213,11 @@ class SliderWidget:
         self._dirty_bounds = False
 
     def _update_value(self) -> None:
-        value = self.current_value()
+        value = self._current_actual()
         if isinstance(value, float):
             value_text = f"{value:.{self.layout.value_precision}f}"
+        elif isinstance(value, bool):
+            value_text = "ON" if value else "OFF"
         else:
             value_text = str(value)
         if self._value_label is not None:

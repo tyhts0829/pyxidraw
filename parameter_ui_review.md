@@ -48,8 +48,8 @@
 
 ## 修正計画（チェックリスト: 指摘 1「int パラメータスライダーが実レンジへ到達できない」）
 
-- [ ] `SliderWidget` から `normalization` モジュールを参照するための依存関係を整理（循環輸入の確認含む）。
-- [ ] `SliderWidget._range()`／`_normalized()`／`drag_to()` が `RangeHint.mapped_min/max/step` を用いて実レンジとの往復変換を行うよう改修。
-- [ ] `drag_to()` での値決定を `denormalize_scalar()` に委譲し、その後で `value_type == "int"` の丸め処理を適用。
-- [ ] `_normalized()` 側で `normalize_scalar()` を利用し、GUI 表示とバー位置が実レンジ基準で一致するか確認。
-- [ ] 既存 int/float パラメータの挙動をカバーするユニットテスト（例: `tests/ui/parameters` 配下）を追加し、正規化ラウンドトリップの精度を検証。
+- [x] `SliderWidget` から `normalization` モジュールを参照するための依存関係を整理（循環輸入の確認含む）。
+- [x] `SliderWidget._range()`／`_normalized()`／`drag_to()` が `RangeHint.mapped_min/max/step` を用いて実レンジとの往復変換を行うよう改修。
+- [x] `drag_to()` での値決定を `denormalize_scalar()` に委譲し、その後で `value_type == "int"` の丸め処理を適用。
+- [x] `_normalized()` 側で `normalize_scalar()` を利用し、GUI 表示とバー位置が実レンジ基準で一致するか確認。
+- [x] 既存 int/float パラメータの挙動をカバーするユニットテスト（例: `tests/ui/parameters` 配下）を追加し、正規化ラウンドトリップの精度を検証。
