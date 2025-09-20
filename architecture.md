@@ -4,7 +4,7 @@
 - 層（数値は内外の序数。小さいほど内側）
   - L0 Core/Base: `common/`, `util/`, `engine/core/`
   - L1 Domain/Transforms: `shapes/`, `effects/`（純関数 `Geometry -> Geometry`）
-  - L2 Infra & Runtime: `engine/render/`, `engine/runtime/`, `engine/ui/`, `engine/io/`
+  - L2 Infra & Runtime: `engine/render/`, `engine/runtime/`, `engine/ui/`, `engine/io/`, `engine/export/`
   - L3 API/Entry: `api/`, `main.py`
 - 許可する依存方向
   - 外側 → 内側（同層は許可）。数値で表すと「ソース層 ≥ ターゲット層」。

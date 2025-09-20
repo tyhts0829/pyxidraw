@@ -302,9 +302,20 @@ def run_sketch(
             rendering_window.close()
         # PNG 保存（P / Shift+P）
         if sym == key.P:
-            scale = 2.0 if (mods & key.MOD_SHIFT) else 1.0
             try:
-                p = save_png(rendering_window, scale=scale, include_overlay=True)
+                if mods & key.MOD_SHIFT:
+                    # 高解像度（overlayなし）: オフスクリーン描画でラインのみ保存
+                    p = save_png(
+                        rendering_window,
+                        scale=2.0,
+                        include_overlay=False,
+                        transparent=False,
+                        mgl_context=mgl_ctx,
+                        draw=line_renderer.draw,
+                    )
+                else:
+                    # 低コスト（overlayあり）: 画面バッファをそのまま保存
+                    p = save_png(rendering_window, scale=1.0, include_overlay=True)
                 overlay.show_message(f"Saved PNG: {p}")
             except Exception as e:  # 失敗時のHUD表示
                 overlay.show_message(f"PNG 保存失敗: {e}", level="error")

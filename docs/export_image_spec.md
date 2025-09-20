@@ -167,7 +167,7 @@ Stage 3 — G-code 変換（空のクラスを保持）
 Stage 4 — PNG エクスポートラッパ
 - [x] `engine/export/image.py` を追加:
   - [x] `save_png(window, path=None, *, scale=1.0, include_overlay=True, transparent=False) -> Path`。
-  - [ ] `include_overlay=True` はウィンドウバッファ直保存、`False` は FBO 経由で `LineRenderer.draw()` のみ描画。
+  - [x] `include_overlay=True` はウィンドウバッファ直保存、`False` は FBO 経由で `LineRenderer.draw()` のみ描画。
 - 合格基準: 生成ファイルのピクセル数が期待通り（`scale` 反映）、エラー時に説明的例外。
 
 Stage 5 — HUD 拡張（メッセージ/進捗）
@@ -177,8 +177,8 @@ Stage 5 — HUD 拡張（メッセージ/進捗）
 - 合格基準: 実行時に一時メッセージが表示され、進捗が % で更新/消去できる。
 
 Stage 6 — ランナー配線（ホットキー）
-- [ ] `src/api/sketch.py` キーイベント:
-  - [ ] `P` / `Shift+P` → `save_png(...)` を呼び出し、完了メッセージを HUD 表示。
+- [x] `src/api/sketch.py` キーイベント:
+  - [x] `P` / `Shift+P` → `save_png(...)` を呼び出し、完了メッセージを HUD 表示。
   - [x] `G` → `SwapBuffer.get_front()` の `coords/offsets` を C 連続コピーでスナップショットし、ExportService へ投入。
   - [x] 実行中に再度 `G` → 「エクスポート実行中」の HUD メッセージ。
   - [x] `Shift+G` → 現行ジョブをキャンセル、HUD にキャンセル通知。
