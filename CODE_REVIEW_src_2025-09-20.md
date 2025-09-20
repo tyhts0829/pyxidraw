@@ -23,6 +23,11 @@
 
 参考: `src/api/effects.py`, `src/api/shapes.py`, `src/api/sketch.py`
 
+— 簡素化/削減の観点 —
+- `PipelineBuilder.strict` 既定 True は堅牢だが、開発初期の反復時に冗長な失敗を誘発することがある。既定を False にして必要時にオン、もしくは `PXD_STRICT_DEFAULT` 環境変数制御にすると体験が軽くなる（互換性要検討）。
+- `to_spec/from_spec` はメソッドの薄いラッパ。API 面の明快さ優先なら維持、縮減方針なら片方（関数 or メソッド）へ集約可能。
+- `__repr__` の詳細構築は開発用利便。パフォーマンス影響は小さく、削減優先度は低。
+
 ---
 
 ## common/
@@ -38,6 +43,10 @@
   - `param_utils.py` に 0..1 正規化ヘルパ群の使用例を 2–3 行追加（何をいつ使うかの指針）。
 
 参考: `src/common/base_registry.py`, `src/common/param_utils.py`, `src/common/types.py`
+
+— 簡素化/削減の観点 —
+- `BaseRegistry._normalize_key` の厳格チェック（空文字/型）は妥当。削るとデバッグ難度が上がるため現状維持推奨。
+- `param_utils.make_hashable_param` はケース網羅が広いが、実運用で不要な分岐（numpy object 配列対応等）を絞れば数行削減可。ただしキャッシュ安定性に影響するため慎重。
 
 ---
 
@@ -62,6 +71,13 @@
 
 参考: `src/effects/*.py`, 特に `src/effects/fill.py`, `src/effects/displace.py`, `src/effects/offset.py`
 
+— 簡素化/削減の観点 —
+- デッドコード: `effects/offset.py` の `_determine_join_style()` は未使用。安全に削除可能。
+- 直 import 依存: `numba`/`shapely` は関数使用直前に遅延 import へ変更可能（失敗時は純 numpy の低速版や明示的な RuntimeError を出す）。import 時失敗を避けつつコード量の重複を減らせる。
+- `fill.py` の Numba 最適化群は維持方針で妥当だが、軽量化優先なら line/cross/dots いずれかを簡易版へ統合し、バッチ関数（`generate_line_intersections_batch` など）を共通化して行数削減が可能。
+- `displace.py` の Perlin 実装は自前で詳細だが、改善の余地は「fade/lerp/grad の docstring 簡略化」「Permutation の 2倍連結生成を関数化（3–5 行削減）」程度。性能と可読性のバランスは現状良好。
+- `ripple/wobble` は frequency 正規化ロジックが類似。小ユーティリティ化（タプル化ヘルパ）で重複削減可。
+
 ---
 
 ## engine/core/
@@ -80,6 +96,10 @@
 
 参考: `src/engine/core/geometry.py`, `src/engine/core/render_window.py`, `src/engine/core/frame_clock.py`
 
+— 簡素化/削減の観点 —
+- `geometry.digest` の環境変数制御とフォールバック説明はやや長め。実装はシンプルで、削る必要性は低。docstring を 1–2 文圧縮の余地はあるが、可読性を損なうほどではない。
+- `render_window.py` は MSAA 設定が一発で決まらない環境があるため、`Config` の try/except を入れるだけで運用トラブルが減る。コード量増は最小で実効性高。
+
 ---
 
 ## engine/io/
@@ -96,6 +116,11 @@
   - `controller.py` も遅延 import に統一し、`api/sketch.py` 側の strict/非 strict 方針と整合させる。
 
 参考: `src/engine/io/manager.py`, `src/engine/io/controller.py`
+
+— 簡素化/削減の観点 —
+- 直 import（`mido`）を遅延化。`manager.py` と同様のガードにより import 時失敗を回避しつつ、例外は「使用時」に限定。
+- `MidiController` 内の `process_7bit_control_change`/`process_14bit_control_change`/`calc_combined_value` は構造化が良い。行数削減のみ目的なら 7bit/14bit 分岐を 1 関数に合流できるが、可読性低下の恐れあり。現状維持推奨。
+- JSON 永続化の `by_name` 以外の構造は未使用。将来的な拡張予定が無ければキーを固定化してローダの分岐を簡略化可（数行削減）。
 
 ---
 
@@ -114,6 +139,10 @@
 
 参考: `src/engine/render/renderer.py`, `src/engine/render/line_mesh.py`, `src/engine/render/shader.py`
 
+— 簡素化/削減の観点 —
+- 現行は Geometry Shader でライン太さを実装。プラットフォーム互換性を最大化するなら GS 無し + `LINE_STRIP` + 固定幅に落とす選択肢もある（コードは若干減る）。ただし見た目品質/太さ可変性が落ちるため要トレードオフ検討。
+- `renderer._geometry_to_vertices_indices` は明快。微小削減案として `np.add`/`np.arange` の一括生成と `indices[::line+1]=restart` のようなベクトル化があるが、可読性とバグリスクを考えると現状維持で良い。
+
 ---
 
 ## engine/runtime/
@@ -130,6 +159,10 @@
 
 参考: `src/engine/runtime/buffer.py`, `src/engine/runtime/worker.py`, `src/engine/runtime/receiver.py`
 
+— 簡素化/削減の観点 —
+- `WorkerTaskError.__reduce__` によるメッセージ再構築は堅牢。簡素化優先なら、例外オブジェクト自体を送らず `(frame_id, error_str)` のタプルに統一し、受信側で例外化する方式にできる（数行削減・pickle 安定）。
+- `WorkerPool.inline` 分岐は価値が高く、行数は最小限。現状維持推奨。
+
 ---
 
 ## engine/ui/parameters/
@@ -145,6 +178,10 @@
   - `Parameters` サブパッケージの Overview を `engine/ui/parameters/AGENTS.md` に短く足す（役割対応表）。
 
 参考: `src/engine/ui/parameters/*.py`
+
+— 簡素化/削減の観点 —
+- 大きいのは `value_resolver.py`。ロジックは整理されているため大規模削減は非推奨だが、`_range_hint_from_meta` 近傍のデフォルト/推測処理を 2–3 個の小関数へ分割して見通しを改善可能（コード行数は横ばい、可読性向上）。
+- UI 未対応型（enum/vector 以外）の分岐は明示的で読みやすい。削減対象ではない。
 
 ---
 
@@ -164,6 +201,12 @@
 
 参考: `src/shapes/*.py`, 特に `src/shapes/text.py`, `src/shapes/sphere.py`, `src/shapes/grid.py`
 
+— 簡素化/削減の観点 —
+- デッドコード: `shapes/text.py` の `_process_vertices_batch_fast()` は未使用。削除可能。
+- `text.py` の最適化関数群（njit）は価値があるが、1ファイル当たりの行数が大きい。`TextRenderer` と njit 群をモジュール分割（`text_runtime.py` など）すると可読性が上がる（コード量は同等、見通し改善）。
+- `sphere.py` は生成バリエーションが豊富。最小構成を狙うならスタイルを 3 種へ絞る（latlon/icosphere/rings）ことで導入負荷を軽減できるが、表現力低下のため任意。
+- `grid.py` のベクトル化は既に良好。さらなる削減余地は小。
+
 ---
 
 ## util/
@@ -179,6 +222,10 @@
   - `utils._find_project_root()` の探索条件に `pyproject.toml`/`setup.cfg` を既に含めており十分。コメントに探索順の例を 1 行追記するとより親切。
 
 参考: `src/util/constants.py`, `src/util/utils.py`, `src/util/geom3d_ops.py`
+
+— 簡素化/削減の観点 —
+- `constants.NOISE_CONST` の巨大リテラルは視認性を損ねる。起動時生成（固定 seed で permutation/grad3 を合成）に切り替えればファイル行数を大幅削減可。ただし「定数の再現性」をどこまで重視するかの方針決めが必要。
+- `geom3d_ops.py` の `numba` は遅延 import + フォールバック化（effects と同方針）で import 失敗を回避しつつ依存を軽めに見せられる。
 
 ---
 
@@ -204,4 +251,3 @@
 ---
 
 以上。
-
