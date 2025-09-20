@@ -329,3 +329,11 @@ def _glyph_commands_to_vertices(glyph_commands: list, units_per_em: float) -> li
             _normalize_vertices_fast(np.array(current_path, dtype=np.float32), units_per_em)
         )
     return vertices_list
+
+
+text.__param_meta__ = {
+    "font_size": {"type": "number", "min": 0.1, "max": 1.0},
+    "font": {"type": "string"},
+    "font_number": {"type": "integer", "min": 0, "max": 10},
+    "align": {"type": "string", "choices": ["left", "center", "right"]},
+}

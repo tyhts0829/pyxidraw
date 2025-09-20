@@ -43,66 +43,67 @@ class _GShapes(Protocol):
 from common.types import Vec3
 
 class _PipelineBuilder(Protocol):
-    # meta: pivot (type=vec3)
-    # meta: angles_rad (type=vec3)
-    # meta: scale (type=vec3)
+    # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
+    # meta: angles_rad (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
+    # meta: scale (type=vec3, range=[(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)])
     def affine(self, *, pivot: Vec3 | None = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         任意の変換（スケール→回転→移動）を適用する純関数エフェクト。
 
         引数:
-            pivot: vec3
-            angles_rad: vec3
-            scale: vec3
+            pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
+            angles_rad: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
+            scale: vec3, range [(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)]
         """
         ...
-    # meta: intensity (type=number, min=0.0)
-    # meta: subdivisions (type=number, range=[0.0, 1.0])
+    # meta: intensity (type=number, range=[0.0, 10.0])
+    # meta: subdivisions (type=integer, range=[0, 10])
     def collapse(self, *, intensity: float = ..., subdivisions: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         線分を細分化してノイズで変形（純関数）。
 
         引数:
-            intensity: number, min 0.0
-            subdivisions: number, range [0.0, 1.0]
+            intensity: number, range [0.0, 10.0]
+            subdivisions: integer, range [0, 10]
         """
         ...
-    # meta: dash_length (type=number, min=0.0)
-    # meta: gap_length (type=number, min=0.0)
+    # meta: dash_length (type=number, range=[0.0, 100.0])
+    # meta: gap_length (type=number, range=[0.0, 100.0])
     def dash(self, *, dash_length: float = ..., gap_length: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         連続線を破線に変換（純関数）。
 
         引数:
-            dash_length: number, min 0.0
-            gap_length: number, min 0.0
+            dash_length: number, range [0.0, 100.0]
+            gap_length: number, range [0.0, 100.0]
         """
         ...
     # meta: amplitude_mm (type=number, range=[0.0, 50.0])
-    # meta: spatial_freq (type=number, range=[0.0, 0.05])
-    # meta: t_sec (type=number, min=0.0)
+    # meta: spatial_freq (type=number, range=[(0.0, 0.0, 0.0), (0.1, 0.1, 0.1)])
+    # meta: t_sec (type=number, range=[0.0, 60.0])
     def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | tuple[float, float, float] = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         3次元頂点にPerlinノイズを追加（クリーンAPI）。
 
         引数:
             amplitude_mm: number, range [0.0, 50.0]
-            spatial_freq: number, range [0.0, 0.05]
-            t_sec: number, min 0.0
+            spatial_freq: number, range [(0.0, 0.0, 0.0), (0.1, 0.1, 0.1)]
+            t_sec: number, range [0.0, 60.0]
         """
         ...
-    # meta: factor (type=number, range=[0.0, 1.0])
+    # meta: factor (type=number, range=[0.0, 50.0])
     def explode(self, *, factor: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         中心から外側へ頂点を放射状に移動させるエフェクト。
 
         引数:
-            factor: 移動係数（0..1 相当のスケールを想定）
+            factor: 移動距離（mm 単位）
         """
         ...
-    # meta: distance (type=number, range=[0.0, 1.0])
-    # meta: scale (type=number, range=[0.0, 1.0])
-    # meta: subdivisions (type=number, range=[0.0, 1.0])
+    # meta: direction (type=vec3)
+    # meta: distance (type=number, range=[0.0, 200.0])
+    # meta: scale (type=number, range=[0.0, 3.0])
+    # meta: subdivisions (type=integer, range=[0, 5])
     # meta: center_mode (type=string)
     # choices: center_mode in ['origin', 'auto']
     def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: float = ..., center_mode: str = ..., **_params: Any) -> _PipelineBuilder:
@@ -110,30 +111,31 @@ class _PipelineBuilder(Protocol):
         2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。
 
         引数:
-            distance: number, range [0.0, 1.0]
-            scale: number, range [0.0, 1.0]
-            subdivisions: number, range [0.0, 1.0]
+            direction: vec3
+            distance: number, range [0.0, 200.0]
+            scale: number, range [0.0, 3.0]
+            subdivisions: integer, range [0, 5]
             center_mode: string, choices { 'origin', 'auto' }
         """
         ...
     # meta: mode (type=string)
     # choices: mode in ['lines', 'cross', 'dots']
-    # meta: angle_rad (type=number)
-    # meta: density (type=number, range=[0.0, 1.0])
+    # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
+    # meta: density (type=number, range=[0.0, 100])
     def fill(self, *, mode: str = ..., angle_rad: float = ..., density: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         閉じた形状をハッチング/ドットで塗りつぶし（純関数）。
 
         引数:
             mode: string, choices { 'lines', 'cross', 'dots' }
-            angle_rad: number
-            density: number, range [0.0, 1.0]
+            angle_rad: number, range [0.0, 6.283185307179586]
+            density: number, range [0.0, 100]
         """
         ...
     # meta: join (type=string)
     # choices: join in ['mitre', 'round', 'bevel']
     # meta: segments_per_circle (type=integer, range=[1, 1000])
-    # meta: distance (type=number, range=[0.0, 1.0])
+    # meta: distance (type=number, range=[0.0, 25.0])
     # meta: distance_mm (type=number, min=0.0)
     def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., distance_mm: float | None = ..., **_params: Any) -> _PipelineBuilder:
         """
@@ -142,30 +144,30 @@ class _PipelineBuilder(Protocol):
         引数:
             join: string, choices { 'mitre', 'round', 'bevel' }
             segments_per_circle: integer, range [1, 1000]
-            distance: number, range [0.0, 1.0]
+            distance: number, range [0.0, 25.0]
             distance_mm: number, min 0.0
         """
         ...
     # meta: count (type=integer, range=[0, 10])
-    # meta: offset (type=vec3)
-    # meta: angles_rad_step (type=vec3)
-    # meta: scale (type=vec3)
-    # meta: pivot (type=vec3)
+    # meta: offset (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
+    # meta: angles_rad_step (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
+    # meta: scale (type=vec3, range=[(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)])
+    # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     def repeat(self, *, count: int = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         入力のコピーを配列状に生成（純関数）。
 
         引数:
             count: integer, range [0, 10]
-            offset: vec3
-            angles_rad_step: vec3
-            scale: vec3
-            pivot: vec3
+            offset: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
+            angles_rad_step: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
+            scale: vec3, range [(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)]
+            pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
         """
         ...
-    # meta: amplitude (type=number, min=0.0)
-    # meta: frequency (type=vec3)
-    # meta: phase (type=number)
+    # meta: amplitude (type=number, range=[0.0, 20.0])
+    # meta: frequency (type=number, range=[(0.0, 0.0, 0.0), (0.2, 0.2, 0.2)])
+    # meta: phase (type=number, range=[0.0, 6.283185307179586])
     def ripple(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         座標値に基づくサイン波ゆらぎ（ウォブル）を各軸に適用する純関数エフェクト。
@@ -176,8 +178,8 @@ class _PipelineBuilder(Protocol):
             phase: 位相オフセット（ラジアン）
         """
         ...
-    # meta: pivot (type=vec3)
-    # meta: angles_rad (type=vec3)
+    # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
+    # meta: angles_rad (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
     def rotate(self, *, pivot: Vec3 = ..., angles_rad: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         回転（新形式のみ）。
@@ -187,8 +189,8 @@ class _PipelineBuilder(Protocol):
             angles_rad: (rx, ry, rz) ラジアン角
         """
         ...
-    # meta: pivot (type=vec3)
-    # meta: scale (type=vec3)
+    # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
+    # meta: scale (type=vec3, range=[(0.1, 0.1, 0.1), (5.0, 5.0, 5.0)])
     def scale(self, *, pivot: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         スケール変換を適用（純関数）。
@@ -198,22 +200,22 @@ class _PipelineBuilder(Protocol):
             scale: 各軸の倍率（`(sx, sy, sz)`）
         """
         ...
-    # meta: subdivisions (type=number, range=[0.0, 1.0])
+    # meta: subdivisions (type=integer, range=[0, 10])
     def subdivide(self, *, subdivisions: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         中間点を追加して線を細分化（純関数）。
 
         引数:
-            subdivisions: number, range [0.0, 1.0]
+            subdivisions: integer, range [0, 10]
         """
         ...
-    # meta: delta (type=vec3)
+    # meta: delta (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     def translate(self, *, delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         指定ベクトルで平行移動（Geometry メソッドに委譲）。
 
         引数:
-            delta: vec3
+            delta: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
         """
         ...
     # meta: start_param (type=number, range=[0.0, 1.0])
@@ -227,7 +229,7 @@ class _PipelineBuilder(Protocol):
             end_param: 終了位置（0.0–1.0）
         """
         ...
-    # meta: angle (type=number)
+    # meta: angle (type=number, range=[0.0, 360.0])
     # meta: axis (type=string)
     # choices: axis in ['x', 'y', 'z']
     def twist(self, *, angle: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder:
@@ -239,22 +241,22 @@ class _PipelineBuilder(Protocol):
             axis: ねじれ軸（"x"|"y"|"z"）
         """
         ...
-    # meta: num_candidate_lines (type=number, range=[0.0, 1.0])
-    # meta: relaxation_iterations (type=number, range=[0.0, 1.0])
-    # meta: step (type=number, range=[0.0, 1.0])
+    # meta: num_candidate_lines (type=integer, range=[0, 500])
+    # meta: relaxation_iterations (type=integer, range=[0, 50])
+    # meta: step (type=number, range=[0.0, 0.5])
     def weave(self, *, num_candidate_lines: float = ..., relaxation_iterations: float = ..., step: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         形状にウェブ状のストリング構造を追加（純関数）。
 
         引数:
-            num_candidate_lines: number, range [0.0, 1.0]
-            relaxation_iterations: number, range [0.0, 1.0]
-            step: number, range [0.0, 1.0]
+            num_candidate_lines: integer, range [0, 500]
+            relaxation_iterations: integer, range [0, 50]
+            step: number, range [0.0, 0.5]
         """
         ...
-    # meta: amplitude (type=number, min=0.0)
-    # meta: frequency (type=vec3)
-    # meta: phase (type=number)
+    # meta: amplitude (type=number, range=[0.0, 20.0])
+    # meta: frequency (type=number, range=[(0.0, 0.0, 0.0), (0.2, 0.2, 0.2)])
+    # meta: phase (type=number, range=[0.0, 6.283185307179586])
     def wobble(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         線にウォブル/波の歪みを追加（純関数）。

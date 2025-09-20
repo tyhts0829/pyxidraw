@@ -5,7 +5,7 @@ explode エフェクト（中心からの放射発散）
 - 形を「弾けさせる」効果で、線の位相は保持されます。
 
 主なパラメータ:
-- factor: 0..1 を実距離に写像して移動量を決定（MAX_OFFSET=50mm 基準）。
+- factor: 各頂点の移動距離 [mm]（0–50）。
 
 注意:
 - 全頂点が等距離で外側へ移動するため、連結は維持されますが交差が増える可能性があります。
@@ -15,19 +15,18 @@ from __future__ import annotations
 
 import numpy as np
 
-from common.param_utils import norm_to_range
 from engine.core.geometry import Geometry
 
 from .registry import effect
 
 
 @effect()
-def explode(g: Geometry, *, factor: float = 0.3) -> Geometry:
+def explode(g: Geometry, *, factor: float = 25.0) -> Geometry:
     """中心から外側へ頂点を放射状に移動させるエフェクト。
 
     引数:
         g: 入力ジオメトリ。
-        factor: 移動係数（0..1 相当のスケールを想定）。
+        factor: 移動距離（mm 単位）。
 
     返り値:
         変形後の `Geometry`。
@@ -42,13 +41,11 @@ def explode(g: Geometry, *, factor: float = 0.3) -> Geometry:
     lengths = np.linalg.norm(direction, axis=1, keepdims=True)
     safe = np.where(lengths > 1e-9, lengths, 1.0)
     unit = direction / safe
-    # 0..1 → mm スケールへ写像（線形）。等価: factor*MAX_OFFSET
-    MAX_OFFSET = 50.0
-    amount = norm_to_range(float(factor), 0.0, MAX_OFFSET)
+    amount = float(factor)
     out = coords + unit * amount
     return Geometry(out.astype(np.float32, copy=False), offsets.copy())
 
 
 explode.__param_meta__ = {
-    "factor": {"type": "number", "min": 0.0, "max": 1.0},
+    "factor": {"type": "number", "min": 0.0, "max": 50.0},
 }

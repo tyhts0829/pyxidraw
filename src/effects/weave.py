@@ -6,8 +6,6 @@ from __future__ import annotations
 - 乱択的に候補線を生成し（距離最大などの基準）、交点/連結を評価
 - 弾性緩和（反復）でウェブ構造を安定化
 - 元の 3D 姿勢に戻して合成
-
-正規化パラメータ（候補線数/反復/ステップ）は 0..1 をレンジに写像して使用する。
 """
 
 import math
@@ -15,8 +13,6 @@ import math
 import numpy as np
 from numba import njit, types
 from numba.typed import List
-
-from common.param_utils import norm_to_int, norm_to_range
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
 
@@ -27,9 +23,9 @@ from .registry import effect
 def weave(
     g: Geometry,
     *,
-    num_candidate_lines: float = 0.2,
-    relaxation_iterations: float = 0.3,
-    step: float = 0.25,
+    num_candidate_lines: float = 100.0,
+    relaxation_iterations: float = 15.0,
+    step: float = 0.125,
 ) -> Geometry:
     """形状にウェブ状のストリング構造を追加（純関数）。"""
     MAX_NUM_CANDIDATE_LINES = 500
@@ -38,9 +34,15 @@ def weave(
 
     coords, offsets = g.as_arrays(copy=False)
     result_lines: list[np.ndarray] = []
-    num_lines = norm_to_int(float(num_candidate_lines), 0, MAX_NUM_CANDIDATE_LINES)
-    iterations = norm_to_int(float(relaxation_iterations), 0, MAX_RELAXATION_ITERATIONS)
-    step_size = norm_to_range(float(step), 0.0, MAX_STEP)
+    num_lines = int(round(num_candidate_lines))
+    num_lines = max(0, min(MAX_NUM_CANDIDATE_LINES, num_lines))
+    iterations = int(round(relaxation_iterations))
+    iterations = max(0, min(MAX_RELAXATION_ITERATIONS, iterations))
+    step_size = float(step)
+    if step_size < 0.0:
+        step_size = 0.0
+    if step_size > MAX_STEP:
+        step_size = MAX_STEP
 
     # STEP 1: 各ポリラインに対してウェブ構造を生成
     for i in range(len(offsets) - 1):
@@ -63,9 +65,9 @@ def weave(
 
 
 weave.__param_meta__ = {
-    "num_candidate_lines": {"type": "number", "min": 0.0, "max": 1.0},
-    "relaxation_iterations": {"type": "number", "min": 0.0, "max": 1.0},
-    "step": {"type": "number", "min": 0.0, "max": 1.0},
+    "num_candidate_lines": {"type": "integer", "min": 0, "max": 500, "step": 1},
+    "relaxation_iterations": {"type": "integer", "min": 0, "max": 50, "step": 1},
+    "step": {"type": "number", "min": 0.0, "max": 0.5},
 }
 
 

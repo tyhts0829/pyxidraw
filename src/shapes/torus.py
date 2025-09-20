@@ -88,3 +88,11 @@ def torus(
             )
         )
     return Geometry.from_lines(vertices_list)
+
+
+torus.__param_meta__ = {
+    "major_radius": {"type": "number", "min": 0.05, "max": 0.5},
+    "minor_radius": {"type": "number", "min": 0.02, "max": 0.3},
+    "major_segments": {"type": "integer", "min": 8, "max": 128},
+    "minor_segments": {"type": "integer", "min": 4, "max": 64},
+}

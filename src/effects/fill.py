@@ -6,21 +6,20 @@ from __future__ import annotations
 - パターン（lines/cross/dots）に応じて塗りつぶし要素を生成
 - 生成要素を元の 3D 姿勢に戻して合成
 
-密度は 0..1 正規化を線/ドット数に写像して使用する。
+密度は線/ドットの本数として扱い、最大で 100 本（グリッドでは 100×100）を生成します。
 """
 
 
 import numpy as np
 from numba import njit
 
-from common.param_utils import norm_to_int
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
-# 塗りつぶし線の最大密度（density=1.0のときの線間隔の係数）
-MAX_FILL_LINES = 100  # density=1.0のときに最大100本の線を生成
+# 塗りつぶし線の最大密度（最大本数）
+MAX_FILL_LINES = 100
 
 
 def _generate_line_fill(
@@ -53,7 +52,11 @@ def _generate_line_fill(
     # 間隔計算: 間隔が小さいほど線が多い
     # density=1.0 → バウンディングボックス内に MAX_FILL_LINES 本を想定
     # density=0.1 → より少ない本数
-    num_lines = max(2, norm_to_int(float(density), 0, MAX_FILL_LINES))
+    num_lines = int(round(density))
+    if num_lines < 2:
+        num_lines = 2
+    if num_lines > MAX_FILL_LINES:
+        num_lines = MAX_FILL_LINES
     spacing = (max_y - min_y) / num_lines
     if spacing <= 0:
         return []
@@ -123,7 +126,11 @@ def _generate_dot_fill(vertices: np.ndarray, density: float) -> list[np.ndarray]
     # Calculate spacing for dot grid
     # At density=1.0, we want many dots (MAX_FILL_LINES x MAX_FILL_LINES grid)
     # At density=0.1, we want fewer dots
-    grid_size = max(2, norm_to_int(float(density), 0, MAX_FILL_LINES))
+    grid_size = int(round(density))
+    if grid_size < 2:
+        grid_size = 2
+    if grid_size > MAX_FILL_LINES:
+        grid_size = MAX_FILL_LINES
     spacing = min(max_x - min_x, max_y - min_y) / grid_size
     if spacing <= 0:
         return []
@@ -174,12 +181,14 @@ def fill(
     *,
     mode: str = "lines",
     angle_rad: float = 0.7853981633974483,  # pi/4 ≈ 45°
-    density: float = 0.35,
+    density: float = 35.0,
 ) -> Geometry:
     """閉じた形状をハッチング/ドットで塗りつぶし（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
     if density <= 0 or offsets.size <= 1:
         return Geometry(coords.copy(), offsets.copy())
+
+    density = max(0.0, min(MAX_FILL_LINES, float(density)))
 
     filled_results: list[np.ndarray] = []
 
@@ -201,8 +210,8 @@ def fill(
 # パラメータメタ（validate_spec で参照）
 fill.__param_meta__ = {
     "mode": {"type": "string", "choices": ["lines", "cross", "dots"]},
-    "density": {"type": "number", "min": 0.0, "max": 1.0},
-    "angle_rad": {"type": "number"},
+    "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES},
+    "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
 }
 
 

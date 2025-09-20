@@ -26,3 +26,10 @@ def cylinder(
         y = radius * np.sin(a)
         vertices_list.append(np.array([[x, y, -height / 2], [x, y, height / 2]], dtype=np.float32))
     return Geometry.from_lines(vertices_list)
+
+
+cylinder.__param_meta__ = {
+    "radius": {"type": "number", "min": 0.05, "max": 1.0},
+    "height": {"type": "number", "min": 0.1, "max": 2.0},
+    "segments": {"type": "integer", "min": 6, "max": 128},
+}

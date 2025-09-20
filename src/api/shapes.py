@@ -49,6 +49,7 @@ import shapes  # noqa: F401  (登録目的の副作用)
 from common.param_utils import params_to_tuple as _params_to_tuple
 from engine.core.geometry import Geometry, LineLike
 from engine.ui.parameters import get_active_runtime
+from engine.ui.parameters.runtime import resolve_without_runtime
 from shapes.registry import get_shape as get_shape_generator
 from shapes.registry import is_shape_registered  # ガード付きメモ化用（登録状態の即時反映）
 from shapes.registry import list_shapes as list_registered_shapes
@@ -85,6 +86,16 @@ class ShapesAPI:
         fn = get_shape_generator(shape_name)
         if runtime is not None:
             params_dict = dict(runtime.before_shape_call(shape_name, fn, params_dict))
+        else:
+            params_dict = dict(
+                resolve_without_runtime(
+                    scope="shape",
+                    name=shape_name,
+                    fn=fn,
+                    params=params_dict,
+                    index=0,
+                )
+            )
 
         data = fn(**params_dict)
         if isinstance(data, Geometry):

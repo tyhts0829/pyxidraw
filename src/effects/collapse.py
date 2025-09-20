@@ -6,8 +6,8 @@ collapse エフェクト（線の崩し/しわ寄せ）
 - ノイズはセグメントごとに独立に生成し、激しさは `intensity` で制御します。
 
 主なパラメータ:
-- intensity: 変位量（mm 相当）。
-- subdivisions: 0..1 を細分回数に写像（最大 MAX_DIV=10）。
+- intensity: 変位量（mm 相当, 0–10 推奨）。
+- subdivisions: 細分回数（0–10, 0 で未細分化）。
 
 特性/注意:
 - 細分化を増やすと鋸歯状の微細な揺らぎが増え、頂点数も増加します。
@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-
-from common.param_utils import norm_to_int
 from engine.core.geometry import Geometry
 
 from .registry import effect
@@ -150,7 +148,7 @@ def collapse(
     g: Geometry,
     *,
     intensity: float = 1.8,
-    subdivisions: float = 0.5,
+    subdivisions: float = 5.0,
 ) -> Geometry:
     """線分を細分化してノイズで変形（純関数）。
 
@@ -159,10 +157,9 @@ def collapse(
     - subdivisions=0.5: 細分化 5 程度（MAX_DIV=10 基準）で「ギザつき」を十分に出す。
     """
     coords, offsets = g.as_arrays(copy=False)
-    if len(coords) == 0 or intensity == 0.0 or subdivisions == 0.0:
+    if len(coords) == 0 or intensity == 0.0 or subdivisions <= 0.0:
         return Geometry(coords.copy(), offsets.copy())
-    MAX_DIV = 10
-    divisions = max(1, norm_to_int(float(subdivisions), 0, MAX_DIV))
+    divisions = max(1, int(round(subdivisions)))
     new_coords, new_offsets = _apply_collapse_to_coords(
         coords, offsets, float(intensity), divisions
     )
@@ -170,6 +167,6 @@ def collapse(
 
 
 collapse.__param_meta__ = {
-    "intensity": {"type": "number", "min": 0.0},
-    "subdivisions": {"type": "number", "min": 0.0, "max": 1.0},
+    "intensity": {"type": "number", "min": 0.0, "max": 10.0},
+    "subdivisions": {"type": "integer", "min": 0, "max": 10, "step": 1},
 }

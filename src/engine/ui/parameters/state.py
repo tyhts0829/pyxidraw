@@ -21,6 +21,9 @@ class RangeHint:
     max_value: float | int
     step: float | int | None = None
     scale: str | None = None  # linear / log 等（現状は linear 固定）
+    mapped_min: float | int | None = None
+    mapped_max: float | int | None = None
+    mapped_step: float | int | None = None
 
 
 @dataclass(frozen=True)

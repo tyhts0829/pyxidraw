@@ -90,7 +90,11 @@ def wobble(
 
 
 wobble.__param_meta__ = {
-    "amplitude": {"type": "number", "min": 0.0},
-    "frequency": {"type": "vec3"},
-    "phase": {"type": "number"},
+    "amplitude": {"type": "number", "min": 0.0, "max": 20.0},
+    "frequency": {
+        "type": "number",
+        "min": (0.0, 0.0, 0.0),
+        "max": (0.2, 0.2, 0.2),
+    },
+    "phase": {"type": "number", "min": 0.0, "max": 2 * np.pi},
 }

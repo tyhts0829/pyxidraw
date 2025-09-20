@@ -69,6 +69,7 @@ import inspect
 import os
 from collections import OrderedDict
 from dataclasses import dataclass
+from itertools import zip_longest
 from threading import RLock
 from typing import Any, Callable, Sequence
 
@@ -78,6 +79,7 @@ from common.param_utils import params_to_tuple as _params_to_tuple
 from effects.registry import get_effect
 from engine.core.geometry import Geometry
 from engine.ui.parameters import get_active_runtime
+from engine.ui.parameters.runtime import resolve_without_runtime
 
 
 def _geometry_hash(g: Geometry) -> bytes:
@@ -149,13 +151,23 @@ class Pipeline:
         out = g
         for idx, st in enumerate(self._steps):
             fn = get_effect(st.name)
-            params = st.params
+            params = dict(st.params)
             if runtime is not None:
                 params = runtime.before_effect_call(
                     step_index=idx,
                     effect_name=st.name,
                     fn=fn,
                     params=params,
+                )
+            else:
+                params = dict(
+                    resolve_without_runtime(
+                        scope="effect",
+                        name=st.name,
+                        fn=fn,
+                        params=params,
+                        index=idx,
+                    )
                 )
             out = fn(out, **params)
 
@@ -412,14 +424,36 @@ def validate_spec(spec: Sequence[dict[str, Any]]) -> None:
                         )
                 # range
                 if isinstance(rules, dict):
-                    if "min" in rules and isinstance(v, (int, float)) and v < rules["min"]:
-                        raise TypeError(
-                            f"spec[{i}]['params']['{k}']={v} は最小値 {rules['min']} 未満です"
-                        )
-                    if "max" in rules and isinstance(v, (int, float)) and v > rules["max"]:
-                        raise TypeError(
-                            f"spec[{i}]['params']['{k}']={v} は最大値 {rules['max']} を超えています"
-                        )
+                    min_rule = rules.get("min")
+                    max_rule = rules.get("max")
+
+                    def _iter_components(val: Any) -> list[float]:
+                        if isinstance(val, (list, tuple)):
+                            return [float(x) for x in val if isinstance(x, (int, float))]
+                        if isinstance(val, (int, float)):
+                            return [float(val)]
+                        return []
+
+                    values = _iter_components(v)
+
+                    if min_rule is not None and values:
+                        mins = _iter_components(min_rule) or [float(min_rule)]
+                        for idx, (val, min_val) in enumerate(
+                            zip_longest(values, mins, fillvalue=mins[-1])
+                        ):
+                            if val < min_val:
+                                raise TypeError(
+                                    f"spec[{i}]['params']['{k}'][{idx}]={val} は最小値 {min_rule} 未満です"
+                                )
+                    if max_rule is not None and values:
+                        maxs = _iter_components(max_rule) or [float(max_rule)]
+                        for idx, (val, max_val) in enumerate(
+                            zip_longest(values, maxs, fillvalue=maxs[-1])
+                        ):
+                            if val > max_val:
+                                raise TypeError(
+                                    f"spec[{i}]['params']['{k}'][{idx}]={val} は最大値 {max_rule} を超えています"
+                                )
                     # choices
                     choices = rules.get("choices")
                     if choices is not None and v not in choices:

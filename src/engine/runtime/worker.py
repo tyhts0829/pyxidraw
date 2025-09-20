@@ -1,3 +1,9 @@
+"""
+ワーカープロセスによる Geometry 生成を管理するモジュール。
+
+メインスレッドから受け取った描画タスクを並列に実行し、結果をキュー経由で送信する責務を担う。
+"""
+
 import itertools
 import logging
 import multiprocessing as mp

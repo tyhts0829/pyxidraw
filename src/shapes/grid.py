@@ -50,14 +50,24 @@ def _generate_grid(nx: int, ny: int) -> list[np.ndarray]:
     return vertices_list
 
 
-MAX_DIVISIONS = 50
+MAX_DIVISIONS = 100
 
 
 @shape
-def grid(subdivisions: tuple[float, float] = (0.1, 0.1), **params: Any) -> Geometry:
+def grid(subdivisions: tuple[float, float] = (20.0, 20.0), **params: Any) -> Geometry:
     """1x1 の正方形グリッドを生成します。"""
-    nx, ny = subdivisions
-    nx = int(nx * MAX_DIVISIONS)
-    ny = int(ny * MAX_DIVISIONS)
+    nx_raw, ny_raw = subdivisions
+    nx = min(MAX_DIVISIONS, max(1, int(round(nx_raw))))
+    ny = min(MAX_DIVISIONS, max(1, int(round(ny_raw))))
     vertices_list = _generate_grid(nx, ny)
     return Geometry.from_lines(vertices_list)
+
+
+grid.__param_meta__ = {
+    "subdivisions": {
+        "type": "number",
+        "min": (1, 1),
+        "max": (100, 100),
+        "step": (1, 1),
+    }
+}

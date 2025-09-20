@@ -220,8 +220,12 @@ def displace(
 
 displace.__param_meta__ = {
     "amplitude_mm": {"type": "number", "min": 0.0, "max": 50.0},
-    "spatial_freq": {"type": "number", "min": 0.0, "max": 0.05},
-    "t_sec": {"type": "number", "min": 0.0},
+    "spatial_freq": {
+        "type": "number",
+        "min": (0.0, 0.0, 0.0),
+        "max": (0.1, 0.1, 0.1),
+    },
+    "t_sec": {"type": "number", "min": 0.0, "max": 60.0},
 }
 
 

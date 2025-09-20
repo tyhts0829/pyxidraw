@@ -15,6 +15,7 @@ from .introspection import FunctionIntrospector
 from .value_resolver import ParameterContext, ParameterValueResolver
 
 _ACTIVE_RUNTIME: "ParameterRuntime | None" = None
+_OFFLINE_INTROSPECTOR = FunctionIntrospector()
 
 
 def activate_runtime(runtime: "ParameterRuntime") -> None:
@@ -93,3 +94,28 @@ class ParameterRuntime:
             param_meta=info.param_meta,
             skip={"g"},
         )
+
+
+def resolve_without_runtime(
+    *,
+    scope: str,
+    name: str,
+    fn: Any,
+    params: Mapping[str, Any],
+    index: int = 0,
+) -> Mapping[str, Any]:
+    """ParameterRuntime 非介在時に 0..1 入力を実レンジへ変換する補助。"""
+
+    info = _OFFLINE_INTROSPECTOR.resolve(kind=scope, name=name, fn=fn)
+    store = ParameterStore()
+    resolver = ParameterValueResolver(store)
+    context = ParameterContext(scope=scope, name=name, index=index)
+    skip = {"g"} if scope == "effect" else set()
+    return resolver.resolve(
+        context=context,
+        params=params,
+        signature=info.signature,
+        doc=info.doc,
+        param_meta=info.param_meta,
+        skip=skip,
+    )

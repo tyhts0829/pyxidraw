@@ -247,3 +247,11 @@ def capsule(
     )
     lines = [scaled_lines_array[i] for i in range(scaled_lines_array.shape[0])]
     return Geometry.from_lines(lines)
+
+
+capsule.__param_meta__ = {
+    "radius": {"type": "number", "min": 0.05, "max": 1.0},
+    "height": {"type": "number", "min": 0.1, "max": 2.0},
+    "segments": {"type": "integer", "min": 6, "max": 128},
+    "latitude_segments": {"type": "integer", "min": 4, "max": 64},
+}

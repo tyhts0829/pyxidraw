@@ -31,7 +31,11 @@ def translate(
 
 
 translate.__param_meta__ = {
-    "delta": {"type": "vec3"},
+    "delta": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
 }
 
 # 後方互換クラスは廃止（関数APIのみ）

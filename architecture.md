@@ -60,6 +60,8 @@
 - パラメータ GUI
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、独立ウィンドウでスライダー表示。
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と値正規化を委譲し、GUI override を適用してから元の関数へ委譲。
+  - すべての公開パラメータは「0.0〜1.0 の正規化入力」を受け取り、`RangeHint.mapped_min/max/step` で宣言した実レンジへ線形変換される。`engine.ui.parameters.normalization` が変換ロジックを一元管理し、GUI・CLI・パイプライン経路すべてで同じ挙動を保証。
+  - CLI/パイプラインでは 0.0〜1.0 の入力を正規化値として扱い、互換性のためその範囲外（例: 25.0 や -0.1）は既存の実レンジ値として受け付ける。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
   - 多プロセスとの相性を考慮し、GUI 有効時は `WorkerPool` が Inline モード（単一プロセス実行）に切替わる。
 
@@ -318,12 +320,11 @@ Tips:
   from shapes.registry import shape
 
   @shape()
-  class Star:
-      def generate(self, *, points: int = 5, r_outer: float = 50, r_inner: float = 20) -> Geometry:
-          th = np.linspace(0, 2*np.pi, points*2, endpoint=False)
-          rr = np.where(np.arange(points*2) % 2 == 0, r_outer, r_inner)
-          xy = np.c_[rr*np.cos(th), rr*np.sin(th)]
-          return Geometry.from_lines([xy])
+  def star(*, points: int = 5, r_outer: float = 50, r_inner: float = 20) -> Geometry:
+      th = np.linspace(0, 2 * np.pi, points * 2, endpoint=False)
+      rr = np.where(np.arange(points * 2) % 2 == 0, r_outer, r_inner)
+      xy = np.c_[rr * np.cos(th), rr * np.sin(th)]
+      return Geometry.from_lines([xy])
   ```
 - 追加後の手順
   - `effects/registry.py`/`shapes/registry.py` は自動登録済み（デコレータ）。

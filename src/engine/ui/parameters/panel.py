@@ -256,7 +256,7 @@ class ToggleWidget:
     def reset(self) -> None:
         self.store.set_override(
             self.descriptor.id,
-            bool(self.descriptor.default_value),
+            float(bool(self.descriptor.default_value)),
             source="gui",
         )
 
@@ -335,7 +335,7 @@ class ToggleWidget:
 
     def _toggle(self) -> None:
         new_value = not self.current_value()
-        self.store.set_override(self.descriptor.id, new_value, source="gui")
+        self.store.set_override(self.descriptor.id, float(new_value), source="gui")
 
 
 class ParameterPanel:

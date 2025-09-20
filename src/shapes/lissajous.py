@@ -29,3 +29,14 @@ def lissajous(
     z = np.zeros_like(t) if freq_z == 0.0 else np.sin(freq_z * t + phase_z) * amp
     vertices = np.stack([x, y, z], axis=1).astype(np.float32)
     return Geometry.from_lines([vertices])
+
+
+lissajous.__param_meta__ = {
+    "freq_x": {"type": "number", "min": 0.5, "max": 10.0},
+    "freq_y": {"type": "number", "min": 0.5, "max": 10.0},
+    "freq_z": {"type": "number", "min": 0.0, "max": 10.0},
+    "phase": {"type": "number", "min": 0.0, "max": 6.28318},
+    "phase_y": {"type": "number", "min": 0.0, "max": 6.28318},
+    "phase_z": {"type": "number", "min": 0.0, "max": 6.28318},
+    "points": {"type": "integer", "min": 100, "max": 5000},
+}

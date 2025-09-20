@@ -38,4 +38,5 @@ if __name__ == "__main__":
         render_scale=3,
         use_midi=True,
         use_parameter_gui=True,
+        workers=6,
     )

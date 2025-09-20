@@ -7,9 +7,9 @@ extrude エフェクト（押し出し）
 
 主なパラメータ:
 - direction: 押し出し方向ベクトル。
-- distance: 0..1 → 実距離 [mm] に写像。
-- scale: 複製線のスケール係数（0..1 → 0..MAX_SCALE）。
-- subdivisions: 0..1 → 細分回数（最大 MAX_SUBDIVISIONS=5）。
+- distance: 実距離 [mm]（0–200）。
+- scale: 複製線のスケール係数（0–3）。
+- subdivisions: 細分回数（0–5）。
 - center_mode: 'auto' は複製線の重心基準、'origin' は原点基準でスケール。
 
 注意:
@@ -22,11 +22,15 @@ from typing import Literal
 
 import numpy as np
 
-from common.param_utils import norm_to_int, norm_to_range
 from common.types import Vec3
 from engine.core.geometry import Geometry
 
 from .registry import effect
+
+
+MAX_DISTANCE = 200.0
+MAX_SCALE = 3.0
+MAX_SUBDIVISIONS = 5
 
 
 @effect()
@@ -34,9 +38,9 @@ def extrude(
     g: Geometry,
     *,
     direction: Vec3 = (0.0, 0.0, 1.0),
-    distance: float = 0.35,
-    scale: float = 0.35,
-    subdivisions: float = 0.3,
+    distance: float = 70.0,
+    scale: float = 1.05,
+    subdivisions: float = 2.0,
     center_mode: Literal["origin", "auto"] = "auto",
 ) -> Geometry:
     """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。"""
@@ -44,14 +48,13 @@ def extrude(
     if g.is_empty or offsets.size < 2:
         return Geometry(coords.copy(), offsets.copy())
 
-    MAX_DISTANCE = 200.0
-    MAX_SCALE = 3.0
-    MAX_SUBDIVISIONS = 5
-
-    # 正規化入力をレンジへ写像
-    distance_scaled = norm_to_range(float(distance), 0.0, MAX_DISTANCE)
-    scale_scaled = norm_to_range(float(scale), 0.0, MAX_SCALE)
-    subdivisions_int = norm_to_int(float(subdivisions), 0, MAX_SUBDIVISIONS)
+    distance_scaled = max(0.0, min(MAX_DISTANCE, float(distance)))
+    scale_scaled = max(0.0, min(MAX_SCALE, float(scale)))
+    subdivisions_int = int(round(subdivisions))
+    if subdivisions_int < 0:
+        subdivisions_int = 0
+    if subdivisions_int > MAX_SUBDIVISIONS:
+        subdivisions_int = MAX_SUBDIVISIONS
 
     direction_vec = np.asarray(direction, dtype=np.float32)
     norm = np.linalg.norm(direction_vec)
@@ -116,8 +119,9 @@ def extrude(
 
 # validate_spec 用のメタデータ
 extrude.__param_meta__ = {
-    "distance": {"type": "number", "min": 0.0, "max": 1.0},
-    "scale": {"type": "number", "min": 0.0, "max": 1.0},
-    "subdivisions": {"type": "number", "min": 0.0, "max": 1.0},
+    "direction": {"type": "vec3"},
+    "distance": {"type": "number", "min": 0.0, "max": MAX_DISTANCE},
+    "scale": {"type": "number", "min": 0.0, "max": MAX_SCALE},
+    "subdivisions": {"type": "integer", "min": 0, "max": MAX_SUBDIVISIONS, "step": 1},
     "center_mode": {"type": "string", "choices": ["origin", "auto"]},
 }

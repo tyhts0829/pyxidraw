@@ -11,6 +11,8 @@ rotate エフェクト（回転）
 
 from __future__ import annotations
 
+import numpy as np
+
 from common.types import Vec3
 from engine.core.geometry import Geometry
 
@@ -37,6 +39,14 @@ def rotate(
 
 # 後方互換クラスは廃止（関数APIのみ）
 rotate.__param_meta__ = {
-    "pivot": {"type": "vec3"},
-    "angles_rad": {"type": "vec3"},
+    "pivot": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
+    "angles_rad": {
+        "type": "vec3",
+        "min": (-np.pi, -np.pi, -np.pi),
+        "max": (np.pi, np.pi, np.pi),
+    },
 }

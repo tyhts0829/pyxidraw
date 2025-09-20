@@ -4,8 +4,8 @@ offset エフェクト（バッファ/輪郭オフセット）
 - Shapely の `buffer` を用いて各ポリラインをオフセットし、膨張（外側）または収縮（内側）形状を生成します。
 - 3D 入力は XY 平面に射影して処理後、元の姿勢に戻します。
 
-主なパラメータ:
-- distance / distance_mm: オフセット距離。`distance` は 0..1 を mm に写像、`distance_mm` は実距離指定。
+- 主なパラメータ:
+- distance / distance_mm: オフセット距離。`distance` は直指定 [mm]、`distance_mm` は別名として同値。
 - join: 角の処理（`round` | `mitre` | `bevel`）。
 - segments_per_circle: 円弧近似分割数（大きいほど滑らかだが重い）。
 
@@ -21,7 +21,6 @@ import numpy as np
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
-from common.param_utils import norm_to_range
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
 
@@ -34,13 +33,13 @@ def offset(
     *,
     join: str = "round",  # 'mitre'|'round'|'bevel'
     segments_per_circle: int = 12,  # shapelyのresolutionに相当（既定値を上げて円滑さを確保）
-    distance: float = 0.2,
+    distance: float = 5.0,
     distance_mm: float | None = None,
 ) -> Geometry:
     """Shapely を使用したバッファ/オフセット（純関数）。
 
     既定値の方針（2025-09-06）:
-        - distance=0.2（0..1→mmの写像で約5mm）、join='round', segments_per_circle=12。
+        - distance=5mm、join='round', segments_per_circle=12。
           300mm 正方キャンバス中央の立方体に適用した静止画で、明瞭かつ過度でない見た目。
     """
     coords, offsets = g.as_arrays(copy=False)
@@ -49,7 +48,11 @@ def offset(
     if distance_mm is not None:
         actual_distance = float(distance_mm)
     else:
-        actual_distance = norm_to_range(float(distance), 0.0, MAX_DISTANCE)
+        actual_distance = float(distance)
+    if actual_distance < 0.0:
+        actual_distance = 0.0
+    if actual_distance > MAX_DISTANCE:
+        actual_distance = MAX_DISTANCE
     if actual_distance == 0:
         return Geometry(coords.copy(), offsets.copy())
 
@@ -84,7 +87,7 @@ def offset(
 
 # validate_spec 用のメタデータ
 offset.__param_meta__ = {
-    "distance": {"type": "number", "min": 0.0, "max": 1.0},
+    "distance": {"type": "number", "min": 0.0, "max": 25.0},
     "distance_mm": {"type": "number", "min": 0.0},
     "join": {"type": "string", "choices": ["mitre", "round", "bevel"]},
     "segments_per_circle": {"type": "integer", "min": 1, "max": 1000},

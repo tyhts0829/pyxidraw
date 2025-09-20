@@ -25,6 +25,8 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
+import math
+
 from common.types import Vec3
 from engine.core.geometry import Geometry
 
@@ -136,11 +138,23 @@ def repeat(
 
 # validate_spec 用のメタデータ（最小限）
 repeat.__param_meta__ = {
-    "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES},
-    "offset": {"type": "vec3"},
-    "angles_rad_step": {"type": "vec3"},
-    "scale": {"type": "vec3"},
-    "pivot": {"type": "vec3"},
+    "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES, "step": 1},
+    "offset": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
+    "angles_rad_step": {
+        "type": "vec3",
+        "min": (-math.pi, -math.pi, -math.pi),
+        "max": (math.pi, math.pi, math.pi),
+    },
+    "scale": {"type": "vec3", "min": (0.1, 0.1, 0.1), "max": (3.0, 3.0, 3.0)},
+    "pivot": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
 }
 
 

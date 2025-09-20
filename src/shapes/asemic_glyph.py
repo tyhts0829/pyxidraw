@@ -762,3 +762,12 @@ def asemic_glyph(
 
     add_diacritic(vertices_list, nodes, used_nodes, diacritic_probability, diacritic_radius, rng)
     return Geometry.from_lines(vertices_list)
+
+
+asemic_glyph.__param_meta__ = {
+    "region": {"type": "number", "min": (-1.0, -1.0, 0.0, 0.0), "max": (0.0, 0.0, 1.0, 1.0)},
+    "smoothing_radius": {"type": "number", "min": 0.0, "max": 0.2},
+    "diacritic_probability": {"type": "number", "min": 0.0, "max": 1.0},
+    "diacritic_radius": {"type": "number", "min": 0.0, "max": 0.2},
+    "random_seed": {"type": "number", "min": 0.0, "max": 1024.0},
+}

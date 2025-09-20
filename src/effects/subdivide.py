@@ -5,7 +5,7 @@ subdivide エフェクト（線の細分化）
 - 最短閾値や最大回数を設け、過剰な分割やゼロ長の暴走を防ぎます。
 
 パラメータ:
-- subdivisions: 0..1 → 分割回数（最大 10）。
+- subdivisions: 分割回数（0–10）。
 
 効果:
 - 曲率の高い箇所の表現力が向上し、後段の破線/塗り/ノイズ下地としても有用です。
@@ -16,21 +16,22 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
-from common.param_utils import norm_to_int
 from engine.core.geometry import Geometry
 
 from .registry import effect
 
 
 @effect()
-def subdivide(g: Geometry, *, subdivisions: float = 0.5) -> Geometry:
+def subdivide(g: Geometry, *, subdivisions: float = 5.0) -> Geometry:
     """中間点を追加して線を細分化（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
     if subdivisions <= 0.0:
         return Geometry(coords.copy(), offsets.copy())
 
     MAX_DIVISIONS = 10
-    divisions = norm_to_int(float(subdivisions), 0, MAX_DIVISIONS)
+    divisions = int(round(subdivisions))
+    if divisions > MAX_DIVISIONS:
+        divisions = MAX_DIVISIONS
     if divisions <= 0:
         return Geometry(coords.copy(), offsets.copy())
 
@@ -44,7 +45,7 @@ def subdivide(g: Geometry, *, subdivisions: float = 0.5) -> Geometry:
 
 
 subdivide.__param_meta__ = {
-    "subdivisions": {"type": "number", "min": 0.0, "max": 1.0},
+    "subdivisions": {"type": "integer", "min": 0, "max": 10, "step": 1},
 }
 
 

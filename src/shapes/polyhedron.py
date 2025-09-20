@@ -150,3 +150,17 @@ def _generate_simple_polyhedron(shape_name: str) -> list[np.ndarray]:
     else:
         # 未対応タイプは四面体にフォールバック
         return _generate_simple_polyhedron("tetrahedron")
+
+
+polyhedron.__param_meta__ = {
+    "polygon_type": {
+        "type": "string",
+        "choices": [
+            "tetrahedron",
+            "hexahedron",
+            "octahedron",
+            "dodecahedron",
+            "icosahedron",
+        ],
+    }
+}

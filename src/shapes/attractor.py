@@ -199,3 +199,14 @@ class DeJongAttractor:
 
         trajectory[:, 0:2] *= self.scale
         return trajectory
+
+
+attractor.__param_meta__ = {
+    "attractor_type": {
+        "type": "string",
+        "choices": ["aizawa", "lorenz", "rossler", "three_scroll", "dejong"],
+    },
+    "points": {"type": "integer", "min": 100, "max": 20000},
+    "dt": {"type": "number", "min": 0.001, "max": 0.05},
+    "scale": {"type": "number", "min": 0.1, "max": 5.0},
+}

@@ -115,9 +115,12 @@ def test_parameter_runtime_applies_meta_range_hints():
 
     descriptor = store.get_descriptor("effect.displace#0.amplitude_mm")
     assert descriptor.range_hint is not None
-    assert descriptor.range_hint.min_value == 0.0
-    assert descriptor.range_hint.max_value == 5.0
-    assert descriptor.range_hint.step == 0.5
+    hint = descriptor.range_hint
+    assert hint.min_value == 0.0
+    assert hint.max_value == 1.0
+    assert hint.mapped_min == 0.0
+    assert hint.mapped_max == 5.0
+    assert hint.mapped_step == 0.5
     deactivate_runtime()
 
 

@@ -1,18 +1,8 @@
 """
-📌 全体の流れ（1フレームあたり）
-        1.	Rendererのtickが呼ばれる
-            •	DoubleBufferに新しいデータがあるか確認
-            •	あればGPUへアップロード（_upload_vertices → _merge_vertices_indices → gpu.upload）
-        2.	画面描画（Rendererのdraw）
-            •	GPUにアップロード済みのデータを使用して描画命令を実行
-        3.	終了時にRendererがGPUリソースを解放（release）
+ライン描画レンダラ。
 
-⸻
-
-🌟 なぜこのように設計したのか？
-        •	GPUとCPUのデータ管理を明確に分け、役割を単一化（Single Responsibility Principle）。
-        •	毎フレームの描画データ更新処理をシンプル化（Tickableによる一元管理）。
-        •	描画データの管理を1か所で統合し、保守性・拡張性を向上。
+SwapBuffer から Geometry を受け取り、頂点/インデックスを GPU に転送して描画する責務を持つ。
+毎フレームの upload / draw / リソース管理を一箇所に集約し、レンダリング処理を単純化する。
 """
 
 from __future__ import annotations

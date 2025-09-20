@@ -285,11 +285,11 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 
 
 @shape
-def sphere(*, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any) -> Geometry:
+def sphere(*, subdivisions: float = 2.0, sphere_type: float = 0.5, **_params: Any) -> Geometry:
     """半径1の球を生成します（関数版）。
 
     引数:
-        subdivisions: 細分化レベル（0.0–1.0 を 0–5 に写像）
+        subdivisions: 細分化レベル（0–5）
         sphere_type: 描画スタイル（0.0–1.0）:
                     0.0–0.2: 緯経線（デフォルト）
                     0.2–0.4: ワイヤーフレーム
@@ -302,7 +302,7 @@ def sphere(*, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: An
     """
     MIN_SUBDIVISIONS = 0
     MAX_SUBDIVISIONS = 5
-    subdivisions_int = int(subdivisions * MAX_SUBDIVISIONS)
+    subdivisions_int = int(round(subdivisions))
     if subdivisions_int < MIN_SUBDIVISIONS:
         subdivisions_int = MIN_SUBDIVISIONS
     if subdivisions_int > MAX_SUBDIVISIONS:
@@ -321,3 +321,9 @@ def sphere(*, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: An
         vertices_list = _sphere_latlon(subdivisions_int)
 
     return Geometry.from_lines(vertices_list)
+
+
+sphere.__param_meta__ = {
+    "subdivisions": {"type": "integer", "min": 0, "max": 5, "step": 1},
+    "sphere_type": {"type": "number", "min": 0.0, "max": 1.0},
+}

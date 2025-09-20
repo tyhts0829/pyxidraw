@@ -100,6 +100,6 @@ def dash(
 
 
 dash.__param_meta__ = {
-    "dash_length": {"type": "number", "min": 0.0},
-    "gap_length": {"type": "number", "min": 0.0},
+    "dash_length": {"type": "number", "min": 0.0, "max": 100.0},
+    "gap_length": {"type": "number", "min": 0.0, "max": 100.0},
 }

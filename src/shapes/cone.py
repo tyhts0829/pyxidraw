@@ -24,3 +24,10 @@ def cone(radius: float = 0.3, height: float = 0.6, segments: int = 32, **params:
         line = np.array([apex, [x, y, -height / 2]], dtype=np.float32)
         vertices_list.append(line)
     return Geometry.from_lines(vertices_list)
+
+
+cone.__param_meta__ = {
+    "radius": {"type": "number", "min": 0.05, "max": 1.0},
+    "height": {"type": "number", "min": 0.1, "max": 2.0},
+    "segments": {"type": "integer", "min": 6, "max": 128},
+}
