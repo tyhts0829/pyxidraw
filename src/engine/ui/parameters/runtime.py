@@ -9,6 +9,7 @@ from engine.ui.parameters.state import (
     ParameterLayoutConfig,
     ParameterRegistry,
     ParameterStore,
+    SourceType,
 )
 
 from .introspection import FunctionIntrospector
@@ -98,7 +99,7 @@ class ParameterRuntime:
 
 def resolve_without_runtime(
     *,
-    scope: str,
+    scope: SourceType,
     name: str,
     fn: Any,
     params: Mapping[str, Any],

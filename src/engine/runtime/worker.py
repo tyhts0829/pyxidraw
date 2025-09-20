@@ -4,11 +4,13 @@
 メインスレッドから受け取った描画タスクを並列に実行し、結果をキュー経由で送信する責務を担う。
 """
 
+from __future__ import annotations
+
 import itertools
 import logging
 import multiprocessing as mp
 from queue import Full, Queue
-from typing import Callable, Mapping
+from typing import Callable, Mapping, cast
 
 from engine.core.geometry import Geometry
 
@@ -90,13 +92,14 @@ class WorkerPool(Tickable):
         self._frame_iter = itertools.count()
         self._elapsed_time = 0.0
         self._task_q: mp.Queue = mp.Queue(maxsize=2 * num_workers)
-        self._result_q: mp.Queue = mp.Queue()
+        self._result_q: Queue[RenderPacket | WorkerTaskError] | mp.Queue
         self._cc_snapshot = cc_snapshot
         self._draw_callback = draw_callback
         self._inline = num_workers < 1
         if self._inline:
-            self._workers: list[_WorkerProcess] = []
+            # スレッド内で完結させるため、シリアライズを避ける queue.Queue を利用する
             self._result_q = Queue()
+            self._workers: list[_WorkerProcess] = []
         else:
             self._result_q = mp.Queue()
             self._workers = [
@@ -130,7 +133,7 @@ class WorkerPool(Tickable):
 
     # --------- public API ---------
     @property
-    def result_q(self) -> mp.Queue:
+    def result_q(self) -> Queue[RenderPacket | WorkerTaskError] | mp.Queue:
         return self._result_q
 
     def close(self) -> None:
@@ -156,7 +159,8 @@ class WorkerPool(Tickable):
                 self._task_q.close()
             except Exception:
                 pass
-            try:
-                self._result_q.close()
-            except Exception:
-                pass
+            if not self._inline:
+                try:
+                    cast(mp.Queue, self._result_q).close()
+                except Exception:
+                    pass

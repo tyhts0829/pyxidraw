@@ -16,7 +16,7 @@ from .state import ParameterLayoutConfig, ParameterStore
 
 if pyglet is None:  # pragma: no cover - tests/headless 用スタブ
 
-    class ParameterWindow:
+    class _ParameterWindowStub:
         """GUI が無効な環境向けのダミーウィンドウ。"""
 
         def __init__(
@@ -39,7 +39,16 @@ else:
 
     from .panel import ParameterPanel, ParameterWidget
 
-    class ParameterWindow(pyglet.window.Window):
+    assert pyglet is not None
+    assert key is not None
+    assert mouse is not None
+
+    _pyglet_clock = pyglet.clock
+    _pyglet_window = pyglet.window.Window
+    _pyglet_mouse = mouse
+    _pyglet_key = key
+
+    class _ParameterWindowImpl(_pyglet_window):
         """描画パラメータ編集用のサイドウィンドウ。"""
 
         def __init__(
@@ -57,7 +66,7 @@ else:
             self._needs_refresh = True
             self._active_widget: ParameterWidget | None = None
             self._store.subscribe(self._on_store_change)
-            pyglet.clock.schedule_interval(self._tick, 1 / 30)
+            _pyglet_clock.schedule_interval(self._tick, 1 / 30)
             self.set_location(40, 40)
 
         # --- 内部ヘルパ ---
@@ -92,8 +101,8 @@ else:
             if widget is None:
                 return
             self._active_widget = widget
-            if button == mouse.LEFT:
-                if modifiers & key.MOD_ACCEL:
+            if button == _pyglet_mouse.LEFT:
+                if modifiers & _pyglet_key.MOD_ACCEL:
                     widget.reset()
                 else:
                     widget.begin_drag()
@@ -108,7 +117,7 @@ else:
             buttons: int,
             modifiers: int,
         ) -> None:  # noqa: D401
-            if not (buttons & mouse.LEFT):
+            if not (buttons & _pyglet_mouse.LEFT):
                 return
             if self._active_widget is not None:
                 self._active_widget.drag_to(x, modifiers=modifiers)
@@ -116,7 +125,7 @@ else:
         def on_mouse_release(
             self, x: float, y: float, button: int, modifiers: int
         ) -> None:  # noqa: D401
-            if button == mouse.LEFT and self._active_widget is not None:
+            if button == _pyglet_mouse.LEFT and self._active_widget is not None:
                 self._active_widget.end_drag()
                 self._active_widget = None
 
@@ -127,6 +136,14 @@ else:
             self.invalid = True
 
         def close(self) -> None:  # noqa: D401
-            pyglet.clock.unschedule(self._tick)
+            _pyglet_clock.unschedule(self._tick)
             self._store.unsubscribe(self._on_store_change)
             super().close()
+
+
+if pyglet is None:
+    ParameterWindow = _ParameterWindowStub
+else:
+    ParameterWindow = _ParameterWindowImpl
+
+__all__ = ["ParameterWindow"]
