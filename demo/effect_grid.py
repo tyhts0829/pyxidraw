@@ -127,7 +127,7 @@ def _denorm_scalar(
         hint = RangeHint(0.0, 1.0, mapped_min=float(meta["min"]), mapped_max=float(meta["max"]))
         return denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type=value_type)  # type: ignore[arg-type]
     # ヒューリスティック（デフォルト値まわり）
-    rng = _LAYOUT_CFG.derive_range(name=name, value_type=value_type, default_value=default)
+    rng = _LAYOUT_CFG.derive_range(name=name, value_type=value_type, default_value=default)  # type: ignore[arg-type]
     hint = RangeHint(0.0, 1.0, mapped_min=float(rng.min_value), mapped_max=float(rng.max_value))
     return denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type=value_type)  # type: ignore[arg-type]
 
