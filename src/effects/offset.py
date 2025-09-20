@@ -169,18 +169,6 @@ def _extract_vertices_from_line(
     return new_vertices_list
 
 
-def _determine_join_style(join_style: float) -> str:
-    # Deprecated: kept for internal fallback if needed
-    if 0.0 <= join_style < 0.33:
-        return "mitre"
-    elif 0.33 <= join_style < 0.67:
-        return "round"
-    elif 0.67 <= join_style <= 1.0:
-        return "bevel"
-    else:
-        return "round"
-
-
 def _close_curve(points: np.ndarray, threshold: float) -> np.ndarray:
     if len(points) < 2:
         return points

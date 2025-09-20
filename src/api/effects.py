@@ -215,6 +215,16 @@ class Pipeline:
 
 
 class PipelineBuilder:
+    """エフェクトパイプラインを段階的に構築するビルダー。
+
+    Notes
+    -----
+    UI/ランタイム層経由の利用では、利用者が 0..1 の正規化値を指定すると
+    `engine.ui.parameters` が実レンジへ変換してから各エフェクトへ引き渡す。
+    本ビルダーを直接呼び出す場合は、各エフェクト関数が期待する実レンジ
+    （例: ミリメートル、ラジアン）でパラメータを渡すこと。
+    """
+
     def __init__(self):
         self._steps: list[PipelineStep] = []
         # 既定サイズは環境変数から上書き可能
@@ -242,6 +252,19 @@ class PipelineBuilder:
 
     # オプション: 単層キャッシュの上限を設定（None で無制限・従来互換）
     def cache(self, *, maxsize: int | None) -> "PipelineBuilder":
+        """パイプライン結果の単層キャッシュ上限を設定する。
+
+        Parameters
+        ----------
+        maxsize : int or None
+            キャッシュに保持する最大エントリ数。``None`` で無制限、``0`` で
+            キャッシュ無効、正の整数で上限を設定する。
+
+        Notes
+        -----
+        既定値は ``None`` で無制限運用となる。重いジオメトリを多数扱う際は
+        明示的に小さい値へ制限し、メモリ使用量の高止まりを避けることを推奨。
+        """
         if maxsize is not None and maxsize < 0:
             self._cache_maxsize = 0
         else:
@@ -250,10 +273,19 @@ class PipelineBuilder:
 
     # オプション: 厳格検証を有効化（ビルド時にパラメータ名を検査）
     def strict(self, enabled: bool = True) -> "PipelineBuilder":
-        """Enable strict parameter-name validation at build time.
+        """ビルド時にステップのパラメータ名を検証する。
 
-        - 各ステップのパラメータ名をエフェクト関数のシグネチャと突き合わせ、未知キーがあれば TypeError を送出。
-        - `**kwargs` を受け取る関数は除外（未知キー許容）。
+        Parameters
+        ----------
+        enabled : bool, default True
+            ``True`` で厳格検証を有効化。``False`` にすると未知パラメータを
+            許容し、開発初期の試行錯誤を優先できる。
+
+        Notes
+        -----
+        厳格検証が有効な場合、各ステップのパラメータ名をエフェクト関数の
+        シグネチャと突き合わせ、未知キーがあれば ``TypeError`` を送出する。
+        ``**kwargs`` を受け取る関数は未知キーを許容する。
         """
         self._strict = enabled
         return self
@@ -295,6 +327,19 @@ class PipelineBuilder:
 class EffectsAPI:
     @property
     def pipeline(self) -> PipelineBuilder:
+        """エフェクトパイプラインを組み立てるビルダーを返す。
+
+        Returns
+        -------
+        PipelineBuilder
+            エフェクト適用ステップを連結し `Pipeline` を生成するビルダー。
+
+        Notes
+        -----
+        GUI やランタイム経由で利用する場合、利用者が指定する 0..1 の正規化
+        パラメータは内部で実レンジへ変換されてからビルダーに渡される。
+        直接利用する場合は各エフェクトが期待する単位系で値を渡すこと。
+        """
         return PipelineBuilder()
 
 

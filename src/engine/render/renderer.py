@@ -33,6 +33,7 @@ class LineRenderer(Tickable):
         mgl_context: mgl.Context,
         projection_matrix: np.ndarray,
         double_buffer: SwapBuffer,
+        line_thickness: float = 0.0006,
     ):
         """
         double_buffer: GPUへ送る前のデータを管理する仕組み
@@ -45,6 +46,8 @@ class LineRenderer(Tickable):
         # シェーダ初期化
         self.line_program = Shader.create_shader(mgl_context)
         self.line_program["projection"].write(projection_matrix.tobytes())
+        # 線幅はクリップ空間（-1..1 基準）で設定する
+        self.line_program["line_thickness"].value = float(line_thickness)
 
         # GPUBuffer を保持
         self.gpu = LineMesh(

@@ -43,6 +43,8 @@ from util.utils import load_config
 
 from .helpers import DualKeyDict
 
+_SNAPSHOT_KEY = "by_name"
+
 # from midi.ui.controllers.tx6 import TX6Dict
 
 
@@ -108,15 +110,20 @@ class MidiController:
         cc = DualKeyDict()
         cc.init_map(self.cc_map)
 
-        values_by_name = data.get("by_name", {})
-        if isinstance(values_by_name, dict):
-            for name, value in values_by_name.items():
-                if isinstance(name, str):
-                    try:
-                        cc[name] = float(value)
-                    except (KeyError, ValueError, TypeError):
-                        # 無効なキー/値は無視（安全側）
-                        pass
+        try:
+            values_by_name = data[_SNAPSHOT_KEY]
+        except KeyError as exc:
+            raise ValueError("missing snapshot key") from exc
+        if not isinstance(values_by_name, dict):
+            raise ValueError("snapshot must be a dict keyed by name")
+
+        for name, value in values_by_name.items():
+            if isinstance(name, str):
+                try:
+                    cc[name] = float(value)
+                except (KeyError, ValueError, TypeError):
+                    # 無効なキー/値は無視（安全側）
+                    pass
         return cc
 
     def save_cc(self):
@@ -134,7 +141,7 @@ class MidiController:
                 except (ValueError, TypeError):
                     continue
 
-        data = {"by_name": values_by_name}
+        data = {_SNAPSHOT_KEY: values_by_name}
         with open(MidiController.SAVE_DIR / save_name, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 

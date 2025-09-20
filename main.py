@@ -39,4 +39,5 @@ if __name__ == "__main__":
         use_midi=True,
         use_parameter_gui=True,
         workers=6,
+        line_thickness=0.001,
     )

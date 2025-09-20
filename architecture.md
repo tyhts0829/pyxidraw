@@ -117,7 +117,8 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 ## 実行と拡張の最小例
 ```python
 # 形状生成 → パイプライン → 実行（main.py の簡略版）
-from api import G, E, run
+from api import E, G, run
+
 
 def draw(t, cc):
     # t は秒、cc は MIDI CC の正規化値（Mapping[int, float], 0.0–1.0）。
@@ -132,7 +133,14 @@ def draw(t, cc):
     return pipe(g.scale(400*cc[8]).translate(200, 200, 0))
 
 if __name__ == "__main__":
-    run(draw, canvas_size=(400,400), render_scale=4, use_midi=True)
+    run(
+        draw,
+        canvas_size=(400, 400),
+        render_scale=4,
+        use_midi=True,
+        # クリップ空間基準の線幅（既定 0.0006）。mm 指定は将来拡張予定。
+        line_thickness=0.0006,
+    )
 ```
 
 Tips:
@@ -145,6 +153,7 @@ Tips:
 
 ## MIDI と入力（要点）
 - `run(..., use_midi=True)` で可能なら実機 MIDI に接続。未接続時はフォールバック（`midi_strict=True` で失敗を致命扱い）。
+- 線の太さは `run(..., line_thickness=0.0006)` で指定可能（クリップ空間 -1..1 基準の半幅相当）。
 - `draw(t, cc)` の `cc` は `Mapping[int, float]`（0.0–1.0 の正規化値）。`engine/io` がスナップショットを供給。
 
 ## テストとの接点（要点）
@@ -290,8 +299,9 @@ Tips:
 - Effect を追加
   ```python
   # src/effects/wave.py
-  from engine.core.geometry import Geometry
   from common.types import Vec3
+  from engine.core.geometry import Geometry
+
   from .registry import effect
 
   @effect()
@@ -316,6 +326,7 @@ Tips:
   ```python
   # src/shapes/star.py
   import numpy as np
+
   from engine.core.geometry import Geometry
   from shapes.registry import shape
 

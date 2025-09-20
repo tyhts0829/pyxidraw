@@ -7,6 +7,9 @@ Notes
   `Geometry` を生成する。
 - 実体はレジストリ（`shapes.registry`）に登録済みの shape 関数を解決し、
   `fn(**params)` を直接呼ぶ薄いファサード。
+- UI/ランタイム層（`engine.ui.parameters`）経由では利用者が 0..1 の正規化値を入力し、
+  本モジュールへ引き渡す直前に実レンジ（ミリメートル等）へ変換される。
+  直接呼び出す場合は各シェイプ関数が期待する実レンジで値を渡す。
 - 生成結果は常に `engine.core.geometry.Geometry`（以下 Geometry）。Geometry 以外を返す
   シェイプ関数がある場合は「ポリライン列（list/ndarray の列）」のみ `Geometry.from_lines(...)`
   で受け付ける。旧タプル形式 `(coords, offsets)` は非サポート。
@@ -66,6 +69,13 @@ class ShapesAPI:
     - 形状名→生成関数の動的ディスパッチ（インスタンス属性で遅延解決）
     - 生成結果の型統一（常に `Geometry` を返す）
     - 形状生成結果の LRU キャッシュ（maxsize=128）
+
+    Notes
+    -----
+    UI/ランタイム層経由では利用者が 0..1 の正規化パラメータを入力し、
+    `engine.ui.parameters` がシェイプ関数に渡す直前で実レンジへ変換する。
+    本 API を直接呼ぶ場合は各シェイプが期待する単位系（例: ミリメートル、度数）
+    で値を指定すること。
 
     使い方:
         from api import G

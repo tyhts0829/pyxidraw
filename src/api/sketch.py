@@ -77,15 +77,14 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Callable, Mapping
+from typing import Callable, Mapping, cast
 
 import numpy as np
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
-from util.constants import CANVAS_SIZES
-
 from engine.ui.parameters.manager import ParameterManager
+from util.constants import CANVAS_SIZES
 
 
 def run_sketch(
@@ -93,6 +92,7 @@ def run_sketch(
     *,
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: int = 4,
+    line_thickness: float = 0.0006,
     fps: int | None = None,
     background: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     workers: int = 4,
@@ -108,6 +108,9 @@ def run_sketch(
         既定キー("A4","A5"...）または ``(width, height)`` mm。
     render_scale :
         mm単位の頂点座標群をレンダリングするときの拡大率。
+    line_thickness :
+        線の太さ（クリップ空間 -1..1 基準の半幅相当）。既定は 0.0006。
+        将来的に mm 指定のサポートを検討（`thickness_clip ≈ 2*mm/canvas_height`）。
     fps :
         描画更新レート。
     background :
@@ -126,7 +129,7 @@ def run_sketch(
     # 引数fpsがNoneのときだけ、設定 (configs/default.yaml 等) を参照
     if fps is None:
         try:
-            from util.utils import load_config  # noqa: WPS433
+            from util.utils import load_config
 
             cfg = load_config() or {}
             ccfg = cfg.get("canvas_controller", {}) if isinstance(cfg, dict) else {}
@@ -153,7 +156,7 @@ def run_sketch(
         else:
             # 設定から既定を参照（なければ False）
             try:
-                from util.utils import load_config  # noqa: WPS433
+                from util.utils import load_config
 
                 cfg = load_config() or {}
                 midi_cfg = cfg.get("midi", {}) if isinstance(cfg, dict) else {}
@@ -175,8 +178,8 @@ def run_sketch(
     if use_midi:
         try:
             # 遅延インポート（依存未導入環境でもフォールバック可能に）
-            from engine.io.manager import connect_midi_controllers  # noqa: WPS433
-            from engine.io.service import MidiService  # noqa: WPS433
+            from engine.io.manager import connect_midi_controllers
+            from engine.io.service import MidiService
 
             midi_manager = connect_midi_controllers()
             # 0台接続もエラー扱いにするかは strict で切替
@@ -211,7 +214,9 @@ def run_sketch(
             initial_cc = {}
         parameter_manager = ParameterManager(user_draw)
         parameter_manager.initialize(initial_cc)
-        draw_callable = parameter_manager.draw
+        draw_callable = cast(
+            Callable[[float, Mapping[int, float]], Geometry], parameter_manager.draw
+        )
         worker_count = 0
     else:
         draw_callable = user_draw
@@ -227,10 +232,10 @@ def run_sketch(
 
     from engine.core.frame_clock import FrameClock
     from engine.core.render_window import RenderWindow
+    from engine.render.renderer import LineRenderer
     from engine.runtime.buffer import SwapBuffer
     from engine.runtime.receiver import StreamReceiver
     from engine.runtime.worker import WorkerPool
-    from engine.render.renderer import LineRenderer
     from engine.ui.monitor import MetricSampler
     from engine.ui.overlay import OverlayHUD
 
@@ -269,6 +274,7 @@ def run_sketch(
         mgl_context=mgl_ctx,
         projection_matrix=proj,
         double_buffer=swap_buffer,
+        line_thickness=line_thickness,
     )  # type: ignore
 
     # ---- Draw callbacks ----------------------------------
