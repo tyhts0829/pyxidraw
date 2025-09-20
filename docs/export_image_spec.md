@@ -136,63 +136,63 @@
 - 変更ファイルに対して `ruff/mypy/pytest` を実行して緑化する（AGENTS.md 方針）。
 
 Stage 0 — 設計スケルトンの用意（コードは薄く、空実装あり）
-- [ ] `engine/export/` パッケージを新設（空の `__init__.py`）。
-- [ ] `engine/export/gcode.py` に空の実装を追加:
-  - [ ] `@dataclass class GCodeParams:`（`travel_feed`, `draw_feed`, `z_up`, `z_down`, `y_down`, `origin`, `decimals=3`）。
-  - [ ] `class GCodeWriter:`（空の本体）。
-    - [ ] `def write(self, coords: np.ndarray, offsets: np.ndarray, params: GCodeParams, fp: IO[str]) -> None:` を定義のみ（`pass`）。
-  - [ ] 型ヒントは Python 3.10 範囲で記述（`typing` は最小限）。
+- [x] `engine/export/` パッケージを新設（空の `__init__.py`）。
+- [x] `engine/export/gcode.py` に空の実装を追加:
+  - [x] `@dataclass class GCodeParams:`（`travel_feed`, `draw_feed`, `z_up`, `z_down`, `y_down`, `origin`, `decimals=3`）。
+  - [x] `class GCodeWriter:`（空の本体）。
+    - [x] `def write(self, coords: np.ndarray, offsets: np.ndarray, params: GCodeParams, fp: IO[str]) -> None:` を定義のみ（`pass`）。
+  - [x] 型ヒントは Python 3.10 範囲で記述（`typing` は最小限）。
 - 合格基準: mypy が型未解決を出さない（空実装でOK）、ruff/black/isort 緑。
 
 Stage 1 — 保存先ユーティリティ
-- [ ] `util/paths.py` を追加し、保存先を提供:
-  - [ ] `ensure_screenshots_dir() -> Path`
-  - [ ] `ensure_gcode_dir() -> Path`
-  - [ ] 既存 `data/` が無ければ作成、並行呼び出しでも安全。
+- [x] `util/paths.py` を追加し、保存先を提供:
+  - [x] `ensure_screenshots_dir() -> Path`
+  - [x] `ensure_gcode_dir() -> Path`
+  - [x] 既存 `data/` が無ければ作成、並行呼び出しでも安全。
 - 合格基準: 同関数を呼び出すだけで存在ディレクトリが返る。存在/非存在の両ケースで例外なし。
 
 Stage 2 — ExportService（非ブロッキング基盤）
-- [ ] `engine/export/service.py` を追加:
-  - [ ] 単一ワーカースレッド＋ジョブキュー（最大同時実行 1）。
-  - [ ] API: `submit_gcode_job(snapshot, params) -> str(job_id)`、`cancel(job_id) -> None`、`progress(job_id) -> Progress`。
-  - [ ] `Progress(state: Literal["pending","running","cancelling","completed","failed","cancelled"], done_vertices:int, total_vertices:int, path:Path|None, error:str|None)`。
-  - [ ] `.part` に逐次書き出し、完了時に `rename`、失敗/キャンセルで削除。
+- [x] `engine/export/service.py` を追加:
+  - [x] 単一ワーカースレッド＋ジョブキュー（最大同時実行 1）。
+  - [x] API: `submit_gcode_job(snapshot, params) -> str(job_id)`、`cancel(job_id) -> None`、`progress(job_id) -> Progress`。
+  - [x] `Progress(state: Literal["pending","running","cancelling","completed","failed","cancelled"], done_vertices:int, total_vertices:int, path:Path|None, error:str|None)`。
+  - [x] `.part` に逐次書き出し、完了時に `rename`、失敗/キャンセルで削除。
 - 合格基準: 疑似ジョブ（モック writer）で進捗が 0→100% へ単調増加。キャンセル時に `cancelled` で終了。
 
 Stage 3 — G-code 変換（空のクラスを保持）
-- [ ] `GCodeWriter` は引き続き空（本体の実装は後日）。
-- [ ] ExportService 側は `GCodeWriter.write(...)` を呼ぶだけにして、ここでは try/except と進捗更新の骨組みのみ実装。
+- [x] `GCodeWriter` は引き続き空（本体の実装は後日）。
+- [x] ExportService 側は `GCodeWriter.write(...)` を呼ぶだけにして、ここでは try/except と進捗更新の骨組みのみ実装。
 - 合格基準: 実ジョブ投入で `NotImplementedError` 等を適切に扱い、HUD に失敗が表示される（UI は止まらない）。
 
 Stage 4 — PNG エクスポートラッパ
-- [ ] `engine/export/image.py` を追加:
-  - [ ] `save_png(window, path=None, *, scale=1.0, include_overlay=True, transparent=False) -> Path`。
+- [x] `engine/export/image.py` を追加:
+  - [x] `save_png(window, path=None, *, scale=1.0, include_overlay=True, transparent=False) -> Path`。
   - [ ] `include_overlay=True` はウィンドウバッファ直保存、`False` は FBO 経由で `LineRenderer.draw()` のみ描画。
 - 合格基準: 生成ファイルのピクセル数が期待通り（`scale` 反映）、エラー時に説明的例外。
 
 Stage 5 — HUD 拡張（メッセージ/進捗）
-- [ ] `engine/ui/overlay.py` に簡易 API を追加:
-  - [ ] `show_message(text: str, level: Literal["info","warn","error"] = "info", timeout_sec=3)`
-  - [ ] `set_progress(key: str, done: int, total: int)` / `clear_progress(key: str)`
+- [x] `engine/ui/overlay.py` に簡易 API を追加:
+  - [x] `show_message(text: str, level: Literal["info","warn","error"] = "info", timeout_sec=3)`
+  - [x] `set_progress(key: str, done: int, total: int)` / `clear_progress(key: str)`
 - 合格基準: 実行時に一時メッセージが表示され、進捗が % で更新/消去できる。
 
 Stage 6 — ランナー配線（ホットキー）
 - [ ] `src/api/sketch.py` キーイベント:
   - [ ] `P` / `Shift+P` → `save_png(...)` を呼び出し、完了メッセージを HUD 表示。
-  - [ ] `G` → `SwapBuffer.get_front()` の `coords/offsets` を C 連続コピーでスナップショットし、ExportService へ投入。
-  - [ ] 実行中に再度 `G` → 「エクスポート実行中」の HUD メッセージ。
-  - [ ] `Shift+G` → 現行ジョブをキャンセル、HUD にキャンセル通知。
+  - [x] `G` → `SwapBuffer.get_front()` の `coords/offsets` を C 連続コピーでスナップショットし、ExportService へ投入。
+  - [x] 実行中に再度 `G` → 「エクスポート実行中」の HUD メッセージ。
+  - [x] `Shift+G` → 現行ジョブをキャンセル、HUD にキャンセル通知。
 - 合格基準: 押下直後のフレーム落ちが最小（体感でカクつかない）。PNG は即時保存、G-code は進捗が更新される。
 
 Stage 7 — エラー処理/ロギング
-- [ ] 例外は捕捉して HUD に短文表示（詳細は `logging`）。
-- [ ] ファイル名衝突時は `-1`, `-2` … を付与。
+- [x] 例外は捕捉して HUD に短文表示（詳細は `logging`）。
+- [x] ファイル名衝突時は `-1`, `-2` … を付与。
 - 合格基準: 想定外エラーでも UI は継続、`.part` 残存なし。
 
 Stage 8 — テスト（smoke/最小）
-- [ ] `tests/ui/test_export_minimal.py`（スキップ許容の smoke）
-  - [ ] `ensure_*_dir` がディレクトリを返す。
-  - [ ] ExportService 疑似ジョブで完了/キャンセル/失敗の3経路が検証できる。
+- [x] `tests/ui/test_export_minimal.py`（スキップ許容の smoke）
+  - [x] `ensure_*_dir` がディレクトリを返す。
+  - [x] ExportService 疑似ジョブで完了/キャンセル/失敗の3経路が検証できる。
 - 合格基準: CI でスモークが緑。公開 API への影響なし。
 
 備考:

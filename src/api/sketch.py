@@ -236,6 +236,8 @@ def run_sketch(
 
     from engine.core.frame_clock import FrameClock
     from engine.core.render_window import RenderWindow
+    from engine.export.image import save_png
+    from engine.export.service import ExportService
     from engine.render.renderer import LineRenderer
     from engine.runtime.buffer import SwapBuffer
     from engine.runtime.receiver import StreamReceiver
@@ -262,6 +264,8 @@ def run_sketch(
     # ----  モニタリング ----------------------------------------
     sampler = MetricSampler(swap_buffer)
     overlay = OverlayHUD(rendering_window, sampler)
+    export_service = ExportService()  # Stage3以降で GCodeWriter を接続
+    _current_g_job: str | None = None
 
     # ---- ⑥ 投影行列（正射影） --------------------------------------
     proj = np.array(
@@ -293,9 +297,62 @@ def run_sketch(
 
     # ---- ⑧ pyglet イベント -----------------------------------------
     @rendering_window.event
-    def on_key_press(sym, _mods):  # noqa: ANN001
+    def on_key_press(sym, mods):  # noqa: ANN001
         if sym == key.ESCAPE:
             rendering_window.close()
+        # PNG 保存（P / Shift+P）
+        if sym == key.P:
+            scale = 2.0 if (mods & key.MOD_SHIFT) else 1.0
+            try:
+                p = save_png(rendering_window, scale=scale, include_overlay=True)
+                overlay.show_message(f"Saved PNG: {p}")
+            except Exception as e:  # 失敗時のHUD表示
+                overlay.show_message(f"PNG 保存失敗: {e}", level="error")
+        # G-code 保存（G / Shift+G）
+        if sym == key.G and not (mods & key.MOD_SHIFT):
+            nonlocal _current_g_job
+            if _current_g_job is not None:
+                overlay.show_message("G-code エクスポート実行中", level="warn")
+                return
+            front = swap_buffer.get_front()
+            if front is None or front.is_empty:
+                overlay.show_message(
+                    "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
+                )
+                return
+            coords, offsets = front.as_arrays(copy=True)
+            try:
+                job_id = export_service.submit_gcode_job((coords, offsets), simulate=True)
+            except RuntimeError:
+                overlay.show_message("G-code エクスポート実行中", level="warn")
+                return
+            _current_g_job = job_id
+
+            # 進捗ポーリング
+            def _poll_progress(_dt: float) -> None:
+                nonlocal _current_g_job
+                assert _current_g_job is not None
+                prog = export_service.progress(_current_g_job)
+                overlay.set_progress("gcode", prog.done_vertices, prog.total_vertices)
+                if prog.state in ("completed", "failed", "cancelled"):
+                    # 終了処理
+                    overlay.clear_progress("gcode")
+                    if prog.state == "completed" and prog.path is not None:
+                        overlay.show_message(f"Saved G-code: {prog.path}")
+                    elif prog.state == "failed":
+                        overlay.show_message(f"G-code 失敗: {prog.error}", level="error")
+                    elif prog.state == "cancelled":
+                        overlay.show_message(
+                            "G-code エクスポートをキャンセルしました", level="warn"
+                        )
+                    pyglet.clock.unschedule(_poll_progress)
+                    _current_g_job = None
+
+            pyglet.clock.schedule_interval(_poll_progress, 0.1)
+        # Shift+G → キャンセル
+        if sym == key.G and (mods & key.MOD_SHIFT) and _current_g_job is not None:
+            export_service.cancel(_current_g_job)
+            overlay.show_message("G-code エクスポートをキャンセルします", level="warn")
 
     @rendering_window.event
     def on_close():  # noqa: ANN001
