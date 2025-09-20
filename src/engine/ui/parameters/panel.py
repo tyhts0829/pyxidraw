@@ -1,4 +1,8 @@
-"""Parameter GUI のウィジェット群。"""
+"""
+どこで: `engine.ui.parameters` の GUI 表示レイヤ。
+何を: ParameterStore の Descriptor をスライダー/トグルへ投影し、描画/入力/レイアウト/スクロールを扱う。
+なぜ: 軽量なウィジェットでパラメータ編集を可能にし、ヘッドレスでも動作可能な設計を保つため。
+"""
 
 from __future__ import annotations
 

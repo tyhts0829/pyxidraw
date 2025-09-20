@@ -1,3 +1,10 @@
+"""
+どこで: `engine.ui` の計測サブモジュール。
+何を: SwapBuffer のフロント Geometry から頂点数を読み、プロセスの CPU/MEM とあわせて
+      一定間隔でサンプリング（実効FPSを含む）。HUD 描画向けに文字列辞書として保持。
+なぜ: 実行時の簡易メトリクスを低コストに観測し、性能/負荷の傾向を把握するため。
+"""
+
 from __future__ import annotations
 
 import os

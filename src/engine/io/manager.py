@@ -1,3 +1,9 @@
+"""
+どこで: `engine.io` の管理層。
+何を: 複数 `MidiController` の登録/更新/保存と、デバイス検出 `connect_midi_controllers()`。
+なぜ: 設定に基づくコントローラ管理を一元化し、ポーリング更新の窓口を提供するため。
+"""
+
 from util.utils import load_config
 
 from .controller import MidiController

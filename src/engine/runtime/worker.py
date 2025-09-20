@@ -1,7 +1,9 @@
 """
-ワーカープロセスによる Geometry 生成を管理するモジュール。
-
-メインスレッドから受け取った描画タスクを並列に実行し、結果をキュー経由で送信する責務を担う。
+どこで: `engine.runtime` のワーカ実行層。
+何を: `RenderTask` を生成してワーカ（プロセス/インライン）へ渡し、`draw_callback` を実行して
+      `Geometry` を得る。結果は `RenderPacket` としてキューへ送出し、例外は `WorkerTaskError`
+      で文脈付きに伝搬。`tick(dt)` は FPS に従いタスクを発行し、`close()` は安全に停止する。
+なぜ: 生成（CPU 計算）をメインスレッドから切り離し、描画ループをブロックせずに安定駆動するため。
 """
 
 from __future__ import annotations

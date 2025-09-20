@@ -1,4 +1,8 @@
-"""ParameterWindow を制御する Facade。"""
+"""
+どこで: `engine.ui.parameters` 層のウィンドウ制御。
+何を: ParameterWindow の生成/可視状態/適用を司る薄いファサード。
+なぜ: ウィンドウ寿命管理をロジックから分離し、GUI 有無に依らず安全に扱うため。
+"""
 
 from __future__ import annotations
 

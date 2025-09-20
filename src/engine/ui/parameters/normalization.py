@@ -1,4 +1,8 @@
-"""パラメータの正規化/逆正規化ヘルパー。"""
+"""
+どこで: `engine.ui.parameters` の値変換レイヤ。
+何を: 0..1 正規化と実レンジの写像（clamp/normalize/denormalize）。`RangeHint` に基づき決定的に変換。
+なぜ: GUI/自動化からの一貫した値スケーリングを提供し、効果/形状実装を単位系から解放するため。
+"""
 
 from __future__ import annotations
 

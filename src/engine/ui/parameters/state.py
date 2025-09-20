@@ -1,4 +1,9 @@
-"""パラメータ管理（メタデータと値状態）。"""
+"""
+どこで: `engine.ui.parameters` の状態管理層。
+何を: ParameterDescriptor/RangeHint のメタと、ParameterStore による値（original/override/midi）を集中管理。
+    購読通知と簡易レンジ推定（ParameterLayoutConfig）も提供。
+なぜ: UI/ランタイムが共有する単一の真実源（Single Source of Truth）として、一貫した状態管理を担うため。
+"""
 
 from __future__ import annotations
 

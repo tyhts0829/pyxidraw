@@ -1,3 +1,9 @@
+"""
+どこで: `engine.runtime` の受信層。
+何を: ワーカ結果キューから `RenderPacket`/例外を取り出し、最新フレームのみ `SwapBuffer` へ反映。
+なぜ: メインスレッドの負荷を一定に保ちつつ、古いフレームの無駄な描画を避けるため。
+"""
+
 from __future__ import annotations
 
 from queue import Empty

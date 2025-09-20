@@ -1,10 +1,7 @@
 """
-エンジン層の変換ユーティリティ関数群（Geometry 統一版）。
-
-基本方針:
-- 個別の変換は `Geometry` のメソッド（`g.translate/scale/rotate`）の利用を推奨。
-- ここでは「まとめて適用」の `transform_combined()` を主用途とし、
-  個別関数は互換と補助のために提供する。
+どこで: `engine.core` の変換ユーティリティ。
+何を: `Geometry` メソッドの薄いラッパ群と、複合変換 `transform_combined()`。
+なぜ: 呼び出し側の利便性と互換性を保ちつつ、`Geometry` へ責務を集約するため。
 """
 
 from __future__ import annotations

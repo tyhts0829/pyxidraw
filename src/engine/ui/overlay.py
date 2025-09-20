@@ -1,3 +1,9 @@
+"""
+どこで: `engine.ui` の HUD 表示モジュール。
+何を: MetricSampler のキー/値ペアを pyglet の Label でオーバーレイ描画する。
+なぜ: 実行時メトリクスを即座に可視化し、デバッグ/チューニングのフィードバックを高めるため。
+"""
+
 from __future__ import annotations
 
 import pyglet

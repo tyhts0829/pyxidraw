@@ -1,4 +1,8 @@
-"""Parameter GUI のネイティブ/スタブ実装。"""
+"""
+どこで: `engine.ui.parameters` のウィンドウ実装。
+何を: pyglet によるネイティブウィンドウ（イベント/描画/入力）と、ヘッドレス環境用スタブを切替提供。
+なぜ: GUI 環境の有無に依存せず、同一 API でパラメータ編集/非編集を両立させるため。
+"""
 
 from __future__ import annotations
 

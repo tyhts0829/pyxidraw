@@ -1,3 +1,9 @@
+"""
+どこで: `engine.core` の簡易フレームドライバ。
+何を: `Tickable` の列を固定順序で呼び出す FrameClock（dt 測定とループ管理）。
+なぜ: GUI/ループから呼び出すだけで複数コンポーネントの更新順を統一するため。
+"""
+
 from __future__ import annotations
 
 import time

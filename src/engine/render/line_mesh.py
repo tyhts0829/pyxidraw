@@ -1,3 +1,9 @@
+"""
+どこで: `engine.render` の低レベルメッシュ層。
+何を: VBO/IBO/VAO の確保・更新・解放を担当し、描画可能な LineMesh を管理。
+なぜ: GPU 転送の詳細を Renderer から切り離し、再確保や VAO の張り直しを一元化するため。
+"""
+
 from __future__ import annotations
 
 import moderngl as mgl

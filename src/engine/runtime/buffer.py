@@ -1,3 +1,9 @@
+"""
+どこで: `engine.runtime` のバッファ層。
+何を: スレッドセーフなダブルバッファ（front/back + version + Event）を提供。
+なぜ: 生成スレッドと描画スレッドの間で `Geometry` を安全かつ低オーバーヘッドに受け渡すため。
+"""
+
 from __future__ import annotations
 
 import threading

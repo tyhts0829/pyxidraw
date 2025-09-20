@@ -1,14 +1,12 @@
-"""Effects レジストリ（関数専用）。
+"""
+どこで: `effects` のレジストリ層（関数専用）。
+何を: `@effect` デコレータによる登録と取得/一覧/検査を提供（キーは正規化）。
+なぜ: 加工ステージの拡張を一貫 API で管理し、`api.effects` から安全に解決するため。
 
-概要:
-- キー正規化（Camel→snake、小文字化、`-`→`_`）を行う共通基盤 `BaseRegistry` で管理する。
-- 登録対象は `Geometry -> Geometry` の関数のみ（`@effect`）。
-- 公開 API は Shapes 側と対称。
-
-公開 API:
-- `effect`（デコレータ）: 関数をレジストリに登録。
+公開 API 概要:
+- `effect`（デコレータ）: 関数を登録
 - `get_effect(name)` / `list_effects()` / `is_effect_registered(name)` / `clear_registry()`
-- `get_registry()`: 読み取り専用ビュー（テスト/診断用）。
+- `get_registry()`: 読み取り専用ビュー（テスト/診断用）
 """
 
 from __future__ import annotations

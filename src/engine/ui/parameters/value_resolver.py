@@ -1,4 +1,23 @@
-"""ParameterRuntime から切り出した値解決ユーティリティ。"""
+"""
+値解決ユーティリティ（ParameterRuntime からの独立モジュール）。
+
+どこで・何を・なぜ:
+- どこで: `engine.ui.parameters` 層。`ParameterRuntime` から呼ばれる。
+- 何を: 0..1 正規化値 ↔ 実レンジ値の往復変換と、`ParameterStore` への登録/解決。
+- なぜ: UI/自動化からの正規化入力を安定に扱い、呼び出し時点の実レンジ値へ決定論的に写像するため。
+
+流れ（概要）:
+1) merge: シグネチャ既定値・ユーザー入力・`skip` を考慮してパラメータをマージ。
+2) resolve: 値種別を判定し、scalar/vector/passthrough に分岐。
+   - scalar: RangeHint を構築 → 0..1 に正規化 → ParameterStore に register/resolve → 実レンジへ逆変換（denormalize）。
+   - vector: 各コンポーネントに分解（x/y/z/w）→ scalar と同じ手順を成分ごとに適用。
+   - passthrough: 数値以外（列挙/真偽など）は RangeHint なしで register/resolve。
+3) return: 実レンジへ変換済みの辞書を返却。
+
+関連:
+- 呼び出し元は `ParameterRuntime.before_shape_call/before_effect_call`。
+- メタ情報は `FunctionIntrospector`（doc/signature/param_meta）から供給される。
+"""
 
 from __future__ import annotations
 

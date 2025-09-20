@@ -1,1 +1,5 @@
-"""Utility modules (constants, geometry, helpers)."""
+"""
+どこで: `util` パッケージ。
+何を: 定数/数値ユーティリティ/補助関数（I/O なし）。
+なぜ: 上位層（engine/api/effects/shapes）から共通ロジックを薄く再利用するため。
+"""

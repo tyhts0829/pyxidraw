@@ -1,3 +1,9 @@
+"""
+どこで: `engine.core` の更新インターフェース。
+何を: 1フレーム更新 `tick(dt)` を持つ `Tickable` Protocol を定義。
+なぜ: フレーム駆動のオブジェクト（レンダラ/ワーカ/オーバーレイ等）を一様に扱うため。
+"""
+
 from typing import Protocol
 
 

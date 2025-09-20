@@ -1,4 +1,8 @@
-"""関数メタ情報の解決とキャッシュ管理。"""
+"""
+どこで: `engine.ui.parameters` のメタ解決層。
+何を: 関数の docstring/シグネチャ/`__param_meta__` を解決してキャッシュし、`FunctionInfo` として提供。
+なぜ: ランタイム解決コストの低減と、値解決の決定性/再現性を高めるため。
+"""
 
 from __future__ import annotations
 

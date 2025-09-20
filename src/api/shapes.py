@@ -1,4 +1,8 @@
 """
+どこで: `api.shapes`（形状生成の高レベル API）。
+何を: 登録済み shape 関数を解決して `Geometry` を返す薄いファサード（LRU キャッシュ付き）。
+なぜ: 生成（shape）と加工（effects）を分離しつつ、関数的に扱える統一入口を提供するため。
+
 api.shapes — 形状生成の入口（高レベル API）
 
 Notes

@@ -1,4 +1,9 @@
-"""ランタイム側のパラメータ適用ロジック。"""
+"""
+どこで: `engine.ui.parameters` のオーケストレーション層。
+何を: Shapes/Effects 呼び出しをフックしてメタ（doc/signature/param_meta）を解決し、
+      `ParameterValueResolver` で 0..1 入力を実レンジへ変換して適用。オフライン解決も提供。
+なぜ: 呼び出し側を汎用の関数 API のまま保ちつつ、UI/自動化からの正規化パラメータ適用を透過化するため。
+"""
 
 from __future__ import annotations
 

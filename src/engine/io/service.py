@@ -1,3 +1,9 @@
+"""
+どこで: `engine.io` のサービス層。
+何を: MIDI デバイスから CC をポーリングし、正規化 0..1 のスナップショットを提供（`snapshot()`）。
+なぜ: ランタイム/ワーカ等が入力依存なしに CC 状態へアクセスできるようにするため。
+"""
+
 from __future__ import annotations
 
 import logging

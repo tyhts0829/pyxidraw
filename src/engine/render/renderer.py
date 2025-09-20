@@ -1,8 +1,7 @@
 """
-ライン描画レンダラ。
-
-SwapBuffer から Geometry を受け取り、頂点/インデックスを GPU に転送して描画する責務を持つ。
-毎フレームの upload / draw / リソース管理を一箇所に集約し、レンダリング処理を単純化する。
+どこで: `engine.render` の高レベル描画。
+何を: SwapBuffer の `Geometry` を頂点/インデックスへ変換し、ModernGL に転送して線を描画。
+なぜ: 毎フレームのアップロード/描画/リソース寿命を一箇所に集約し、描画処理を単純化するため。
 """
 
 from __future__ import annotations

@@ -1,4 +1,8 @@
-"""Parameter GUI 管理ユーティリティ（内部使用）。"""
+"""
+どこで: `engine.ui.parameters` の統合ヘルパ層。
+何を: `user_draw` をラップし、ParameterRuntime の有効化/初回トレース/GUI ウィンドウ起動・寿命管理を担う。
+なぜ: 既存の描画関数に最小介入でパラメータランタイム/GUI を組み込むため。
+"""
 
 from __future__ import annotations
 

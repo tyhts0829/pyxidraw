@@ -1,10 +1,12 @@
-"""シェイプレジストリ（関数専用）。
+"""
+どこで: `shapes` のレジストリ層（関数専用）。
+何を: `@shape` デコレータで shape 関数を登録し、取得/一覧/検査を提供。
+なぜ: 形状生成の拡張を一貫 API で管理し、`api.shapes` から安全に解決するため。
 
 概要:
 - Effect と対称の API（`@shape` / `get_shape` / `list_shapes` / `is_shape_registered`）。
-- 登録対象は「関数」のみ（`Geometry` もしくはポリライン列を返す）。
-- デコレータは名前省略可（`@shape` / `@shape()`）に加え、
-  明示名指定（`@shape("name")` / `@shape(name="name")`）をサポート。
+- 登録対象は「関数」のみ（`Geometry` またはポリライン列を返す）。
+- デコレータは名前省略可（`@shape` / `@shape()`）と明示名指定をサポート。
 """
 
 from __future__ import annotations
