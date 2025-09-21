@@ -20,18 +20,8 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         return float(cc.get(i, default))
 
     t = t * c(9, 1.0) * 10
-    poly = (
-        G.polyhedron(polygon_type="icosahedron")
-        .scale(400 * c(8, 0.25))
-        .translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-    )
-    pipe = (
-        E.pipeline.rotate(
-            angles_rad=(c(3), c(4), c(5)), pivot=(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-        )
-        .displace(spatial_freq=c(6, 0.5))
-        .build()
-    )
+    poly = G.cylinder().scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+    pipe = E.pipeline.rotate().subdivide().displace().build()
     return pipe(poly)
 
 

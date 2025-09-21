@@ -90,12 +90,50 @@ class ShapesAPI:
     @staticmethod
     @lru_cache(maxsize=128)
     def _cached_shape(shape_name: str, params_tuple: ParamsTuple) -> Geometry:
-        """登録シェイプを解決・生成し、結果を LRU キャッシュ。"""
+        """登録シェイプを生成して LRU に保存する。
+
+        Parameters
+        ----------
+        shape_name : str
+            形状名（レジストリ登録済みキー）。
+        params_tuple : ParamsTuple
+            パラメータ辞書を順序安定・ハッシュ可能に正規化したタプル。
+
+        Returns
+        -------
+        Geometry
+            生成された `Geometry`。
+
+        Notes
+        -----
+        - キャッシュキーは `(shape_name, params_tuple)`。
+        - 例外は下層からそのまま伝播。
+        """
         params_dict = dict(params_tuple)
         return ShapesAPI._generate_shape(shape_name, params_dict)
 
     @staticmethod
     def _generate_shape(shape_name: str, params_dict: dict[str, Any]) -> Geometry:
+        """形状生成関数を解決して実行し、`Geometry` を返す。
+
+        Parameters
+        ----------
+        shape_name : str
+            形状名（レジストリ登録済みキー）。
+        params_dict : dict[str, Any]
+            形状関数へ渡す実レンジのパラメータ（正規化値ではない）。
+
+        Returns
+        -------
+        Geometry
+            生成結果。戻り値が `Geometry` 以外（ポリライン列）の場合は
+            `Geometry.from_lines(...)` で包んで返す。
+
+        Notes
+        -----
+        - ランタイムが有効な場合は `engine.ui.parameters` による事前解決を行う。
+        - 例外は各シェイプ実装からそのまま伝播。
+        """
         runtime = get_active_runtime()
         fn = get_shape_generator(shape_name)
         if runtime is not None:
@@ -118,11 +156,42 @@ class ShapesAPI:
 
     @staticmethod
     def _params_to_tuple(**params: Any) -> ParamsTuple:
-        """パラメータ辞書を「順序安定・ハッシュ可能」なタプルへ正規化（共通実装）。"""
+        """ハッシュ可能なタプルへパラメータを正規化する。
+
+        Parameters
+        ----------
+        **params : Any
+            形状関数へ渡される任意のパラメータ。
+
+        Returns
+        -------
+        ParamsTuple
+            キー昇順かつ不変要素に正規化されたタプル。
+
+        Notes
+        -----
+        キャッシュキーの安定化と等価性の保証が目的。
+        """
         return _params_to_tuple(dict(params))
 
     def _build_shape_method(self, name: str) -> Callable[..., Geometry]:
-        """指定されたレジストリ名から形状生成関数を構築するヘルパー。"""
+        """レジストリ名から `G.<name>(**params)` を構築する。
+
+        Parameters
+        ----------
+        name : str
+            形状名（レジストリ登録済みキー）。
+
+        Returns
+        -------
+        Callable[..., Geometry]
+            `G.<name>(**params) -> Geometry` となる呼び出し可能。
+
+        Notes
+        -----
+        - ランタイム無効時は LRU キャッシュを使用。
+        - 登録が外れた場合は `AttributeError` を送出。
+        """
 
         def _shape_method(**params: Any) -> Geometry:
             if not is_shape_registered(name):
@@ -143,26 +212,48 @@ class ShapesAPI:
 
     @staticmethod
     def from_lines(lines: Iterable[LineLike]) -> Geometry:
-        """線分集合（ポリライン列）から `Geometry` を構築する補助。
+        """線分集合（ポリライン列）から `Geometry` を構築する。
 
-        引数:
-            lines: `list`/`tuple`/`ndarray` の混在を許容する座標列のイテラブル。
+        Parameters
+        ----------
+        lines : Iterable[LineLike]
+            `list`/`tuple`/`ndarray` の混在を許容するポリライン列。
 
-        返り値:
+        Returns
+        -------
+        Geometry
             `coords` と `offsets` を持つ統一 `Geometry`。
         """
         return Geometry.from_lines(lines)
 
     @staticmethod
     def empty() -> Geometry:
-        """空の `Geometry`（頂点ゼロ）を返すユーティリティ。"""
+        """空の `Geometry`（頂点ゼロ）を返す。
+
+        Returns
+        -------
+        Geometry
+            要素を持たない `Geometry`。
+        """
         return Geometry.from_lines([])
 
     def __getattr__(self, name: str) -> Callable[..., Geometry]:
-        """インスタンスレベルでの動的属性アクセス。
+        """レジストリに基づき `G.<name>` を遅延生成する。
 
-        `G.<name>(**params) -> Geometry` を提供。レジストリ状態を確認しながら
-        一度構築した呼び出し可能をインスタンス属性としてキャッシュする。
+        Parameters
+        ----------
+        name : str
+            形状名（レジストリ登録済みキー）。
+
+        Returns
+        -------
+        Callable[..., Geometry]
+            `G.<name>(**params) -> Geometry` を返す呼び出し可能。
+
+        Raises
+        ------
+        AttributeError
+            未登録名を指定した場合。
         """
         if not is_shape_registered(name):
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
@@ -173,23 +264,42 @@ class ShapesAPI:
 
     @classmethod
     def list_shapes(cls) -> list[str]:
-        """利用可能な形状（レジストリ登録済み名）の一覧を返す。"""
+        """利用可能な形状名の一覧を返す。
+
+        Returns
+        -------
+        list[str]
+            レジストリに登録済みの形状名の一覧。
+        """
         return list_registered_shapes()
 
     # === キャッシュ管理 ===
 
     @classmethod
     def clear_cache(cls) -> None:
-        """形状生成結果の LRU キャッシュをクリア（デバッグ/メモリ回収用）。"""
+        """形状生成結果の LRU キャッシュをクリアする。"""
         cls._cached_shape.cache_clear()
 
     @classmethod
     def cache_info(cls) -> object:
-        """`functools.lru_cache` の統計情報を取得（ヒット率等の観察に）。"""
+        """LRU キャッシュの統計情報を取得する。
+
+        Returns
+        -------
+        object
+            `functools._CacheInfo` 互換の統計情報。
+        """
         return cls._cached_shape.cache_info()
 
     # 補完体験向上: dir(G) で登録シェイプ名を出す
     def __dir__(self) -> list[str]:
+        """標準の候補にレジストリ登録名を加えて返す。
+
+        Returns
+        -------
+        list[str]
+            通常の属性名に加え、登録シェイプ名を含む一覧。
+        """
         try:
             base = set(object.__dir__(self))
         except Exception:
