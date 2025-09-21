@@ -17,7 +17,7 @@ collapse エフェクト（線の崩し/しわ寄せ）
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 
@@ -61,8 +61,10 @@ def _apply_collapse_to_coords(
     np.random.seed(seed)
 
     # 結果を格納するリスト
-    all_coords = []
-    all_offsets = []
+    # 仕様変更: 細分化してオフセットした各線分は互いに接続しない。
+    # よって、各セグメントを長さ2の独立ポリラインとして蓄積する。
+    all_coords: list[np.ndarray] = []
+    all_offsets: list[np.ndarray] = []
 
     # offsetsからポリラインを抽出
     start_idx = 0
@@ -74,14 +76,11 @@ def _apply_collapse_to_coords(
         vertices = coords[start_idx:end_idx]
 
         if vertices.shape[0] < 2:
-            # 単一点の場合はそのまま追加
-            all_coords.append(vertices)
+            # 単一点の場合はそのまま追加（独立ポリライン1本として保持）
+            all_coords.append(vertices.astype(coords.dtype, copy=False))
             all_offsets.append(np.array([vertices.shape[0]], dtype=offsets.dtype))
             start_idx = end_idx
             continue
-
-        # ポリライン内の各線分を処理
-        polyline_coords = []
 
         for i in range(vertices.shape[0] - 1):
             start_point = vertices[i]
@@ -99,8 +98,12 @@ def _apply_collapse_to_coords(
                 main_dir = seg_end - seg_start
                 main_norm = np.linalg.norm(main_dir)
                 if main_norm < 1e-12:
-                    polyline_coords.append(seg_start)
-                    polyline_coords.append(seg_end)
+                    # 退避: 変形せず、そのまま1本の独立ポリラインとして追加
+                    segment = np.stack(
+                        [seg_start.astype(coords.dtype), seg_end.astype(coords.dtype)]
+                    )
+                    all_coords.append(segment)
+                    all_offsets.append(np.array([2], dtype=offsets.dtype))
                     continue
 
                 norm_main_dir = main_dir / main_norm
@@ -112,8 +115,12 @@ def _apply_collapse_to_coords(
                 ortho_dir = np.cross(norm_main_dir, noise_vector)
                 ortho_norm = np.linalg.norm(ortho_dir)
                 if ortho_norm < 1e-12:
-                    polyline_coords.append(seg_start)
-                    polyline_coords.append(seg_end)
+                    # 直交方向が得られない場合も非接続で保存
+                    segment = np.stack(
+                        [seg_start.astype(coords.dtype), seg_end.astype(coords.dtype)]
+                    )
+                    all_coords.append(segment)
+                    all_offsets.append(np.array([2], dtype=offsets.dtype))
                     continue
 
                 ortho_dir = ortho_dir / ortho_norm
@@ -121,16 +128,12 @@ def _apply_collapse_to_coords(
                 # ノイズを加える
                 noise = (ortho_dir * np.float32(intensity)).astype(np.float32)
 
-                # 変形された線分を追加
-                noisy_start = (seg_start + noise).astype(np.float32)
-                noisy_end = (seg_end + noise).astype(np.float32)
-                polyline_coords.append(noisy_start)
-                polyline_coords.append(noisy_end)
-
-        if len(polyline_coords) > 0:
-            polyline_array = np.array(polyline_coords, dtype=coords.dtype)
-            all_coords.append(polyline_array)
-            all_offsets.append(np.array([polyline_array.shape[0]], dtype=offsets.dtype))
+                # 変形された線分を追加（独立ポリライン2点）
+                noisy_start = (seg_start + noise).astype(coords.dtype, copy=False)
+                noisy_end = (seg_end + noise).astype(coords.dtype, copy=False)
+                segment = np.stack([noisy_start, noisy_end]).astype(coords.dtype, copy=False)
+                all_coords.append(segment)
+                all_offsets.append(np.array([2], dtype=offsets.dtype))
 
         start_idx = end_idx
 
@@ -138,7 +141,7 @@ def _apply_collapse_to_coords(
     if len(all_coords) == 0:
         return coords.copy(), offsets.copy()
 
-    combined_coords = np.vstack(all_coords)
+    combined_coords = np.vstack(all_coords).astype(coords.dtype, copy=False)
     lengths = np.concatenate(all_offsets)
     # offsets は先頭に 0 を置き、以後は累積和（Geometry の不変条件）
     combined_offsets = np.empty(lengths.size + 1, dtype=offsets.dtype)
@@ -152,10 +155,14 @@ def _apply_collapse_to_coords(
 def collapse(
     g: Geometry,
     *,
-    intensity: float = 3.0,
-    subdivisions: float = 5.0,
+    intensity: float = 5.0,
+    subdivisions: float = 6.0,
 ) -> Geometry:
-    """線分を細分化してノイズで変形（純関数）。"""
+    """線分を細分化してノイズで変形（純関数）。
+
+    仕様: 細分化後にオフセットを与えた各セグメントは互いに接続しない。
+    すなわち、元ポリライン内の細分セグメントは長さ2の独立ポリラインとして出力される。
+    """
     coords, offsets = g.as_arrays(copy=False)
     if len(coords) == 0 or intensity == 0.0 or subdivisions <= 0.0:
         return Geometry(coords.copy(), offsets.copy())
