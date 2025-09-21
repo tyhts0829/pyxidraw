@@ -3,8 +3,9 @@ affine エフェクト（合成アフィン：スケール→回転）
 
 - ピボットを中心にスケール後、XYZ（Rz·Ry·Rx の合成）回転を一括適用します。
 
-パラメータ:
-- pivot: None の場合はジオメトリの平均座標を自動採用。
+パラメータ（新API）:
+- set_center: True ならジオメトリの平均座標を中心に使用。False なら `pivot` を使用。
+- pivot: `set_center=False` のときの中心座標。
 - angles_rad: (rx, ry, rz) [rad]。
 - scale: (sx, sy, sz) 倍率。
 
@@ -15,7 +16,7 @@ affine エフェクト（合成アフィン：スケール→回転）
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit  # type: ignore[attr-defined]
 
 from common.types import Vec3
 from engine.core.geometry import Geometry
@@ -60,31 +61,35 @@ def _apply_combined_transform(
 def affine(
     g: Geometry,
     *,
-    pivot: Vec3 | None = None,
-    angles_rad: Vec3 = (0.0, 0.0, 0.0),
-    scale: Vec3 = (1.0, 1.0, 1.0),
+    set_center: bool = True,
+    pivot: Vec3 = (0.0, 0.0, 0.0),
+    angles_rad: Vec3 = (np.pi / 4, np.pi / 4, np.pi / 4),
+    scale: Vec3 = (0.5, 0.5, 0.5),
 ) -> Geometry:
-    """任意の変換（スケール→回転→移動）を適用する純関数エフェクト。
-    - `pivot`: 回転・スケールの中心（None の場合はジオメトリの平均座標を使用）
-    - `angles_rad`: XYZ 回りの回転角（ラジアン）
-    - `scale`: XYZ 各軸のスケール倍率
+    """任意の変換（スケール→回転）を適用する純関数エフェクト。
+
+    引数:
+        set_center: True ならジオメトリの平均座標を中心に使用。False なら `pivot` を使用。
+        pivot: `set_center=False` のときの中心座標 (x, y, z)。
+        angles_rad: XYZ 回りの回転角（ラジアン）。
+        scale: XYZ 各軸のスケール倍率。
     """
     coords, offsets = g.as_arrays(copy=False)
 
     if len(coords) == 0:
         return Geometry(coords.copy(), offsets.copy())
 
+    # 恒等変換なら早期リターン（中心の選択に依存しない）
     if (
-        pivot in ((0, 0, 0), None)
-        and scale == (1, 1, 1)
+        scale == (1, 1, 1)
         and abs(angles_rad[0]) < 1e-10
         and abs(angles_rad[1]) < 1e-10
         and abs(angles_rad[2]) < 1e-10
     ):
         return Geometry(coords.copy(), offsets.copy())
 
-    if pivot is None:
-        # 幾何の平均座標をピボットにする（矩形中心に近い）
+    # 中心座標を決定
+    if set_center:
         center_np = coords.mean(axis=0).astype(np.float32)
     else:
         center_np = np.array(pivot, dtype=np.float32)
@@ -97,6 +102,7 @@ def affine(
 
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
 affine.__param_meta__ = {
+    "set_center": {"type": "bool"},
     "pivot": {
         "type": "vec3",
         "min": (-300.0, -300.0, -300.0),

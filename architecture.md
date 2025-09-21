@@ -96,6 +96,8 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
   - `ui/overlay.py`, `ui/monitor.py`: HUD とメトリクス。
   - `io/`: MIDI 接続・スナップショット取得。
 - `effects/`: 幾何処理のオペレータ群と `registry.py`。
+  - 代表例: `affine(set_center: bool, pivot: Vec3, angles_rad: Vec3, scale: Vec3)` —
+    `set_center=True` でジオメトリの平均座標を中心に使用。`False` で `pivot` を使用。
 - `shapes/`: プリミティブ形状と `registry.py`。
 - `common/`, `util/`: ロギング、型、幾何ユーティリティ、定数、設定ロード。
 

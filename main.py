@@ -20,8 +20,8 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         return float(cc.get(i, default))
 
     t = t * c(9, 1.0) * 10
-    poly = G.cylinder().scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-    pipe = E.pipeline.rotate().subdivide().displace().build()
+    poly = G.sphere().scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+    pipe = E.pipeline.affine().build()
     return pipe(poly)
 
 
