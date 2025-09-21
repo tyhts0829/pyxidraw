@@ -108,7 +108,7 @@ def dash_kernel(coords: float32[:, :], offsets: int32[:], dash: float32, gap: fl
 - [ ] 数値安定化（eps/side）の固定化と境界テスト
 - [ ] 回帰テスト（機能/性能）
 - [ ] `architecture.md` 差分があれば更新
-- [ ]（任意）`PXD_USE_NUMBA_DASH` による njit 経路の用意（依存は追加しない）
+- [x]（任意）`PXD_USE_NUMBA_DASH` による njit 経路の用意（依存は追加しない）
 
 ---
 

@@ -15,11 +15,199 @@ dash エフェクト（破線化）
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from engine.core.geometry import Geometry
 
 from .registry import effect
+
+# 任意の numba 加速（存在時のみ有効化）
+try:  # Ask-first の依存追加は行わない。存在する環境のみ使用。
+    from numba import njit  # type: ignore
+
+    _HAVE_NUMBA = True
+except Exception:  # pragma: no cover - 実行環境に依存
+    njit = None  # type: ignore
+    _HAVE_NUMBA = False
+
+
+def _use_numba() -> bool:
+    """Numba 経路を使うかの判定（存在時は既定で有効、環境変数で無効化可）。"""
+    if not _HAVE_NUMBA:
+        return False
+    v = os.environ.get("PXD_USE_NUMBA_DASH", "1")
+    return v not in ("0", "false", "False", "FALSE")
+
+
+# ── Numba kernels（存在時のみ定義）──────────────────────────────────────────
+if _HAVE_NUMBA:  # pragma: no cover - numba の有無に依存
+
+    @njit(cache=True, fastmath=True)  # type: ignore[misc]
+    def _count_line(v: np.ndarray, dash_len: float, gap_len: float) -> tuple:
+        n = v.shape[0]
+        if n < 2:
+            return n, 1
+        pattern = dash_len + gap_len
+        if pattern <= 0.0 or not np.isfinite(pattern):
+            return n, 1
+        # 弧長 s（サイズ n）
+        s = np.empty(n, dtype=np.float64)
+        s[0] = 0.0
+        for j in range(n - 1):
+            dx = v[j + 1, 0] - v[j, 0]
+            dy = v[j + 1, 1] - v[j, 1]
+            dz = v[j + 1, 2] - v[j, 2]
+            s[j + 1] = s[j] + np.sqrt(dx * dx + dy * dy + dz * dz)
+        L = s[n - 1]
+        if L <= 0.0 or not np.isfinite(L):
+            return n, 1
+        # ダッシュ本数（np.arange(0,L,pattern) と等価）
+        m = int(np.ceil(L / pattern))
+        if m <= 0:
+            return n, 1
+        # 頂点数合計: 各ダッシュで 2 + interior
+        total_vertices = 0
+        for i in range(m):
+            start = i * pattern
+            end = start + dash_len
+            if end > L:
+                end = L
+            # searchsorted（左）
+            s_idx = np.searchsorted(s, start)
+            e_idx = np.searchsorted(s, end)
+            interior = e_idx - s_idx
+            if interior < 0:
+                interior = 0
+            total_vertices += 2 + interior
+        return total_vertices, m
+
+    @njit(cache=True, fastmath=True)  # type: ignore[misc]
+    def _fill_line(
+        v: np.ndarray,
+        dash_len: float,
+        gap_len: float,
+        out_c: np.ndarray,
+        out_o: np.ndarray,
+        vc0: int,
+        oc0: int,
+    ) -> tuple:
+        n = v.shape[0]
+        vc = vc0
+        oc = oc0
+        if n < 2:
+            # 原線コピー
+            for j in range(n):
+                out_c[vc + j, 0] = v[j, 0]
+                out_c[vc + j, 1] = v[j, 1]
+                out_c[vc + j, 2] = v[j, 2]
+            vc += n
+            out_o[oc] = vc
+            oc += 1
+            return vc, oc
+
+        pattern = dash_len + gap_len
+        if pattern <= 0.0 or not np.isfinite(pattern):
+            # 原線コピー
+            for j in range(n):
+                out_c[vc + j, 0] = v[j, 0]
+                out_c[vc + j, 1] = v[j, 1]
+                out_c[vc + j, 2] = v[j, 2]
+            vc += n
+            out_o[oc] = vc
+            oc += 1
+            return vc, oc
+
+        # 弧長 s（サイズ n）
+        s = np.empty(n, dtype=np.float64)
+        s[0] = 0.0
+        for j in range(n - 1):
+            dx = v[j + 1, 0] - v[j, 0]
+            dy = v[j + 1, 1] - v[j, 1]
+            dz = v[j + 1, 2] - v[j, 2]
+            s[j + 1] = s[j] + np.sqrt(dx * dx + dy * dy + dz * dz)
+        L = s[n - 1]
+        if L <= 0.0 or not np.isfinite(L):
+            for j in range(n):
+                out_c[vc + j, 0] = v[j, 0]
+                out_c[vc + j, 1] = v[j, 1]
+                out_c[vc + j, 2] = v[j, 2]
+            vc += n
+            out_o[oc] = vc
+            oc += 1
+            return vc, oc
+
+        m = int(np.ceil(L / pattern))
+        if m <= 0:
+            for j in range(n):
+                out_c[vc + j, 0] = v[j, 0]
+                out_c[vc + j, 1] = v[j, 1]
+                out_c[vc + j, 2] = v[j, 2]
+            vc += n
+            out_o[oc] = vc
+            oc += 1
+            return vc, oc
+
+        for i in range(m):
+            start = i * pattern
+            end = start + dash_len
+            if end > L:
+                end = L
+
+            s_idx = np.searchsorted(s, start)
+            e_idx = np.searchsorted(s, end)
+
+            # start 補間
+            s0 = s_idx - 1
+            if s0 < 0:
+                s0 = 0
+            s1 = s_idx
+            den = s[s1] - s[s0]
+            if den == 0.0:
+                ts = 0.0
+            else:
+                ts = (start - s[s0]) / den
+            x0 = v[s0, 0] + (v[s1, 0] - v[s0, 0]) * ts
+            y0 = v[s0, 1] + (v[s1, 1] - v[s0, 1]) * ts
+            z0 = v[s0, 2] + (v[s1, 2] - v[s0, 2]) * ts
+
+            # end 補間
+            e0 = e_idx - 1
+            if e0 < 0:
+                e0 = 0
+            e1 = e_idx
+            dene = s[e1] - s[e0]
+            if dene == 0.0:
+                te = 0.0
+            else:
+                te = (end - s[e0]) / dene
+            x1 = v[e0, 0] + (v[e1, 0] - v[e0, 0]) * te
+            y1 = v[e0, 1] + (v[e1, 1] - v[e0, 1]) * te
+            z1 = v[e0, 2] + (v[e1, 2] - v[e0, 2]) * te
+
+            # 書き込み（開始点）
+            out_c[vc, 0] = np.float32(x0)
+            out_c[vc, 1] = np.float32(y0)
+            out_c[vc, 2] = np.float32(z0)
+            vc += 1
+            # 中間頂点
+            if e_idx > s_idx:
+                for k in range(s_idx, e_idx):
+                    out_c[vc, 0] = v[k, 0]
+                    out_c[vc, 1] = v[k, 1]
+                    out_c[vc, 2] = v[k, 2]
+                    vc += 1
+            # 終端点
+            out_c[vc, 0] = np.float32(x1)
+            out_c[vc, 1] = np.float32(y1)
+            out_c[vc, 2] = np.float32(z1)
+            vc += 1
+            # 行の終端 offset
+            out_o[oc] = vc
+            oc += 1
+
+        return vc, oc
 
 
 @effect()
@@ -45,6 +233,41 @@ def dash(
         # 不正値や 0 ステップは無限ループを避けるため no-op
         return Geometry(coords.copy(), offsets.copy())
 
+    # Numba 経路が利用可能なら優先
+    if _use_numba():  # pragma: no cover - 実行環境に依存
+        # 第1パス
+        total_out_vertices = 0
+        total_out_lines = 0
+        n_lines = len(offsets) - 1
+        for li in range(n_lines):
+            v = coords[offsets[li] : offsets[li + 1]]
+            tv, tl = _count_line(v, float(dash_length), float(gap_length))  # type: ignore[arg-type]
+            total_out_vertices += int(tv)
+            total_out_lines += int(tl)
+        if total_out_lines == 0:
+            return Geometry(coords.copy(), offsets.copy())
+        out_coords = np.empty((total_out_vertices, 3), dtype=np.float32)
+        out_offsets = np.empty((total_out_lines + 1,), dtype=np.int32)
+        out_offsets[0] = 0
+        vc = 0
+        oc = 1
+        # 第2パス
+        for li in range(n_lines):
+            v = coords[offsets[li] : offsets[li + 1]]
+            vc, oc = _fill_line(  # type: ignore[arg-type]
+                v.astype(np.float32, copy=False),
+                float(dash_length),
+                float(gap_length),
+                out_coords,
+                out_offsets,
+                vc,
+                oc,
+            )
+        if oc < out_offsets.shape[0]:
+            out_offsets[oc:] = vc
+        return Geometry(out_coords, out_offsets)
+
+    # ---- NumPy 経路（フォールバック） --------------------------------------
     # ---- 第1パス: 出力行数/頂点数をカウント ---------------------------------
     total_out_vertices = 0
     total_out_lines = 0
