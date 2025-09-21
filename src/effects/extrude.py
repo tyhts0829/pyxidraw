@@ -117,7 +117,7 @@ def extrude(
     return Geometry(new_coords, new_offsets)
 
 
-# validate_spec 用のメタデータ
+# UI/正規化のためのメタ情報（RangeHint 構築に使用）
 extrude.__param_meta__ = {
     "direction": {"type": "vec3"},
     "distance": {"type": "number", "min": 0.0, "max": MAX_DISTANCE},

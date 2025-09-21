@@ -7,7 +7,7 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
 - 生成スクリプト: `tools/gen_g_stubs.py`
 - 出力先: `src/api/__init__.pyi`（自動生成ファイル、手編集しない）
 - 起動タイミング: `.pre-commit-config.yaml` の `gen-g-stubs` フック（commit 前）
-- 同期検証: `tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py`
+- 同期検証: `tests/test_g_stub_sync.py`
 
 ## 生成されるもの（What）
 
@@ -18,7 +18,7 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
 - `class _PipelineBuilder(Protocol)` / `class _Effects(Protocol)`
   - すべてのエフェクト関数をビルダメソッドとして公開。
   - 各メソッドに docstring（要約/引数）を付与。`build/strict/cache/__call__` も含む。
-- JSON/Spec 型定義、`G: _GShapes`, `E: _Effects`、`Pipeline` 系の再エクスポート。
+- 型別名の定義、`G: _GShapes`, `E: _Effects`、`Pipeline` 系の再エクスポート。
 
 ## 実装の流れ（How）
 
@@ -31,10 +31,10 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
   - `_render_pyi(valid_names)` で最終文字列を構築して返す。
 - `_render_pyi(shape_names)`
   - ヘッダ/共通 import/型別名を出力。
-- 形状: 関数シグネチャから `G.<name>(...)` を生成（関数ベース統一後）。
+- 形状: 関数シグネチャから `G.<name>(...)` を生成。
   - エフェクト: `effects.registry.list_effects()` を列挙し、
     `_render_pipeline_protocol(effect_names)` でビルダ/Effects の Protocol 本体を生成。
-  - 末尾で `G/E` や `run`、Spec ヘルパー関数を再エクスポート。
+  - 末尾で `G/E` や `run` を再エクスポート。
 - 形状関数の解析
   - `inspect.signature` と `get_type_hints` から関数シグネチャを復元。
   - 既定値はスタブ上では `= ...` に正規化し API 表面を安定化。
@@ -61,7 +61,6 @@ docstring を自動付与。IDE 補完/ツールチップと型検査の体験�
 
 - `gen-g-stubs`: `PYTHONPATH=src python -m tools.gen_g_stubs`
 - `test-g-stub-sync`: `pytest -q tests/test_g_stub_sync.py`
-- `test-pipeline-stub-sync`: `pytest -q tests/test_pipeline_stub_sync.py`
 
 コミット前にスタブを再生成し、直後に同期テストでディスク上の `api/__init__.pyi` と
 生成文字列の完全一致を検証。一致しない場合はコミットを拒否する。
@@ -138,4 +137,4 @@ rotate.__param_meta__ = {
   - 形状: `_render_method_from_generate()`
   - エフェクト: `_render_pipeline_protocol()` / `_annotation_for_effect_param()`
 - 設定: `.pre-commit-config.yaml`
-- 検証: `tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py`
+- 検証: `tests/test_g_stub_sync.py`

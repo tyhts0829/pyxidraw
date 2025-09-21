@@ -12,14 +12,17 @@
 ## フロー（最短要約）
 1) Runtime が関数メタを `Introspector` で取得（doc/signature/param_meta）
 2) `ValueResolver.resolve()` がパラメータをマージし、種別ごとに正規化/登録/逆変換
+   - 入力は常に「正規化値」（0..1 外も許容）。
+   - `normalize_scalar/denormalize_scalar` は線形写像のみ（クランプしない）。
+   - クランプは UI 表示上の都合に限り `clamp_normalized()` を用いる。
 3) 実レンジ値の辞書を関数へ渡す（`g` は skip）
 
 ## 実装ガイド
-- 0..1 正規化を入口、RangeHint の mapped_min/max/step へ実レンジを記述する
-- vector は x/y/z/w に分割して Descriptor を発行し、group を `vector_group` に設定
-- 既定値がない数値は Range 推定（中心±span）で安全側レンジを作る
+- 0..1 正規化を入口（0..1 外も正規化値として扱う）。実レンジは RangeHint の mapped_min/max/step で宣言。
+- vector は x/y/z/w に分割して Descriptor を発行し、group を `vector_group` に設定。
+- 既定値がない数値は Range 推定（中心±span）で安全側レンジを作る。
+- 入力値のクランプは行わない。UI 表示（バー/トラック）に限り 0..1 へクランプして描画してよい。
 
 ## Do/Don't
 - Do: UI/非UI の双方で `resolve_without_runtime` を使えるよう、副作用を持たない
 - Don't: 形状/エフェクト本体へ UI 依存を逆流させない（ここで遮断）
-

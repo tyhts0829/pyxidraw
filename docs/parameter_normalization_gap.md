@@ -60,42 +60,38 @@
 
 Phase 1: ドキュメント整備（同期）
 - [x] architecture.md を更新（オーバースケール明記、互換記述削除）。
-- [ ] `src/engine/ui/parameters/AGENTS.md` を更新（clamp は表示上の都合に限定する旨を明記）。
-- [ ] ルート AGENTS.md に方針を追記（正規化統一・オーバースケール許容）。
+- [x] `src/engine/ui/parameters/AGENTS.md` を更新（clamp は表示上の都合に限定する旨を明記）。
+- [x] ルート AGENTS.md に方針を追記（正規化統一・オーバースケール許容）。
 
 Phase 2: 変換プリミティブ（normalization.py）
-- [ ] `normalize_scalar()` の最終クランプを撤廃。実レンジ→正規化は線形変換のみ（bool=0/1、intはfloat正規化）。
-- [ ] `denormalize_scalar()` の事前クランプを撤廃。正規化→実レンジは線形変換＋`mapped_step` 量子化＋型変換のみ。
-- [ ] `clamp_normalized()` は残すが「UI 表示用ユーティリティ」として限定利用に位置付ける（docstring 明記）。
+- [x] `normalize_scalar()` の最終クランプを撤廃。実レンジ→正規化は線形変換のみ（bool=0/1、intはfloat正規化）。
+- [x] `denormalize_scalar()` の事前クランプを撤廃。正規化→実レンジは線形変換＋`mapped_step` 量子化＋型変換のみ。
+- [x] `clamp_normalized()` は残すが「UI 表示用ユーティリティ」として限定利用に位置付ける（docstring 明記）。
 - [ ] 単体テスト: 正規化値 1.2/-0.3 の逆変換がオーバースケールで反映される（float/int/bool）。
 
 Phase 3: 値解決（value_resolver.py）
-- [ ] `_normalized_input_from_raw()` の分岐撤廃。「常に入力=正規化値」。bool は 0/1 変換、数値は float 化のみ。
-- [ ] 既定値の正規化計算もクランプせずに線形変換。RangeHint がない場合の既定 0..1 は表示ヒントのみ。
-- [ ] 単体テスト: >1.0 の正規化入力がそのまま実レンジへ反映されること。
+- [x] `_normalized_input_from_raw()` の分岐撤廃。「常に入力=正規化値」。bool は 0/1 変換、数値は float 化のみ。
+- [x] 既定値の正規化計算もクランプせずに線形変換。RangeHint がない場合の既定 0..1 は表示ヒントのみ。
+- [x] 単体テスト: >1.0 の正規化入力がそのまま実レンジへ反映されること。
 
 Phase 4: 値ストア（state.py）
-- [ ] `ParameterStore.set_override()` のクランプを撤廃。正規化値をそのまま保持。
-- [ ] dump_state などのデバッグ出力は変更不要。
-- [ ] 単体テスト: override に 1.5 を設定しても保持されること。
+- [x] `ParameterStore.set_override()` のクランプを撤廃。正規化値をそのまま保持。
+- [x] dump_state などのデバッグ出力は変更不要。
+- [x] 単体テスト: override に 1.5 を設定しても保持されること。
 
 Phase 5: UI 層（panel.py 他）
-- [ ] スライダーのドラッグは 0..1 内に限定（視覚と操作の単純化）。内部保持値はクランプしない設計に合わせ、表示は `clamp_normalized()` で 0..1 に収める。
-- [ ] 値ラベルは `denormalize_scalar()` を用いて実レンジ値を表示（>実レンジ上限も表示）。
+- [x] スライダーのドラッグは 0..1 内に限定（視覚と操作の単純化）。内部保持値はクランプしない設計に合わせ、表示は `clamp_normalized()` で 0..1 に収める。
+- [x] 値ラベルは `denormalize_scalar()` を用いて実レンジ値を表示（>実レンジ上限も表示）。
 - [ ] 単体テスト: ストア値が 1.2 のとき、バー表示は最大だが実値ラベルは上限超を表示する。
 
-Phase 6: Spec/CLI の検証（effects.validate_spec）
-- [ ] `min/max` による数値レンジ検証を削除（コード除去）。Spec は正規化値のみを受け取り、範囲は検証しない。
-- [ ] 実装: `src/api/effects.py` の `validate_spec()` から、`min_rule/max_rule` を取得して `values` を比較する判定ブロック全体を削除する。
+Phase 6: Spec/CLI の検証（外部仕様の検証 API は廃止）
+- [x] `min/max` による数値レンジ検証を削除（コード除去）。Spec は正規化値のみを受け取り、範囲は検証しない。
+- [x] 実装: `src/api/effects.py` の検証ロジック（validate_spec）を削除。
   - 目印: `min_rule = rules.get("min")`, `max_rule = rules.get("max")`（付近の `zip_longest` を使う比較ループ一式）。
-- [ ] ドキュメント: 「Spec は正規化値を記述」「`__param_meta__` の `min/max` は UI の mapped レンジであり Spec 検証には用いない」を明記。
-- [ ] テスト調整: レンジ違反を期待するテストが存在する場合は削除/修正（type/choices は現状維持）。
+- [x] ドキュメント: 「Spec は正規化値を記述」「`__param_meta__` の `min/max` は UI の mapped レンジであり Spec 検証には用いない」を明記。
+- [x] テスト調整: レンジ違反を期待するテストが存在する場合は削除/修正（type/choices は現状維持）。
 
-Phase 7: 互換・移行補助（必要に応じて）
-- [ ] 既存の「実レンジ値」を含む Spec を「正規化値」へ変換するユーティリティ（`tools/migrate_spec_to_normalized.py`）の設計をドラフト化。
-- [ ] 影響の多いエフェクトについて、メタの `min/max` が UI 向け mapped レンジであることをコメントに明記。
-
-Phase 8: 仕上げ
+Phase 7: 仕上げ
 - [ ] 関連 docstring/コメント整備（clamp の用途を表示側に限定）。
 - [ ] 変更対象の ruff/mypy/pytest を緑化（編集ファイル優先ルール）。
 

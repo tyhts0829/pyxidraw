@@ -23,10 +23,10 @@ def test_parameter_store_resolve_and_override():
     store.set_override(descriptor.id, 0.8)
     assert store.current_value(descriptor.id) == 0.8
 
-    # 範囲外の値はクリップされる
+    # 仕様変更: ストアはクランプせず正規化値をそのまま保持する
     result = store.set_override(descriptor.id, 5.0)
-    assert result.clamped is True
-    assert store.current_value(descriptor.id) == 1.0
+    assert result.clamped is False
+    assert store.current_value(descriptor.id) == 5.0
 
     store.clear_override(descriptor.id)
     assert store.current_value(descriptor.id) == 0.5

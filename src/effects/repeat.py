@@ -136,7 +136,7 @@ def repeat(
     return Geometry.from_lines(lines)
 
 
-# validate_spec 用のメタデータ（最小限）
+# UI/正規化のためのメタ情報（RangeHint 構築に使用）
 repeat.__param_meta__ = {
     "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES, "step": 1},
     "offset": {

@@ -530,15 +530,10 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     lines.append("from shapes.registry import shape as shape\n")
     lines.append("from effects.registry import effect as effect\n")
     lines.append("from .sketch import run_sketch as run_sketch, run_sketch as run\n")
-    # Pipeline Spec ヘルパ関数の厳密なシグネチャ
-    lines.append("def to_spec(pipeline: Pipeline) -> PipelineSpec: ...\n")
-    lines.append("def from_spec(spec: PipelineSpec) -> Pipeline: ...\n")
-    lines.append("def validate_spec(spec: PipelineSpec) -> None: ...\n")
-    lines.append("\n")
-    # 実行時の `__all__` と整合させる
+    # 実行時の `__all__` と整合させる（外部保存/復元/検証の API は提供しない）
     lines.append(
         "__all__ = [\n"
-        "    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry', 'to_spec', 'from_spec', 'validate_spec',\n"
+        "    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry',\n"
         "]\n"
     )
 

@@ -26,7 +26,7 @@ from shapes.registry import (
     shape as shape,
 )  # 公開唯一経路（api.shape）。shape_registry では再輸出しない。
 
-from .effects import E, from_spec, to_spec, validate_spec
+from .effects import E
 
 # 主要API
 from .shapes import G, ShapesAPI
@@ -44,10 +44,7 @@ __all__ = [
     # クラス（高度な使用）
     "ShapesAPI",
     "Geometry",
-    # シリアライズ補助
-    "to_spec",
-    "from_spec",
-    "validate_spec",
+    # シリアライズ補助（削除済み：外部保存/復元/検証は提供しない）
 ]
 
 # バージョン情報

@@ -2,6 +2,10 @@
 どこで: `engine.ui.parameters` の GUI 表示レイヤ。
 何を: ParameterStore の Descriptor をスライダー/トグルへ投影し、描画/入力/レイアウト/スクロールを扱う。
 なぜ: 軽量なウィジェットでパラメータ編集を可能にし、ヘッドレスでも動作可能な設計を保つため。
+
+補足:
+- スライダーのトラック/バー表示は 0..1 にクランプするが、内部の正規化値自体はクランプしない。
+- 実レンジ表示は `denormalize_scalar()` により線形写像で求める。
 """
 
 from __future__ import annotations

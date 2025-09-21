@@ -1,44 +1,15 @@
 from __future__ import annotations
 
-import pytest
 
 from api import E
-from api.effects import Pipeline, _is_json_like, from_spec, to_spec, validate_spec
+from api.effects import Pipeline, _is_json_like
 from engine.core.geometry import Geometry
 
 
-def test_pipeline_to_from_spec_roundtrip() -> None:
-    p = (
-        E.pipeline.rotate(pivot=(1.0, 2.0, 3.0), angles_rad=(0.1, 0.2, 0.3))
-        .displace(amplitude_mm=0.0, spatial_freq=0.05, t_sec=0.0)
-        .build()
-    )
-    spec = to_spec(p)
-    p2 = from_spec(spec)
-    assert isinstance(p2, Pipeline)
-    assert to_spec(p2) == spec
-
-
-def test_validate_spec_param_meta_min_max_choices_and_type() -> None:
-    # rotate has Vec3 types enforced by validate_spec; offset has choices on join; displace has min for amplitude
-    ok = [
-        {"name": "rotate", "params": {"pivot": (0.0, 0.0, 0.0), "angles_rad": (0.0, 0.0, 0.0)}},
-        {"name": "offset", "params": {"join": "round", "segments_per_circle": 12, "distance": 0.1}},
-        {"name": "displace", "params": {"amplitude_mm": 0.1, "spatial_freq": 0.05, "t_sec": 0.0}},
-    ]
-    validate_spec(ok)
-
-    # choices
-    bad_choice = [
-        {"name": "offset", "params": {"join": "foo", "segments_per_circle": 12, "distance": 0.1}}
-    ]
-    with pytest.raises(TypeError):
-        validate_spec(bad_choice)
-
-    # min
-    bad_min = [{"name": "displace", "params": {"amplitude_mm": -1.0}}]
-    with pytest.raises(TypeError):
-        validate_spec(bad_min)
+def test_noop_placeholder_to_keep_file_active() -> None:
+    # 仕様縮減により to_spec/from_spec/validate_spec を削除。
+    # 本ファイルでは _is_json_like のテストと他のケースを維持する。
+    assert isinstance(Pipeline.__name__, str)
 
 
 def test_pipeline_cache_none_and_clear_cache_behavior() -> None:

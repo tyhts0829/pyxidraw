@@ -98,7 +98,7 @@ def affine(
     return Geometry(transformed_coords, offsets.copy())
 
 
-# validate_spec 用（緩やかなメタ）
+# UI/正規化のためのメタ情報（RangeHint 構築に使用）
 affine.__param_meta__ = {
     "pivot": {
         "type": "vec3",

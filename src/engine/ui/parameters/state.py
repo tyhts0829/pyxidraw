@@ -3,6 +3,9 @@
 何を: ParameterDescriptor/RangeHint のメタと、ParameterStore による値（original/override/midi）を集中管理。
     購読通知と簡易レンジ推定（ParameterLayoutConfig）も提供。
 なぜ: UI/ランタイムが共有する単一の真実源（Single Source of Truth）として、一貫した状態管理を担うため。
+
+補足:
+- `set_override()` は正規化値をそのまま保持し、クランプしない（表示上のクランプは GUI レイヤの責務）。
 """
 
 from __future__ import annotations
@@ -149,19 +152,8 @@ class ParameterStore:
         *,
         source: OverrideSource = "gui",
     ) -> OverrideResult:
-        descriptor = self._descriptors.get(param_id)
+        # 正規化値はそのまま保持し、ここではクランプしない
         clamped = False
-        if descriptor and descriptor.range_hint:
-            lo = descriptor.range_hint.min_value
-            hi = descriptor.range_hint.max_value
-            if (
-                isinstance(value, (int, float))
-                and isinstance(lo, (int, float))
-                and isinstance(hi, (int, float))
-            ):
-                clamped_value = min(max(value, lo), hi)
-                clamped = clamped_value != value
-                value = clamped_value
         with self._lock:
             entry = self._values.setdefault(param_id, ParameterValue(original=value))
             if source == "gui":

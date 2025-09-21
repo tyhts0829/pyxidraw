@@ -85,7 +85,7 @@ def offset(
     return Geometry(all_coords, np.array(new_offsets, dtype=np.int32))
 
 
-# validate_spec 用のメタデータ
+# UI/正規化のためのメタ情報（RangeHint 構築に使用）
 offset.__param_meta__ = {
     "distance": {"type": "number", "min": 0.0, "max": 25.0},
     "distance_mm": {"type": "number", "min": 0.0},

@@ -30,19 +30,10 @@ out = pipe(base)
 ## 厳格モードとパラメータ検証
 - 未知キーは例外にする（strict=True）。
 - `effects` は `__param_meta__` を任意で公開可能（型/範囲/choices）。
-- JSON 仕様検証: `validate_spec(spec)` が上記メタ情報も考慮して詳細に検証。
+- 外部仕様（JSON など）に対する検証 API は提供しない（縮減方針）。
 
-## シリアライズ（spec）
-- `to_spec(pipeline) -> list[dict]`
-- `from_spec(spec) -> Pipeline`
-- `validate_spec(spec) -> None`
-
-```
-spec = to_spec(pipe)
-validate_spec(spec)
-restored = from_spec(spec)
-assert restored(G.grid())  # 実行可能
-```
+## 外部保存/復元（シリアライズ）
+- パイプラインを JSON/ファイルに保存・復元する API は提供しない（縮減方針）。
 
 ## パフォーマンスとキャッシュ
 - キーは「入力 `Geometry.digest` × パイプライン定義ハッシュ」。
@@ -52,4 +43,4 @@ assert restored(G.grid())  # 実行可能
 ## スタブと IDE 補助
 - `api/__init__.pyi` は `tools/gen_g_stubs.py` により自動生成。
 - 形状 `G` とエフェクト `E.pipeline` のメソッドには引数の短い説明を含む。
-- スタブは CI で同期検証（`tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py`）。
+- スタブは CI で同期検証（`tests/test_g_stub_sync.py`）。

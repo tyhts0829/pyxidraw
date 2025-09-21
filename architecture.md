@@ -46,11 +46,11 @@
   - Shapes: `shapes/` + `@shape` で登録、`G.<name>(...) -> Geometry` を提供。
   - Effects: `effects/` + `@effect` で登録、`E.pipeline.<name>(...)` でチェーン可能。
   - 正規化キー（Camel→snake, lower, `-`→`_`）で一貫性を担保（`common/base_registry.py`）。
-  - Effects はオプションで `__param_meta__` を公開でき、`validate_spec` が型/範囲/choices を追加検証。
+  - Effects はオプションで `__param_meta__` を公開できる（UI/正規化のヒント）。
   - 公開インポート経路の単一路線: ユーザー拡張の登録デコレータは `from api import shape` のみを公式に提供（破壊的変更で統一）。
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
-  - 厳格モード（既定 `strict=True`）で未知パラメータを検出。`to_spec/from_spec/validate_spec` でシリアライズと検証。
+  - 厳格モード（既定 `strict=True`）で未知パラメータを検出（外部保存/復元/仕様検証の API は提供しない）。
   - 単層 LRU キャッシュ（インスタンス内）: 入力 `Geometry.digest` × パイプライン定義ハッシュでヒット判定。
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
     - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
@@ -60,8 +60,7 @@
 - パラメータ GUI
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、独立ウィンドウでスライダー表示。
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と値正規化を委譲し、GUI override を適用してから元の関数へ委譲。
-  - すべての公開パラメータは「0.0〜1.0 の正規化入力」を受け取り、`RangeHint.mapped_min/max/step` で宣言した実レンジへ線形変換される。`engine.ui.parameters.normalization` が変換ロジックを一元管理し、GUI・CLI・パイプライン経路すべてで同じ挙動を保証。
-  - CLI/パイプラインでは 0.0〜1.0 の入力を正規化値として扱い、互換性のためその範囲外（例: 25.0 や -0.1）は既存の実レンジ値として受け付ける。
+  - すべての公開パラメータは「0.0〜1.0 の正規化入力」を受け取り、`RangeHint.mapped_min/max/step` で宣言した実レンジへ線形変換される。`engine.ui.parameters.normalization` が変換ロジックを一元管理し、GUI・CLI・パイプライン経路すべてで同じ挙動を保証。0.0〜1.0 を超える正規化入力も、超過分を含め同じ線形変換でスケール（オーバースケール）する。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
   - 多プロセスとの相性を考慮し、GUI 有効時は `WorkerPool` が Inline モード（単一プロセス実行）に切替わる。
 
@@ -86,7 +85,7 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 ## 主なモジュール
 - `api/`
   - `__init__.py`: 公開面（`G`, `E`, `run`/`run_sketch`, `Geometry`）。
-  - `effects.py`: `Pipeline`, `PipelineBuilder`, 仕様検証（`validate_spec`）。
+- `effects.py`: `Pipeline`, `PipelineBuilder`。
   - `shapes.py`: 形状 API。
   - `sketch.py`: 実行エンジンの束ね（ModernGL/Pyglet、MIDI、ワーカー、HUD）。
 - `engine/`
@@ -103,16 +102,7 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 ## API 境界と依存方向
 - 外部利用者は `from api import G, E, run, Geometry` のみを前提にする。
 - 依存は下向き（api → engine/common/util/effects/shapes）。`engine` は `api` を参照しない。
-- JSON ライクな `spec` でパイプラインを保存/復元でき、ワークフローの再現性を確保。
-
-### パイプライン spec の例
-```json
-[
-  {"name": "rotate", "params": {"pivot": [200,200,0], "angles_rad": [0,0,0.5]}},
-  {"name": "displace", "params": {"amplitude_mm": 0.5, "spatial_freq": 0.01, "t_sec": 1.0}}
-]
-```
-`Pipeline.to_spec()`/`from_spec()` で相互変換でき、`validate_spec()` が未知キーや値の妥当性を検査する。
+- 外部保存/復元/仕様検証の API は提供しない（縮減方針）。
 
 ## 実行と拡張の最小例
 ```python
@@ -158,12 +148,12 @@ Tips:
 
 ## テストとの接点（要点）
 - `Geometry` はスナップショット（`digest`）で回帰検知しやすい。
-- パイプラインは `strict` と `validate_spec` により境界が明確。キャッシュは `cache(maxsize=...)` で制御可能。
+- パイプラインは `strict` により未知キーを検出。キャッシュは `cache(maxsize=...)` で制御可能。
 
 ## 拡張のガイド（最短ルート）
 - Shape の追加: `shapes/` に実装し `@shape` で登録。`generate(**params) -> Geometry` を返す。
 - Effect の追加: `effects/` に `def effect_name(g: Geometry, *, ...) -> Geometry` を実装し `@effect` を付与。
-  - 可能なら `__param_meta__ = {"param": {"type": "number", "min": 0, ...}}` を添えて `validate_spec` を強化。
+  - 可能なら `__param_meta__ = {"param": {"type": "number", "min": 0, ...}}` を添えて、UI/正規化のヒント（RangeHint 構築）を提供。
 
 既存のコーディング規約やテスト方針はリポジトリの「Repository Guidelines」を参照。
 
@@ -234,7 +224,7 @@ Tips:
   - 実装は `OrderedDict` による LRU 風（ヒットで末尾へ、上限超過で先頭を追い出し）。
 - 厳格検証
   - `PipelineBuilder.strict(True)`（既定）でビルド時に各エフェクト関数シグネチャと `params` のキーを照合。未知キーがあれば `TypeError`。
-  - `validate_spec(spec)` は JSON 風値（数値/文字列/真偽/None、list/dict の入れ子）も検査。さらにエフェクトが `__param_meta__` を公開していれば `type/min/max/choices` を照合。
+（削除）
 
 ## レジストリと公開 API
 - Shapes（`shapes/registry.py`）
@@ -244,9 +234,9 @@ Tips:
   - 高水準 API `G` は `ShapesAPI` のインスタンス。`G.polygon(...) -> Geometry` のように関数的に呼び出す。
 - Effects（`effects/registry.py`）
   - `@effect` で `def effect_name(g: Geometry, *, ...) -> Geometry` な関数を登録。
-  - パラメータメタ `__param_meta__`（任意）を公開すれば `validate_spec()` が型/範囲/選択肢を追加検証。
+  - パラメータメタ `__param_meta__`（任意）は UI/正規化のヒントとして利用する。
 - 公開面
-  - 利用者は `from api import G, E, run, Geometry, to_spec, from_spec, validate_spec` のみに依存。
+- 利用者は `from api import G, E, run, Geometry` のみに依存。
   - 上位（api）→下位（engine/common/util/effects/shapes）と一方向の依存。`engine` は `api` を知らない。
   - 破壊的変更はスタブ同期テストが検出する。意図的な場合はスタブ再生成手順に従う。
 

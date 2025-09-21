@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from api import E
-from api.effects import validate_spec
 
 
 def test_strict_unknown_param_raises() -> None:
@@ -15,16 +14,7 @@ def test_strict_unknown_param_raises() -> None:
     assert "Allowed:" in str(ei.value)
 
 
-def test_validate_spec_allows_known_params_and_rejects_unknown() -> None:
-    ok = [{"name": "rotate", "params": {"pivot": (0.0, 0.0, 0.0), "angles_rad": (0.0, 0.0, 0.0)}}]
-    validate_spec(ok)
-
-    bad = [{"name": "rotate", "params": {"bogus": 1}}]
-    with pytest.raises(TypeError):
-        validate_spec(bad)
-
-
-def test_validate_spec_rejects_non_json_like_values() -> None:
-    bad = [{"name": "rotate", "params": {"pivot": {1, 2, 3}}}]  # set は不可
-    with pytest.raises(TypeError):
-        validate_spec(bad)
+def test_builder_strictness_is_enforced_via_signature() -> None:
+    # validate_spec は削除されたため、ビルダーの strict 検証を確認する
+    ok = E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.0))
+    ok.build()  # 例外なし

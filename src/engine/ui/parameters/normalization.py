@@ -1,7 +1,11 @@
 """
 どこで: `engine.ui.parameters` の値変換レイヤ。
-何を: 0..1 正規化と実レンジの写像（clamp/normalize/denormalize）。`RangeHint` に基づき決定的に変換。
+何を: 0..1 正規化と実レンジの写像（normalize/denormalize）。`RangeHint` に基づき決定的に線形変換。
 なぜ: GUI/自動化からの一貫した値スケーリングを提供し、効果/形状実装を単位系から解放するため。
+
+補足:
+- 入力は常に「正規化値」（0..1 外も許容）。本レイヤではクランプしない。
+- `clamp_normalized()` は UI 表示用の補助（バー/トラックの描画域に収める）としてのみ使用する。
 """
 
 from __future__ import annotations
@@ -46,7 +50,8 @@ def normalize_scalar(actual: Any, hint: RangeHint | None, *, value_type: ValueTy
     if mapped_min is None or mapped_max is None or mapped_min == mapped_max:
         if value_type == "bool":
             return 1.0 if bool(actual) else 0.0
-        return clamp_normalized(_coerce_float(actual), hint)
+        # マッピングが不十分な場合は、与えられた値をそのまま正規化値として扱う（クランプしない）
+        return _coerce_float(actual)
 
     lo = float(mapped_min)
     hi = float(mapped_max)
@@ -55,7 +60,7 @@ def normalize_scalar(actual: Any, hint: RangeHint | None, *, value_type: ValueTy
         return clamp_normalized(float(hint.min_value), hint)
 
     normalized = (float(_coerce_float(actual)) - lo) / span
-    return clamp_normalized(normalized, hint)
+    return float(normalized)
 
 
 def denormalize_scalar(normalized: Any, hint: RangeHint | None, *, value_type: ValueType) -> Any:
@@ -68,7 +73,8 @@ def denormalize_scalar(normalized: Any, hint: RangeHint | None, *, value_type: V
             return int(round(float(normalized)))
         return float(normalized)
 
-    normalized_value = clamp_normalized(_coerce_float(normalized), hint)
+    # クランプせず、そのまま線形変換する
+    normalized_value = _coerce_float(normalized)
 
     mapped_min = hint.mapped_min
     mapped_max = hint.mapped_max

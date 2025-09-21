@@ -67,7 +67,7 @@ def test_parameter_value_resolver_denormalizes_provided_normalized_value():
     assert stored == pytest.approx(0.5)
 
 
-def test_parameter_value_resolver_accepts_actual_range_values():
+def test_parameter_value_resolver_uses_normalized_only_and_allows_overscale():
     store = ParameterStore()
     resolver = ParameterValueResolver(store)
     context = ParameterContext(scope="effect", name="displace", index=0)
@@ -78,14 +78,15 @@ def test_parameter_value_resolver_accepts_actual_range_values():
 
     resolved = resolver.resolve(
         context=context,
-        params={"amplitude_mm": 25.0},
+        # 仕様: 入力は常に正規化値。>1.0 もオーバースケールとして許容
+        params={"amplitude_mm": 2.5},
         signature=signature,
         doc=None,
         param_meta=param_meta,
         skip={"g"},
     )
-
-    assert resolved["amplitude_mm"] == pytest.approx(25.0)
+    # mapped_min=0, mapped_max=50 なので 2.5 → 実値 125.0
+    assert resolved["amplitude_mm"] == pytest.approx(125.0)
 
 
 def test_parameter_value_resolver_handles_vector_params():

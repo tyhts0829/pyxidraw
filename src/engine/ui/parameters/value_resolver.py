@@ -359,20 +359,14 @@ class ParameterValueResolver:
         *,
         value_type: ValueType,
     ) -> float:
+        # 入力は常に「正規化値」として扱う（クランプしない）
         if isinstance(raw_value, bool):
-            numeric = 1.0 if raw_value else 0.0
-            return clamp_normalized(numeric, hint)
+            return 1.0 if raw_value else 0.0
 
         if not isinstance(raw_value, (int, float)):
             raise TypeError(f"正規化できない値です: {raw_value!r}")
 
-        numeric = float(raw_value)
-        normalized_min = float(hint.min_value)
-        normalized_max = float(hint.max_value)
-        if normalized_min <= numeric <= normalized_max:
-            return clamp_normalized(numeric, hint)
-
-        return normalize_scalar(raw_value, hint, value_type=value_type)
+        return float(raw_value)
 
     @staticmethod
     def _merge_with_defaults(

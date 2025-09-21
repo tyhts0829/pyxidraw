@@ -10,7 +10,7 @@
 - '報告して'や'どう思う？'や'提案して'といった指示は、聞かれたことだけ答え、コードを先回りして変更しないこと。
 - ルート AGENTS.md の最小項目（Build/Test/Style/Safety/PR）を常に最新化
 - ルート architecture.md は実装（src/ 配下）と同期しています。差分を見つけた場合は、該当コードの参照箇所とともに更新してください。
-- shape/effect の公開パラメータは 0.0〜1.0 の正規化入力で受け取り、`__param_meta__` の min/max/step へ実レンジを記述して必ず RangeHint を提供する。
+- shape/effect の公開パラメータは 0.0〜1.0 の正規化入力（0..1 外もオーバースケールとして許容）で受け取り、`__param_meta__` の min/max/step へ実レンジを記述して必ず RangeHint を提供する（変換は `engine.ui.parameters.normalization` に一元化、クランプは表示上のみ）。
 - コード改善を指示された場合、コード変更前に、改善アクションを細分化したチェックリストを新規.md ファイルとして保存し、私にそれでいいか確認してください。その後、私の返答に基づいて改善を行い、完了アイテムをチェックしていき、何が完了し、何が完了していないかを常に明確にして下さい。改善の中で気がついた、私に事前確認したほうがいいことや、さらなる改善提案があれば、その md ファイルに追記して報告してください。
 - 回答は日本語。
 
@@ -18,7 +18,7 @@
 
 - 環境: Python 3.10。初期化: `python3.10 -m venv .venv && source .venv/bin/activate && pip install -U pip && pip install -e .[dev]`
 - 実行: `python main.py`
-- スタブ再生成: `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
+  - スタブ再生成: `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
 - プロジェクト全体チェック（明示要求時のみ）:
   - Lint/Format/Type: `ruff check . && black . && isort . && mypy .`
   - Test: `pytest -q -m "not optional"`
@@ -67,7 +67,7 @@
   - `ruff check --fix {changed_files}`、`black {changed_files} && isort {changed_files}`
   - `mypy {changed_files}`（段階導入設定。必要に応じ対象を拡大）
   - `pytest -q -m smoke` もしくは対象テストファイルを直接指定
-  - 公開 API に影響時: スタブ再生成 + `tests/stubs/test_g_stub_sync.py` / `tests/stubs/test_pipeline_stub_sync.py` を緑化
+  - 公開 API に影響時: スタブ再生成 + `tests/stubs/test_g_stub_sync.py` を緑化
 - CI 成功条件（DoD）:
   - スタブ最新（生成後に差分ゼロ）
   - `ruff/black/isort/mypy` 成功
@@ -101,7 +101,7 @@
 - 公開 API 変更時はスタブ再生成し、スタブ同期テストを更新。
 - マーカー別の実行例:
   - 並行処理: `pytest -q -m integration -k worker`
-  - スタブ同期: `pytest -q tests/stubs/test_g_stub_sync.py tests/stubs/test_pipeline_stub_sync.py`
+  - スタブ同期: `pytest -q tests/stubs/test_g_stub_sync.py`
   - e2e/perf: `pytest -q -m "e2e or perf"`
 
 ## Good / Bad 実例（本リポ内参照）

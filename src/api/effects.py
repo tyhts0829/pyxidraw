@@ -1,6 +1,6 @@
 """
 どこで: `api.effects`（エフェクト・パイプラインの高レベル API）。
-何を: 登録エフェクトの直列適用を定義する `Pipeline/Builder` と検証/シリアライズを提供。
+何を: 登録エフェクトの直列適用を定義する `Pipeline/Builder` を提供（外部保存/復元/仕様検証の API は提供しない）。
 なぜ: Geometry を入力に副作用なく決定的に加工し、キャッシュ可能な処理チェーンを組み立てるため。
 
 api.effects — パイプライン実行モジュール（Effects オーケストレーター）
@@ -14,14 +14,12 @@ api.effects — パイプライン実行モジュール（Effects オーケス�
 - `Pipeline`: 不変な処理定義を保持し、`__call__(g)` で逐次適用する実行体。
   - 単層 LRU 風キャッシュを内蔵。鍵は `(geometry_digest, pipeline_key)`。
   - `clear_cache()` でキャッシュを手動クリア可能。
-  - `to_spec()/from_spec()` により JSON 風の仕様へシリアライズ/デシリアライズ可能。
 - `PipelineBuilder`: ビルダー（フルエント API）。`E.pipeline ... .build()` で `Pipeline` を生成。
   - 動的属性でエフェクト名を受け取り、`adder(**params)` でステップを追加する仕組み。
   - `.cache(maxsize=...)` で単層キャッシュの上限を設定（`None`=無制限、`0`=無効）。
   - `.strict(enabled=True)` でビルド時の厳格検証を有効化（未知パラメータを検出して `TypeError`）。
 - `PipelineStep`: 1 ステップの定義（`name` と `params`）。
 - `E`: 利用者向けシングルトン（`from api import E`）。`E.pipeline` が `PipelineBuilder` を返す。
-- `validate_spec(spec)`: 仕様配列を検証するユーティリティ（不正時に `TypeError/KeyError`）。
 
 キャッシュ設計:
 - `Geometry.digest`（16B の blake2b 指紋）と、ステップ列から導出した `pipeline_key` を組み合わせる。
@@ -33,8 +31,6 @@ api.effects — パイプライン実行モジュール（Effects オーケス�
 厳格検証（strict）:
 - 各ステップの `params` キーを該当エフェクト関数のシグネチャと照合。
 - `g` 引数は内部で供給するため指定不要。`**kwargs` を受け取る関数は未知キー許容（Builder 側）。
-- `validate_spec` はデータ受け渡し境界（設定/ファイル）での安全性確保に重点を置き、
-  JSON 風の値かどうかのヒューリスティックも併せて確認する。
 
 ハッシュと同一性:
 - `pipeline_key` は各ステップの「名前」「関数バイトコード（近似版）」「パラメータ正規化結果」
@@ -73,7 +69,6 @@ import inspect
 import os
 from collections import OrderedDict
 from dataclasses import dataclass
-from itertools import zip_longest
 from threading import RLock
 from typing import Any, Callable, Sequence
 
@@ -203,19 +198,7 @@ class Pipeline:
 
     __str__ = __repr__
 
-    # ---- Serialization (Proposal 6) ----
-    def to_spec(self) -> list[dict[str, Any]]:
-        """シリアライズ可能な仕様を返す: `[{"name": str, "params": dict}]`。"""
-        return [{"name": s.name, "params": dict(s.params)} for s in self._steps]
-
-    @staticmethod
-    def from_spec(spec: Sequence[dict[str, Any]]) -> "Pipeline":
-        """仕様から `Pipeline` を生成。不正な形状/エフェクト名の場合は例外を送出。"""
-        validate_spec(spec)
-        steps: list[PipelineStep] = [
-            PipelineStep(str(entry["name"]), dict(entry.get("params", {}))) for entry in spec  # type: ignore[arg-type]
-        ]
-        return Pipeline(steps)
+    # シリアライズ/デシリアライズ機能は削除（縮減方針）
 
 
 class PipelineBuilder:
@@ -352,12 +335,7 @@ E = EffectsAPI()
 
 
 # Helper functions (optional API)
-def to_spec(pipeline: Pipeline) -> list[dict[str, Any]]:
-    return pipeline.to_spec()
-
-
-def from_spec(spec: Sequence[dict[str, Any]]) -> Pipeline:
-    return Pipeline.from_spec(spec)
+# to_spec/from_spec は削除（API 縮減）
 
 
 # ---- Spec validation (Proposal 6) -----------------------------------------
@@ -374,138 +352,4 @@ def _is_json_like(value: Any) -> bool:
     return False
 
 
-def validate_spec(spec: Sequence[dict[str, Any]]) -> None:
-    """パイプライン仕様を検証（不正時は TypeError/KeyError）。
-
-    仕様:
-    - `spec` は `{"name": str, "params": dict}` の列（list/tuple）
-    - `name` は登録済みエフェクト名
-    - `params` は辞書かつ JSON 風（数値/文字列/真偽/None、入れ子の list/dict を許容）
-    - 可能なら関数シグネチャと照合し、未知パラメータを検出（ただし関数が **kwargs を取る場合は許容）
-    """
-    if not isinstance(spec, (list, tuple)):
-        raise TypeError("spec はステップ辞書の list または tuple である必要があります")
-
-    for i, entry in enumerate(spec):
-        if not isinstance(entry, dict):
-            raise TypeError(
-                f"spec[{i}] は dict である必要があります（実際: {type(entry).__name__}）"
-            )
-        name = entry.get("name")
-        params = entry.get("params", {})
-        if not isinstance(name, str):
-            raise TypeError(f"spec[{i}]['name'] は str である必要があります")
-        if not isinstance(params, dict):
-            raise TypeError(f"spec[{i}]['params'] は dict である必要があります")
-
-        # Validate effect registration
-        fn = get_effect(name)  # raises KeyError if not registered
-
-        # Validate params JSON-likeness
-        for k, v in params.items():
-            if not isinstance(k, str):
-                raise TypeError(f"spec[{i}]['params'] のキーは str である必要があります: {k!r}")
-            if not _is_json_like(v):
-                raise TypeError(
-                    f"spec[{i}]['params']['{k}'] は JSON 風の値ではありません: {type(v).__name__}"
-                )
-
-        # 厳格: 未知パラメータを禁止（**kwargs 許容の特例も廃止）
-        try:
-            sig = inspect.signature(fn)
-        except ValueError:
-            # 署名を取得できない場合はスキップ（ほぼ発生しない想定）
-            continue
-        allowed = {
-            p.name
-            for p in sig.parameters.values()
-            if p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-        }
-        # 効果関数の第1引数 g は外部指定しない
-        if "g" in allowed:
-            allowed.remove("g")
-        unknown = [k for k in params.keys() if k not in allowed]
-        if unknown:
-            allowed_sorted = ", ".join(sorted(allowed))
-            raise TypeError(
-                f"spec[{i}] effect '{name}' has unknown params: {unknown}. Allowed: [{allowed_sorted}]"
-            )
-
-        # （重複させない）この時点で未知パラメータは検出済み
-
-        # Optional: param meta validation (type/range/choices) if effect exposes __param_meta__
-        meta = getattr(fn, "__param_meta__", None)
-        if isinstance(meta, dict):
-            for k, rules in meta.items():
-                if k not in params:
-                    continue
-                v = params[k]
-                # type check (loose)
-                t = rules.get("type") if isinstance(rules, dict) else None
-                if t == "number" and not isinstance(v, (int, float)):
-                    raise TypeError(
-                        f"spec[{i}]['params']['{k}'] は数値である必要があります（実際: {type(v).__name__}）"
-                    )
-                if t == "integer" and not isinstance(v, int):
-                    raise TypeError(
-                        f"spec[{i}]['params']['{k}'] は整数である必要があります（実際: {type(v).__name__}）"
-                    )
-                if t == "string" and not isinstance(v, str):
-                    raise TypeError(
-                        f"spec[{i}]['params']['{k}'] は文字列である必要があります（実際: {type(v).__name__}）"
-                    )
-                if t == "vec3":
-                    # allow scalar, 1-tuple, or 3-tuple of numbers
-                    def _is_num(x):
-                        return isinstance(x, (int, float))
-
-                    if _is_num(v):
-                        pass
-                    elif (
-                        isinstance(v, (list, tuple))
-                        and len(v) in (1, 3)
-                        and all(_is_num(x) for x in v)
-                    ):
-                        pass
-                    else:
-                        raise TypeError(
-                            f"spec[{i}]['params']['{k}'] は数値のスカラー、1要素、または3要素のタプルである必要があります"
-                        )
-                # range
-                if isinstance(rules, dict):
-                    min_rule = rules.get("min")
-                    max_rule = rules.get("max")
-
-                    def _iter_components(val: Any) -> list[float]:
-                        if isinstance(val, (list, tuple)):
-                            return [float(x) for x in val if isinstance(x, (int, float))]
-                        if isinstance(val, (int, float)):
-                            return [float(val)]
-                        return []
-
-                    values = _iter_components(v)
-
-                    if min_rule is not None and values:
-                        mins = _iter_components(min_rule) or [float(min_rule)]
-                        for idx, (val, min_val) in enumerate(
-                            zip_longest(values, mins, fillvalue=mins[-1])
-                        ):
-                            if val < min_val:
-                                raise TypeError(
-                                    f"spec[{i}]['params']['{k}'][{idx}]={val} は最小値 {min_rule} 未満です"
-                                )
-                    if max_rule is not None and values:
-                        maxs = _iter_components(max_rule) or [float(max_rule)]
-                        for idx, (val, max_val) in enumerate(
-                            zip_longest(values, maxs, fillvalue=maxs[-1])
-                        ):
-                            if val > max_val:
-                                raise TypeError(
-                                    f"spec[{i}]['params']['{k}'][{idx}]={val} は最大値 {max_rule} を超えています"
-                                )
-                    # choices
-                    choices = rules.get("choices")
-                    if choices is not None and v not in choices:
-                        raise TypeError(
-                            f"spec[{i}]['params']['{k}']={v!r} は {choices} のいずれかである必要があります"
-                        )
+# 仕様検証 API は提供しない（縮減方針）。
