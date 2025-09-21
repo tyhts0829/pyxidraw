@@ -45,17 +45,17 @@ class _GShapes(Protocol):
 from common.types import Vec3
 
 class _PipelineBuilder(Protocol):
-    # meta: set_center (type=bool)
+    # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     # meta: angles_rad (type=vec3, range=[(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)])
     # meta: scale (type=vec3, range=[(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)])
-    def affine(self, *, set_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    def affine(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         任意の変換（スケール→回転）を適用する純関数エフェクト。
 
         引数:
-            set_center: True ならジオメトリの平均座標を中心に使用
-            pivot: `set_center=False` のときの中心座標 (x, y, z)
+            auto_center: True ならジオメトリの平均座標を中心に使用
+            pivot: `auto_center=False` のときの中心座標 (x, y, z)
             angles_rad: XYZ 回りの回転角（ラジアン）
             scale: XYZ 各軸のスケール倍率
         """
