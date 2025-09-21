@@ -46,7 +46,7 @@
   - Shapes: `shapes/` + `@shape` で登録、`G.<name>(...) -> Geometry` を提供。
   - Effects: `effects/` + `@effect` で登録、`E.pipeline.<name>(...)` でチェーン可能。
   - 正規化キー（Camel→snake, lower, `-`→`_`）で一貫性を担保（`common/base_registry.py`）。
-  - Effects はオプションで `__param_meta__` を公開できる（UI/正規化のヒント）。
+  - Effects はオプションで `__param_meta__` を公開できる（UI 表示のヒント）。
   - 公開インポート経路の単一路線: ユーザー拡張の登録デコレータは `from api import shape` のみを公式に提供（破壊的変更で統一）。
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
@@ -55,12 +55,12 @@
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
     - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
     - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
-  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「正規化パラメータ（`common.param_utils.params_to_tuple`）の blake2b-64」を積み、128bit に集約。
+  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「パラメータ（`common.param_utils.params_to_tuple` による整形）の blake2b-64」を積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
 - パラメータ GUI
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、独立ウィンドウでスライダー表示。
-  - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と値正規化を委譲し、GUI override を適用してから元の関数へ委譲。
-  - すべての公開パラメータは「0.0〜1.0 の正規化入力」を受け取り、`RangeHint.mapped_min/max/step` で宣言した実レンジへ線形変換される。`engine.ui.parameters.normalization` が変換ロジックを一元管理し、GUI・CLI・パイプライン経路すべてで同じ挙動を保証。0.0〜1.0 を超える正規化入力も、超過分を含め同じ線形変換でスケール（オーバースケール）する。
+  - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と Descriptor 登録を行い、GUI override を適用してから元の関数へ委譲（変換レイヤは廃止し、実値を扱う）。
+  - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
   - 多プロセスとの相性を考慮し、GUI 有効時は `WorkerPool` が Inline モード（単一プロセス実行）に切替わる。
 
@@ -153,7 +153,7 @@ Tips:
 ## 拡張のガイド（最短ルート）
 - Shape の追加: `shapes/` に実装し `@shape` で登録。`generate(**params) -> Geometry` を返す。
 - Effect の追加: `effects/` に `def effect_name(g: Geometry, *, ...) -> Geometry` を実装し `@effect` を付与。
-  - 可能なら `__param_meta__ = {"param": {"type": "number", "min": 0, ...}}` を添えて、UI/正規化のヒント（RangeHint 構築）を提供。
+  - 可能なら `__param_meta__ = {"param": {"type": "number", "min": 0, ...}}` を添えて、UI 表示のヒント（RangeHint 構築）を提供。
 
 既存のコーディング規約やテスト方針はリポジトリの「Repository Guidelines」を参照。
 
@@ -218,7 +218,7 @@ Tips:
   - 入力 `geometry_hash` × `pipeline_key`。
   - `geometry_hash`: 通常は `Geometry.digest`（無効時は配列から都度 blake2b-128）。
   - `pipeline_key`: ステップ列を順にハッシュして合成。
-    - 各ステップで `name.encode()`、エフェクト関数の近似版 `__code__.co_code` ハッシュ（blake2b-64）、正規化パラメータ（dict/配列の決定的 repr）ハッシュ（blake2b-64）を積む。
+    - 各ステップで `name.encode()`、エフェクト関数の近似版 `__code__.co_code` ハッシュ（blake2b-64）、パラメータ（dict/配列の決定的 repr）ハッシュ（blake2b-64）を積む。
 - 容量/動作
   - `PipelineBuilder.cache(maxsize=None|0|N)`、または `PXD_PIPELINE_CACHE_MAXSIZE` で設定。
   - 実装は `OrderedDict` による LRU 風（ヒットで末尾へ、上限超過で先頭を追い出し）。
@@ -234,7 +234,7 @@ Tips:
   - 高水準 API `G` は `ShapesAPI` のインスタンス。`G.polygon(...) -> Geometry` のように関数的に呼び出す。
 - Effects（`effects/registry.py`）
   - `@effect` で `def effect_name(g: Geometry, *, ...) -> Geometry` な関数を登録。
-  - パラメータメタ `__param_meta__`（任意）は UI/正規化のヒントとして利用する。
+  - パラメータメタ `__param_meta__`（任意）は UI 表示のヒントとして利用する。
 - 公開面
 - 利用者は `from api import G, E, run, Geometry` のみに依存。
   - 上位（api）→下位（engine/common/util/effects/shapes）と一方向の依存。`engine` は `api` を知らない。

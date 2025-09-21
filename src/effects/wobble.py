@@ -63,13 +63,13 @@ def wobble(
           300mm 正方キャンバス中央の立方体に適用したときに「効果が分かる最小限」を狙う。
 
     引数:
-        amplitude: 変位量（座標単位, mm 相当）。0..1 正規化ではありません。
+        amplitude: 変位量（座標単位, mm 相当）。
         frequency: 空間周波数 [cycles per unit]。float なら全軸同一、タプルは (fx, fy, fz)。
         phase: 位相（ラジアン）。
     """
     coords, offsets = g.as_arrays(copy=False)
 
-    # frequency をタプルに正規化（係数スケーリングは廃止）
+    # frequency をタプルに整形（係数スケーリングは廃止）
     if isinstance(frequency, (int, float)):
         f = float(frequency)
         freq_tuple = (f, f, f)

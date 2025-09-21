@@ -84,7 +84,6 @@ _ensure_pyglet_stub()
 
 import pytest
 
-from engine.ui.parameters.normalization import denormalize_scalar
 from engine.ui.parameters.panel import SliderWidget
 from engine.ui.parameters.state import (
     ParameterDescriptor,
@@ -112,15 +111,14 @@ def _make_store_with_descriptor(
     return store, descriptor
 
 
-def test_slider_widget_drag_respects_mapped_range_for_int():
+def test_slider_widget_drag_moves_to_max_for_int():
     hint = RangeHint(
-        min_value=0.0,
-        max_value=1.0,
-        mapped_min=3,
-        mapped_max=11,
-        mapped_step=1,
+        min_value=3,
+        max_value=11,
+        step=1,
     )
-    store, descriptor = _make_store_with_descriptor(value_type="int", hint=hint, default=0.5)
+    # 既定値を範囲中央に置く
+    store, descriptor = _make_store_with_descriptor(value_type="int", hint=hint, default=7)
     layout = ParameterLayoutConfig()
     slider = SliderWidget(descriptor, store, layout)
     slider.set_bounds(x=0, y=0, width=200, height=20)
@@ -128,21 +126,17 @@ def test_slider_widget_drag_respects_mapped_range_for_int():
     slider.begin_drag()
     slider.drag_to(slider.x + slider.width)
 
-    normalized = store.current_value(descriptor.id)
-    assert normalized == pytest.approx(1.0)
-
-    actual = denormalize_scalar(normalized, hint, value_type="int")
+    actual = store.current_value(descriptor.id)
     assert actual == 11
 
 
-def test_slider_widget_actual_value_matches_mapped_range():
+def test_slider_widget_actual_value_matches_range():
     hint = RangeHint(
-        min_value=0.0,
-        max_value=1.0,
-        mapped_min=10.0,
-        mapped_max=110.0,
+        min_value=10.0,
+        max_value=110.0,
     )
-    store, descriptor = _make_store_with_descriptor(value_type="float", hint=hint, default=0.25)
+    # 既定値は 25% の位置（35.0）
+    store, descriptor = _make_store_with_descriptor(value_type="float", hint=hint, default=35.0)
     layout = ParameterLayoutConfig()
     slider = SliderWidget(descriptor, store, layout)
     slider.set_bounds(x=5, y=0, width=100, height=20)
@@ -150,8 +144,6 @@ def test_slider_widget_actual_value_matches_mapped_range():
     slider.begin_drag()
     slider.drag_to(slider.x + slider.width * 0.75)
 
-    normalized = store.current_value(descriptor.id)
-    assert normalized == pytest.approx(0.75, rel=1e-5)
-
-    actual_expected = denormalize_scalar(normalized, hint, value_type="float")
-    assert slider._current_actual() == pytest.approx(actual_expected, rel=1e-6)
+    actual = store.current_value(descriptor.id)
+    # lo=10, hi=110 → 75% は 85
+    assert actual == pytest.approx(85.0, rel=1e-6)

@@ -117,10 +117,8 @@ def test_parameter_runtime_applies_meta_range_hints():
     assert descriptor.range_hint is not None
     hint = descriptor.range_hint
     assert hint.min_value == 0.0
-    assert hint.max_value == 1.0
-    assert hint.mapped_min == 0.0
-    assert hint.mapped_max == 5.0
-    assert hint.mapped_step == 0.5
+    assert hint.max_value == 5.0
+    assert hint.step == 0.5
     deactivate_runtime()
 
 
@@ -134,6 +132,6 @@ def test_parameter_runtime_uses_fallback_range_for_missing_meta():
 
     descriptor = store.get_descriptor("shape.capsule#0.radius")
     assert descriptor.range_hint is not None
-    assert descriptor.range_hint.min_value == 0.0
-    assert descriptor.range_hint.max_value == 1.0
+    # 既定値周りの安全側レンジ（中心±span）
+    assert descriptor.range_hint.min_value <= 1.0 <= descriptor.range_hint.max_value
     deactivate_runtime()

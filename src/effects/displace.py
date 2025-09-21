@@ -199,7 +199,7 @@ def displace(
     freq_val = spatial_freq
     ti = float(t_sec)
 
-    # 周波数の正規化
+    # 周波数の整形
     if isinstance(freq_val, (int, float)):
         freq_tuple = (freq_val, freq_val, freq_val)
     elif len(freq_val) == 1:  # type: ignore[arg-type]

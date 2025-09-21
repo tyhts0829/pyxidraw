@@ -2,7 +2,6 @@
 affine エフェクト（合成アフィン：スケール→回転）
 
 - ピボットを中心にスケール後、XYZ（Rz·Ry·Rx の合成）回転を一括適用します。
-- 既定でわずかな非等方スケールと Z 回り回転を与え、効果を視認しやすくしています。
 
 パラメータ:
 - pivot: None の場合はジオメトリの平均座標を自動採用。
@@ -62,15 +61,13 @@ def affine(
     g: Geometry,
     *,
     pivot: Vec3 | None = None,
-    angles_rad: Vec3 = (0.0, 0.0, 0.35),  # ≈ 20° around Z to make intent visible
-    scale: Vec3 = (1.1, 0.85, 1.0),  # slight anisotropic scaling for clarity
+    angles_rad: Vec3 = (0.0, 0.0, 0.0),
+    scale: Vec3 = (1.0, 1.0, 1.0),
 ) -> Geometry:
     """任意の変換（スケール→回転→移動）を適用する純関数エフェクト。
-
-    既定値ポリシー:
-    - pivot: None の場合は入力ジオメトリの平均座標（概ね中心）を使用。
-    - angles_rad: Z 軸に 0.35rad（約20°）。
-    - scale: X=1.1, Y=0.85（わずかに非等方）で変形の意図を視覚化。
+    - `pivot`: 回転・スケールの中心（None の場合はジオメトリの平均座標を使用）
+    - `angles_rad`: XYZ 回りの回転角（ラジアン）
+    - `scale`: XYZ 各軸のスケール倍率
     """
     coords, offsets = g.as_arrays(copy=False)
 
@@ -98,7 +95,7 @@ def affine(
     return Geometry(transformed_coords, offsets.copy())
 
 
-# UI/正規化のためのメタ情報（RangeHint 構築に使用）
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
 affine.__param_meta__ = {
     "pivot": {
         "type": "vec3",
@@ -107,8 +104,8 @@ affine.__param_meta__ = {
     },
     "angles_rad": {
         "type": "vec3",
-        "min": (-np.pi, -np.pi, -np.pi),
-        "max": (np.pi, np.pi, np.pi),
+        "min": (0, 0, 0),
+        "max": (2 * np.pi, 2 * np.pi, 2 * np.pi),
     },
-    "scale": {"type": "vec3", "min": (0.1, 0.1, 0.1), "max": (3.0, 3.0, 3.0)},
+    "scale": {"type": "vec3", "min": (0.25, 0.25, 0.25), "max": (4.0, 4.0, 4.0)},
 }

@@ -46,16 +46,16 @@ from common.types import Vec3
 
 class _PipelineBuilder(Protocol):
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
-    # meta: angles_rad (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
-    # meta: scale (type=vec3, range=[(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)])
+    # meta: angles_rad (type=vec3, range=[(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)])
+    # meta: scale (type=vec3, range=[(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)])
     def affine(self, *, pivot: Vec3 | None = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         任意の変換（スケール→回転→移動）を適用する純関数エフェクト。
 
         引数:
             pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
-            angles_rad: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
-            scale: vec3, range [(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)]
+            angles_rad: vec3, range [(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)]
+            scale: vec3, range [(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)]
         """
         ...
     # meta: intensity (type=number, range=[0.0, 10.0])

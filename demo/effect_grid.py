@@ -8,6 +8,7 @@
 注意:
 - 依存は既存のランタイムに準拠（`api.sketch.run` を使用）。
 - ラベル描画は `shapes.text` 依存（環境によりフォント/numba の有無で描画不可の場合は自動スキップ）。
+- 各エフェクトのパラメータは「関数のデフォルト引数」をそのまま使用する。
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 import sys
 from math import ceil
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 # src/ を import パスへ追加（main.py と同様の簡易ブート）
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,9 +27,7 @@ import effects  # noqa: F401  # register all effects
 from api import G, run  # type: ignore  # after sys.path tweak
 from effects.registry import get_effect, list_effects
 from engine.core.geometry import Geometry
-from engine.ui.parameters.introspection import FunctionIntrospector
-from engine.ui.parameters.normalization import denormalize_scalar
-from engine.ui.parameters.state import ParameterLayoutConfig, RangeHint
+import inspect
 
 # === 調整可能な定数 =======================================================
 # 参照形状（全セルで同じ形状を使う）
@@ -43,11 +42,7 @@ GAP = 10.0  # セル間の間隔（外側ギャップ）—レイアウト時に
 LINE_THICKNESS = 0.0006  # 描画線の太さ（スクリーン座標に対する比率）
 EDGE_MARGIN = 30.0  # ウィンドウ外枠の余白（上下左右, px 相当）
 
-# パラメータ解決
-NORMALIZED_DEFAULT = 0.5  # 0..1 の既定値
-_INTROSPECTOR = FunctionIntrospector()
-_LAYOUT_CFG = ParameterLayoutConfig()
-# ラベルはシンプルに固定サイズで描画（メタは後で調整予定）
+# ラベルはシンプルに固定サイズで描画
 
 
 # === 小ユーティリティ =====================================================
@@ -84,116 +79,23 @@ def _shorten(text: str, *, max_len: int = 22) -> str:
     return f"{text[:head]}…{text[-tail:]}"
 
 
-def _value_type_of(meta_type: str | None, default: Any) -> str:
-    mt = (meta_type or "").lower()
-    if mt in {"number", "float"}:
-        return "float"
-    if mt in {"integer", "int"}:
-        return "int"
-    if mt == "bool":
-        return "bool"
-    if mt in {"vec2", "vec3", "vector"}:
-        return "vector"
-    # 推定
-    if isinstance(default, bool):
-        return "bool"
-    if isinstance(default, int) and not isinstance(default, bool):
-        return "int"
-    if isinstance(default, float):
-        return "float"
-    if isinstance(default, Sequence) and len(default) in (2, 3):
-        return "vector"
-    return "float"
-
-
-def _as_tuple3(value: Any, *, fill: float = 0.0) -> tuple[float, float, float]:
-    if isinstance(value, Sequence) and len(value) >= 3:
-        return (float(value[0]), float(value[1]), float(value[2]))
-    if isinstance(value, Sequence) and len(value) == 2:
-        return (float(value[0]), float(value[1]), fill)
-    v = float(value) if isinstance(value, (int, float)) else fill
-    return (v, v, v)
-
-
-def _denorm_scalar(
-    default: Any, *, name: str, value_type: str, meta: Mapping[str, Any] | None
-) -> Any:
-    # 正規化レンジは常に 0..1
-    if (
-        meta
-        and isinstance(meta.get("min"), (int, float))
-        and isinstance(meta.get("max"), (int, float))
-    ):
-        hint = RangeHint(0.0, 1.0, mapped_min=float(meta["min"]), mapped_max=float(meta["max"]))
-        return denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type=value_type)  # type: ignore[arg-type]
-    # ヒューリスティック（デフォルト値まわり）
-    rng = _LAYOUT_CFG.derive_range(name=name, value_type=value_type, default_value=default)  # type: ignore[arg-type]
-    hint = RangeHint(0.0, 1.0, mapped_min=float(rng.min_value), mapped_max=float(rng.max_value))
-    return denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type=value_type)  # type: ignore[arg-type]
-
-
-def _denorm_vector(
-    default: Any, *, name: str, meta: Mapping[str, Any] | None
-) -> tuple[float, float, float]:
-    # meta にベクトル min/max があれば成分ごとに適用
-    if meta and isinstance(meta.get("min"), Sequence) and isinstance(meta.get("max"), Sequence):
-        mins = _as_tuple3(meta["min"], fill=0.0)
-        maxs = _as_tuple3(meta["max"], fill=1.0)
-        out = []
-        for lo, hi in zip(mins, maxs):
-            hint = RangeHint(0.0, 1.0, mapped_min=lo, mapped_max=hi)
-            out.append(float(denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type="float")))
-        return (out[0], out[1], out[2])
-    # ヒューリスティック（各成分同一レンジ）
-    base = _as_tuple3(default, fill=0.0)
-    rng = _LAYOUT_CFG.derive_range(name=name, value_type="vector", default_value=base[0])
-    hint = RangeHint(0.0, 1.0, mapped_min=float(rng.min_value), mapped_max=float(rng.max_value))
-    v = float(denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type="float"))
-    return (v, v, v)
-
-
 def _build_params(name: str, fn: Any) -> dict[str, Any]:
-    """エフェクト関数のパラメータを 0..1 正規化から実レンジへ決定的に構築。"""
-    info = _INTROSPECTOR.resolve(kind="effect", name=name, fn=fn)
-    meta = info.param_meta
+    """エフェクト関数のデフォルト引数だけを抽出して辞書化する。"""
     try:
-        import inspect
-
         sig = inspect.signature(fn)
     except Exception:
         return {}
 
     params: dict[str, Any] = {}
     for p in sig.parameters.values():
+        # エフェクトの最初の引数 `g` はスキップ
         if p.name == "g":
             continue
-        if p.kind not in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY):
+        # 位置/キーワードで受けられるパラメータのみ対象
+        if p.kind not in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
             continue
-        m = meta.get(p.name)
-        m_type = None if m is None else str(m.get("type", ""))
-        value_type = _value_type_of(m_type, p.default)
-        try:
-            if value_type == "vector":
-                params[p.name] = _denorm_vector(p.default, name=p.name, meta=m)
-            elif value_type == "int":
-                v = _denorm_scalar(p.default, name=p.name, value_type="int", meta=m)
-                params[p.name] = int(round(float(v)))
-            elif value_type == "bool":
-                v = _denorm_scalar(p.default, name=p.name, value_type="bool", meta=m)
-                params[p.name] = bool(v)
-            elif value_type == "float":
-                params[p.name] = float(
-                    _denorm_scalar(p.default, name=p.name, value_type="float", meta=m)
-                )
-            else:
-                # 未知型はデフォルトを尊重
-                if p.default is not p.empty:
-                    params[p.name] = p.default
-        except Exception:
-            # 変換に失敗した場合はデフォルトにフォールバック
-            if p.default is not p.empty:
-                params[p.name] = p.default
-
+        if p.default is not inspect._empty:  # type: ignore[attr-defined]
+            params[p.name] = p.default
     return params
 
 
@@ -240,7 +142,7 @@ def _initialize_grid() -> None:
         # ラベル（静的）
         try:
             label = _shorten(name)
-            label_geo = G.text(text=label, font_size=0.2).translate(
+            label_geo = G.text(text=label, font_size=20).translate(
                 ox + PADDING, oy + PADDING * 0.9, 0.0
             )
             labels = labels.concat(label_geo)

@@ -99,7 +99,7 @@ def trim(g: Geometry, *, start_param: float = 0.1, end_param: float = 0.9) -> Ge
     return Geometry.from_lines(results)
 
 
-# UI/正規化のためのメタ情報（RangeHint 構築に使用）
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
 trim.__param_meta__ = {
     "start_param": {"type": "number", "min": 0.0, "max": 1.0},
     "end_param": {"type": "number", "min": 0.0, "max": 1.0},

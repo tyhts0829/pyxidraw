@@ -38,13 +38,12 @@ def test_parameter_value_resolver_registers_scalars_with_meta():
     assert descriptor.range_hint is not None
     hint = descriptor.range_hint
     assert hint.min_value == 0.0
-    assert hint.max_value == 1.0
-    assert hint.mapped_max == 5.0
-    assert hint.mapped_step == 0.5
+    assert hint.max_value == 5.0
+    assert hint.step == 0.5
     assert descriptor.help_text == "Effect doc"
 
 
-def test_parameter_value_resolver_denormalizes_provided_normalized_value():
+def test_parameter_value_resolver_passes_through_provided_actual_value():
     store = ParameterStore()
     resolver = ParameterValueResolver(store)
     context = ParameterContext(scope="effect", name="displace", index=0)
@@ -61,13 +60,12 @@ def test_parameter_value_resolver_denormalizes_provided_normalized_value():
         param_meta=param_meta,
         skip={"g"},
     )
-
-    assert resolved["amplitude_mm"] == pytest.approx(25.0)
+    assert resolved["amplitude_mm"] == pytest.approx(0.5)
     stored = store.original_value("effect.displace#0.amplitude_mm")
     assert stored == pytest.approx(0.5)
 
 
-def test_parameter_value_resolver_uses_normalized_only_and_allows_overscale():
+def test_parameter_value_resolver_passes_through_large_actual_value():
     store = ParameterStore()
     resolver = ParameterValueResolver(store)
     context = ParameterContext(scope="effect", name="displace", index=0)
@@ -78,15 +76,13 @@ def test_parameter_value_resolver_uses_normalized_only_and_allows_overscale():
 
     resolved = resolver.resolve(
         context=context,
-        # 仕様: 入力は常に正規化値。>1.0 もオーバースケールとして許容
         params={"amplitude_mm": 2.5},
         signature=signature,
         doc=None,
         param_meta=param_meta,
         skip={"g"},
     )
-    # mapped_min=0, mapped_max=50 なので 2.5 → 実値 125.0
-    assert resolved["amplitude_mm"] == pytest.approx(125.0)
+    assert resolved["amplitude_mm"] == pytest.approx(2.5)
 
 
 def test_parameter_value_resolver_handles_vector_params():

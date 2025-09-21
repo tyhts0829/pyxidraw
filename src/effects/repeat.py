@@ -99,7 +99,6 @@ def repeat(
           累積オフセットは 1,3,6…倍になる実装のため、1ステップ12mmに抑えて画面内に収める。
     """
     coords, offsets = g.as_arrays(copy=False)
-    # count があれば優先。なければ 0..1 → 0..MAX_DUPLICATES（整数）
     n_int = int(count)
     if n_int <= 0 or g.is_empty or offsets.size <= 1:
         return Geometry(coords.copy(), offsets.copy())
@@ -136,7 +135,7 @@ def repeat(
     return Geometry.from_lines(lines)
 
 
-# UI/正規化のためのメタ情報（RangeHint 構築に使用）
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
 repeat.__param_meta__ = {
     "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES, "step": 1},
     "offset": {

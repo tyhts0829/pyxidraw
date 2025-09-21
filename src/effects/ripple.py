@@ -8,7 +8,7 @@ ripple エフェクト（座標依存サイン波）
 - amplitude [mm], frequency [cycles/unit], phase [rad]。
 
 注意:
-- 単位は正規化値ではなく座標系の実寸（mm 相当）です。
+- 単位は座標系の実寸（mm 相当）。
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def ripple(
 
     引数:
         g: 入力ジオメトリ
-        amplitude: 変位の大きさ（座標単位, mm 相当）。0..1 正規化ではありません。
+        amplitude: 変位の大きさ（座標単位, mm 相当）。
         frequency: 空間周波数 [cycles per unit]。float なら全軸に同一値、タプルなら (fx, fy, fz)。
         phase: 位相オフセット（ラジアン）
 
@@ -44,7 +44,7 @@ def ripple(
     if g.is_empty:
         return Geometry(coords.copy(), offsets.copy())
 
-    # frequency をタプルに正規化
+    # frequency をタプルに整形
     if isinstance(frequency, (int, float)):
         fx = fy = fz = float(frequency)
     else:

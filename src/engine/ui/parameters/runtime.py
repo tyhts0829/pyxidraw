@@ -1,8 +1,8 @@
 """
 どこで: `engine.ui.parameters` のオーケストレーション層。
 何を: Shapes/Effects 呼び出しをフックしてメタ（doc/signature/param_meta）を解決し、
-      `ParameterValueResolver` で 0..1 入力を実レンジへ変換して適用。オフライン解決も提供。
-なぜ: 呼び出し側を汎用の関数 API のまま保ちつつ、UI/自動化からの正規化パラメータ適用を透過化するため。
+      `ParameterValueResolver` で実値を登録・override 適用して関数へ渡す。オフライン解決も提供。
+なぜ: 呼び出し側を汎用の関数 API のまま保ちつつ、UI/自動化からの実値パラメータ適用を透過化するため。
 """
 
 from __future__ import annotations
@@ -110,18 +110,7 @@ def resolve_without_runtime(
     params: Mapping[str, Any],
     index: int = 0,
 ) -> Mapping[str, Any]:
-    """ParameterRuntime 非介在時に 0..1 入力を実レンジへ変換する補助。"""
+    """ParameterRuntime 非介在時の補助（実値パラメータをそのまま返す）。"""
 
-    info = _OFFLINE_INTROSPECTOR.resolve(kind=scope, name=name, fn=fn)
-    store = ParameterStore()
-    resolver = ParameterValueResolver(store)
-    context = ParameterContext(scope=scope, name=name, index=index)
-    skip = {"g"} if scope == "effect" else set()
-    return resolver.resolve(
-        context=context,
-        params=params,
-        signature=info.signature,
-        doc=info.doc,
-        param_meta=info.param_meta,
-        skip=skip,
-    )
+    # ランタイムが無い場合は変換せず実値をそのまま渡す。
+    return dict(params)

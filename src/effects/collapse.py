@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
+
 from engine.core.geometry import Geometry
 
 from .registry import effect
@@ -151,15 +152,10 @@ def _apply_collapse_to_coords(
 def collapse(
     g: Geometry,
     *,
-    intensity: float = 1.8,
+    intensity: float = 3.0,
     subdivisions: float = 5.0,
 ) -> Geometry:
-    """線分を細分化してノイズで変形（純関数）。
-
-    既定値ポリシー（強め）:
-    - intensity=1.8: 輪郭の揺らぎがはっきり見える強さ。
-    - subdivisions=0.5: 細分化 5 程度（MAX_DIV=10 基準）で「ギザつき」を十分に出す。
-    """
+    """線分を細分化してノイズで変形（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)
     if len(coords) == 0 or intensity == 0.0 or subdivisions <= 0.0:
         return Geometry(coords.copy(), offsets.copy())

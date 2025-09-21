@@ -207,7 +207,7 @@ def fill(
     return Geometry.from_lines(filled_results)
 
 
-# UI/正規化のためのメタ情報（RangeHint 構築に使用）
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
 fill.__param_meta__ = {
     "mode": {"type": "string", "choices": ["lines", "cross", "dots"]},
     "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES},

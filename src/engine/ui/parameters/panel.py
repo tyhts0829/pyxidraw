@@ -4,8 +4,8 @@
 なぜ: 軽量なウィジェットでパラメータ編集を可能にし、ヘッドレスでも動作可能な設計を保つため。
 
 補足:
-- スライダーのトラック/バー表示は 0..1 にクランプするが、内部の正規化値自体はクランプしない。
-- 実レンジ表示は `denormalize_scalar()` により線形写像で求める。
+- スライダーのバー表示は表示上の比率にクランプするが、内部の実値はクランプしない。
+- 表示比率は実レンジの線形変換 `(value - min)/(max - min)` を用いる。
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ import pyglet.shapes
 from pyglet.graphics import Batch, Group
 from pyglet.window import key
 
-from .normalization import clamp_normalized, denormalize_scalar, normalize_scalar
 from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore, RangeHint
 
 # スクロール量（ピクセル）
@@ -80,33 +79,28 @@ class SliderWidget:
     def _hint(self) -> RangeHint | None:
         return self.descriptor.range_hint
 
-    def _current_normalized(self) -> float:
+    def _current_actual(self) -> Any:
         value = self.store.current_value(self.descriptor.id)
         if value is None:
             value = self.descriptor.default_value
-        if isinstance(value, (int, float)):
-            return float(value)
-        if isinstance(value, bool):
-            return 1.0 if value else 0.0
-        return 0.0
-
-    def _current_actual(self) -> Any:
-        hint = self._hint()
-        normalized = self._current_normalized()
-        if hint is None:
-            if self.descriptor.value_type == "int":
-                return int(round(normalized))
-            if self.descriptor.value_type == "bool":
-                return bool(normalized)
-            return normalized
-        return denormalize_scalar(normalized, hint, value_type=self.descriptor.value_type)
+        if self.descriptor.value_type == "int":
+            return int(round(float(value)))
+        if self.descriptor.value_type == "bool":
+            return bool(value)
+        return float(value) if isinstance(value, (int, float)) else value
 
     def _normalized(self) -> float:
+        # 表示用の 0..1 比率
         hint = self._hint()
-        normalized = self._current_normalized()
+        value = float(self._current_actual())
         if hint is None:
-            return max(0.0, min(1.0, normalized))
-        return clamp_normalized(normalized, hint)
+            return 0.0
+        lo = float(hint.min_value)
+        hi = float(hint.max_value)
+        span = max(hi - lo, 1e-9)
+        ratio = (value - lo) / span
+        # 表示上のみクランプ
+        return max(0.0, min(1.0, ratio))
 
     def begin_drag(self) -> None:
         self.dragging = True
@@ -124,38 +118,28 @@ class SliderWidget:
             factor *= 0.1
         if modifiers & (key.MOD_COMMAND | key.MOD_CTRL):
             factor *= 10.0
-        normalized = self._drag_start_normalized + delta * factor
+        new_ratio = self._drag_start_normalized + delta * factor
         hint = self._hint()
         if hint is None:
-            normalized = max(0.0, min(1.0, normalized))
-            actual_value: Any = normalized
-        else:
-            normalized = clamp_normalized(normalized, hint)
-            actual_value = denormalize_scalar(
-                normalized, hint, value_type=self.descriptor.value_type
-            )
-
+            return
+        # 表示上のみクランプ
+        new_ratio = max(0.0, min(1.0, float(new_ratio)))
+        lo = float(hint.min_value)
+        hi = float(hint.max_value)
+        actual_value: Any = lo + (hi - lo) * new_ratio
+        # step/丸め
+        if hint.step is not None:
+            step = float(hint.step)
+            if step > 0:
+                actual_value = lo + round((actual_value - lo) / step) * step
         if self.descriptor.value_type == "int":
-            actual_value = int(round(actual_value))
-
-        if hint is None:
-            new_normalized = float(actual_value)
-        else:
-            new_normalized = normalize_scalar(
-                actual_value,
-                hint,
-                value_type=self.descriptor.value_type,
-            )
-        self.store.set_override(self.descriptor.id, new_normalized, source="gui")
-        self._drag_start_normalized = float(new_normalized)
+            actual_value = int(round(float(actual_value)))
+        self.store.set_override(self.descriptor.id, actual_value, source="gui")
+        self._drag_start_normalized = float(new_ratio)
         self._drag_origin_x = x
 
     def reset(self) -> None:
-        self.store.set_override(
-            self.descriptor.id,
-            self.descriptor.default_value,
-            source="gui",
-        )
+        self.store.set_override(self.descriptor.id, self.descriptor.default_value, source="gui")
 
     def _ensure_graphics(self, batch: Batch) -> None:
         if self._batch is not batch:
@@ -290,9 +274,7 @@ class ToggleWidget:
 
     def reset(self) -> None:
         self.store.set_override(
-            self.descriptor.id,
-            float(bool(self.descriptor.default_value)),
-            source="gui",
+            self.descriptor.id, bool(self.descriptor.default_value), source="gui"
         )
 
     def draw(self, batch: Batch) -> None:
@@ -370,7 +352,7 @@ class ToggleWidget:
 
     def _toggle(self) -> None:
         new_value = not self.current_value()
-        self.store.set_override(self.descriptor.id, float(new_value), source="gui")
+        self.store.set_override(self.descriptor.id, bool(new_value), source="gui")
 
 
 class ParameterPanel:

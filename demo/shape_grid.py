@@ -26,8 +26,7 @@ import shapes  # noqa: F401  # register all shapes
 from api import G, run  # type: ignore  # after sys.path tweak
 from engine.core.geometry import Geometry
 from engine.ui.parameters.introspection import FunctionIntrospector
-from engine.ui.parameters.normalization import denormalize_scalar
-from engine.ui.parameters.state import ParameterLayoutConfig, RangeHint
+from engine.ui.parameters.state import ParameterLayoutConfig
 from shapes.registry import get_shape, list_shapes
 
 # === レイアウト/描画定数 ===================================================
@@ -38,8 +37,8 @@ GAP = 10.0  # セル間の間隔（外側ギャップ）—レイアウト時に
 LINE_THICKNESS = 0.0006  # 描画線の太さ（スクリーン座標に対する比率）
 EDGE_MARGIN = 30.0  # ウィンドウ外枠の余白（上下左右, px 相当）
 
-# パラメータ解決
-NORMALIZED_DEFAULT = 0.5  # 0..1 の既定値
+# パラメータ代表値の比率（レンジ内の中間値を使う）
+DEFAULT_RATIO = 0.5
 _INTROSPECTOR = FunctionIntrospector()
 _LAYOUT_CFG = ParameterLayoutConfig()
 
@@ -112,18 +111,24 @@ def _as_tuple3(value: Any, *, fill: float = 0.0) -> tuple[float, float, float]:
 def _denorm_scalar(
     default: Any, *, name: str, value_type: str, meta: Mapping[str, Any] | None
 ) -> Any:
-    # 正規化レンジは常に 0..1
+    # 実レンジヒント（min/max/step）のみ使用。中央比率で代表値を決める。
     if (
         meta
         and isinstance(meta.get("min"), (int, float))
         and isinstance(meta.get("max"), (int, float))
     ):
-        hint = RangeHint(0.0, 1.0, mapped_min=float(meta["min"]), mapped_max=float(meta["max"]))
-        return denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type=value_type)  # type: ignore[arg-type]
-    # ヒューリスティック（デフォルト値まわり）
-    rng = _LAYOUT_CFG.derive_range(name=name, value_type=value_type, default_value=default)  # type: ignore[arg-type]
-    hint = RangeHint(0.0, 1.0, mapped_min=float(rng.min_value), mapped_max=float(rng.max_value))
-    return denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type=value_type)  # type: ignore[arg-type]
+        lo = float(meta["min"])
+        hi = float(meta["max"])
+    else:
+        rng = _LAYOUT_CFG.derive_range(name=name, value_type=value_type, default_value=default)  # type: ignore[arg-type]
+        lo = float(rng.min_value)
+        hi = float(rng.max_value)
+    v = lo + (hi - lo) * DEFAULT_RATIO
+    if value_type == "int":
+        return int(round(v))
+    if value_type == "bool":
+        return v >= (lo + hi) * 0.5
+    return float(v)
 
 
 def _denorm_vector(
@@ -135,19 +140,19 @@ def _denorm_vector(
         maxs = _as_tuple3(meta["max"], fill=1.0)
         out = []
         for lo, hi in zip(mins, maxs):
-            hint = RangeHint(0.0, 1.0, mapped_min=lo, mapped_max=hi)
-            out.append(float(denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type="float")))
+            v = float(lo) + (float(hi) - float(lo)) * DEFAULT_RATIO
+            out.append(float(v))
         return (out[0], out[1], out[2])
     # ヒューリスティック（各成分同一レンジ）
     base = _as_tuple3(default, fill=0.0)
     rng = _LAYOUT_CFG.derive_range(name=name, value_type="vector", default_value=base[0])
-    hint = RangeHint(0.0, 1.0, mapped_min=float(rng.min_value), mapped_max=float(rng.max_value))
-    v = float(denormalize_scalar(NORMALIZED_DEFAULT, hint, value_type="float"))
+    lo, hi = float(rng.min_value), float(rng.max_value)
+    v = lo + (hi - lo) * DEFAULT_RATIO
     return (v, v, v)
 
 
 def _build_params(name: str, fn: Any) -> dict[str, Any]:
-    """shape 関数のパラメータを 0..1 正規化から実レンジへ決定的に構築。"""
+    """shape 関数のパラメータをヒューリスティックに決定的構築（実値ベース）。"""
     info = _INTROSPECTOR.resolve(kind="shape", name=name, fn=fn)
     meta = info.param_meta
     try:

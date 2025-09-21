@@ -5,7 +5,7 @@
 なぜ: UI/ランタイムが共有する単一の真実源（Single Source of Truth）として、一貫した状態管理を担うため。
 
 補足:
-- `set_override()` は正規化値をそのまま保持し、クランプしない（表示上のクランプは GUI レイヤの責務）。
+- `set_override()` は実値をそのまま保持し、クランプしない（表示上のクランプは GUI レイヤの責務）。
 """
 
 from __future__ import annotations
@@ -23,15 +23,12 @@ OverrideSource = Literal["gui", "midi"]
 
 @dataclass(frozen=True)
 class RangeHint:
-    """UI 表示用の範囲ヒント。"""
+    """UI 表示用の範囲ヒント（実レンジ）。"""
 
     min_value: float | int
     max_value: float | int
     step: float | int | None = None
     scale: str | None = None  # linear / log 等（現状は linear 固定）
-    mapped_min: float | int | None = None
-    mapped_max: float | int | None = None
-    mapped_step: float | int | None = None
 
 
 @dataclass(frozen=True)
@@ -152,7 +149,7 @@ class ParameterStore:
         *,
         source: OverrideSource = "gui",
     ) -> OverrideResult:
-        # 正規化値はそのまま保持し、ここではクランプしない
+        # 実値はそのまま保持し、ここではクランプしない
         clamped = False
         with self._lock:
             entry = self._values.setdefault(param_id, ParameterValue(original=value))

@@ -3,16 +3,15 @@
 
 どこで・何を・なぜ:
 - どこで: `engine.ui.parameters` 層。`ParameterRuntime` から呼ばれる。
-- 何を: 0..1 正規化値 ↔ 実レンジ値の往復変換と、`ParameterStore` への登録/解決。
-- なぜ: UI/自動化からの正規化入力を安定に扱い、呼び出し時点の実レンジ値へ決定論的に写像するため。
+- 何を: 実値パラメータを `ParameterStore` に登録し、override を適用した実値を返す。
+- なぜ: UI/自動化からの実値入力を一元管理し、関数呼び出し時に最新の実値を適用するため。
 
 流れ（概要）:
 1) merge: シグネチャ既定値・ユーザー入力・`skip` を考慮してパラメータをマージ。
 2) resolve: 値種別を判定し、scalar/vector/passthrough に分岐。
-   - scalar: RangeHint を構築 → 0..1 に正規化 → ParameterStore に register/resolve → 実レンジへ逆変換（denormalize）。
-   - vector: 各コンポーネントに分解（x/y/z/w）→ scalar と同じ手順を成分ごとに適用。
+   - scalar/vector: RangeHint を構築しつつ、実値を ParameterStore に register/resolve。
    - passthrough: 数値以外（列挙/真偽など）は RangeHint なしで register/resolve。
-3) return: 実レンジへ変換済みの辞書を返却。
+3) return: override 適用後の実値辞書を返す。
 
 関連:
 - 呼び出し元は `ParameterRuntime.before_shape_call/before_effect_call`。
@@ -33,7 +32,7 @@ from engine.ui.parameters.state import (
     ValueType,
 )
 
-from .normalization import clamp_normalized, denormalize_scalar, normalize_scalar
+# 正規化レイヤは廃止
 
 _VECTOR_SUFFIX = ("x", "y", "z", "w")
 
@@ -135,64 +134,25 @@ class ParameterValueResolver:
         value_type: ValueType,
         has_default: bool,
     ) -> Any:
-        if not meta_entry:
-            hint = self._range_hint_from_meta(
-                value_type=value_type,
-                meta={},
-                component_index=None,
-                default_value=default_actual,
-            )
-            descriptor = ParameterDescriptor(
-                id=descriptor_id,
-                label=f"{context.label_prefix} · {param_name}",
-                source=context.scope,
-                category=context.scope,
-                value_type=value_type,
-                default_value=default_actual,
-                range_hint=hint,
-                help_text=doc,
-                vector_group=None,
-            )
-            self._store.register(descriptor, default_actual if source == "default" else raw_value)
-            return self._store.resolve(
-                descriptor.id, default_actual if source == "default" else raw_value
-            )
-
         hint = self._range_hint_from_meta(
             value_type=value_type,
             meta=meta_entry,
             component_index=None,
             default_value=default_actual,
         )
-
-        if has_default:
-            default_normalized = normalize_scalar(default_actual, hint, value_type=value_type)
-        else:
-            default_normalized = clamp_normalized(float(hint.min_value), hint)
-
-        if source == "default":
-            normalized_value = default_normalized
-        else:
-            normalized_value = self._normalized_input_from_raw(
-                raw_value,
-                hint,
-                value_type=value_type,
-            )
-
         descriptor = ParameterDescriptor(
             id=descriptor_id,
             label=f"{context.label_prefix} · {param_name}",
             source=context.scope,
             category=context.scope,
             value_type=value_type,
-            default_value=default_normalized,
+            default_value=default_actual,
             range_hint=hint,
             help_text=doc,
             vector_group=None,
         )
-
-        resolved_normalized = self._register_scalar(descriptor, normalized_value)
-        return denormalize_scalar(resolved_normalized, hint, value_type=value_type)
+        actual_value = default_actual if source == "default" else raw_value
+        return self._register_scalar(descriptor, actual_value)
 
     def _resolve_vector(
         self,
@@ -252,7 +212,7 @@ class ParameterValueResolver:
             return tuple(results)
 
         descriptors: list[ParameterDescriptor] = []
-        normalized_values: list[float] = []
+        actual_values: list[float] = []
 
         for idx in range(length):
             suffix = _VECTOR_SUFFIX[idx] if idx < len(_VECTOR_SUFFIX) else str(idx)
@@ -270,22 +230,11 @@ class ParameterValueResolver:
                 has_default=has_default,
                 hint=component_hint,
             )
-            default_component_normalized = normalize_scalar(
-                default_component_actual,
-                component_hint,
-                value_type="float",
-            )
-
             if source == "default" or not provided_values:
-                normalized_component = default_component_normalized
+                actual_component = default_component_actual
             else:
-                component_input = (
+                actual_component = (
                     provided_values[idx] if idx < len(provided_values) else provided_values[-1]
-                )
-                normalized_component = normalize_scalar(
-                    component_input,
-                    component_hint,
-                    value_type="float",
                 )
 
             descriptor = ParameterDescriptor(
@@ -294,21 +243,17 @@ class ParameterValueResolver:
                 source=context.scope,
                 category=context.scope,
                 value_type="float",
-                default_value=default_component_normalized,
+                default_value=default_component_actual,
                 range_hint=component_hint,
                 help_text=doc,
                 vector_group=descriptor_id,
             )
 
             descriptors.append(descriptor)
-            normalized_values.append(normalized_component)
+            actual_values.append(float(actual_component))
 
-        resolved_components = self._register_vector(descriptors, normalized_values)
-        actual_components = [
-            denormalize_scalar(value, descriptor.range_hint, value_type="float")
-            for descriptor, value in zip(descriptors, resolved_components)
-        ]
-        return tuple(actual_components)
+        resolved_components = self._register_vector(descriptors, actual_values)
+        return tuple(resolved_components)
 
     def _resolve_passthrough(
         self,
@@ -336,9 +281,9 @@ class ParameterValueResolver:
         self._store.register(descriptor, value)
         return self._store.resolve(descriptor.id, value)
 
-    def _register_scalar(self, descriptor: ParameterDescriptor, value: float) -> float:
+    def _register_scalar(self, descriptor: ParameterDescriptor, value: Any) -> Any:
         self._store.register(descriptor, value)
-        return float(self._store.resolve(descriptor.id, value))
+        return self._store.resolve(descriptor.id, value)
 
     def _register_vector(
         self,
@@ -351,22 +296,6 @@ class ParameterValueResolver:
             resolved_value = self._store.resolve(descriptor.id, value)
             resolved.append(float(resolved_value))
         return resolved
-
-    def _normalized_input_from_raw(
-        self,
-        raw_value: Any,
-        hint: RangeHint,
-        *,
-        value_type: ValueType,
-    ) -> float:
-        # 入力は常に「正規化値」として扱う（クランプしない）
-        if isinstance(raw_value, bool):
-            return 1.0 if raw_value else 0.0
-
-        if not isinstance(raw_value, (int, float)):
-            raise TypeError(f"正規化できない値です: {raw_value!r}")
-
-        return float(raw_value)
 
     @staticmethod
     def _merge_with_defaults(
@@ -477,39 +406,34 @@ class ParameterValueResolver:
         max_value = self._extract_meta_component(meta.get("max"), component_index)
         step = self._extract_meta_component(meta.get("step"), component_index)
 
-        default_min, default_max, default_step = self._default_mapped_range(value_type)
-        mapped_min = min_value if min_value is not None else None
-        mapped_max = max_value if max_value is not None else None
-        mapped_step = step if step is not None else default_step
+        default_min, default_max, default_step = self._default_actual_range(value_type)
+        actual_min = min_value if min_value is not None else None
+        actual_max = max_value if max_value is not None else None
+        actual_step = step if step is not None else default_step
 
-        if mapped_min is None or mapped_max is None:
+        if actual_min is None or actual_max is None:
             inferred_min, inferred_max = self._infer_range_from_default(
                 default_value=default_value,
                 value_type=value_type,
                 fallback_min=default_min,
                 fallback_max=default_max,
             )
-            if mapped_min is None:
-                mapped_min = inferred_min
-            if mapped_max is None:
-                mapped_max = inferred_max
+            if actual_min is None:
+                actual_min = inferred_min
+            if actual_max is None:
+                actual_max = inferred_max
 
-        if mapped_min == mapped_max:
+        if actual_min == actual_max:
             if value_type == "int":
-                mapped_max = int(mapped_min) + 1
+                actual_max = int(actual_min) + 1
             else:
-                mapped_max = float(mapped_min) + 1.0
-
-        normalized_min, normalized_max, normalized_step = self._default_normalized_range(value_type)
+                actual_max = float(actual_min) + 1.0
 
         return RangeHint(
-            min_value=normalized_min,
-            max_value=normalized_max,
-            step=normalized_step,
+            min_value=float(actual_min),
+            max_value=float(actual_max),
+            step=actual_step,
             scale="linear",
-            mapped_min=mapped_min,
-            mapped_max=mapped_max,
-            mapped_step=mapped_step,
         )
 
     @staticmethod
@@ -528,21 +452,13 @@ class ParameterValueResolver:
         return None
 
     @staticmethod
-    def _default_mapped_range(
+    def _default_actual_range(
         value_type: ValueType,
     ) -> tuple[float | int, float | int, float | int | None]:
         if value_type == "bool":
             return 0, 1, 1
         if value_type == "int":
             return 0, 1, 1
-        return 0.0, 1.0, None
-
-    @staticmethod
-    def _default_normalized_range(
-        value_type: ValueType,
-    ) -> tuple[float, float, float | None]:
-        if value_type == "bool":
-            return 0.0, 1.0, 1.0
         return 0.0, 1.0, None
 
     @staticmethod
@@ -584,8 +500,8 @@ class ParameterValueResolver:
     ) -> float:
         if has_default and idx < len(default_values):
             return float(default_values[idx])
-        lo = hint.mapped_min
-        hi = hint.mapped_max
+        lo = hint.min_value
+        hi = hint.max_value
         if lo is not None and hi is not None:
             return float((float(lo) + float(hi)) / 2.0)
         if lo is not None:

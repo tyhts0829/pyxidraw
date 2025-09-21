@@ -43,7 +43,6 @@ def offset(
           300mm 正方キャンバス中央の立方体に適用した静止画で、明瞭かつ過度でない見た目。
     """
     coords, offsets = g.as_arrays(copy=False)
-    # 0..1 → 実距離（mm）へ写像（提案5: 一貫写像）
     MAX_DISTANCE = 25.0
     if distance_mm is not None:
         actual_distance = float(distance_mm)
@@ -85,7 +84,7 @@ def offset(
     return Geometry(all_coords, np.array(new_offsets, dtype=np.int32))
 
 
-# UI/正規化のためのメタ情報（RangeHint 構築に使用）
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
 offset.__param_meta__ = {
     "distance": {"type": "number", "min": 0.0, "max": 25.0},
     "distance_mm": {"type": "number", "min": 0.0},
