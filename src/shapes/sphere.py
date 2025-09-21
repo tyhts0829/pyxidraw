@@ -285,7 +285,7 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 
 
 @shape
-def sphere(*, subdivisions: float = 2.0, sphere_type: float = 0.5, **_params: Any) -> Geometry:
+def sphere(*, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any) -> Geometry:
     """半径1の球を生成します（関数版）。
 
     引数:

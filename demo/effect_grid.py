@@ -22,17 +22,18 @@ from typing import Any, Mapping
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import inspect
+
 # 登録の副作用を有効にする
 import effects  # noqa: F401  # register all effects
 from api import G, run  # type: ignore  # after sys.path tweak
 from effects.registry import get_effect, list_effects
 from engine.core.geometry import Geometry
-import inspect
 
 # === 調整可能な定数 =======================================================
 # 参照形状（全セルで同じ形状を使う）
 REFERENCE_SHAPE = "polyhedron"
-REFERENCE_SHAPE_PARAMS: dict[str, Any] = {"polygon_type": "dodecahedron"}
+REFERENCE_SHAPE_PARAMS: dict[str, Any] = {"polygon_type": 20}
 
 # レイアウト
 CELL_SIZE = (100.0, 100.0)  # (w, h)
@@ -127,12 +128,13 @@ def _initialize_grid() -> None:
         cx = ox + PADDING + inner_w * 0.5
         cy = oy + PADDING + inner_h * 0.5
 
-        # エフェクト適用（セル中心へフィット）
+        # エフェクト適用（再フィットなし・はみ出し許容）。
+        # 参照形状 `base` はセル内の内枠中心 (inner_w*0.5, inner_h*0.5) に配置済み。
+        # エフェクトはその中心を基準に作用するため、結果をセル中心 (cx, cy) へ平行移動のみ行う。
         try:
             fn = get_effect(name)
             params = _build_params(name, fn)
-            effected = fn(base, **params)
-            effected = _fit_into(effected, width=inner_w, height=inner_h, center=(cx, cy))
+            effected = fn(base, **params).translate(cx - inner_w * 0.5, cy - inner_h * 0.5, 0.0)
         except Exception:
             effected = G.empty()
 
