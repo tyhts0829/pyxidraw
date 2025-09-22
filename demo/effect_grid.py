@@ -33,7 +33,8 @@ from engine.core.geometry import Geometry
 # === 調整可能な定数 =======================================================
 # 参照形状（全セルで同じ形状を使う）
 REFERENCE_SHAPE = "polyhedron"
-REFERENCE_SHAPE_PARAMS: dict[str, Any] = {"polygon_type": 20}
+# 4 = icosahedron（_TYPE_ORDER の 0..4 に対応）
+REFERENCE_SHAPE_PARAMS: dict[str, Any] = {"polygon_index": 4}
 
 # レイアウト
 CELL_SIZE = (100.0, 100.0)  # (w, h)

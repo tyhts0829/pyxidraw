@@ -13,7 +13,7 @@
 - `capsule(radius, height, ...)`: カプセル形状。
 - `cylinder(radius, height, segments)`: 円柱。
 - `cone(radius, height, segments)`: 円錐。
-- `polyhedron(polygon_type)`: 正多面体。
+- `polyhedron(polygon_index)`: 正多面体（0=tetra/1=hexa/2=octa/3=dodeca/4=icosa）。
 - `lissajous(freq_x, freq_y, ...)`: 2D/3D リサージュ曲線。
 - `text(text, font_size, ...)`: フォント輪郭から線分を生成。
 - `asemic_glyph(...)`: 擬似文字。

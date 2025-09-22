@@ -14,26 +14,6 @@ _vertices_cache: dict[str, list[np.ndarray]] | None = None
 # UI/インデックス用の型順序（0..N-1）
 _TYPE_ORDER = ["tetrahedron", "hexahedron", "octahedron", "dodecahedron", "icosahedron"]
 
-_TYPE_MAP = {
-    "tetrahedron": "tetrahedron",
-    4: "tetrahedron",
-    "tetra": "tetrahedron",
-    "hexahedron": "hexahedron",
-    6: "hexahedron",
-    "hexa": "hexahedron",
-    "cube": "hexahedron",
-    "box": "hexahedron",
-    "octahedron": "octahedron",
-    8: "octahedron",
-    "octa": "octahedron",
-    "dodecahedron": "dodecahedron",
-    12: "dodecahedron",
-    "dodeca": "dodecahedron",
-    "icosahedron": "icosahedron",
-    20: "icosahedron",
-    "icosa": "icosahedron",
-}
-
 
 def _load_vertices_data() -> None:
     global _vertices_cache
@@ -62,35 +42,21 @@ def _load_vertices_data() -> None:
 
 @shape
 def polyhedron(
-    polygon_type: str | int = "tetrahedron",
     *,
     polygon_index: int = 0,
     **params: Any,
 ) -> Geometry:
     """正多面体を生成します。
 
-    優先順位:
-    1) polygon_index（0 以外が指定されていれば最優先）
-    2) polygon_index が 0 のときのみ polygon_type（別名/面数整数にも対応）
-    3) デフォルト（tetrahedron）
+    選択は `polygon_index`（0..N-1）で行う。0=tetrahedron, 1=hexahedron, 2=octahedron,
+    3=dodecahedron, 4=icosahedron。範囲外はクランプする。
     """
-    # 1) polygon_index 優先（0 以外）
-    if polygon_index is not None and int(polygon_index) != 0:
-        idx = int(polygon_index)
-        if idx < 0:
-            idx = 0
-        elif idx >= len(_TYPE_ORDER):
-            idx = len(_TYPE_ORDER) - 1
-        shape_name = _TYPE_ORDER[idx]
-    else:
-        # 2) polygon_index が 0 の場合のみ polygon_type を参照
-        if polygon_type is None:
-            # 明示なしのときはデフォルト（tetrahedron）
-            shape_name = _TYPE_ORDER[0]
-        else:
-            if polygon_type not in _TYPE_MAP:
-                raise ValueError(f"polygon_type が不正です: {polygon_type}")
-            shape_name = _TYPE_MAP[polygon_type]
+    idx = int(polygon_index)
+    if idx < 0:
+        idx = 0
+    elif idx >= len(_TYPE_ORDER):
+        idx = len(_TYPE_ORDER) - 1
+    shape_name = _TYPE_ORDER[idx]
     _load_vertices_data()
     if _vertices_cache and shape_name in _vertices_cache:
         vertices_list = _vertices_cache[shape_name]
@@ -181,9 +147,6 @@ def _generate_simple_polyhedron(shape_name: str) -> list[np.ndarray]:
 
 
 polyhedron.__param_meta__ = {
-    "polygon_type": {
-        "choices": _TYPE_ORDER,
-    },
     "polygon_index": {
         "type": "integer",
         "min": 0,
