@@ -19,6 +19,8 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 
+from .registry import effect
+
 
 def _boldify_coords_with_offsets(
     coords: np.ndarray, offsets: np.ndarray, boldness: float
@@ -107,6 +109,7 @@ def _boldify_coords_with_offsets(
     return out_coords, out_offsets
 
 
+@effect()
 def boldify(g: Geometry, *, boldness: float = 0.5) -> Geometry:
     """平行線を追加して線を太く見せる（純関数）。"""
     coords, offsets = g.as_arrays(copy=False)

@@ -60,6 +60,10 @@ class _PipelineBuilder(Protocol):
             scale: vec3, range [(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)]
         """
         ...
+    def boldify(self, *, boldness: float = ..., **_params: Any) -> _PipelineBuilder:
+        """        平行線を追加して線を太く見せる（純関数）。
+        """
+        ...
     # meta: intensity (type=number, range=[0.0, 10.0])
     # meta: subdivisions (type=integer, range=[0, 10])
     def collapse(self, *, intensity: float = ..., subdivisions: float = ..., **_params: Any) -> _PipelineBuilder:
