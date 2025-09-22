@@ -335,5 +335,5 @@ text.__param_meta__ = {
     "font_size": {"type": "number", "min": 5, "max": 50},
     "font": {"type": "string"},
     "font_number": {"type": "integer", "min": 0, "max": 10},
-    "align": {"type": "string", "choices": ["left", "center", "right"]},
+    "align": {"choices": ["left", "center", "right"]},
 }

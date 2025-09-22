@@ -21,6 +21,7 @@
 - vector は x/y/z/w に分割して Descriptor を発行し、group を `vector_group` に設定。
 - 既定値がない数値は Range 推定（中心±span）で安全側レンジを作る。
 - 入力値のクランプは行わない。UI 表示（バー/トラック）に限り比率を 0..1 へクランプして描画してよい。
+- enum 判定は `__param_meta__` の `choices` 有無で行う（`type: "string"` は自由入力テキストのヒント）。
 
 ## Do/Don't
 - Do: UI/非UI の双方で `resolve_without_runtime` を使えるよう、副作用を持たない

@@ -131,5 +131,5 @@ extrude.__param_meta__ = {
     "distance": {"type": "number", "min": 0.0, "max": MAX_DISTANCE},
     "scale": {"type": "number", "min": 0.0, "max": MAX_SCALE},
     "subdivisions": {"type": "integer", "min": 0, "max": MAX_SUBDIVISIONS, "step": 1},
-    "center_mode": {"type": "string", "choices": ["origin", "auto"]},
+    "center_mode": {"choices": ["origin", "auto"]},
 }

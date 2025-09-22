@@ -117,7 +117,6 @@ class _PipelineBuilder(Protocol):
     # meta: distance (type=number, range=[0.0, 200.0])
     # meta: scale (type=number, range=[0.0, 3.0])
     # meta: subdivisions (type=integer, range=[0, 5])
-    # meta: center_mode (type=string)
     # choices: center_mode in ['origin', 'auto']
     def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: float = ..., center_mode: str = ..., **_params: Any) -> _PipelineBuilder:
         """
@@ -128,10 +127,9 @@ class _PipelineBuilder(Protocol):
             distance: number, range [0.0, 200.0]
             scale: number, range [0.0, 3.0]
             subdivisions: integer, range [0, 5]
-            center_mode: string, choices { 'origin', 'auto' }
+            center_mode: choices { 'origin', 'auto' }
         """
         ...
-    # meta: mode (type=string)
     # choices: mode in ['lines', 'cross', 'dots']
     # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
     # meta: density (type=number, range=[0.0, 100])
@@ -140,12 +138,11 @@ class _PipelineBuilder(Protocol):
         閉じた形状をハッチング/ドットで塗りつぶし（純関数）。
 
         引数:
-            mode: string, choices { 'lines', 'cross', 'dots' }
+            mode: choices { 'lines', 'cross', 'dots' }
             angle_rad: number, range [0.0, 6.283185307179586]
             density: number, range [0.0, 100]
         """
         ...
-    # meta: join (type=string)
     # choices: join in ['mitre', 'round', 'bevel']
     # meta: segments_per_circle (type=integer, range=[1, 100])
     # meta: distance (type=number, range=[0.0, 25.0])
@@ -154,7 +151,7 @@ class _PipelineBuilder(Protocol):
         Shapely を用いて輪郭をオフセット（膨張/収縮）。
 
         引数:
-            join: string, choices { 'mitre', 'round', 'bevel' }
+            join: choices { 'mitre', 'round', 'bevel' }
             segments_per_circle: integer, range [1, 100]
             distance: number, range [0.0, 25.0]
         """
@@ -243,7 +240,6 @@ class _PipelineBuilder(Protocol):
         """
         ...
     # meta: angle (type=number, range=[0.0, 360.0])
-    # meta: axis (type=string)
     # choices: axis in ['x', 'y', 'z']
     def twist(self, *, angle: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder:
         """

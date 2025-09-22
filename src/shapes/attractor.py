@@ -203,7 +203,6 @@ class DeJongAttractor:
 
 attractor.__param_meta__ = {
     "attractor_type": {
-        "type": "string",
         "choices": ["aizawa", "lorenz", "rossler", "three_scroll", "dejong"],
     },
     "points": {"type": "integer", "min": 100, "max": 20000},

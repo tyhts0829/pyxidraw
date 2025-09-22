@@ -87,5 +87,5 @@ def twist(g: Geometry, *, angle: float = 60.0, axis: str = "y") -> Geometry:
 
 twist.__param_meta__ = {
     "angle": {"type": "number", "min": 0.0, "max": 360.0},
-    "axis": {"type": "string", "choices": ["x", "y", "z"]},
+    "axis": {"choices": ["x", "y", "z"]},
 }

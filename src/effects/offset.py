@@ -280,6 +280,6 @@ def _scaling(vertices_list: list[np.ndarray], scale_factor: float) -> list[np.nd
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
 offset.__param_meta__ = {
     "distance": {"type": "number", "min": 0.0, "max": 25.0},
-    "join": {"type": "string", "choices": ["mitre", "round", "bevel"]},
+    "join": {"choices": ["mitre", "round", "bevel"]},
     "segments_per_circle": {"type": "integer", "min": 1, "max": 100},
 }

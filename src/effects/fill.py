@@ -209,7 +209,7 @@ def fill(
 
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
 fill.__param_meta__ = {
-    "mode": {"type": "string", "choices": ["lines", "cross", "dots"]},
+    "mode": {"choices": ["lines", "cross", "dots"]},
     "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES},
     "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
 }

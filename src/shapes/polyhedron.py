@@ -182,7 +182,6 @@ def _generate_simple_polyhedron(shape_name: str) -> list[np.ndarray]:
 
 polyhedron.__param_meta__ = {
     "polygon_type": {
-        "type": "string",
         "choices": _TYPE_ORDER,
     },
     "polygon_index": {
