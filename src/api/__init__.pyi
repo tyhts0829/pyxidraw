@@ -147,15 +147,15 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: join (type=string)
     # choices: join in ['mitre', 'round', 'bevel']
-    # meta: segments_per_circle (type=integer, range=[1, 1000])
+    # meta: segments_per_circle (type=integer, range=[1, 100])
     # meta: distance (type=number, range=[0.0, 25.0])
     def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        Shapely を用いて輪郭をオフセット。
+        Shapely を用いて輪郭をオフセット（膨張/収縮）。
 
         引数:
             join: string, choices { 'mitre', 'round', 'bevel' }
-            segments_per_circle: integer, range [1, 1000]
+            segments_per_circle: integer, range [1, 100]
             distance: number, range [0.0, 25.0]
         """
         ...

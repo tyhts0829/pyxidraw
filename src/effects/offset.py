@@ -40,7 +40,7 @@ def offset(
     segments_per_circle: int = 12,  # shapelyのresolutionに相当（既定値を上げて円滑さを確保）
     distance: float = 5.0,
 ) -> Geometry:
-    """Shapely を用いて輪郭をオフセット。
+    """Shapely を用いて輪郭をオフセット（膨張/収縮）。
 
     Parameters
     ----------
@@ -49,17 +49,12 @@ def offset(
     join : str, default 'round'
         角の処理。`'mitre'|'round'|'bevel'` を指定。
     segments_per_circle : int, default 12
-        円弧近似の分割数（Shapely の resolution 相当）。
-    distance : float, default 15.0
-        オフセット距離（mm）。
+        円弧近似の分割数（Shapely の `resolution` に相当）。
+    distance : float, default 5.0
+        オフセット距離（mm）。0 で no-op。負値で収縮、正値で膨張。
     """
     coords, offsets = g.as_arrays(copy=False)
-    MAX_DISTANCE = 25.0
     actual_distance = float(distance)
-    if actual_distance < 0.0:
-        actual_distance = 0.0
-    if actual_distance > MAX_DISTANCE:
-        actual_distance = MAX_DISTANCE
     if actual_distance == 0:
         return Geometry(coords.copy(), offsets.copy())
 
@@ -92,17 +87,27 @@ def offset(
     return Geometry(all_coords, np.array(new_offsets, dtype=np.int32))
 
 
-# UI 表示のためのメタ情報（RangeHint 構築に使用）
-offset.__param_meta__ = {
-    "distance": {"type": "number", "min": 0.0, "max": 25.0},
-    "join": {"type": "string", "choices": ["mitre", "round", "bevel"]},
-    "segments_per_circle": {"type": "integer", "min": 1, "max": 1000},
-}
-
-
 def _buffer(
     vertices_list: list[np.ndarray], distance: float, join_style: str, resolution: int
 ) -> list[np.ndarray]:
+    """各ポリラインを XY 射影して `buffer` を適用し、3D に復元。
+
+    Parameters
+    ----------
+    vertices_list : list of ndarray
+        各要素が (N, 3) の頂点配列（1 ポリライン）。
+    distance : float
+        オフセット距離。負値で収縮、正値で膨張。0 の場合は入力をそのまま返す。
+    join_style : str
+        `'mitre'|'round'|'bevel'` を想定（Shapely の `join_style` に渡す）。
+    resolution : int
+        円弧近似分割数（Shapely の `resolution` へ渡す）。
+
+    Returns
+    -------
+    list of ndarray
+        `buffer` 結果から抽出した各ポリラインの (M, 3) 頂点配列。
+    """
     if distance == 0:
         return vertices_list
 
@@ -137,6 +142,28 @@ def _extract_vertices_from_polygon(
     rotation_matrix: np.ndarray,
     z_offset: float,
 ) -> list:
+    """Polygon/MultiPolygon から外環の頂点列を抽出し 3D に復元。
+
+    Parameters
+    ----------
+    new_vertices_list : list
+        出力先の頂点配列リスト（追記して返す）。
+    buffered_line : BaseGeometry
+        `Polygon` または `MultiPolygon` を想定。
+    rotation_matrix : ndarray
+        XY 射影前の姿勢へ戻す回転行列。
+    z_offset : float
+        XY 射影前の z 平行移動量。
+
+    Returns
+    -------
+    list
+        3D 復元後の頂点配列を追記した `new_vertices_list`。
+
+    Notes
+    -----
+    内環（holes）は現在無視し、外環（exterior）のみ抽出。
+    """
     if isinstance(buffered_line, Polygon):
         polygons = [buffered_line]
     else:
@@ -159,6 +186,24 @@ def _extract_vertices_from_line(
     rotation_matrix: np.ndarray,
     z_offset: float,
 ) -> list:
+    """LineString/MultiLineString から頂点列を抽出し 3D に復元。
+
+    Parameters
+    ----------
+    new_vertices_list : list
+        出力先の頂点配列リスト（追記して返す）。
+    buffered_line : BaseGeometry
+        `LineString` または `MultiLineString` を想定。
+    rotation_matrix : ndarray
+        XY 射影前の姿勢へ戻す回転行列。
+    z_offset : float
+        XY 射影前の z 平行移動量。
+
+    Returns
+    -------
+    list
+        3D 復元後の頂点配列を追記した `new_vertices_list`。
+    """
     if isinstance(buffered_line, LineString):
         lines = [buffered_line]
     else:
@@ -176,6 +221,20 @@ def _extract_vertices_from_line(
 
 
 def _close_curve(points: np.ndarray, threshold: float) -> np.ndarray:
+    """端点が閾値以内なら輪郭をクローズ。
+
+    Parameters
+    ----------
+    points : ndarray
+        (N, 3) 頂点配列。
+    threshold : float
+        始点と終点のユークリッド距離がこの値以下なら、始点を終端に複製して閉じる。
+
+    Returns
+    -------
+    ndarray
+        クローズ適用後の頂点配列。
+    """
     if len(points) < 2:
         return points
     start = points[0]
@@ -188,6 +247,25 @@ def _close_curve(points: np.ndarray, threshold: float) -> np.ndarray:
 
 
 def _scaling(vertices_list: list[np.ndarray], scale_factor: float) -> list[np.ndarray]:
+    """重心まわりの一様スケーリングを頂点列ごとに適用。
+
+    Parameters
+    ----------
+    vertices_list : list of ndarray
+        各要素が (N, 3) の頂点配列。
+    scale_factor : float
+        重心基準での拡大縮小率。
+
+    Returns
+    -------
+    list of ndarray
+        スケーリング後の頂点配列リスト。
+
+    Notes
+    -----
+    オフセット量とは独立に形状スケールを変える補正。幾何学的意味を変える可能性がある。
+    現在は `_buffer` の末尾で一括適用される。
+    """
     scaled_vertices_list = []
     for vertices in vertices_list:
         if len(vertices) == 0:
@@ -197,3 +275,11 @@ def _scaling(vertices_list: list[np.ndarray], scale_factor: float) -> list[np.nd
         scaled_vertices = (vertices - centroid) * scale_factor + centroid
         scaled_vertices_list.append(scaled_vertices)
     return scaled_vertices_list
+
+
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
+offset.__param_meta__ = {
+    "distance": {"type": "number", "min": 0.0, "max": 25.0},
+    "join": {"type": "string", "choices": ["mitre", "round", "bevel"]},
+    "segments_per_circle": {"type": "integer", "min": 1, "max": 100},
+}
