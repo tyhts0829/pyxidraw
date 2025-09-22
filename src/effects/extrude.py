@@ -27,7 +27,6 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
-
 MAX_DISTANCE = 200.0
 MAX_SCALE = 3.0
 MAX_SUBDIVISIONS = 5
@@ -37,13 +36,18 @@ MAX_SUBDIVISIONS = 5
 def extrude(
     g: Geometry,
     *,
-    direction: Vec3 = (0.0, 0.0, 1.0),
-    distance: float = 70.0,
-    scale: float = 1.05,
-    subdivisions: float = 2.0,
+    direction: Vec3 = (0.0, 0.0, 0.0),
+    distance: float = 10.0,
+    scale: float = 0.5,
+    subdivisions: float = 0,
     center_mode: Literal["origin", "auto"] = "auto",
 ) -> Geometry:
-    """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。"""
+    """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。
+
+    注意:
+        `direction` のノルムが 0（実質ゼロを含む）または `distance=0` の場合は
+        平行移動は行わず、スケールのみ適用する。
+    """
     coords, offsets = g.as_arrays(copy=False)
     if g.is_empty or offsets.size < 2:
         return Geometry(coords.copy(), offsets.copy())
@@ -57,10 +61,12 @@ def extrude(
         subdivisions_int = MAX_SUBDIVISIONS
 
     direction_vec = np.asarray(direction, dtype=np.float32)
-    norm = np.linalg.norm(direction_vec)
-    if norm == 0.0:
-        return Geometry(coords.copy(), offsets.copy())
-    extrude_vec = (direction_vec / norm) * np.float32(distance_scaled)
+    norm = float(np.linalg.norm(direction_vec))
+    if norm < 1e-9 or distance_scaled == 0.0:
+        # 平行移動ベクトルはゼロにし、スケールのみ適用（NaN 汚染を避ける）
+        extrude_vec = np.zeros(3, dtype=np.float32)
+    else:
+        extrude_vec = direction_vec * np.float32(distance_scaled / norm)
 
     # 入力ラインを抽出
     lines: list[np.ndarray] = []
@@ -100,19 +106,21 @@ def extrude(
             extruded_line = extruded_base * np.float32(scale_scaled)
         out_lines.append(extruded_line.astype(np.float32, copy=False))
         for j in range(len(line)):
-            seg = np.asarray([line[j], extruded_line[j]], dtype=np.float32)
-            out_lines.append(seg)
+            # 退化（ゼロ長）接続エッジは追加しない
+            if not np.allclose(line[j], extruded_line[j], atol=1e-8):
+                seg = np.asarray([line[j], extruded_line[j]], dtype=np.float32)
+                out_lines.append(seg)
 
     if not out_lines:
         return Geometry(coords.copy(), offsets.copy())
 
     new_coords = np.vstack(out_lines).astype(np.float32, copy=False)
-    new_offsets = [0]
+    new_offsets_list: list[int] = [0]
     vertex_count = 0
     for ln in out_lines:
         vertex_count += len(ln)
-        new_offsets.append(vertex_count)
-    new_offsets = np.asarray(new_offsets, dtype=np.int32)
+        new_offsets_list.append(vertex_count)
+    new_offsets = np.asarray(new_offsets_list, dtype=np.int32)
 
     return Geometry(new_coords, new_offsets)
 

@@ -111,7 +111,22 @@ def _boldify_coords_with_offsets(
 
 @effect()
 def boldify(g: Geometry, *, boldness: float = 0.5) -> Geometry:
-    """平行線を追加して線を太く見せる（純関数）。"""
+    """平行線を追加して線を太く見せる（純関数）。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    boldness : float, default 0.5
+        太さ（左右オフセット量の合計, mm）。
+        オフセットは XY のみで Z 成分は保持。
+    """
     coords, offsets = g.as_arrays(copy=False)
     new_coords, new_offsets = _boldify_coords_with_offsets(coords, offsets, float(boldness))
     return Geometry(new_coords, new_offsets)
+
+
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
+boldify.__param_meta__ = {
+    "boldness": {"type": "number", "min": 0.0, "max": 10.0},
+}

@@ -78,7 +78,7 @@ def _update_scale(current_scale: np.ndarray, scale: np.ndarray) -> np.ndarray:
     return current_scale * scale
 
 
-MAX_DUPLICATES = 10
+MAX_DUPLICATES = 25
 
 
 @effect()
@@ -166,7 +166,7 @@ repeat.__param_meta__ = {
         "min": (-math.pi, -math.pi, -math.pi),
         "max": (math.pi, math.pi, math.pi),
     },
-    "scale": {"type": "vec3", "min": (0.1, 0.1, 0.1), "max": (3.0, 3.0, 3.0)},
+    "scale": {"type": "vec3", "min": (0.5, 0.5, 0.5), "max": (1.5, 1.5, 1.5)},
     "pivot": {
         "type": "vec3",
         "min": (-300.0, -300.0, -300.0),
