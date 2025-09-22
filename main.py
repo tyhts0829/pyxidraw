@@ -20,8 +20,8 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
         return float(cc.get(i, default))
 
     t = t * c(9, 1.0) * 10
-    poly = G.sphere().scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-    pipe = E.pipeline.affine().build()
+    poly = G.polyhedron().scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+    pipe = E.pipeline.affine().offset().build()
     return pipe(poly)
 
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
-        render_scale=3,
+        render_scale=5,
         use_midi=True,
         use_parameter_gui=True,
         workers=6,

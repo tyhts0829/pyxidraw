@@ -62,7 +62,7 @@ def _load_vertices_data() -> None:
 
 @shape
 def polyhedron(
-    polygon_type: str | int | None = None,
+    polygon_type: str | int = "tetrahedron",
     *,
     polygon_index: int = 0,
     **params: Any,
@@ -70,26 +70,27 @@ def polyhedron(
     """正多面体を生成します。
 
     優先順位:
-    1) polygon_type（明示指定があれば最優先。別名/面数整数にも対応）
-    2) polygon_index（0..N-1 の整数インデックス）
-    3) デフォルト（0: tetrahedron）
+    1) polygon_index（0 以外が指定されていれば最優先）
+    2) polygon_index が 0 のときのみ polygon_type（別名/面数整数にも対応）
+    3) デフォルト（tetrahedron）
     """
-    # 1) polygon_type 明示指定（別名/面数整数含む）
-    if polygon_type is not None:
-        if polygon_type not in _TYPE_MAP:
-            raise ValueError(f"polygon_type が不正です: {polygon_type}")
-        shape_name = _TYPE_MAP[polygon_type]
-    else:
-        # 2) polygon_index（0..N-1）
-        if polygon_index is None:
+    # 1) polygon_index 優先（0 以外）
+    if polygon_index is not None and int(polygon_index) != 0:
+        idx = int(polygon_index)
+        if idx < 0:
             idx = 0
-        else:
-            idx = int(polygon_index)
-            if idx < 0:
-                idx = 0
-            elif idx >= len(_TYPE_ORDER):
-                idx = len(_TYPE_ORDER) - 1
+        elif idx >= len(_TYPE_ORDER):
+            idx = len(_TYPE_ORDER) - 1
         shape_name = _TYPE_ORDER[idx]
+    else:
+        # 2) polygon_index が 0 の場合のみ polygon_type を参照
+        if polygon_type is None:
+            # 明示なしのときはデフォルト（tetrahedron）
+            shape_name = _TYPE_ORDER[0]
+        else:
+            if polygon_type not in _TYPE_MAP:
+                raise ValueError(f"polygon_type が不正です: {polygon_type}")
+            shape_name = _TYPE_MAP[polygon_type]
     _load_vertices_data()
     if _vertices_cache and shape_name in _vertices_cache:
         vertices_list = _vertices_cache[shape_name]
