@@ -18,6 +18,8 @@ collapse エフェクト（線の崩し/しわ寄せ）
 from __future__ import annotations
 
 import math
+import os
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -143,6 +145,242 @@ def _collapse_numpy_v2(
     return out_coords, out_offsets
 
 
+# --- Numba optional acceleration -------------------------------------------------
+try:  # オプショナル依存（未導入時はフォールバック）
+    from numba import njit  # type: ignore
+
+    NUMBA_AVAILABLE = True
+except Exception:  # pragma: no cover - 未導入環境
+    NUMBA_AVAILABLE = False
+
+    def njit(*args: Any, **kwargs: Any):  # type: ignore[misc]
+        def _deco(fn: Any) -> Any:
+            return fn
+
+        return _deco
+
+
+def _collapse_count(
+    coords: np.ndarray,
+    offsets: np.ndarray,
+    divisions: int,
+) -> Tuple[int, int, int]:
+    """出力配列サイズと有効セグメント数を事前に数える（NumPy）。
+
+    戻り値
+    ------
+    total_lines : int
+        出力される独立ポリライン本数（サブセグメント + 端ケース）。
+    total_vertices : int
+        出力頂点数（float32 で確保）。
+    valid_seg_count : int
+        有効セグメント（有限かつ長さ>EPS）の本数。
+    """
+    n_lines = len(offsets) - 1
+    total_lines = 0
+    total_vertices = 0
+    valid_seg_count = 0
+
+    for li in range(n_lines):
+        v = coords[offsets[li] : offsets[li + 1]]
+        n = v.shape[0]
+        if n < 2:
+            total_lines += 1
+            total_vertices += n
+            continue
+        seg = v[1:] - v[:-1]
+        L2 = np.sum(seg.astype(np.float64) ** 2, axis=1)
+        L = np.sqrt(L2)
+        finite = np.isfinite(L)
+        mask = finite & (L > EPS)
+        n_valid = int(np.count_nonzero(mask))
+        n_invalid = int(np.count_nonzero(~mask))
+
+        valid_seg_count += n_valid
+        total_lines += n_valid * divisions + n_invalid
+        total_vertices += n_valid * (2 * divisions) + n_invalid * 2
+
+    return total_lines, total_vertices, valid_seg_count
+
+
+@njit(cache=True, fastmath=False)
+def _collapse_njit_fill(
+    coords64: np.ndarray,
+    offsets32: np.ndarray,
+    intensity64: float,
+    divisions: int,
+    t0: np.ndarray,
+    t1: np.ndarray,
+    cos_list: np.ndarray,
+    sin_list: np.ndarray,
+    out_coords32: np.ndarray,
+    out_offsets32: np.ndarray,
+) -> None:
+    vc = 0  # vertex cursor
+    oc = 1  # offset cursor（0 は 0 固定）
+    out_offsets32[0] = 0
+    idx = 0  # cos/sin 消費位置
+
+    n_lines = offsets32.shape[0] - 1
+    for li in range(n_lines):
+        start = int(offsets32[li])
+        end = int(offsets32[li + 1])
+        n = end - start
+        if n < 2:
+            # 頂点コピー（原状維持）
+            if n > 0:
+                for m in range(n):
+                    p = coords64[start + m]
+                    out_coords32[vc, 0] = float(p[0])
+                    out_coords32[vc, 1] = float(p[1])
+                    out_coords32[vc, 2] = float(p[2])
+                    vc += 1
+            out_offsets32[oc] = vc
+            oc += 1
+            continue
+
+        for j in range(n - 1):
+            a = coords64[start + j]
+            b = coords64[start + j + 1]
+            d0 = b[0] - a[0]
+            d1 = b[1] - a[1]
+            d2 = b[2] - a[2]
+            L = math.sqrt(d0 * d0 + d1 * d1 + d2 * d2)
+            if (not math.isfinite(L)) or (L <= EPS):
+                # 端点をそのまま出力
+                out_coords32[vc, 0] = float(a[0])
+                out_coords32[vc, 1] = float(a[1])
+                out_coords32[vc, 2] = float(a[2])
+                vc += 1
+                out_coords32[vc, 0] = float(b[0])
+                out_coords32[vc, 1] = float(b[1])
+                out_coords32[vc, 2] = float(b[2])
+                vc += 1
+                out_offsets32[oc] = vc
+                oc += 1
+                continue
+
+            invL = 1.0 / L
+            nmx = d0 * invL
+            nmy = d1 * invL
+            nmz = d2 * invL
+
+            # 参照軸（n と非平行）
+            refx = 0.0
+            refy = 0.0
+            refz = 1.0
+            if abs(nmz) >= 0.9:
+                refx = 1.0
+                refy = 0.0
+                refz = 0.0
+
+            # u = cross(n_main, ref) の正規化
+            ux = nmy * refz - nmz * refy
+            uy = nmz * refx - nmx * refz
+            uz = nmx * refy - nmy * refx
+            ul = math.sqrt(ux * ux + uy * uy + uz * uz)
+            if ul <= EPS:
+                ux, uy, uz = 1.0, 0.0, 0.0
+                ul = 1.0
+            inv_ul = 1.0 / ul
+            ux *= inv_ul
+            uy *= inv_ul
+            uz *= inv_ul
+
+            # v_basis = cross(n_main, u)
+            vx = nmy * uz - nmz * uy
+            vy = nmz * ux - nmx * uz
+            vz = nmx * uy - nmy * ux
+
+            # サブセグメント毎に書き込み
+            for k in range(divisions):
+                t0k = t0[k]
+                t1k = t1[k]
+
+                p0x = a[0] * (1.0 - t0k) + b[0] * t0k
+                p0y = a[1] * (1.0 - t0k) + b[1] * t0k
+                p0z = a[2] * (1.0 - t0k) + b[2] * t0k
+
+                p1x = a[0] * (1.0 - t1k) + b[0] * t1k
+                p1y = a[1] * (1.0 - t1k) + b[1] * t1k
+                p1z = a[2] * (1.0 - t1k) + b[2] * t1k
+
+                c = cos_list[idx]
+                s = sin_list[idx]
+                idx += 1
+
+                # noise = (c*u + s*v_basis) * intensity
+                nx = (c * ux + s * vx) * intensity64
+                ny = (c * uy + s * vy) * intensity64
+                nz = (c * uz + s * vz) * intensity64
+
+                out_coords32[vc, 0] = float(p0x + nx)
+                out_coords32[vc, 1] = float(p0y + ny)
+                out_coords32[vc, 2] = float(p0z + nz)
+                vc += 1
+                out_coords32[vc, 0] = float(p1x + nx)
+                out_coords32[vc, 1] = float(p1y + ny)
+                out_coords32[vc, 2] = float(p1z + nz)
+                vc += 1
+
+                out_offsets32[oc] = vc
+                oc += 1
+
+
+def _collapse_numba(
+    coords: np.ndarray,
+    offsets: np.ndarray,
+    intensity: float,
+    divisions: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Numba 経路で collapse を実行（フォールバック呼び出し元とは独立）。"""
+    if not NUMBA_AVAILABLE:
+        # セーフガード（理論上は呼ばれない）
+        return _collapse_numpy_v2(coords, offsets, intensity, divisions)
+
+    if coords.shape[0] == 0 or intensity == 0.0 or divisions <= 0:
+        return coords.copy(), offsets.copy()
+
+    # 事前カウント
+    total_lines, total_vertices, valid_seg_count = _collapse_count(coords, offsets, divisions)
+    if total_lines == 0:
+        return coords.copy(), offsets.copy()
+
+    # 出力配列の前方確保
+    out_coords = np.empty((total_vertices, 3), dtype=np.float32)
+    out_offsets = np.empty((total_lines + 1,), dtype=np.int32)
+
+    # 共有グリッド
+    t = np.linspace(0.0, 1.0, divisions + 1, dtype=np.float64)
+    t0 = t[:-1]
+    t1 = t[1:]
+
+    # 乱数を現行手順と同じ総量・順序で事前生成
+    rng = np.random.default_rng(0)
+    theta = rng.random(valid_seg_count * divisions) * (2.0 * math.pi)
+    cos_list = np.cos(theta)
+    sin_list = np.sin(theta)
+
+    # 入力の作業用 dtypes を整える
+    coords64 = coords.astype(np.float64, copy=False)
+    offsets32 = offsets.astype(np.int32, copy=False)
+
+    # JIT 本体で充填
+    _collapse_njit_fill(
+        coords64,
+        offsets32,
+        float(intensity),
+        int(divisions),
+        t0,
+        t1,
+        cos_list,
+        sin_list,
+        out_coords,
+        out_offsets,
+    )
+    return out_coords, out_offsets
+
+
 @effect()
 def collapse(
     g: Geometry,
@@ -160,12 +398,24 @@ def collapse(
         変位量（mm 相当）。0 で変化なし（no-op）。
     subdivisions : float, default 6.0
         細分回数（実数は丸めて整数に変換）。0 で変化なし（no-op）。
+    Notes
+    -----
+    - Numba が利用可能な環境では、同等出力を保ったまま `njit` による高速化を適用する。
+      未導入環境では NumPy 実装にフォールバックする（出力は同一）。
     """
     coords, offsets = g.as_arrays(copy=False)
     if coords.shape[0] == 0 or intensity == 0.0 or subdivisions <= 0.0:
         return Geometry(coords.copy(), offsets.copy())
     divisions = max(1, int(round(subdivisions)))
-    new_coords, new_offsets = _collapse_numpy_v2(coords, offsets, float(intensity), divisions)
+
+    # Numba の使用可否（存在時は既定で使用、環境変数で無効化可能）
+    use_numba_env = os.environ.get("PYX_USE_NUMBA", "1")
+    use_numba = NUMBA_AVAILABLE and use_numba_env not in {"0", "false", "False"}
+
+    if use_numba:
+        new_coords, new_offsets = _collapse_numba(coords, offsets, float(intensity), divisions)
+    else:
+        new_coords, new_offsets = _collapse_numpy_v2(coords, offsets, float(intensity), divisions)
     return Geometry(new_coords, new_offsets)
 
 
