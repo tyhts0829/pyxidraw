@@ -10,7 +10,13 @@ dash エフェクト（破線化）
 仕様/注意:
 - 端部は補間により部分ダッシュになり得る。全長が 0 または頂点数 < 2 の線は原線を保持。
 - 長さ単位は座標系の実寸（mm 相当）。
-- 実装は 2 パス（count/fill）+ 前方確保で Python ループを最小化（将来 njit しやすい形）。
+- `dash_length + gap_length <= 0` または非有限値は no-op（入力コピーを返す）。
+
+実装メモ（詳細設計）:
+- 2 パス（count/fill）+ 前方確保。端点探索・補間は配列化し、ラグド結合のみ最小限の Python ループ。
+- 弧長・補間は float64 で計算し、出力座標は float32 に統一。
+- 端点探索は `np.searchsorted(s, ·, side='left')` を使用。0 除算は `eps=1e-12` で回避。
+- 任意の Numba 加速に対応（存在時は既定で有効）。`PXD_USE_NUMBA_DASH=0` で無効化可能。
 """
 
 from __future__ import annotations
@@ -217,12 +223,16 @@ def dash(
     dash_length: float = 6.0,
     gap_length: float = 3.0,
 ) -> Geometry:
-    """連続線を破線に変換（純関数）。
+    """連続線を破線に変換。
 
-    備考:
-        - dash_length/gap_length は座標単位（mm 相当）。
-        - 線長に応じて端部のダッシュは補間されます（端は部分ダッシュになり得ます）。
-        - 既定値（6mm/3mm）は 300mm キャンバス中央の立方体（辺=150mm）で視認性と密度のバランスが良好です。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    dash_length : float, default 6.0
+        ダッシュ（描画区間）の長さ。
+    gap_length : float, default 3.0
+        ギャップ（非描画区間）の長さ。
     """
     coords, offsets = g.as_arrays(copy=False)
     if coords.shape[0] == 0:

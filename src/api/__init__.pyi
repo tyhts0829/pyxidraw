@@ -75,7 +75,7 @@ class _PipelineBuilder(Protocol):
     # meta: gap_length (type=number, range=[0.0, 100.0])
     def dash(self, *, dash_length: float = ..., gap_length: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        連続線を破線に変換（純関数）。
+        連続線を破線に変換。
 
         引数:
             dash_length: number, range [0.0, 100.0]
@@ -140,8 +140,7 @@ class _PipelineBuilder(Protocol):
     # choices: join in ['mitre', 'round', 'bevel']
     # meta: segments_per_circle (type=integer, range=[1, 1000])
     # meta: distance (type=number, range=[0.0, 25.0])
-    # meta: distance_mm (type=number, min=0.0)
-    def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., distance_mm: float | None = ..., **_params: Any) -> _PipelineBuilder:
+    def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         Shapely を使用したバッファ/オフセット（純関数）。
 
@@ -149,7 +148,6 @@ class _PipelineBuilder(Protocol):
             join: string, choices { 'mitre', 'round', 'bevel' }
             segments_per_circle: integer, range [1, 1000]
             distance: number, range [0.0, 25.0]
-            distance_mm: number, min 0.0
         """
         ...
     # meta: count (type=integer, range=[0, 10])

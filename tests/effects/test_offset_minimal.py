@@ -12,6 +12,6 @@ from engine.core.geometry import Geometry
 @pytest.mark.smoke
 def test_offset_distance_zero_is_identity() -> None:
     g = Geometry.from_lines([np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32)])
-    out = offset(g, distance_mm=0.0)
+    out = offset(g, distance=0.0)
     assert np.allclose(out.coords, g.coords)
     assert np.array_equal(out.offsets, g.offsets)

@@ -227,6 +227,3 @@ displace.__param_meta__ = {
     },
     "t_sec": {"type": "number", "min": 0.0, "max": 60.0},
 }
-
-
-# 後方互換クラスは廃止（関数APIのみ）

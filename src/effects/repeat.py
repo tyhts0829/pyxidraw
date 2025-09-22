@@ -22,10 +22,10 @@ repeat エフェクト（配列複製）
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from numba import njit
-
-import math
 
 from common.types import Vec3
 from engine.core.geometry import Geometry
@@ -86,9 +86,9 @@ def repeat(
     g: Geometry,
     *,
     count: int = 3,
-    offset: Vec3 = (12.0, 0.0, 0.0),
-    angles_rad_step: Vec3 = (0.0, 0.0, 0.0),
-    scale: Vec3 = (1.0, 1.0, 1.0),
+    offset: Vec3 = (0.0, 0.0, 0.0),
+    angles_rad_step: Vec3 = (0.1, 0.1, 0.1),
+    scale: Vec3 = (0.8, 0.8, 0.8),
     pivot: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
     """入力のコピーを配列状に生成（純関数）。

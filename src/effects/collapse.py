@@ -2,153 +2,145 @@
 collapse エフェクト（線の崩し/しわ寄せ）
 
 - 各線分を細分化し、小区間ごとに主方向と直交するランダムベクトルでオフセットして
-  「崩れた」「くしゃっとした」見た目を作ります。
-- ノイズはセグメントごとに独立に生成し、激しさは `intensity` で制御します。
+  「崩れた」「くしゃっとした」見た目を作る。
+- ノイズはサブセグメントごとに独立に生成し、激しさは `intensity` で制御する。
 
 主なパラメータ:
 - intensity: 変位量（mm 相当, 0–10 推奨）。
 - subdivisions: 細分回数（0–10, 0 で未細分化）。
 
 特性/注意:
-- 細分化を増やすと鋸歯状の微細な揺らぎが増え、頂点数も増加します。
-- 直線長が極端に短い場合やゼロ長はスキップされます。
+- 細分化を増やすと微細な揺らぎが増え、頂点数も増加する。
+- 細分化後にオフセットを与えた各サブセグメントは互いに接続しない（各 2 頂点の独立ポリライン）。
+- 直線長が極端に短い場合やゼロ長は原状維持で独立ポリラインとして出力。
 """
 
 from __future__ import annotations
 
+import math
 import numpy as np
-from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 
 from .registry import effect
 
 
-@njit(fastmath=True, cache=True)
-def _subdivide_line(start: np.ndarray, end: np.ndarray, divisions: int) -> np.ndarray:
-    """線分を指定された分割数で細分化します。"""
-    if divisions <= 1:
-        points = np.empty((2, 3), dtype=np.float32)
-        points[0] = start
-        points[1] = end
-        return points
-
-    # 細分化されたポイントを生成
-    t_values = np.linspace(0, 1, divisions + 1)
-    points = np.empty((divisions + 1, 3), dtype=np.float32)
-
-    for i in range(divisions + 1):
-        t = t_values[i]
-        points[i] = start * (1 - t) + end * t
-
-    return points
+EPS = 1e-12
 
 
-def _apply_collapse_to_coords(
+def _collapse_numpy_v2(
     coords: np.ndarray,
     offsets: np.ndarray,
     intensity: float,
-    n_divisions: int,
-    seed: int = 0,
+    divisions: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """座標とオフセット配列にcollapseエフェクトを適用します。"""
-    if intensity == 0.0 or n_divisions == 0:
+    """collapse を分布互換のまま効率化（2 パス + 前方確保）。
+
+    - 非接続仕様（各サブセグメントは 2 頂点の独立ポリライン）を維持。
+    - 方向は平面内一様（theta ~ U[0, 2π)）。振幅は `intensity` 一定。
+    """
+    if coords.shape[0] == 0 or intensity == 0.0 or divisions <= 0:
         return coords.copy(), offsets.copy()
 
-    if len(coords) == 0:
+    rng = np.random.default_rng(0)
+    n_lines = len(offsets) - 1
+
+    # 第1パス: 出力本数/頂点数をカウント
+    total_lines = 0
+    total_vertices = 0
+    for li in range(n_lines):
+        v = coords[offsets[li] : offsets[li + 1]]
+        n = v.shape[0]
+        if n < 2:
+            total_lines += 1
+            total_vertices += n
+            continue
+        seg = v[1:] - v[:-1]
+        L = np.sqrt(np.sum(seg.astype(np.float64) ** 2, axis=1))
+        nz = L > EPS
+        total_lines += int(np.count_nonzero(nz)) * divisions + int(np.count_nonzero(~nz))
+        total_vertices += (
+            int(np.count_nonzero(nz)) * (2 * divisions) + int(np.count_nonzero(~nz)) * 2
+        )
+
+    if total_lines == 0:
         return coords.copy(), offsets.copy()
 
-    np.random.seed(seed)
+    # 第2パス: 充填
+    out_coords = np.empty((total_vertices, 3), dtype=np.float32)
+    out_offsets = np.empty((total_lines + 1,), dtype=np.int32)
+    out_offsets[0] = 0
+    vc = 0
+    oc = 1
 
-    # 結果を格納するリスト
-    # 仕様変更: 細分化してオフセットした各線分は互いに接続しない。
-    # よって、各セグメントを長さ2の独立ポリラインとして蓄積する。
-    all_coords: list[np.ndarray] = []
-    all_offsets: list[np.ndarray] = []
+    # 共有 t グリッド
+    t = np.linspace(0.0, 1.0, divisions + 1, dtype=np.float64)
+    t0 = t[:-1]
+    t1 = t[1:]
 
-    # offsetsからポリラインを抽出
-    start_idx = 0
-    for end_idx in offsets:
-        if start_idx >= end_idx:
-            start_idx = end_idx
+    for li in range(n_lines):
+        v = coords[offsets[li] : offsets[li + 1]].astype(np.float64, copy=False)
+        n = v.shape[0]
+        if n < 2:
+            if n > 0:
+                out_coords[vc : vc + n] = v.astype(np.float32, copy=False)
+                vc += n
+            out_offsets[oc] = vc
+            oc += 1
             continue
 
-        vertices = coords[start_idx:end_idx]
+        for j in range(n - 1):
+            a = v[j]
+            b = v[j + 1]
+            d = b - a
+            L = float(np.sqrt(np.dot(d, d)))
+            if not np.isfinite(L) or L <= EPS:
+                out_coords[vc] = a.astype(np.float32)
+                vc += 1
+                out_coords[vc] = b.astype(np.float32)
+                vc += 1
+                out_offsets[oc] = vc
+                oc += 1
+                continue
 
-        if vertices.shape[0] < 2:
-            # 単一点の場合はそのまま追加（独立ポリライン1本として保持）
-            all_coords.append(vertices.astype(coords.dtype, copy=False))
-            all_offsets.append(np.array([vertices.shape[0]], dtype=offsets.dtype))
-            start_idx = end_idx
-            continue
+            n_main = d / L
+            # 参照軸（n と非平行）
+            ref = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+            if abs(n_main[2]) >= 0.9:
+                ref = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+            u = np.cross(n_main, ref)
+            ul = float(np.sqrt(np.dot(u, u)))
+            if ul <= EPS:
+                u = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+                ul = 1.0
+            u /= ul
+            v_basis = np.cross(n_main, u)
 
-        for i in range(vertices.shape[0] - 1):
-            start_point = vertices[i]
-            end_point = vertices[i + 1]
+            # サブセグメント端点（D 本分）
+            starts = a * (1.0 - t0[:, None]) + b * t0[:, None]
+            ends = a * (1.0 - t1[:, None]) + b * t1[:, None]
 
-            # 線分を細分化
-            subdivided = _subdivide_line(start_point, end_point, n_divisions)
+            # 平面内一様方向（角度一様）+ 一定振幅 intensity
+            theta = rng.random(divisions) * (2.0 * math.pi)
+            c = np.cos(theta)
+            s = np.sin(theta)
+            noise = (c[:, None] * u[None, :] + s[:, None] * v_basis[None, :]) * float(intensity)
 
-            # 細分化した各セグメントにノイズを適用
-            for j in range(subdivided.shape[0] - 1):
-                seg_start = subdivided[j]
-                seg_end = subdivided[j + 1]
+            # 書き込み（2 ストライド）
+            out_coords[vc : vc + 2 * divisions : 2] = (starts + noise).astype(
+                np.float32, copy=False
+            )
+            out_coords[vc + 1 : vc + 2 * divisions : 2] = (ends + noise).astype(
+                np.float32, copy=False
+            )
+            # offsets をサブセグメントごとに更新
+            out_offsets[oc : oc + divisions] = vc + 2 * (np.arange(divisions, dtype=np.int32) + 1)
+            vc += 2 * divisions
+            oc += divisions
 
-                # メイン方向を求める
-                main_dir = seg_end - seg_start
-                main_norm = np.linalg.norm(main_dir)
-                if main_norm < 1e-12:
-                    # 退避: 変形せず、そのまま1本の独立ポリラインとして追加
-                    segment = np.stack(
-                        [seg_start.astype(coords.dtype), seg_end.astype(coords.dtype)]
-                    )
-                    all_coords.append(segment)
-                    all_offsets.append(np.array([2], dtype=offsets.dtype))
-                    continue
-
-                norm_main_dir = main_dir / main_norm
-
-                # ノイズベクトルを生成
-                noise_vector = np.random.randn(3).astype(np.float32) / np.float32(5.0)
-
-                # ノイズをメイン方向と直交する方向に変換
-                ortho_dir = np.cross(norm_main_dir, noise_vector)
-                ortho_norm = np.linalg.norm(ortho_dir)
-                if ortho_norm < 1e-12:
-                    # 直交方向が得られない場合も非接続で保存
-                    segment = np.stack(
-                        [seg_start.astype(coords.dtype), seg_end.astype(coords.dtype)]
-                    )
-                    all_coords.append(segment)
-                    all_offsets.append(np.array([2], dtype=offsets.dtype))
-                    continue
-
-                ortho_dir = ortho_dir / ortho_norm
-
-                # ノイズを加える
-                noise = (ortho_dir * np.float32(intensity)).astype(np.float32)
-
-                # 変形された線分を追加（独立ポリライン2点）
-                noisy_start = (seg_start + noise).astype(coords.dtype, copy=False)
-                noisy_end = (seg_end + noise).astype(coords.dtype, copy=False)
-                segment = np.stack([noisy_start, noisy_end]).astype(coords.dtype, copy=False)
-                all_coords.append(segment)
-                all_offsets.append(np.array([2], dtype=offsets.dtype))
-
-        start_idx = end_idx
-
-    # すべての座標とオフセットを結合
-    if len(all_coords) == 0:
-        return coords.copy(), offsets.copy()
-
-    combined_coords = np.vstack(all_coords).astype(coords.dtype, copy=False)
-    lengths = np.concatenate(all_offsets)
-    # offsets は先頭に 0 を置き、以後は累積和（Geometry の不変条件）
-    combined_offsets = np.empty(lengths.size + 1, dtype=offsets.dtype)
-    combined_offsets[0] = 0
-    np.cumsum(lengths, out=combined_offsets[1:])
-
-    return combined_coords, combined_offsets
+    if oc < out_offsets.shape[0]:
+        out_offsets[oc:] = vc
+    return out_coords, out_offsets
 
 
 @effect()
@@ -164,12 +156,10 @@ def collapse(
     すなわち、元ポリライン内の細分セグメントは長さ2の独立ポリラインとして出力される。
     """
     coords, offsets = g.as_arrays(copy=False)
-    if len(coords) == 0 or intensity == 0.0 or subdivisions <= 0.0:
+    if coords.shape[0] == 0 or intensity == 0.0 or subdivisions <= 0.0:
         return Geometry(coords.copy(), offsets.copy())
     divisions = max(1, int(round(subdivisions)))
-    new_coords, new_offsets = _apply_collapse_to_coords(
-        coords, offsets, float(intensity), divisions
-    )
+    new_coords, new_offsets = _collapse_numpy_v2(coords, offsets, float(intensity), divisions)
     return Geometry(new_coords, new_offsets)
 
 
