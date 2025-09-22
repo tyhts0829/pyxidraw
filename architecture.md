@@ -57,8 +57,8 @@
     - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
   - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「パラメータ（`common.param_utils.params_to_tuple` による整形）の blake2b-64」を積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
-- パラメータ GUI
-  - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、独立ウィンドウでスライダー表示。
+- パラメータ GUI（Dear PyGui）
+  - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する。
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と Descriptor 登録を行い、GUI override を適用してから元の関数へ委譲（変換レイヤは廃止し、実値を扱う）。
   - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。

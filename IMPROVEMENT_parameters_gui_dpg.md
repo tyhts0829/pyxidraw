@@ -1,164 +1,161 @@
-# Parameters GUI: Dear PyGui 導入計画（詳細）
+# Parameters GUI: Dear PyGui 完全移行計画（最終案）
 
 目的
 
-- 既存の `pyglet` ベース UI を置き換え/併存し、見た目と操作性を向上しつつコード量を削減する。
-- 既存の `ParameterStore / ParameterDescriptor / RangeHint` をそのまま利用し、UI 実装のみを差し替える。
+- 既存の `pyglet` ベースのパラメータ GUI を Dear PyGui（DPG）へ完全移行し、見た目/操作性/保守性を向上する。
+- 既存の `ParameterStore / ParameterDescriptor / RangeHint` はそのまま利用し、値は実値（float/int/bool/vector）で受け取る。`__param_meta__` の min/max/step は RangeHint として表示レンジに反映（クランプは表示上のみ）。
 
 採用ライブラリ / 前提
 
 - Dear PyGui（即時モード GUI, GPU アクセラレーション, 豊富なウィジェット, テーマ/ドッキング）
-- 前提: dearpygui は導入済み（ネットワーク操作は不要）
+- 依存: `dearpygui`。CI/ヘッドレスでは import/起動ガードを実装し、落ちないこと。
 
-設計方針
+方針（完全移行）
 
-- UI バックエンドを差し替え可能にする薄い抽象（インタフェース）を導入。
-- `ParameterStore` の購読/更新を唯一のデータフローとし、UI は stateless に近い設計（即時モードに適合）。
-- 既存 `pyglet` 実装は当面温存し、環境変数/設定で DPG と切替（段階移行）。
+- 切替フラグや並存は行わない。`pyglet` 実装は削除し、DPG 実装へ一本化する。
+- `ParameterStore` の購読/更新を唯一のデータフローとし、UI は即時モード前提の stateless 設計に寄せる。
+- テスト/CI は DPG 依存箇所を headless でも import/生成/破棄できるよう最小限に留める（ビューポート非表示運用）。
 
-ファイル構成（予定）
+対象範囲
 
-- `src/engine/ui/parameters/dpg_backend.py`（新規）
-  - DpgParameterWindow（DPG 実装のウィンドウ）
-  - Descriptor→ ウィジェット生成マッピング、イベントハンドラ、テーマ適用
-- `src/engine/ui/parameters/window.py`（更新）
-  - バックエンド選択ロジック（env `PXD_UI_BACKEND=dpg|pyglet|stub`）
-- `src/engine/ui/parameters/__init__.py`（必要ならエクスポート追加）
-- `tests/ui/parameters/test_dpg_backend.py`（最小の生成/購読テスト、headless で import/構築のみ）
+- 本移行の対象は「パラメータ編集パネル」のみ。描画ウィンドウ（`engine.core.render_window`）は現状通り pyglet を継続利用する。
 
-機能要件（マッピング）
+最終ファイル構成（予定）
+
+- 新規: `src/engine/ui/parameters/dpg_window.py`
+  - `ParameterWindow`（DPG 実装）: 初期化/マウント/イベント/破棄
+  - Descriptor → DPG ウィジェット生成、購読/反映、テーマ適用
+- 置換: `src/engine/ui/parameters/window.py`
+  - 中身を DPG 実装へ差し替え（`ParameterWindow` をエクスポート）
+- 削除: `src/engine/ui/parameters/panel.py`（pyglet ウィジェット群）
+- 既存維持: `state.py`, `manager.py`, `controller.py`, `runtime.py`, `value_resolver.py`, `introspection.py`
+- テスト: `tests/ui/parameters/test_dpg_window.py`（新規・最小）/ 既存の `panel` 依存テストは移行/削除
+
+UI 仕様（DPG マッピング）
 
 - float/int
-  - DPG: `add_slider_float` / `add_slider_int`
-  - `RangeHint.min/max/step` と `ParameterDescriptor.default_value` を反映
-  - 値変更 →`store.set_override(id, value)`
+  - `add_slider_float` / `add_slider_int`。`RangeHint.min/max/step` を反映。内部値は実値を保持（変換なし）。
+  - 変更は `store.set_override(id, value)` に集約。
 - bool
-  - DPG: `add_checkbox`（テーマでトグル風にも）
+  - `add_checkbox`（見た目はテーマで最終調整）。
 - enum
-  - 選択肢<=5: `add_radio_button(items=choices)`
-  - 選択肢>5: `add_combo(items=choices)`
-  - 値変更 →`store.set_override`
+  - 選択肢 <= 5: `add_radio_button(items=choices)`、> 5: `add_combo(items=choices)`。
+  - 値は文字列で保持し、`store.set_override` で反映。
 - vector（x/y/z/w）
-  - 既存はコンポーネント分割済み（`vector_group` 付き Descriptor）
-  - DPG: 横並び配置（`add_slider_float` を 3/4 個）または `add_input_float3/4`
-  - ラベルはグループ見出しのみ、各コンポは短ラベル（x/y/z/w）
+  - `add_input_float3/4` もしくは横並びスライダを使用。グループ見出し＋短ラベル（x/y/z/w）。
 - グルーピング
-  - `collapsing_header` で `scope.name#index` 見出し（例: `affine#0`）
-  - 見出し下に各 param 行（上: ラベル, 下: ウィジェット）
-- 変更マーカー/Reset
-  - 値が `default_value` と異なる場合にラベル色/● ドット付与
-  - 右クリックメニュー: Reset（`store.clear_override` or `set_override(default)`）
+  - `add_collapsing_header` を使用し、`scope.name#index` を見出しにして配下へ各 param を並べる。
+- 変更マーカー / Reset
+  - 現在値 ≠ 既定値ならラベル色を変える/● 表示。右クリック context menu に Reset。
 - ツールチップ
-  - `help_text`（Descriptor）を hover で表示
-- ショートカット/操作性
-  - `←/→` で enum の移動、`1..9` で快速選択（Key handler）
-  - フィルタ入力（上部に検索ボックス）で param を絞り込み（後続）
-- テーマ/見た目
-  - 暗色テーマ（基本色/アクセント、角丸、パディング、フォント）
-  - Enum の radio/コンボのコントラスト調整
+  - `help_text` があれば `add_tooltip` で表示。
+- ショートカット
+  - `handler_registry` を用い、←/→ で enum 移動、1..9 でクイック選択（範囲外は無視）。
+- テーマ
+  - ダークテーマを既定とし、コントラスト/角丸/パディング/フォントを設定。
 
 イベント/データフロー
 
-- 描画: 起動時に Descriptor リストを走査してウィジェット生成
-- 変更通知: `ParameterStore.subscribe` で UI へ反映（`set_value`）
-- 入力: DPG コールバック →`store.set_override` へ集約
-- 更新間引き: UI 側は値差分のみ `set_value` して無限ループを回避
+- 初期化: `create_context` → ウィジェット定義 → `create_viewport`（非表示でも可） → `setup_dearpygui`。
+- UI → Store: 各ウィジェットの callback で `store.set_override`。
+- Store → UI: `store.subscribe` で差分のみ `dpg.set_value`。無限ループ回避のため同値更新は抑止。
+- 終了: `destroy_context`。テストではビューポートを開かず import/生成/破棄のみ実施。
 
-切替戦略
+実装チェックリスト（完全移行）
 
-- `src/engine/ui/parameters/window.py`
-  - 現状: `pyglet` or headless stub
-  - 追加: `if os.getenv("PXD_UI_BACKEND") == "dpg": from .dpg_backend import DpgParameterWindow as ParameterWindow`
-  - 既定は現状維持（pyglet）→ 移行期のリスク低減
+1. DPG ウィンドウの土台
 
-実装チェックリスト（段階導入）
+- [x] `dpg_window.py` 追加（`ParameterWindow`: `__init__/mount/set_visible/close`）。
+- [x] DPG の context/viewport/lifecycle ユーティリティを内包（pyglet 連携 or スレッド駆動）。
 
-1) バックエンド切替の土台
-- [ ] `src/engine/ui/parameters/dpg_backend.py` を新規作成（空の DpgParameterWindow 骨格: `__init__/set_visible/close`）
-- [ ] `src/engine/ui/parameters/window.py` にバックエンド選択を追加
-  - [ ] `PXD_UI_BACKEND` を参照し `dpg` の場合のみ DPG を import
-  - [ ] ImportError 時は安全に既存（pyglet or stub）へフォールバック
-- [ ] 既存コードの動作確認（未設定時は従来 UI 起動）
+2. 最小ウィジェット（float/int/bool/enum）
 
-2) 最小ウィジェット生成（float/int/bool/enum）
-- [ ] `DpgParameterWindow` に `mount(descriptors: list[ParameterDescriptor])` を実装
-- [ ] グルーピング: `collapsing_header` で `scope.name#index` を見出しに
-- [ ] float → `add_slider_float`（min/max/step を RangeHint から反映）
-- [ ] int → `add_slider_int`（step=1）
-- [ ] bool → `add_checkbox`（見た目は後でテーマ調整）
-- [ ] enum（choices あり）
-  - [ ] 候補数 <= 5 → `add_radio_button`
-  - [ ] 候補数 > 5 → `add_combo`
-- [ ] 生成と同時に `store.set_override(..., value=default)` は行わない（現在値は Store から取得）
+- [ ] Descriptor 群からウィジェットを生成（行レイアウト + collapsing header）。
+- [x] float/int: `min/max/step` を RangeHint から反映、内部値は実値。
+- [x] bool: `add_checkbox`。
+- [x] enum: 候補数で radio/combo を自動選択。
 
-3) Store 連携（単方向/双方向）
-- [ ] UI → Store: すべてのウィジェット `callback` で `store.set_override(id, value)` を呼ぶ
-- [ ] Store → UI: `store.subscribe` で `set_value(widget_id, value)` を反映（差分のみ）
-- [ ] `param_id -> dpg_item_id` のマップを持つ（辞書）
+3. Store 連携（双方向）
 
-4) 変更マーカー/Reset/ツールチップ
-- [ ] `default_value` と比較し、差分があればラベルに●（または色）を付与
-- [ ] 右クリックで Reset（`set_override(default)`）を提供（DPG の context menu）
-- [ ] `help_text` があれば `set_tooltip` を設定
+- [x] UI → Store: すべて callback で `set_override`。
+- [x] Store → UI: `subscribe` で `set_value`（差分のみ）。
+- [x] `param_id ↔ dpg_item_id` マップを保持。
 
-5) レイアウト/テーマ（最小）
-- [ ] ダークテーマとフォント/角丸/パディングの適用
-- [ ] enum の radio/コンボのコントラスト調整（選択時の視認性）
-- [ ] vector は当面“分割表示のまま”（横並びは後続）
+4. 変更マーカー / Reset / ツールチップ
 
-6) キー操作（最小）
-- [ ] enum に ←/→ で前後移動（radio でのインデックス操作 / combo の選択変更）
-- [ ] 数字キー 1..9 で上から n 番目を選択（範囲外は無視）
+- [ ] 既定値との差分をラベル装飾で表示。
+- [x] Reset: 取り止め（実装しない）。
+- [x] ツールチップ（help_text）: 非表示（実装しない）。
 
-7) ベクトル/複合（拡張）
-- [ ] `vector_group` を使い x/y/z/w を 1 行横並びで表現（`add_input_float3/4` or 横並びスライダ）
-- [ ] 軸ラベル（x/y/z/w）を小さく表示
+5. レイアウト/テーマ
 
-8) 仕上げ/安定化
-- [ ] 大量パラメータ時の更新間引き（同値更新回避）
-- [ ] ラベルの長文折返し/ツールチップ化
-- [ ] 例外ガード（DPG 例外時も落ちない）
+- [x] パディングのみ整備（WindowPadding/FramePadding/ItemSpacing）。
+- [x] enum の選択時コントラスト最適化（Radio/Selectable の色のみ調整）。
+- [ ] ダークテーマ/フォント/角丸は不採用。
 
-9) テスト/検証
-- [ ] headless でも import/生成→破棄が行える簡易スモーク（DPG 未導入環境では skip）
-- [ ] 代表パラメータ（float/int/bool/enum）の round-trip（UI→Store→UI）が成立する
-- [ ] `PXD_UI_BACKEND=dpg` と未設定（既存 UI）の両方で起動確認
+6. ベクトル/複合
 
-10) ドキュメント/整備
-- [ ] README/AGENTS に切替方法を 2-3 行追記（任意）
-- [ ] 変更ファイル限定の `ruff/black/isort` を実行
+- [x] `input_float3/4` または横並びスライダで x/y/z/w を 1 行化。
+- [ ] 軸ラベルの最小表示を実装。
 
-変更対象一覧
+7. ショートカット/操作性
 
-- 追加: `src/engine/ui/parameters/dpg_backend.py`
-- 更新: `src/engine/ui/parameters/window.py`（バックエンド切替）
-- 追加（任意）: `tests/ui/parameters/test_dpg_backend.py`
-- 変更なし: `ParameterStore/ValueResolver/Introspector`（既存 API 利用）
+- [ ] ←/→ で enum 移動、1..9 でクイック選択。
+
+8. 安定化
+
+- [ ] 大量パラメータ時の更新間引き（同値更新抑止）。
+- [ ] 長文ラベルの折返し/ツールチップ化。
+- [ ] 例外ガード（DPG 側の例外でも落とさない）。
+
+9. 削除/置換（完全移行）
+
+- [x] `src/engine/ui/parameters/window.py` の実装を DPG へ差し替え。
+- [ ] `src/engine/ui/parameters/panel.py` を削除（参照テストも整理）。
+- [ ] `tests/ui/parameters/test_slider_widget.py` 等の pyglet 依存テストを削除または DPG 版に移行。
+
+10. テスト/CI
+
+- [ ] headless で import/生成/破棄のみ行うスモークを追加（DPG 未導入環境は skip）。
+- [ ] 代表型（float/int/bool/enum/vector）の round-trip（UI→Store→UI）テスト。
+
+11. ドキュメント/整備
+
+- [x] `README/AGENTS/architecture.md` に「パラメータ GUI は DPG」を明記し差分更新。
+- [x] 変更ファイル限定で `ruff/black/isort/mypy` を通す。
+
+変更対象一覧（最終）
+
+- 追加: `src/engine/ui/parameters/dpg_window.py`
+- 置換: `src/engine/ui/parameters/window.py`（DPG 実装に差し替え）
+- 削除: `src/engine/ui/parameters/panel.py`
+- 更新: `tests/ui/parameters/*`（pyglet 依存の削除/移行）
+- 変更なし: `ParameterStore/ValueResolver/Introspector`（公開 API は維持）
 
 リスクと緩和
 
-- 依存追加（dearpygui）が重い: 段階導入と環境変数での opt-in。CI では import-guard で回避
-- 二重実装の保守: バックエンド抽象を薄くして重複ロジックを最小化
-- パフォーマンス: 大量パラメータ時の create/update をバッチ化（DPG は高速だが更新間引きは実装）
+- GPU/依存環境差: headless/CI ではビューポート非表示 + import ガードで回避。
+- 互換性: 既存パラメータ仕様（実値/RangeHint）は不変。UI 層のみ変更。
+- パフォーマンス: create/update はまとめて実行し、差分更新で負荷を低減。
 
 受け入れ条件（DoD）
 
-- 既存機能（float/int/bool/enum/vector/グループ/Reset/ツールチップ）が DPG で再現
-- `PXD_UI_BACKEND=dpg` で新 UI が起動し、未設定では既存 UI のまま
-- 変更ファイルに対する `ruff/black/isort` 緑
-- headless/CI でも import 失敗しない（guard 済み）
+- 既存機能（float/int/bool/enum/vector/グループ/Reset/ツールチップ/ショートカット）を DPG で再現。
+- 既定起動で DPG パラメータウィンドウが表示される（切替フラグ不要）。
+- 変更ファイルに対する `ruff/black/isort/mypy` が緑。
+- headless/CI でも import 失敗せずスモークが通る。
 
-運用/導入手順（ローカル）
+運用/起動
 
-- 起動: `PXD_UI_BACKEND=dpg python main.py`
-- 既存 UI に戻す: `PXD_UI_BACKEND=pyglet python main.py`（既定）
+- 通常起動: `python main.py`（パラメータ GUI は DPG）。
+- テスト環境（例）: ビューポートを開かずに `create_context` のみ実行して生成/破棄を確認。
 
 メモ（後続拡張）
 
-- Docking で「プロパティパネル」+「ライブプレビュー」2 ペイン構成
-- プリセット保存/読込、フィルタ検索、キーバインドカスタム
-- テーマスイッチ（ライト/ダーク）
+- Docking による「プロパティパネル + ライブプレビュー」レイアウト。
+- プリセット保存/読込、フィルタ検索、キーバインドカスタム。
+- テーマスイッチ（ライト/ダーク）。
 
 ---
 
-この計画で実装に進めてよいか確認してください。依存追加（dearpygui）の承認後、ステップ 1 から着手します。
+本「完全移行」案で進めてよいか確認してください。承認後、ステップ 1 から着手します。
