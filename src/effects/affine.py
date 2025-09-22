@@ -66,13 +66,20 @@ def affine(
     angles_rad: Vec3 = (np.pi / 4, np.pi / 4, np.pi / 4),
     scale: Vec3 = (0.5, 0.5, 0.5),
 ) -> Geometry:
-    """任意の変換（スケール→回転）を適用する純関数エフェクト。
+    """スケール後に回転を適用（合成アフィン）。
 
-    引数:
-        auto_center: True ならジオメトリの平均座標を中心に使用。False なら `pivot` を使用。
-        pivot: `auto_center=False` のときの中心座標 (x, y, z)。
-        angles_rad: XYZ 回りの回転角（ラジアン）。
-        scale: XYZ 各軸のスケール倍率。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    auto_center : bool, default True
+        True のとき形状の平均座標を中心に使用。False のとき `pivot` を使用。
+    pivot : tuple[float, float, float], default (0.0, 0.0, 0.0)
+        `auto_center=False` のときの変換中心 [mm]。
+    angles_rad : tuple[float, float, float], default (π/4, π/4, π/4)
+        回転角 [rad]（X, Y, Z）。
+    scale : tuple[float, float, float], default (0.5, 0.5, 0.5)
+        スケール倍率（X, Y, Z）。
     """
     coords, offsets = g.as_arrays(copy=False)
 

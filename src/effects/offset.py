@@ -4,15 +4,20 @@ offset エフェクト（バッファ/輪郭オフセット）
 - Shapely の `buffer` を用いて各ポリラインをオフセットし、膨張（外側）または収縮（内側）形状を生成する。
 - 3D 入力は XY 平面に射影して処理後、元の姿勢に戻す。
 
-- 主なパラメータ:
+主なパラメータ:
 - distance: オフセット距離 [mm]。
 - join: 角の処理（`round` | `mitre` | `bevel`）。
 - segments_per_circle: 円弧近似分割数（大きいほど滑らかだが重い）。
 
-実装メモ/注意:
-- 入力曲線は必要に応じて自動クローズしてから処理し、結果を 3D 姿勢へ復元する。
-- 全体が膨張し過ぎないよう軽い縮尺補正を適用する。
-- 自己交差や極端な距離ではトポロジが変化する可能性がある。
+仕様/注意:
+- 入力曲線が未クローズで、始終点が閾値内にある場合は自動クローズしてから処理。
+- 結果は 3D 姿勢に復元する。自己交差や極端な距離ではトポロジが変化し得る。
+- 安全のため距離は [0, 25.0] に丸める。距離 0 は no-op（入力コピー）。
+
+実装メモ（詳細設計）:
+- XY 射影 → Shapely `buffer(distance, join_style, resolution)` → 3D 復元の順で処理。
+- `LineString/MultiLineString` と `Polygon/MultiPolygon` の両方の出力形に対応し、外輪郭頂点列を抽出。
+- 全体が膨張し過ぎないよう軽いスケーリング補正を適用。
 """
 
 from __future__ import annotations
@@ -35,11 +40,18 @@ def offset(
     segments_per_circle: int = 12,  # shapelyのresolutionに相当（既定値を上げて円滑さを確保）
     distance: float = 15.0,
 ) -> Geometry:
-    """Shapely を使用したバッファ/オフセット（純関数）。
+    """Shapely を用いて輪郭をオフセット。
 
-    既定値の方針（2025-09-06）:
-        - distance=15mm、join='round', segments_per_circle=12。
-          300mm 正方キャンバス中央の立方体に適用した静止画で、明瞭かつ過度でない見た目。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    join : str, default 'round'
+        角の処理。`'mitre'|'round'|'bevel'` を指定。
+    segments_per_circle : int, default 12
+        円弧近似の分割数（Shapely の resolution 相当）。
+    distance : float, default 15.0
+        オフセット距離（mm）。
     """
     coords, offsets = g.as_arrays(copy=False)
     MAX_DISTANCE = 25.0

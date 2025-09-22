@@ -237,6 +237,11 @@ Tips:
 - Effects（`effects/registry.py`）
   - `@effect` で `def effect_name(g: Geometry, *, ...) -> Geometry` な関数を登録。
   - パラメータメタ `__param_meta__`（任意）は UI 表示のヒントとして利用する。
+- パラメータ規約（重要）
+  - すべての Shape/Effect 関数の引数は None を受け付けない（Optional 禁止）。既定値にも None を使用しない。
+  - 数値系（float/int/bool/vector）は実値で受け取り、`__param_meta__` の min/max/step を RangeHint（表示レンジ）として用いる。
+  - 非数値（文字列・列挙など）は GUI スライダー対象外（必要に応じてトグル/選択肢として扱う）。
+  - 根拠: `engine.ui.parameters` のスライダーは None を扱わず、表示時に `float(None)` が例外となるため。
 - 公開面
 - 利用者は `from api import G, E, run, Geometry` のみに依存。
   - 上位（api）→下位（engine/common/util/effects/shapes）と一方向の依存。`engine` は `api` を知らない。

@@ -18,12 +18,12 @@ collapse エフェクト（線の崩し/しわ寄せ）
 from __future__ import annotations
 
 import math
+
 import numpy as np
 
 from engine.core.geometry import Geometry
 
 from .registry import effect
-
 
 EPS = 1e-12
 
@@ -150,10 +150,16 @@ def collapse(
     intensity: float = 5.0,
     subdivisions: float = 6.0,
 ) -> Geometry:
-    """線分を細分化してノイズで変形（純関数）。
+    """線分を細分化してノイズで変形。
 
-    仕様: 細分化後にオフセットを与えた各セグメントは互いに接続しない。
-    すなわち、元ポリライン内の細分セグメントは長さ2の独立ポリラインとして出力される。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    intensity : float, default 5.0
+        変位量（mm 相当）。0 で変化なし（no-op）。
+    subdivisions : float, default 6.0
+        細分回数（実数は丸めて整数に変換）。0 で変化なし（no-op）。
     """
     coords, offsets = g.as_arrays(copy=False)
     if coords.shape[0] == 0 or intensity == 0.0 or subdivisions <= 0.0:

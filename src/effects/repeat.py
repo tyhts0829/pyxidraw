@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from numba import njit
+from numba import njit  # type: ignore[attr-defined]
 
 from common.types import Vec3
 from engine.core.geometry import Geometry
@@ -89,21 +89,38 @@ def repeat(
     offset: Vec3 = (0.0, 0.0, 0.0),
     angles_rad_step: Vec3 = (0.1, 0.1, 0.1),
     scale: Vec3 = (0.8, 0.8, 0.8),
+    auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
-    """入力のコピーを配列状に生成（純関数）。
+    """入力のコピーを配列状に生成。
 
-    既定値の方針（2025-09-06）:
-        - count=3, offset=(12,0,0)mm, scale=(1,1,1), angles_rad_step=(0,0,0)
-        - 300mm 正方キャンバス中央の立方体で、横に4つ並びが収まり、効果が一目で分かる。
-          累積オフセットは 1,3,6…倍になる実装のため、1ステップ12mmに抑えて画面内に収める。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    count : int, default 3
+        複製回数。0 で変化なし（no-op）。上限は `MAX_DUPLICATES`。
+    offset : tuple[float, float, float], default (0.0, 0.0, 0.0)
+        各ステップの平行移動量 [mm]。
+    angles_rad_step : tuple[float, float, float], default (0.1, 0.1, 0.1)
+        各ステップの回転角 [rad]（X, Y, Z）。
+    scale : tuple[float, float, float], default (0.8, 0.8, 0.8)
+        各ステップのスケール倍率（X, Y, Z）。
+    auto_center : bool, default True
+        True のとき形状の平均座標を中心に使用。False のとき `pivot` を使用。
+    pivot : tuple[float, float, float], default (0.0, 0.0, 0.0)
+        `auto_center=False` のときの変換中心 [mm]。
     """
     coords, offsets = g.as_arrays(copy=False)
     n_int = int(count)
     if n_int <= 0 or g.is_empty or offsets.size <= 1:
         return Geometry(coords.copy(), offsets.copy())
 
-    center_np = np.array(pivot, dtype=np.float32)
+    # 中心座標を決定（affine の方針に合わせる）
+    if auto_center:
+        center_np = coords.mean(axis=0).astype(np.float32)
+    else:
+        center_np = np.array(pivot, dtype=np.float32)
     offset_np = np.array(offset, dtype=np.float32)
     scale_np = np.array(scale, dtype=np.float32)
 
@@ -137,6 +154,7 @@ def repeat(
 
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
 repeat.__param_meta__ = {
+    "auto_center": {"type": "bool"},
     "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES, "step": 1},
     "offset": {
         "type": "vec3",

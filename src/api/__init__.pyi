@@ -51,20 +51,20 @@ class _PipelineBuilder(Protocol):
     # meta: scale (type=vec3, range=[(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)])
     def affine(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
-        任意の変換（スケール→回転）を適用する純関数エフェクト。
+        スケール後に回転を適用（合成アフィン）。
 
         引数:
-            auto_center: True ならジオメトリの平均座標を中心に使用
-            pivot: `auto_center=False` のときの中心座標 (x, y, z)
-            angles_rad: XYZ 回りの回転角（ラジアン）
-            scale: XYZ 各軸のスケール倍率
+            auto_center: bool
+            pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
+            angles_rad: vec3, range [(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)]
+            scale: vec3, range [(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)]
         """
         ...
     # meta: intensity (type=number, range=[0.0, 10.0])
     # meta: subdivisions (type=integer, range=[0, 10])
     def collapse(self, *, intensity: float = ..., subdivisions: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        線分を細分化してノイズで変形（純関数）。
+        線分を細分化してノイズで変形。
 
         引数:
             intensity: number, range [0.0, 10.0]
@@ -142,7 +142,7 @@ class _PipelineBuilder(Protocol):
     # meta: distance (type=number, range=[0.0, 25.0])
     def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        Shapely を使用したバッファ/オフセット（純関数）。
+        Shapely を用いて輪郭をオフセット。
 
         引数:
             join: string, choices { 'mitre', 'round', 'bevel' }
@@ -154,16 +154,18 @@ class _PipelineBuilder(Protocol):
     # meta: offset (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     # meta: angles_rad_step (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
     # meta: scale (type=vec3, range=[(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)])
+    # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
-    def repeat(self, *, count: int = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    def repeat(self, *, count: int = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
-        入力のコピーを配列状に生成（純関数）。
+        入力のコピーを配列状に生成。
 
         引数:
             count: integer, range [0, 10]
             offset: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
             angles_rad_step: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
             scale: vec3, range [(0.1, 0.1, 0.1), (3.0, 3.0, 3.0)]
+            auto_center: bool
             pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
         """
         ...
