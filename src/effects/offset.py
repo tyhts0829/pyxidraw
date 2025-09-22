@@ -38,7 +38,7 @@ def offset(
     *,
     join: str = "round",  # 'mitre'|'round'|'bevel'
     segments_per_circle: int = 12,  # shapelyのresolutionに相当（既定値を上げて円滑さを確保）
-    distance: float = 15.0,
+    distance: float = 5.0,
 ) -> Geometry:
     """Shapely を用いて輪郭をオフセット。
 

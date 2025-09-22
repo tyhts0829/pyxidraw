@@ -21,7 +21,7 @@ def draw(t: float, cc: Mapping[int, float]) -> Geometry:
 
     t = t * c(9, 1.0) * 10
     poly = G.polyhedron().scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-    pipe = E.pipeline.affine().offset().build()
+    pipe = E.pipeline.affine().extrude(distance=(10), direction=(0, 0, 1)).build()
     return pipe(poly)
 
 
