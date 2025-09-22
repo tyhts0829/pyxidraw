@@ -45,6 +45,7 @@ class ParameterDescriptor:
     help_text: str | None = None
     vector_group: str | None = None
     supported: bool = True
+    choices: list[str] | None = None
 
 
 @dataclass

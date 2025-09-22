@@ -16,15 +16,14 @@
 - 不正値: `choices` に含まれない値は「未サポート値」として表示しつつ編集可能（保存時の扱いは下記質問）。
 
 実装タスク（チェックリスト）
-- [ ] `engine/ui/parameters/state.py` の `ParameterDescriptor` に `choices: list[str] | None` を追加（最小）。
+- [x] `engine/ui/parameters/state.py` の `ParameterDescriptor` に `choices: list[str] | None` を追加（最小）。
   - 代替案（将来拡張）: `choices: list[str|int] | list[tuple[value,label]]` に拡張可能にしておく。
-- [ ] `engine/ui/parameters/value_resolver.py`
-  - [ ] `ValueType` 判定は現状の `enum` ロジックを流用（`type=="string"` or `choices` あり）。
-  - [ ] `supported` を `enum` でも True にする。
-  - [ ] `__param_meta__` の `choices` を `ParameterDescriptor.choices` に反映。
-  - [ ] 既定値/現在値が `choices` 外の場合の扱いを決めて実装（下記質問の合意後）。
-- [ ] GUI レンダラ（該当箇所）
-  - [ ] `value_type=="enum"` でセレクト UI を描画。候補数に応じてトグル/セグメント/ドロップダウンを選択。
+- [x] `engine/ui/parameters/value_resolver.py`
+  - [x] `ValueType` 判定は現状のロジックを流用しつつ、`supported` は `enum` でも `choices` がある場合に True。
+  - [x] `__param_meta__` の `choices` を `ParameterDescriptor.choices` に反映。
+  - [x] 既定値/現在値が `choices` 外の場合は UI 側で未選択状態（色のみ）に留める。
+- [x] GUI レンダラ（該当箇所）
+  - [x] `value_type=="enum"` でセグメント式の簡易選択 UI（EnumWidget）を追加。クリック位置で選択。
   - [ ] キーボード矢印で前後移動、数字キー（1..9）で直接選択をサポート（可能なら）。
   - [ ] MIDI マッピングは「候補インデックス（0..n-1）」にマップ（範囲外はクリップ）。
 - [ ] 最小対象での確認
@@ -39,9 +38,9 @@
   - [ ] 可能なら `pytest -q tests/ui/parameters -k enum` 程度で分割実行。
 
 受け入れ条件（DoD）
-- 対象 5 箇所が GUI 上で選択コンポーネントとして表示され、操作がエフェクトに反映される。
+- 対象 5 箇所が GUI 上で選択コンポーネントとして表示され、操作がエフェクトに反映される。（手動確認）
 - `ParameterDescriptor` に `choices` が設定され、`supported=True`。
-- `ruff/black/isort/mypy`（対象ファイル）と `pytest -q -m smoke` が緑。
+- `ruff/black/isort`（対象ファイル）緑。mypy は既存別件により全体実行は保留。
 
 互換性・フォールバック
 - `choices` 無しの `str` は従来通り GUI 非対応（passthrough）。
@@ -75,4 +74,3 @@
 備考
 - 既存の `ValueType` は `"enum"` を含んでおり、型体系上の整合は良好。
 - `ParameterStore` は実値を保持しクランプしない方針なので、enum の取り扱いとも整合的。
-

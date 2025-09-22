@@ -116,6 +116,7 @@ class ParameterValueResolver:
                 value=raw_value,
                 doc=doc,
                 default_value=default_actual,
+                meta_entry=meta_entry,
             )
 
         return updated
@@ -264,8 +265,26 @@ class ParameterValueResolver:
         value: Any,
         doc: str | None,
         default_value: Any,
+        meta_entry: Mapping[str, Any] | None,
     ) -> Any:
+        # enum 判定は choices の有無を優先し、無い文字列は自由入力として非対応のままにする
         value_type = self._value_type(default_value if default_value is not None else value)
+        # choices 抽出
+        choices_list: list[str] | None = None
+        if isinstance(meta_entry, Mapping):
+            raw_choices = meta_entry.get("choices")
+            try:
+                if isinstance(raw_choices, Sequence) and not isinstance(raw_choices, (str, bytes)):
+                    cands = [str(x) for x in list(raw_choices)]
+                    choices_list = cands if cands else None
+            except Exception:
+                choices_list = None
+        # choices は上位 `resolve()` から渡されないため、ここで meta を使わずに判断する
+        # ただし value が str であっても、choices が不明な場合は GUI 非対応（supported=False）にする
+        supported = value_type in {"float", "int", "bool"} or (
+            value_type == "enum" and bool(choices_list)
+        )
+        # choices は後で param_meta から渡すよう `_determine_value_type` と resolve 経路を拡張してもよい
         descriptor = ParameterDescriptor(
             id=descriptor_id,
             label=f"{context.label_prefix} · {param_name}",
@@ -276,7 +295,8 @@ class ParameterValueResolver:
             range_hint=None,
             help_text=doc,
             vector_group=None,
-            supported=value_type in {"float", "int", "bool"},
+            supported=supported,
+            choices=choices_list,
         )
         self._store.register(descriptor, value)
         return self._store.resolve(descriptor.id, value)
