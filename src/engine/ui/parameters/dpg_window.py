@@ -88,6 +88,7 @@ else:
 
             # DPG ライフサイクル
             dpg.create_context()
+            # ビューポート参照は明示破棄（close）まで保持（GC/順序の明確化）
             self._viewport = dpg.create_viewport(
                 title=self._title, width=self._width, height=self._height
             )
@@ -126,7 +127,7 @@ else:
                 if visible:
                     dpg.show_viewport()
                 else:
-                    dpg.minimize_viewport()
+                    dpg.hide_viewport()
             except Exception:
                 pass
 
@@ -153,9 +154,7 @@ else:
 
         # ---- マウント/構築 ----
         def mount(self, descriptors: list[ParameterDescriptor]) -> None:
-            scroll = dpg.get_item_alias("__pxd_param_scroll__")
-            if scroll is None:
-                scroll = "__pxd_param_scroll__"
+            scroll = "__pxd_param_scroll__"
             with dpg.stage(tag="__pxd_param_stage__"):
                 # カテゴリ別の折りたたみヘッダを作成し、その配下に 2 カラムテーブルを配置
                 # カテゴリ順は名称の昇順、同一カテゴリ内は id の昇順
@@ -246,6 +245,7 @@ else:
                         parent=parent,
                         label="",
                         default_value=vec,  # type: ignore[arg-type]
+                        format=f"%.{self._layout.value_precision}f",
                         callback=self._on_widget_change,
                         user_data=desc.id,
                     )
@@ -254,6 +254,7 @@ else:
                     parent=parent,
                     label="",
                     default_value=(vec + [0.0, 0.0, 0.0])[:3],  # type: ignore[arg-type]
+                    format=f"%.{self._layout.value_precision}f",
                     callback=self._on_widget_change,
                     user_data=desc.id,
                 )
@@ -399,14 +400,11 @@ else:
                 if changed and self._highlight_theme is not None:
                     dpg.bind_item_theme(pid, self._highlight_theme)
                 else:
-                    # テーマ解除（なければグローバルテーマに戻す）
+                    # テーマ解除（グローバルテーマへ戻す）
                     try:
-                        dpg.bind_item_theme(pid, 0)  # type: ignore[arg-type]
+                        dpg.bind_item_theme(pid, None)  # type: ignore[arg-type]
                     except Exception:
-                        try:
-                            dpg.bind_item_theme(pid, None)  # type: ignore[arg-type]
-                        except Exception:
-                            pass
+                        pass
             except Exception:
                 # ハイライト失敗は無視
                 pass
