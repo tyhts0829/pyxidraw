@@ -12,17 +12,11 @@ from engine.core.geometry import Geometry  # type: ignore
 
 CANVAS_SIZE = 400
 
-pipe = E.pipeline.affine(scale=(2, 2, 2)).offset().build()
-
 
 def draw(t: float, cc: Mapping[int, float]) -> Geometry:
     """デモ描画関数（MIDI 未接続でも安全に動作）。"""
-
-    def c(i: int, default: float = 0.0) -> float:
-        return float(cc.get(i, default))
-
-    t = t * c(9, 1.0) * 10
-    poly = G.polyhedron().scale(400 * c(8, 0.25)).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+    poly = G.polyhedron().scale(400 * cc[1]).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+    pipe = E.pipeline.affine(scale=(2, 2, 2)).offset()
     return pipe(poly)
 
 
