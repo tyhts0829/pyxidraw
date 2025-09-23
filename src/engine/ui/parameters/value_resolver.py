@@ -204,75 +204,53 @@ class ParameterValueResolver:
         has_default: bool,
         cc_snapshot: Mapping[int, float] | None = None,
     ) -> tuple[Any, ...]:
-        provided_values = self._ensure_sequence(raw_value)
+        # 提供値は CCBinding 混在の可能性があるため、float 化せずにそのまま展開
+        provided_values_mixed: list[Any]
+        if isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes)):
+            provided_values_mixed = list(raw_value)
+        else:
+            provided_values_mixed = []
+
+        # 既定値は数値列として扱う（登録時 original に使用）
         default_values = self._ensure_sequence(default_actual)
-        length = max(len(provided_values), len(default_values))
+        length = max(len(provided_values_mixed), len(default_values))
         if length == 0:
             return tuple()
 
-        if not meta_entry:
-            components: list[float] = []
-            for idx in range(length):
-                value = (
-                    default_values[idx]
-                    if (source == "default" or not provided_values) and idx < len(default_values)
-                    else (
-                        provided_values[idx] if idx < len(provided_values) else provided_values[-1]
-                    )
-                )
-                components.append(float(value))
-
-            results: list[float] = []
-            for idx, value in enumerate(components):
-                suffix = _VECTOR_SUFFIX[idx] if idx < len(_VECTOR_SUFFIX) else str(idx)
-                component_id = f"{descriptor_id}.{suffix}"
-                default_component = default_values[idx] if idx < len(default_values) else value
-                component_hint = self._range_hint_from_meta(
-                    value_type="float",
-                    meta={},
-                    component_index=None,
-                    default_value=default_component,
-                )
-                descriptor = ParameterDescriptor(
-                    id=component_id,
-                    label=f"{context.label_prefix} · {param_name}.{suffix}",
-                    source=context.scope,
-                    category=context.scope,
-                    value_type="float",
-                    default_value=float(default_component),
-                    range_hint=component_hint,
-                    help_text=doc,
-                    vector_group=descriptor_id,
-                )
-                self._store.register(descriptor, value)
-                results.append(float(self._store.resolve(component_id, value)))
-            return tuple(results)
-
-        descriptors: list[ParameterDescriptor] = []
-        actual_values: list[float] = []
-
+        resolved_vals: list[float] = []
         for idx in range(length):
             suffix = _VECTOR_SUFFIX[idx] if idx < len(_VECTOR_SUFFIX) else str(idx)
             component_id = f"{descriptor_id}.{suffix}"
+
+            # 範囲ヒントは meta があれば採用、無ければ推定
             component_hint = self._range_hint_from_meta(
                 value_type="float",
                 meta=meta_entry,
                 component_index=idx,
-                default_value=None,
+                default_value=(
+                    default_values[idx]
+                    if idx < len(default_values)
+                    else (default_values[-1] if default_values else None)
+                ),
             )
 
-            default_component_actual = self._component_default_actual(
+            # default を基準に original を導出（後で provided 数値なら置き換える）
+            base_original = self._component_default_actual(
                 default_values=default_values,
                 idx=idx,
                 has_default=has_default,
                 hint=component_hint,
             )
-            if source == "default" or not provided_values:
-                actual_component = default_component_actual
+
+            # 実際に与えられた値（数値 or CCBinding）
+            if provided_values_mixed:
+                if idx < len(provided_values_mixed):
+                    v_prov = provided_values_mixed[idx]
+                else:
+                    # 足りない成分は最後の指定値を踏襲（従来互換）
+                    v_prov = provided_values_mixed[-1]
             else:
-                actual_component = (
-                    provided_values[idx] if idx < len(provided_values) else provided_values[-1]
-                )
+                v_prov = None
 
             descriptor = ParameterDescriptor(
                 id=component_id,
@@ -280,31 +258,23 @@ class ParameterValueResolver:
                 source=context.scope,
                 category=context.scope,
                 value_type="float",
-                default_value=default_component_actual,
+                default_value=base_original,
                 range_hint=component_hint,
                 help_text=doc,
                 vector_group=descriptor_id,
             )
+            # original を決定: provided 数値なら original=provided、
+            # CCBinding/未指定は base_original のまま
+            if not isinstance(v_prov, CCBinding) and v_prov is not None and source != "default":
+                try:
+                    original_value = float(v_prov)
+                except Exception:
+                    original_value = float(base_original)
+            else:
+                original_value = float(base_original)
+            self._store.register(descriptor, original_value)
 
-            descriptors.append(descriptor)
-            actual_values.append(float(actual_component))
-
-        # CCBinding を含むかを判定
-        has_cc = any(isinstance(v, CCBinding) for v in provided_values)
-        if not has_cc:
-            resolved_components = self._register_vector(descriptors, actual_values)
-            return tuple(resolved_components)
-
-        # CCBinding が含まれる場合: 登録→midi_override セット→resolve
-        resolved_vals: list[float] = []
-        for idx, descriptor in enumerate(descriptors):
-            base_original = (
-                default_values[idx]
-                if idx < len(default_values)
-                else (default_values[-1] if default_values else 0.0)
-            )
-            self._store.register(descriptor, base_original)
-            v_prov = provided_values[idx] if idx < len(provided_values) else None
+            # override 適用（midi > gui）
             if isinstance(v_prov, CCBinding):
                 cc_val = 0.0
                 if cc_snapshot is not None:
@@ -313,17 +283,13 @@ class ParameterValueResolver:
                     try:
                         cc_val = float(v_prov.map(cc_val))
                     except Exception:
-                        pass
-                self._store.set_override(descriptor.id, cc_val, source="midi")
-                resolved_vals.append(float(self._store.resolve(descriptor.id, base_original)))
-            else:
-                # 数値は gui override として扱う（original は default）
-                try:
-                    val = float(v_prov) if v_prov is not None else float(base_original)
-                except Exception:
-                    val = float(base_original)
-                self._store.set_override(descriptor.id, val, source="gui")
-                resolved_vals.append(float(self._store.resolve(descriptor.id, base_original)))
+                        cc_val = float(cc_val)
+                self._store.set_override(component_id, cc_val, source="midi")
+            # 数値 provided は original として登録済み。ここで GUI override は付与しない。
+
+            resolved = float(self._store.resolve(component_id, original_value))
+            resolved_vals.append(resolved)
+
         return tuple(resolved_vals)
 
     def _resolve_passthrough(
