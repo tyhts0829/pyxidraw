@@ -69,12 +69,12 @@
   - DPG: `add_popup(parent=item, mousebutton=...)`。
   - 差し込み: 行またはウィジェット単位でメニューを定義。
 
-- [ ] 変更ハイライト（差分時テーマ付与）
+- [x] 変更ハイライト（差分時テーマ付与）
 
   - 効果: 上書き中の値が一目で分かる。
   - DPG: `theme`/`bind_item_theme` で背景/枠色を切替。
-  - 差し込み: Store→UI 反映時に既定値と比較し、差分ならテーマ付与/解除。
-  - 参考: `src/engine/ui/parameters/dpg_window.py:312-331`（テーマ実装の流儀）。
+  - 差し込み: Store→UI 反映時に original と current を比較し、差分ならテーマ付与/解除。
+  - 実装箇所: `src/engine/ui/parameters/dpg_window.py:160`（初期適用）, `src/engine/ui/parameters/dpg_window.py:294`（Store反映時の適用）, `src/engine/ui/parameters/dpg_window.py:318`（ハイライトテーマ定義）, `src/engine/ui/parameters/dpg_window.py:332`（適用関数）
 
 - [ ] キーボードショートカット（検索フォーカス/enum 移動 など）
 

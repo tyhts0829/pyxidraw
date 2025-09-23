@@ -84,6 +84,7 @@ else:
             self._syncing = False
             self._thread: Thread | None = None
             self._using_pyglet = False
+            self._highlight_theme: int | None = None
 
             # DPG ライフサイクル
             dpg.create_context()
@@ -178,6 +179,8 @@ else:
                                 if not it.supported:
                                     continue
                                 self._create_row(table, it)
+                                # 初期のハイライト適用（override があれば強調）
+                                self._update_highlight(it.id)
 
                 for desc in sorted_desc:
                     if current_cat is None:
@@ -322,6 +325,8 @@ else:
                         dpg.set_value(pid, value)
                     except Exception:
                         pass
+                    # 差分ハイライト付与/解除
+                    self._update_highlight(pid)
             finally:
                 self._syncing = False
 
@@ -360,8 +365,50 @@ else:
                         dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (30, 140, 255, 96))
                         dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (30, 140, 255, 128))
                 dpg.bind_theme(theme)
+                # 差分ハイライト用の軽量テーマ（アイテム単位で適用）
+                with dpg.theme() as highlight:
+                    with dpg.theme_component(dpg.mvAll):
+                        dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (40, 120, 200, 64))
+                        dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (40, 120, 200, 96))
+                        dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (40, 120, 200, 128))
+                        dpg.add_theme_color(dpg.mvThemeCol_Border, (30, 140, 255, 200))
+                        dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 1.0)
+                self._highlight_theme = highlight
             except Exception:
                 # 失敗しても既定スタイルで継続
+                pass
+
+        # ---- 差分ハイライト適用 ----
+        def _update_highlight(self, pid: str) -> None:
+            try:
+                if not dpg.does_item_exist(pid):
+                    return
+                # 差分（current != original）で強調。vector は比較前に正規化。
+                try:
+                    desc = self._store.get_descriptor(pid)
+                except Exception:
+                    desc = None  # type: ignore[assignment]
+                curr = self._store.current_value(pid)
+                orig = self._store.original_value(pid)
+                if desc is not None and getattr(desc, "value_type", None) == "vector":
+                    if isinstance(curr, list):
+                        curr = tuple(curr)
+                    if isinstance(orig, list):
+                        orig = tuple(orig)
+                changed = curr is not None and orig is not None and curr != orig
+                if changed and self._highlight_theme is not None:
+                    dpg.bind_item_theme(pid, self._highlight_theme)
+                else:
+                    # テーマ解除（なければグローバルテーマに戻す）
+                    try:
+                        dpg.bind_item_theme(pid, 0)  # type: ignore[arg-type]
+                    except Exception:
+                        try:
+                            dpg.bind_item_theme(pid, None)  # type: ignore[arg-type]
+                        except Exception:
+                            pass
+            except Exception:
+                # ハイライト失敗は無視
                 pass
 
     __all__ = ["ParameterWindow"]
