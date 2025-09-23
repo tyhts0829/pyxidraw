@@ -28,12 +28,13 @@
   - 差し込み: `mount()` 内で `ParameterDescriptor.category` ごとにヘッダ生成し、その配下に行を構築。
   - 参考: `src/engine/ui/parameters/dpg_window.py:107`（`mount` 呼出直後の構築フェーズ）。
 
-- [x] 2 カラム/テーブルレイアウト（左ラベル/右入力）
+- [x] 2 カラム/テーブルレイアウト（左ラベル/右入力） — 実装済
 
   - 効果: 視線移動と縦スクロール量の削減。
   - DPG: `add_table` + `table_column`/`table_row`（または `same_line`）。
   - 差し込み: 行構築時にラベルとウィジェットを同一行へ配置。
   - 参考: `src/engine/ui/parameters/dpg_window.py:168`（ラベル生成）、`src/engine/ui/parameters/dpg_window.py:210-251`（各入力）。
+  - 実装箇所: `src/engine/ui/parameters/dpg_window.py:196`（mount 内テーブル生成）、`src/engine/ui/parameters/dpg_window.py:206`（_create_row で table_row に配置）
 
 - [ ] 検索/フィルタバー
 

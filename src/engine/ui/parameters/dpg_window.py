@@ -156,18 +156,26 @@ else:
             if scroll is None:
                 scroll = "__pxd_param_scroll__"
             with dpg.stage(tag="__pxd_param_stage__"):
-                for desc in descriptors:
-                    if not desc.supported:
-                        continue
-                    self._create_row(scroll, desc)
+                # 2 カラムテーブル（左: ラベル / 右: 入力）
+                with dpg.table(
+                    tag="__pxd_param_table__",
+                    parent=scroll,
+                    header_row=False,
+                ) as table:
+                    dpg.add_table_column(label="Parameter")
+                    dpg.add_table_column(label="Value")
+                    for desc in descriptors:
+                        if not desc.supported:
+                            continue
+                        self._create_row(table, desc)
             dpg.unstage("__pxd_param_stage__")
 
-        def _create_row(self, parent: int | str, desc: ParameterDescriptor) -> None:
-            # ラベル
-            if desc.label:
-                dpg.add_text(default_value=desc.label, parent=parent)
-            # ウィジェット
-            self._create_widget(parent, desc)
+        def _create_row(self, table: int | str, desc: ParameterDescriptor) -> None:
+            # テーブル行（左: ラベル / 右: 入力）
+            with dpg.table_row(parent=table) as row:
+                label = desc.label or desc.id
+                dpg.add_text(default_value=label, parent=row)
+                self._create_widget(row, desc)
             # ツールチップは非採用（ポップアップは表示しない）
 
         def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int:
