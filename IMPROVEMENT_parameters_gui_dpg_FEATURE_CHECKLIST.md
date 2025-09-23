@@ -21,12 +21,12 @@
 
 チェックリスト（採用にチェックを入れてください）
 
-- [ ] 折りたたみグループ（カテゴリ別）
+- [x] 折りたたみグループ（カテゴリ別） — 実装済
 
   - 効果: 多パラメータ時の見通し向上（カテゴリ単位で開閉）。
   - DPG: `add_collapsing_header` / `add_tree_node`。
-  - 差し込み: `mount()` 内で `ParameterDescriptor.category` ごとにヘッダ生成し、その配下に行を構築。
-  - 参考: `src/engine/ui/parameters/dpg_window.py:107`（`mount` 呼出直後の構築フェーズ）。
+  - 差し込み: `mount()` 内で `ParameterDescriptor.category` ごとにヘッダ生成し、その配下に 2 カラムテーブルで行を構築。
+  - 実装箇所: `src/engine/ui/parameters/dpg_window.py:160` 付近（カテゴリ分割〜ヘッダ/テーブル生成）
 
 - [x] 2 カラム/テーブルレイアウト（左ラベル/右入力） — 実装済
 
@@ -34,7 +34,7 @@
   - DPG: `add_table` + `table_column`/`table_row`（または `same_line`）。
   - 差し込み: 行構築時にラベルとウィジェットを同一行へ配置。
   - 参考: `src/engine/ui/parameters/dpg_window.py:168`（ラベル生成）、`src/engine/ui/parameters/dpg_window.py:210-251`（各入力）。
-  - 実装箇所: `src/engine/ui/parameters/dpg_window.py:196`（mount 内テーブル生成）、`src/engine/ui/parameters/dpg_window.py:206`（_create_row で table_row に配置）
+  - 実装箇所: `src/engine/ui/parameters/dpg_window.py:196`（mount 内テーブル生成）、`src/engine/ui/parameters/dpg_window.py:206`（\_create_row で table_row に配置）
 
 - [ ] 検索/フィルタバー
 

@@ -156,18 +156,42 @@ else:
             if scroll is None:
                 scroll = "__pxd_param_scroll__"
             with dpg.stage(tag="__pxd_param_stage__"):
-                # 2 カラムテーブル（左: ラベル / 右: 入力）
-                with dpg.table(
-                    tag="__pxd_param_table__",
-                    parent=scroll,
-                    header_row=False,
-                ) as table:
-                    dpg.add_table_column(label="Parameter")
-                    dpg.add_table_column(label="Value")
-                    for desc in descriptors:
-                        if not desc.supported:
-                            continue
-                        self._create_row(table, desc)
+                # カテゴリ別の折りたたみヘッダを作成し、その配下に 2 カラムテーブルを配置
+                # カテゴリ順は名称の昇順、同一カテゴリ内は id の昇順
+                sorted_desc = sorted(descriptors, key=lambda d: (d.category, d.id))
+                # 走査しながらカテゴリ境界でグループを切替
+                current_cat: str | None = None
+                group_items: list[ParameterDescriptor] = []
+
+                def flush_group(cat: str | None, items: list[ParameterDescriptor]) -> None:
+                    if not items:
+                        return
+                    # 表示対象がない場合はスキップ
+                    if not any(it.supported for it in items):
+                        return
+                    label = cat if cat else "General"
+                    with dpg.collapsing_header(label=label, parent=scroll, default_open=True):
+                        with dpg.table(header_row=False) as table:
+                            dpg.add_table_column(label="Parameter")
+                            dpg.add_table_column(label="Value")
+                            for it in items:
+                                if not it.supported:
+                                    continue
+                                self._create_row(table, it)
+
+                for desc in sorted_desc:
+                    if current_cat is None:
+                        current_cat = desc.category
+                        group_items = [desc]
+                        continue
+                    if desc.category != current_cat:
+                        flush_group(current_cat, group_items)
+                        current_cat = desc.category
+                        group_items = [desc]
+                    else:
+                        group_items.append(desc)
+                # 最後のグループをフラッシュ
+                flush_group(current_cat, group_items)
             dpg.unstage("__pxd_param_stage__")
 
         def _create_row(self, table: int | str, desc: ParameterDescriptor) -> None:
