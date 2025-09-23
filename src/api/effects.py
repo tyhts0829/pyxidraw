@@ -1,71 +1,34 @@
 """
 どこで: `api.effects`（エフェクト・パイプラインの高レベル API）。
-何を: 登録エフェクトの直列適用を定義する `Pipeline/Builder` を提供（外部保存/復元/仕様検証の API は提供しない）。
-なぜ: Geometry を入力に副作用なく決定的に加工し、キャッシュ可能な処理チェーンを組み立てるため。
-
-api.effects — パイプライン実行モジュール（Effects オーケストレーター）
-
-本モジュールは、登録済みエフェクト群（`effects.registry`）を直列に適用する
-「パイプライン」を提供する。入力は唯一の幾何表現 `Geometry`（engine.core.geometry）で、
-各ステップは `Geometry -> Geometry` の純関数として実行される。副作用を避け、
-決定的で再現性の高い処理チェーンを組み立てることを目的とする。
+何を: 登録エフェクトの直列適用を宣言・実行する Pipeline を提供（外部保存/復元/仕様検証の API は提供しない）。
+なぜ: Geometry を入力に副作用なく決定的に加工し、ユーザーが build/キャッシュを意識せずに再計算を最小化するため。
 
 提供コンポーネント:
-- `Pipeline`: 不変な処理定義を保持し、`__call__(g)` で逐次適用する実行体。
+- `Pipeline`: 宣言（ステップ列）と実行を担う単一オブジェクト。`__call__(g)` で逐次適用。
+  - 実行時にパラメータを解決・量子化し、差分があれば裏で再ビルド。
   - 単層 LRU 風キャッシュを内蔵。鍵は `(geometry_digest, pipeline_key)`。
   - `clear_cache()` でキャッシュを手動クリア可能。
-- `PipelineBuilder`: ビルダー（フルエント API）。`E.pipeline ... .build()` で `Pipeline` を生成。
-  - 動的属性でエフェクト名を受け取り、`adder(**params)` でステップを追加する仕組み。
-  - `.cache(maxsize=...)` で単層キャッシュの上限を設定（`None`=無制限、`0`=無効）。
-  - `.strict(enabled=True)` でビルド時の厳格検証を有効化（未知パラメータを検出して `TypeError`）。
+- `PipelineBuilder`: 互換のための薄いビルダー。`.build()` は no-op 同義で `Pipeline` を返す。
 - `PipelineStep`: 1 ステップの定義（`name` と `params`）。
 - `E`: 利用者向けシングルトン（`from api import E`）。`E.pipeline` が `PipelineBuilder` を返す。
 
 キャッシュ設計:
-- `Geometry.digest`（16B の blake2b 指紋）と、ステップ列から導出した `pipeline_key` を組み合わせる。
-- `Geometry.digest` が無効/未計算の場合でも、配列内容から都度ハッシュを計算してフォールバック。
-- 容量は `PipelineBuilder.cache(maxsize=...)` または環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` で制御。
-  - `None`: 無制限（従来互換）。`0`: キャッシュ無効。
+- `Geometry.digest`（16B の blake2b）と、解決後（量子化後）パラメータから導出した `pipeline_key` を組み合わせる。
+- 容量は `.cache(maxsize=...)` または環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` で制御。
+  - `None`: 無制限、`0`: 無効、正の整数で上限。
 - 実装は `OrderedDict` による単純な LRU 風。ヒット時は末尾に移動し、上限超過で先頭から追い出し。
 
-厳格検証（strict）:
-- 各ステップの `params` キーを該当エフェクト関数のシグネチャと照合。
-- `g` 引数は内部で供給するため指定不要。`**kwargs` を受け取る関数は未知キー許容（Builder 側）。
-
 ハッシュと同一性:
-- `pipeline_key` は各ステップの「名前」「関数バイトコード（近似版）」「パラメータの直列化向け整形結果」
-  から blake2b（8B）を積み上げて算出し、最終的に 16B にまとめた指紋を使用する。
-- `Geometry` との組み合わせにより処理結果のキャッシュ同一性が安定し、
-  大規模な入出力でも再計算を抑制できる。
+- `pipeline_key` は各ステップの「名前」「関数バイトコード近似」「量子化後パラメータの決定的表現」から blake2b を積み上げて算出し、16B にまとめる。
+- `Geometry` との組み合わせにより処理結果のキャッシュ同一性が安定する。
 
 スレッド/プロセスについての注意:
-- 現実装のキャッシュはモジュール内 `Pipeline` インスタンスに閉じた `OrderedDict` を使用。
-  マルチスレッドで同一インスタンスを共有する場合は外部でロックを用いるか、
-  スレッドごとに別インスタンスを使用することを推奨。
-
-使用例:
-    from api import E, G
-    g = G.grid(subdivisions=(0.5, 0.5))
-    pipe = (
-        E.pipeline
-         .displace(amplitude_mm=0.05)
-         .rotate(angles_rad=(0.0, 0.0, 0.3))
-         .cache(maxsize=128)
-         .strict(True)
-         .build()
-    )
-    out = pipe(g)  # Geometry -> Geometry
-
-モジュール境界:
-- エフェクト解決は `effects.registry.get_effect` に委譲（未登録名は `KeyError`）。
-- ジオメトリ表現は `engine.core.geometry.Geometry` に統一。
-- 本モジュールは I/O を持たず、エフェクト適用の順序・同一性・キャッシュ管理に専念する。
+- キャッシュは `Pipeline` インスタンスに閉じた `OrderedDict`。共有時は外部でロックを用いるか、スレッドごとに別インスタンスを使用する。
 """
 
 from __future__ import annotations
 
 import hashlib
-import inspect
 import os
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -74,7 +37,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from common.param_utils import params_to_tuple as _params_to_tuple
+from common.param_utils import signature_tuple as _signature_tuple
 from effects.registry import get_effect
 from engine.core.geometry import Geometry
 from engine.ui.parameters import get_active_runtime
@@ -107,10 +70,9 @@ def _fn_version(fn: Callable[..., Geometry]) -> bytes:
     return hashlib.blake2b(data, digest_size=8).digest()
 
 
-def _params_digest(params: dict[str, Any]) -> bytes:
-    """パラメータを共通実装で正規化し、短いハッシュへ圧縮。"""
-    normalized = _params_to_tuple(params)
-    data = repr(normalized).encode()
+def _params_digest_from_tuple(params_tuple: tuple[tuple[str, object], ...]) -> bytes:
+    """正規化タプルから短いハッシュへ圧縮。"""
+    data = repr(params_tuple).encode()
     return hashlib.blake2b(data, digest_size=8).digest()
 
 
@@ -120,43 +82,139 @@ class PipelineStep:
     params: dict[str, Any]
 
 
-class Pipeline:
-    def __init__(self, steps: Sequence[PipelineStep], *, cache_maxsize: int | None = 128):
+# ---- Global compiled cache (reuse across Builders/Pipelines) --------------
+_GLOBAL_COMPILED_CACHE: "OrderedDict[tuple[tuple[str, tuple[tuple[str, object], ...]], ...], _CompiledPipeline]" = OrderedDict()  # type: ignore[name-defined]
+_GLOBAL_LOCK = RLock()
+_GLOBAL_MAXSIZE_ENV = os.getenv("PXD_COMPILED_CACHE_MAXSIZE")
+try:
+    _GLOBAL_MAXSIZE: int | None = (
+        int(_GLOBAL_MAXSIZE_ENV) if _GLOBAL_MAXSIZE_ENV is not None else None
+    )
+    if _GLOBAL_MAXSIZE is not None and _GLOBAL_MAXSIZE < 0:
+        _GLOBAL_MAXSIZE = 0
+except Exception:
+    _GLOBAL_MAXSIZE = None
+
+
+class _CompiledPipeline:
+    """量子化後パラメータで固定化された実行体（インスタンスローカル LRU を保持）。"""
+
+    def __init__(
+        self,
+        steps: Sequence[tuple[str, Callable[..., Geometry], tuple[tuple[str, object], ...]]],
+        *,
+        cache_maxsize: int | None,
+    ) -> None:
         self._steps = list(steps)
-        # LRU 互換の単層キャッシュ（maxsize=None なら従来通り無制限）
-        self._cache_maxsize: int | None = cache_maxsize
+        self._cache_maxsize = cache_maxsize
         self._cache: "OrderedDict[tuple[bytes, bytes], Geometry]" = OrderedDict()
         self._lock = RLock()
+        self._hits = 0
+        self._misses = 0
+        self._evicts = 0
 
-        # パイプラインハッシュを先に計算
+        # pipeline_key（16B）を計算
         h = hashlib.blake2b(digest_size=16)
-        for st in self._steps:
-            fn = get_effect(st.name)
-            h.update(st.name.encode())
+        for name, fn, params_tuple in self._steps:
+            h.update(name.encode())
             h.update(_fn_version(fn))
-            h.update(_params_digest(st.params))
+            h.update(_params_digest_from_tuple(params_tuple))
         self._pipeline_key = h.digest()
 
     def __call__(self, g: Geometry) -> Geometry:
         key = (_geometry_hash(g), self._pipeline_key)
         with self._lock:
             if key in self._cache:
-                # LRU: 参照を末尾へ
                 out = self._cache.pop(key)
                 self._cache[key] = out
+                self._hits += 1
                 return out
 
-        runtime = get_active_runtime()
         out = g
+        for name, fn, params_tuple in self._steps:
+            params = dict(params_tuple)
+            out = fn(out, **params)
+
+        if self._cache_maxsize == 0:
+            return out
+        with self._lock:
+            self._cache[key] = out
+            if self._cache_maxsize is not None and self._cache_maxsize > 0:
+                while len(self._cache) > self._cache_maxsize:
+                    self._cache.popitem(last=False)
+                    self._evicts += 1
+            self._misses += 1
+        return out
+
+    def clear_cache(self) -> None:
+        with self._lock:
+            self._cache.clear()
+            self._hits = 0
+            self._misses = 0
+            self._evicts = 0
+
+    def cache_info(self) -> dict[str, int]:
+        with self._lock:
+            return {
+                "size": len(self._cache),
+                "maxsize": self._cache_maxsize if self._cache_maxsize is not None else -1,
+                "hits": self._hits,
+                "misses": self._misses,
+                "evicts": self._evicts,
+            }
+
+
+class Pipeline:
+    def __init__(self, steps: Sequence[PipelineStep], *, cache_maxsize: int | None = 128):
+        self._steps = list(steps)
+        self._cache_maxsize: int | None = cache_maxsize
+        self._compiled: _CompiledPipeline | None = None
+        self._compiled_signature: tuple[tuple[str, tuple[tuple[str, object], ...]], ...] | None = (
+            None
+        )
+        self._lock = RLock()
+
+    def _ensure_compiled(
+        self, runtime_signature: tuple[tuple[str, tuple[tuple[str, object], ...]], ...]
+    ) -> _CompiledPipeline:
+        # まずグローバルキャッシュで再利用を試みる
+        with _GLOBAL_LOCK:
+            if runtime_signature in _GLOBAL_COMPILED_CACHE:
+                compiled = _GLOBAL_COMPILED_CACHE.pop(runtime_signature)
+                _GLOBAL_COMPILED_CACHE[runtime_signature] = compiled
+            else:
+                compiled_steps: list[
+                    tuple[str, Callable[..., Geometry], tuple[tuple[str, object], ...]]
+                ] = []
+                for name, params_tuple in runtime_signature:
+                    fn = get_effect(name)
+                    compiled_steps.append((name, fn, params_tuple))
+                compiled = _CompiledPipeline(compiled_steps, cache_maxsize=self._cache_maxsize)
+                _GLOBAL_COMPILED_CACHE[runtime_signature] = compiled
+                if _GLOBAL_MAXSIZE is not None and _GLOBAL_MAXSIZE > 0:
+                    while len(_GLOBAL_COMPILED_CACHE) > _GLOBAL_MAXSIZE:
+                        _GLOBAL_COMPILED_CACHE.popitem(last=False)
+        # ローカルにも保持（軽量参照）
+        with self._lock:
+            self._compiled = compiled
+            self._compiled_signature = runtime_signature
+            return compiled
+
+    def __call__(self, g: Geometry) -> Geometry:
+        # 各ステップの params を Runtime で解決→量子化→署名タプル列へ
+        runtime = get_active_runtime()
+        runtime_sig_list: list[tuple[str, tuple[tuple[str, object], ...]]] = []
         for idx, st in enumerate(self._steps):
             fn = get_effect(st.name)
             params = dict(st.params)
             if runtime is not None:
-                params = runtime.before_effect_call(
-                    step_index=idx,
-                    effect_name=st.name,
-                    fn=fn,
-                    params=params,
+                params = dict(
+                    runtime.before_effect_call(
+                        step_index=idx,
+                        effect_name=st.name,
+                        fn=fn,
+                        params=params,
+                    )
                 )
             else:
                 params = dict(
@@ -168,27 +226,24 @@ class Pipeline:
                         index=idx,
                     )
                 )
-            out = fn(out, **params)
+            meta = getattr(fn, "__param_meta__", {}) or {}
+            params_tuple = _signature_tuple(params, meta)
+            runtime_sig_list.append((st.name, params_tuple))
 
-        # 単層キャッシュ（LRU 風）
-        if self._cache_maxsize == 0:
-            return out  # キャッシュ無効
-        with self._lock:
-            self._cache[key] = out
-            if self._cache_maxsize is not None and self._cache_maxsize > 0:
-                while len(self._cache) > self._cache_maxsize:
-                    self._cache.popitem(last=False)  # 先頭（最古）を追い出す
-        return out
+        runtime_signature = tuple(runtime_sig_list)
+        compiled = self._ensure_compiled(runtime_signature)
+        return compiled(g)
 
     def clear_cache(self) -> None:
-        """パイプラインの単層キャッシュをクリア。"""
         with self._lock:
-            self._cache.clear()
+            if self._compiled is not None:
+                self._compiled.clear_cache()
 
     def cache_info(self) -> dict[str, int]:
-        """簡易キャッシュ情報（サイズのみ）。"""
         with self._lock:
-            return {"size": len(self._cache)}
+            if self._compiled is not None:
+                return self._compiled.cache_info()
+            return {"size": 0, "maxsize": -1, "hits": 0, "misses": 0, "evicts": 0}
 
     def __repr__(self) -> str:  # 開発時の可読性向上
         steps = ", ".join(
@@ -197,8 +252,6 @@ class Pipeline:
         return f"Pipeline(steps=[{steps}], cache_maxsize={self._cache_maxsize})"
 
     __str__ = __repr__
-
-    # シリアライズ/デシリアライズ機能は削除（縮減方針）
 
 
 class PipelineBuilder:
@@ -216,8 +269,7 @@ class PipelineBuilder:
         self._steps: list[PipelineStep] = []
         # 既定サイズは環境変数から上書き可能
         self._cache_maxsize: int | None = None
-        # クリーン化方針: 既定で厳格検証を有効化
-        self._strict: bool = True
+        self._pipeline: Pipeline | None = None
         _env = os.getenv("PXD_PIPELINE_CACHE_MAXSIZE")
         if _env is not None:
             try:
@@ -228,6 +280,7 @@ class PipelineBuilder:
 
     def _add(self, name: str, params: dict[str, Any]) -> "PipelineBuilder":
         self._steps.append(PipelineStep(name, params))
+        self._pipeline = None  # invalidate
         return self
 
     def __getattr__(self, name: str):
@@ -237,7 +290,7 @@ class PipelineBuilder:
 
         return adder
 
-    # オプション: 単層キャッシュの上限を設定（None で無制限・従来互換）
+    # オプション: 単層キャッシュの上限を設定（None で無制限）
     def cache(self, *, maxsize: int | None) -> "PipelineBuilder":
         """パイプライン結果の単層キャッシュ上限を設定する。
 
@@ -256,59 +309,27 @@ class PipelineBuilder:
             self._cache_maxsize = 0
         else:
             self._cache_maxsize = maxsize
+        self._pipeline = None  # invalidate
         return self
 
-    # オプション: 厳格検証を有効化（ビルド時にパラメータ名を検査）
-    def strict(self, enabled: bool = True) -> "PipelineBuilder":
-        """ビルド時にステップのパラメータ名を検証する。
-
-        Parameters
-        ----------
-        enabled : bool, default True
-            ``True`` で厳格検証を有効化。``False`` にすると未知パラメータを
-            許容し、開発初期の試行錯誤を優先できる。
-
-        Notes
-        -----
-        厳格検証が有効な場合、各ステップのパラメータ名をエフェクト関数の
-        シグネチャと突き合わせ、未知キーがあれば ``TypeError`` を送出する。
-        ``**kwargs`` を受け取る関数は未知キーを許容する。
-        """
-        self._strict = enabled
-        return self
+    def _ensure_pipeline(self) -> Pipeline:
+        if self._pipeline is None:
+            self._pipeline = Pipeline(self._steps, cache_maxsize=self._cache_maxsize)
+        return self._pipeline
 
     def build(self) -> Pipeline:
-        if self._strict:
-            for i, st in enumerate(self._steps):
-                fn = get_effect(st.name)
-                try:
-                    sig = inspect.signature(fn)
-                except ValueError:
-                    # Builtins などはスキップ
-                    continue
-                has_var_kw = any(
-                    p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-                )
-                if has_var_kw:
-                    continue
-                allowed = {
-                    p.name
-                    for p in sig.parameters.values()
-                    if p.kind
-                    in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-                }
-                if "g" in allowed:
-                    allowed.remove("g")
-                unknown = [k for k in st.params.keys() if k not in allowed]
-                if unknown:
-                    allowed_sorted = ", ".join(sorted(allowed))
-                    raise TypeError(
-                        f"step[{i}] effect '{st.name}' has unknown params: {unknown}. Allowed: [{allowed_sorted}]"
-                    )
-        return Pipeline(self._steps, cache_maxsize=self._cache_maxsize)
+        # 実体を生成して保持（以後の __call__/cache_info で再利用）
+        return self._ensure_pipeline()
 
     def __call__(self, g: Geometry) -> Geometry:
-        return self.build()(g)
+        return self._ensure_pipeline()(g)
+
+    # 便宜: Builder にも統計/クリアを露出（利用者が build を意識しなくてよい）
+    def cache_info(self) -> dict[str, int]:
+        return self._ensure_pipeline().cache_info()
+
+    def clear_cache(self) -> None:
+        self._ensure_pipeline().clear_cache()
 
 
 class EffectsAPI:

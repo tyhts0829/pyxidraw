@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from typing import Any, Mapping
 
 from .state import ParameterLayoutConfig, ParameterStore
 from .window import ParameterWindow
@@ -23,7 +23,7 @@ class ParameterWindowController:
     ) -> None:
         self._store = store
         self._layout = layout or ParameterLayoutConfig()
-        self._window: ParameterWindow | None = None
+        self._window: Any | None = None
         self._visible: bool = True
 
     def start(self) -> None:
@@ -35,8 +35,8 @@ class ParameterWindowController:
         return None
 
     def apply_overrides(self, cc_snapshot: Mapping[int, float]) -> Mapping[int, float]:
-        # 現状は GUI と CC の直接連携は未実装のため情報をそのまま返す。
-        return dict(cc_snapshot)
+        # 現状は GUI と CC の直接連携は未実装。総域マッピングを維持して返す。
+        return cc_snapshot
 
     def set_visibility(self, visible: bool) -> None:
         self._visible = visible
@@ -53,5 +53,5 @@ class ParameterWindowController:
             self._window = None
 
     @property
-    def window(self) -> ParameterWindow | None:
+    def window(self) -> Any | None:
         return self._window

@@ -213,7 +213,7 @@ def run_sketch(
     parameter_manager: ParameterManager | None = None
     if use_parameter_gui and not init_only:
         try:
-            initial_cc = dict(cc_snapshot_fn())
+            initial_cc = cc_snapshot_fn()
         except Exception:
             initial_cc = {}
         parameter_manager = ParameterManager(user_draw)

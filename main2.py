@@ -14,10 +14,14 @@ CANVAS_SIZE = 400
 
 
 def draw(t: float, cc: Mapping[int, float]) -> Geometry:
+    pipe = E.pipeline.affine(scale=(1, 1, cc[2])).extrude()
+    poly = G.polyhedron().scale(200 * cc[1]).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     """デモ描画関数（MIDI 未接続でも安全に動作）。"""
-    poly = G.polyhedron().scale(400 * cc[1]).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-    pipe = E.pipeline.affine(scale=(2, 2, 2)).offset()
-    return pipe(poly)
+    out = pipe(poly)
+    # print(pipe.cache_info())
+    # print(G.cache_info())
+    # print(G.cache_info())
+    return out
 
 
 if __name__ == "__main__":

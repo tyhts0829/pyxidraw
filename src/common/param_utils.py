@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import math
-from typing import Any, Iterable, Tuple
+import os
+from typing import Any, Iterable, Mapping, Tuple
 
 import numpy as np
 
@@ -51,6 +52,8 @@ __all__ = [
     "ensure_vec3",
     "make_hashable_param",
     "params_to_tuple",
+    "quantize_params",
+    "signature_tuple",
 ]
 
 
@@ -111,3 +114,70 @@ def params_to_tuple(params: dict[str, Any]) -> Tuple[Tuple[str, object], ...]:
     """パラメータ辞書を「順序安定・ハッシュ可能」なタプル列に正規化する。"""
     items = sorted(params.items(), key=lambda kv: _key_for_sorting_object_key(kv[0]))
     return tuple((k, make_hashable_param(v)) for k, v in items)
+
+
+# ---- 量子化（ParamSignature 用ユーティリティ） -----------------------------
+
+
+def _env_quant_step(default_step: float | None) -> float:
+    if default_step is not None:
+        return float(default_step)
+    env = os.getenv("PXD_PIPELINE_QUANT_STEP")
+    try:
+        return float(env) if env is not None else 1e-3
+    except Exception:
+        return 1e-3
+
+
+def _quantize_scalar(value: Any, step: float) -> Any:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return round(float(value) / float(step)) * float(step)
+    return value
+
+
+def quantize_params(
+    params: Mapping[str, Any],
+    meta: Mapping[str, Mapping[str, Any]] | None = None,
+    *,
+    default_step: float | None = None,
+) -> dict[str, object]:
+    """パラメータ辞書を `step` に基づいて量子化する。
+
+    - 数値/ベクトル: `__param_meta__[name]['step']` を優先し、無ければ環境変数
+      `PXD_PIPELINE_QUANT_STEP`、それも無ければ 1e-3。
+    - それ以外: 値はそのまま。
+    """
+    step_default = _env_quant_step(default_step)
+    meta = meta or {}
+
+    out: dict[str, object] = {}
+    for k, v in params.items():
+        m = meta.get(k, {})
+        step = m.get("step")
+        if isinstance(v, (tuple, list)):
+            # ベクトルの各成分を量子化
+            if isinstance(step, (tuple, list)) and step:
+                steps: list[float | None] = list(step)  # type: ignore[assignment]
+            else:
+                steps = [step if isinstance(step, (int, float)) else step_default] * len(v)
+            result: list[Any] = []
+            for idx, comp in enumerate(v):
+                s = steps[idx if idx < len(steps) else -1]
+                s_val = float(s) if isinstance(s, (int, float)) else step_default
+                result.append(_quantize_scalar(comp, s_val))
+            out[k] = tuple(result)
+            continue
+        s = float(step) if isinstance(step, (int, float)) else step_default
+        out[k] = _quantize_scalar(v, s)
+    return out
+
+
+def signature_tuple(
+    params: Mapping[str, Any],
+    meta: Mapping[str, Mapping[str, Any]] | None = None,
+    *,
+    default_step: float | None = None,
+) -> Tuple[Tuple[str, object], ...]:
+    """量子化→ハッシュ可能化まで行い、署名タプルを返す。"""
+    q = quantize_params(params, meta, default_step=default_step)
+    return params_to_tuple(q)  # type: ignore[return-value]

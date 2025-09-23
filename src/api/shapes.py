@@ -54,6 +54,7 @@ from typing import Any, Callable, Iterable
 # レジストリ登録の副作用を発火させるため、shapes パッケージを 1 度だけ import すれば十分
 import shapes  # noqa: F401  (登録目的の副作用)
 from common.param_utils import params_to_tuple as _params_to_tuple
+from common.param_utils import signature_tuple as _signature_tuple
 from engine.core.geometry import Geometry, LineLike
 from engine.ui.parameters import get_active_runtime
 from engine.ui.parameters.runtime import resolve_without_runtime
@@ -109,7 +110,18 @@ class ShapesAPI:
         - 例外は下層からそのまま伝播。
         """
         params_dict = dict(params_tuple)
-        return ShapesAPI._generate_shape(shape_name, params_dict)
+        return ShapesAPI._generate_shape_resolved(shape_name, params_dict)
+
+    @staticmethod
+    def _generate_shape_resolved(shape_name: str, params_dict: dict[str, Any]) -> Geometry:
+        """Runtime 介在なしで直接シェイプ関数を実行し Geometry を返す。"""
+        fn = get_shape_generator(shape_name)
+        data = fn(**params_dict)
+        if isinstance(data, Geometry):
+            return data
+        return Geometry.from_lines(data)
+
+    # 量子化ユーティリティは common.param_utils.signature_tuple を使用
 
     @staticmethod
     def _generate_shape(shape_name: str, params_dict: dict[str, Any]) -> Geometry:
@@ -199,7 +211,12 @@ class ShapesAPI:
                 raise AttributeError(f"'{self.__class__.__name__}' has no attribute '{name}'")
             runtime = get_active_runtime()
             if runtime is not None:
-                return self._generate_shape(name, dict(params))
+                # Runtime 介在時も LRU を有効化するため、解決後の最終値（量子化後）で鍵を作る
+                fn = get_shape_generator(name)
+                resolved = dict(runtime.before_shape_call(name, fn, dict(params)))
+                meta = getattr(fn, "__param_meta__", {}) or {}
+                params_tuple = _signature_tuple(resolved, meta)
+                return self._cached_shape(name, params_tuple)
             params_tuple = self._params_to_tuple(**params)
             return self._cached_shape(name, params_tuple)
 
@@ -280,15 +297,16 @@ class ShapesAPI:
         cls._cached_shape.cache_clear()
 
     @classmethod
-    def cache_info(cls) -> object:
-        """LRU キャッシュの統計情報を取得する。
-
-        Returns
-        -------
-        object
-            `functools._CacheInfo` 互換の統計情報。
-        """
-        return cls._cached_shape.cache_info()
+    def cache_info(cls) -> dict[str, int]:
+        """LRU キャッシュの統計情報を取得する（辞書形式）。"""
+        info = cls._cached_shape.cache_info()
+        # functools._CacheInfo(hits, misses, maxsize, currsize)
+        return {
+            "hits": getattr(info, "hits", 0),
+            "misses": getattr(info, "misses", 0),
+            "maxsize": getattr(info, "maxsize", 0),
+            "size": getattr(info, "currsize", 0),
+        }
 
     # 補完体験向上: dir(G) で登録シェイプ名を出す
     def __dir__(self) -> list[str]:

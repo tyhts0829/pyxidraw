@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Mapping
 
+from .cc_snapshot import CCSnapshot
+
 from ..core.tickable import Tickable
 from .manager import MidiControllerManager
 
@@ -66,8 +68,8 @@ class MidiService(Tickable):
         ``{cc_number: value}`` を返す。辞書は *浅いコピー* なので
         呼び出し側で自由に破壊的変更しても安全。
         """
-        # copy() でイミュータブル保証
-        return dict(self._latest_cc_flat_cache)
+        # 総域マッピングで安全に渡す（未登録は 0.0）
+        return CCSnapshot(self._latest_cc_flat_cache)
 
     def save_all_cc(self) -> None:
         """各コントローラの CC をファイルに永続化する。"""

@@ -24,6 +24,7 @@ import inspect
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from engine.ui.parameters.cc_binding import CCBinding  # CC マーカー
 from engine.ui.parameters.state import (
     ParameterDescriptor,
     ParameterStore,
@@ -69,6 +70,7 @@ class ParameterValueResolver:
         doc: str | None,
         param_meta: Mapping[str, Mapping[str, Any]],
         skip: set[str] | None = None,
+        cc_snapshot: Mapping[int, float] | None = None,
     ) -> dict[str, Any]:
         merged, sources = self._merge_with_defaults(params, signature, skip=skip)
         updated: dict[str, Any] = {}
@@ -91,7 +93,40 @@ class ParameterValueResolver:
                     doc=doc,
                     meta_entry=meta_entry,
                     has_default=self._has_default(signature, key),
+                    cc_snapshot=cc_snapshot,
                 )
+                continue
+
+            if isinstance(raw_value, CCBinding):
+                # CC マーカー: CC スナップショットから値を取得し、midi_override として適用
+                cc_val = 0.0
+                if cc_snapshot is not None:
+                    cc_val = float(cc_snapshot.get(raw_value.index, 0.0))
+                if callable(raw_value.map):
+                    try:
+                        cc_val = float(raw_value.map(cc_val))
+                    except Exception:
+                        cc_val = float(cc_val)
+                # Descriptor 登録（original は default_actual）、midi_override をセット
+                descriptor = ParameterDescriptor(
+                    id=descriptor_id,
+                    label=f"{context.label_prefix} · {key}",
+                    source=context.scope,
+                    category=context.scope,
+                    value_type=value_type,
+                    default_value=default_actual,
+                    range_hint=self._range_hint_from_meta(
+                        value_type=value_type,
+                        meta=meta_entry,
+                        component_index=None,
+                        default_value=default_actual,
+                    ),
+                    help_text=doc,
+                    vector_group=None,
+                )
+                self._store.register(descriptor, default_actual)
+                self._store.set_override(descriptor_id, cc_val, source="midi")
+                updated[key] = self._store.resolve(descriptor_id, default_actual)
                 continue
 
             if self._is_numeric_type(value_type):
@@ -167,6 +202,7 @@ class ParameterValueResolver:
         doc: str | None,
         meta_entry: Mapping[str, Any],
         has_default: bool,
+        cc_snapshot: Mapping[int, float] | None = None,
     ) -> tuple[Any, ...]:
         provided_values = self._ensure_sequence(raw_value)
         default_values = self._ensure_sequence(default_actual)
@@ -253,8 +289,42 @@ class ParameterValueResolver:
             descriptors.append(descriptor)
             actual_values.append(float(actual_component))
 
-        resolved_components = self._register_vector(descriptors, actual_values)
-        return tuple(resolved_components)
+        # CCBinding を含むかを判定
+        has_cc = any(isinstance(v, CCBinding) for v in provided_values)
+        if not has_cc:
+            resolved_components = self._register_vector(descriptors, actual_values)
+            return tuple(resolved_components)
+
+        # CCBinding が含まれる場合: 登録→midi_override セット→resolve
+        resolved_vals: list[float] = []
+        for idx, descriptor in enumerate(descriptors):
+            base_original = (
+                default_values[idx]
+                if idx < len(default_values)
+                else (default_values[-1] if default_values else 0.0)
+            )
+            self._store.register(descriptor, base_original)
+            v_prov = provided_values[idx] if idx < len(provided_values) else None
+            if isinstance(v_prov, CCBinding):
+                cc_val = 0.0
+                if cc_snapshot is not None:
+                    cc_val = float(cc_snapshot.get(v_prov.index, 0.0))
+                if callable(v_prov.map):
+                    try:
+                        cc_val = float(v_prov.map(cc_val))
+                    except Exception:
+                        pass
+                self._store.set_override(descriptor.id, cc_val, source="midi")
+                resolved_vals.append(float(self._store.resolve(descriptor.id, base_original)))
+            else:
+                # 数値は gui override として扱う（original は default）
+                try:
+                    val = float(v_prov) if v_prov is not None else float(base_original)
+                except Exception:
+                    val = float(base_original)
+                self._store.set_override(descriptor.id, val, source="gui")
+                resolved_vals.append(float(self._store.resolve(descriptor.id, base_original)))
+        return tuple(resolved_vals)
 
     def _resolve_passthrough(
         self,

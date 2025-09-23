@@ -53,6 +53,11 @@ class ParameterManager:
         self.runtime.begin_frame()
         try:
             merged_cc = self.controller.apply_overrides(cc_values)
+            # 時刻/CC スナップショットを Runtime に渡す（GUI 由来の override は ParameterStore 側で適用）
+            try:
+                self.runtime.set_inputs(t, merged_cc)
+            except Exception:
+                pass
             return self._user_draw(t, merged_cc)
         finally:
             deactivate_runtime()

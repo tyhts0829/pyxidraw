@@ -54,9 +54,16 @@ class ParameterRuntime:
         self._lazy = True
         self._introspector = FunctionIntrospector()
         self._resolver = ParameterValueResolver(store)
+        self._t: float = 0.0
+        self._cc_snapshot: Mapping[int, float] = {}
 
     def set_lazy(self, lazy: bool) -> None:
         self._lazy = lazy
+
+    def set_inputs(self, t: float, cc_snapshot: Mapping[int, float]) -> None:
+        """時間`t`と CC のスナップショットを登録する。"""
+        self._t = float(t)
+        self._cc_snapshot = dict(cc_snapshot)
 
     # --- フレーム制御 ---
     def begin_frame(self) -> None:
@@ -73,12 +80,16 @@ class ParameterRuntime:
         index = self._shape_registry.next_index(shape_name)
         info = self._introspector.resolve(kind="shape", name=shape_name, fn=fn)
         context = ParameterContext(scope="shape", name=shape_name, index=index)
+        # `t` 引数があれば追加（存在時のみ注入）。その他の入力(CC/GUI)は ParameterStore 側の override で適用される。
+        if info.signature is not None and "t" in info.signature.parameters and "t" not in params:
+            params = {**params, "t": self._t}
         return self._resolver.resolve(
             context=context,
             params=params,
             signature=info.signature,
             doc=info.doc,
             param_meta=info.param_meta,
+            cc_snapshot=self._cc_snapshot,
         )
 
     # --- エフェクト ---
@@ -92,6 +103,8 @@ class ParameterRuntime:
     ) -> Mapping[str, Any]:
         info = self._introspector.resolve(kind="effect", name=effect_name, fn=fn)
         context = ParameterContext(scope="effect", name=effect_name, index=step_index)
+        if info.signature is not None and "t" in info.signature.parameters and "t" not in params:
+            params = {**params, "t": self._t}
         return self._resolver.resolve(
             context=context,
             params=params,
@@ -99,6 +112,7 @@ class ParameterRuntime:
             doc=info.doc,
             param_meta=info.param_meta,
             skip={"g"},
+            cc_snapshot=self._cc_snapshot,
         )
 
 

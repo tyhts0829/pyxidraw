@@ -58,10 +58,11 @@ class ParameterValue:
     timestamp: float = field(default_factory=time.time)
 
     def resolve(self) -> Any:
-        if self.override is not None:
-            return self.override
+        # CC をプライマリに（midi > gui > original）
         if self.midi_override is not None:
             return self.midi_override
+        if self.override is not None:
+            return self.override
         return self.original
 
 
