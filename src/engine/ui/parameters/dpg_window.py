@@ -11,8 +11,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from threading import Event, Thread
+from threading import Thread
 from typing import Any, Iterable
 
 try:  # dearpygui の存在は環境依存なのでガード
@@ -64,12 +63,6 @@ if dpg is None:  # pragma: no cover - import 不可時のダミー実装
 
 else:
 
-    @dataclass
-    class _ItemRefs:
-        widget_id: int
-        label_id: int | None
-        reset_id: int | None
-
     class _ParameterWindowImpl:  # type: ignore[override]
         """Dear PyGui によるパラメータウィンドウ。"""
 
@@ -88,9 +81,7 @@ else:
             self._height = height
             self._title = title
 
-            self._items: dict[str, _ItemRefs] = {}
             self._syncing = False
-            self._closed = Event()
             self._thread: Thread | None = None
             self._using_pyglet = False
 
@@ -119,10 +110,8 @@ else:
             # 購読
             self._store.subscribe(self._on_store_change)
 
-            # 表示
+            # 表示 + 駆動
             dpg.show_viewport()
-
-            # 駆動（pyglet があれば統合、無ければスレッド）
             if pyglet is not None:
                 self._using_pyglet = True
                 pyglet.clock.schedule_interval(self._tick, 1 / 60)
@@ -151,15 +140,15 @@ else:
                 except Exception:
                     pass
             if self._thread is not None:
-                self._closed.set()
                 try:
+                    dpg.stop_dearpygui()
                     self._thread.join(timeout=1.0)
                 except Exception:
                     pass
             try:
                 dpg.destroy_context()
-            finally:
-                self._items.clear()
+            except Exception:
+                pass
 
         # ---- マウント/構築 ----
         def mount(self, descriptors: list[ParameterDescriptor]) -> None:
@@ -175,19 +164,18 @@ else:
 
         def _create_row(self, parent: int | str, desc: ParameterDescriptor) -> None:
             # ラベル
-            label_id: int | None = None
             if desc.label:
-                label_id = dpg.add_text(default_value=desc.label, parent=parent)
+                dpg.add_text(default_value=desc.label, parent=parent)
             # ウィジェット
-            widget_id = self._create_widget(parent, desc)
+            self._create_widget(parent, desc)
             # ツールチップは非採用（ポップアップは表示しない）
-            self._items[desc.id] = _ItemRefs(widget_id=widget_id, label_id=label_id, reset_id=None)
 
         def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int:
             value = self._current_or_default(desc)
             vt = desc.value_type
             if vt == "bool":
                 return dpg.add_checkbox(
+                    tag=desc.id,
                     parent=parent,
                     label="",
                     default_value=bool(value),
@@ -199,6 +187,7 @@ else:
                 default = str(value) if value is not None else (items[0] if items else "")
                 if len(items) <= 5:
                     return dpg.add_radio_button(
+                        tag=desc.id,
                         items=items,
                         parent=parent,
                         default_value=default,
@@ -207,6 +196,7 @@ else:
                         user_data=desc.id,
                     )
                 return dpg.add_combo(
+                    tag=desc.id,
                     items=items,
                     parent=parent,
                     default_value=default,
@@ -217,6 +207,7 @@ else:
                 vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
                 if len(vec) == 4:
                     return dpg.add_input_float4(
+                        tag=desc.id,
                         parent=parent,
                         label="",
                         default_value=vec,  # type: ignore[arg-type]
@@ -224,6 +215,7 @@ else:
                         user_data=desc.id,
                     )
                 return dpg.add_input_float3(
+                    tag=desc.id,
                     parent=parent,
                     label="",
                     default_value=(vec + [0.0, 0.0, 0.0])[:3],  # type: ignore[arg-type]
@@ -236,6 +228,7 @@ else:
             )
             if vt == "int":
                 return dpg.add_slider_int(
+                    tag=desc.id,
                     parent=parent,
                     label="",
                     default_value=int(value) if value is not None else 0,
@@ -246,6 +239,7 @@ else:
                 )
             # float 既定
             return dpg.add_slider_float(
+                tag=desc.id,
                 parent=parent,
                 label="",
                 default_value=float(value) if value is not None else 0.0,
@@ -280,17 +274,21 @@ else:
             self._syncing = True
             try:
                 for pid in ids:
-                    refs = self._items.get(pid)
-                    if not refs:
+                    if not dpg.does_item_exist(pid):
                         continue
                     value = self._store.current_value(pid)
                     if value is None:
-                        # original に戻す
                         value = self._store.original_value(pid)
+                    # vector は list を期待するため変換
                     try:
-                        dpg.set_value(refs.widget_id, value)
+                        desc = self._store.get_descriptor(pid)
+                        if desc.value_type == "vector" and isinstance(value, tuple):
+                            value = list(value)
                     except Exception:
-                        # 型不一致時などは黙ってスキップ
+                        pass
+                    try:
+                        dpg.set_value(pid, value)
+                    except Exception:
                         pass
             finally:
                 self._syncing = False
@@ -306,13 +304,10 @@ else:
                 pass
 
         def _run_loop(self) -> None:
-            while not self._closed.is_set():
-                try:
-                    if dpg.is_dearpygui_running():
-                        dpg.render_dearpygui_frame()
-                except Exception:
-                    pass
-                self._closed.wait(1.0 / 60.0)
+            try:
+                dpg.start_dearpygui()
+            except Exception:
+                pass
 
         # ---- テーマ（最小: パディング + enum コントラスト） ----
         def _setup_theme(self) -> None:
