@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from queue import Empty
+from typing import Callable, Mapping
 
 from ..core.tickable import Tickable
 from .buffer import SwapBuffer
@@ -15,7 +16,13 @@ from .buffer import SwapBuffer
 class StreamReceiver(Tickable):
     """結果キューを監視して DoubleBuffer に流し込むだけの責務。"""
 
-    def __init__(self, double_buffer: SwapBuffer, result_q, max_packets_per_tick: int = 2):
+    def __init__(
+        self,
+        double_buffer: SwapBuffer,
+        result_q,
+        max_packets_per_tick: int = 2,
+        on_metrics: Callable[[Mapping[str, str]], None] | None = None,
+    ):
         """
         _buffer:データを流し込む先のDoubleBuffer
         _q (Queue): ワーカープロセスが作成したデータ（RenderPacket）が入るキュー
@@ -26,6 +33,7 @@ class StreamReceiver(Tickable):
         self._q = result_q
         self._max = max_packets_per_tick
         self._latest_frame: int | None = None
+        self._on_metrics = on_metrics
 
     # -------- Tickable interface --------
     def tick(self, dt: float) -> None:
@@ -46,4 +54,11 @@ class StreamReceiver(Tickable):
             if (self._latest_frame is None) or (packet.frame_id > self._latest_frame):
                 self._buffer.push(packet.geometry)
                 self._latest_frame = packet.frame_id
+                # HUD 用メトリクス（任意）
+                try:
+                    flags = getattr(packet, "cache_flags", None)
+                    if flags and self._on_metrics is not None:
+                        self._on_metrics(flags)
+                except Exception:
+                    pass
             processed += 1

@@ -5,6 +5,7 @@
 """
 
 from dataclasses import dataclass
+from typing import Mapping
 
 from engine.core.geometry import Geometry
 
@@ -15,3 +16,5 @@ class RenderPacket:
 
     geometry: Geometry
     frame_id: int  # ワーカ側で連番付与
+    # 追加メトリクス（任意）: HUD 用にキャッシュの HIT/MISS を伝える。
+    cache_flags: Mapping[str, str] | None = None  # keys: "shape"/"effect" → "HIT" or "MISS"

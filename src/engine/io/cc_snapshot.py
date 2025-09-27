@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, KeysView, ItemsView, Iterator
+from collections.abc import ItemsView, Iterator, KeysView, Mapping
 from typing import Any, TypeVar, overload
 
 

@@ -1,10 +1,13 @@
 この AGENTS.md は `src/api/` 配下に適用されます（近接優先）。
 
 目的/役割
+
 - 公開 API のエントリポイント。
+- ユーザーが import して使うモジュールのみ配置を許可。
 - `G`（形状ファクトリ）、`E.pipeline`（エフェクトパイプライン）、`run`/`run_sketch` の薄いファサードを提供。
 
 外部とのつながり（依存関係）
+
 - 依存可: `engine.core.Geometry`、`effects.registry`、`shapes.registry`、`api.sketch`。
 - 依存原則: `api/*` から `engine/*` への依存は最小限（公開 API の薄いファサードに限定）。
 - 例外（sketch.py のみ許可）:
@@ -17,12 +20,15 @@
   - 上記以外の `api/*` モジュールは従来どおり `engine.render/*` および `engine.runtime/*` への直接依存を禁止。
 
 方針/Do
+
 - 変換・加工ロジックを持ち込まず、委譲に徹する。
 - 外部保存/復元/仕様検証の API は提供しない（縮減方針）。
 
 Don’t
+
 - ハードウェア I/O を直接扱わない（MIDI/GL へは `engine` 経由）。
 - 重い依存のモジュールトップ import。
 
 テスト指針
+
 - 入口 API のみの単体テスト（パラメータ透過、例外、LRU 動作）。

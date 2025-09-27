@@ -56,11 +56,13 @@ class _WorkerProcess(mp.Process):
         result_q: mp.Queue,
         draw_callback: Callable[[float], Geometry],
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
+        metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None,
     ):
         super().__init__(daemon=True)
         self.task_q, self.result_q = task_q, result_q
         self.draw_callback = draw_callback
         self.apply_cc_snapshot = apply_cc_snapshot
+        self.metrics_snapshot = metrics_snapshot
 
     def run(self) -> None:
         """頂点データとフレームIDを持つ RenderPacket を生成し、結果キューに送る。"""
@@ -73,9 +75,37 @@ class _WorkerProcess(mp.Process):
                         self.apply_cc_snapshot(task.cc_state)
                 except Exception:
                     pass
+                # 直前のスナップショット
+                try:
+                    before = self.metrics_snapshot() if self.metrics_snapshot is not None else None
+                except Exception:
+                    before = None
                 # t のみを渡す（cc は api.cc 側で参照）
                 geometry = self.draw_callback(task.t)
-                self.result_q.put(RenderPacket(geometry, task.frame_id))
+                # 直後のスナップショット
+                try:
+                    after = self.metrics_snapshot() if self.metrics_snapshot is not None else None
+                except Exception:
+                    after = None
+                # HIT/MISS の二値判定
+                flags = None
+                if isinstance(before, dict) and isinstance(after, dict):
+                    try:
+                        s_hit = after.get("shape", {}).get("hits", 0) > before.get("shape", {}).get(
+                            "hits", 0
+                        )
+                        e_hit = after.get("effect", {}).get("hits", 0) > before.get(
+                            "effect", {}
+                        ).get("hits", 0)
+                        flags = {
+                            "shape": "HIT" if s_hit else "MISS",
+                            "effect": "HIT" if e_hit else "MISS",
+                        }
+                    except Exception:
+                        flags = None
+                self.result_q.put(
+                    RenderPacket(geometry=geometry, frame_id=task.frame_id, cache_flags=flags)
+                )
             except Exception as e:  # 例外を親へ
                 # デバッグ用：分類情報を付与
                 import traceback
@@ -99,6 +129,7 @@ class WorkerPool(Tickable):
         cc_snapshot,
         num_workers: int = 4,
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None = None,
+        metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None = None,
     ):
         self._fps = fps
         self._frame_iter = itertools.count()
@@ -108,6 +139,7 @@ class WorkerPool(Tickable):
         self._cc_snapshot = cc_snapshot
         self._draw_callback = draw_callback
         self._apply_cc_snapshot = apply_cc_snapshot
+        self._metrics_snapshot = metrics_snapshot
         self._inline = num_workers < 1
         if self._inline:
             # スレッド内で完結させるため、シリアライズを避ける queue.Queue を利用する
@@ -116,7 +148,9 @@ class WorkerPool(Tickable):
         else:
             self._result_q = mp.Queue()
             self._workers = [
-                _WorkerProcess(self._task_q, self._result_q, draw_callback, apply_cc_snapshot)
+                _WorkerProcess(
+                    self._task_q, self._result_q, draw_callback, apply_cc_snapshot, metrics_snapshot
+                )
                 for _ in range(num_workers)
             ]
             for w in self._workers:
@@ -141,8 +175,38 @@ class WorkerPool(Tickable):
                             self._apply_cc_snapshot(task.cc_state)
                     except Exception:
                         pass
+                    # 直前/直後で差分を取得
+                    try:
+                        before = (
+                            self._metrics_snapshot() if self._metrics_snapshot is not None else None
+                        )
+                    except Exception:
+                        before = None
                     geometry = self._draw_callback(task.t)
-                    self._result_q.put(RenderPacket(geometry, task.frame_id))
+                    try:
+                        after = (
+                            self._metrics_snapshot() if self._metrics_snapshot is not None else None
+                        )
+                    except Exception:
+                        after = None
+                    flags = None
+                    if isinstance(before, dict) and isinstance(after, dict):
+                        try:
+                            s_hit = after.get("shape", {}).get("hits", 0) > before.get(
+                                "shape", {}
+                            ).get("hits", 0)
+                            e_hit = after.get("effect", {}).get("hits", 0) > before.get(
+                                "effect", {}
+                            ).get("hits", 0)
+                            flags = {
+                                "shape": "HIT" if s_hit else "MISS",
+                                "effect": "HIT" if e_hit else "MISS",
+                            }
+                        except Exception:
+                            flags = None
+                    self._result_q.put(
+                        RenderPacket(geometry=geometry, frame_id=task.frame_id, cache_flags=flags)
+                    )
                 except Exception as exc:  # 例外を揃える
                     self._result_q.put(WorkerTaskError(task.frame_id, exc))
             else:

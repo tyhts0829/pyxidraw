@@ -82,14 +82,18 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Callable, Mapping, cast
+from typing import Callable, Mapping, Optional, cast
 
 import numpy as np
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
+from engine.ui.hud.config import HUDConfig
 from engine.ui.parameters.manager import ParameterManager
 from util.constants import CANVAS_SIZES
+
+from .effects import global_cache_counters as _effects_counters
+from .shapes import ShapesAPI as _ShapesAPI
 
 
 def run_sketch(
@@ -105,6 +109,7 @@ def run_sketch(
     midi_strict: bool | None = None,
     init_only: bool = False,
     use_parameter_gui: bool = False,
+    hud_config: HUDConfig | None = None,
 ) -> None:
     """
     user_draw :
@@ -129,6 +134,8 @@ def run_sketch(
         環境変数 ``PYXIDRAW_MIDI_STRICT`` を参照（未設定は False）。
     use_parameter_gui :
         True で描画パラメータ編集ウィンドウを有効化し、`user_draw` の呼び出しをラップする。
+    hud_config :
+        HUD の表示設定。None の場合は既定（FPS/VERTEX/CPU/MEM を表示、CACHE は OFF）。
     """
     # ---- ① 設定からFPSを解決 --------------------------------------
     # 引数fpsがNoneのときだけ、設定 (configs/default.yaml 等) を参照
@@ -237,10 +244,11 @@ def run_sketch(
     from engine.runtime.buffer import SwapBuffer
     from engine.runtime.receiver import StreamReceiver
     from engine.runtime.worker import WorkerPool
-    from engine.ui.monitor import MetricSampler
-    from engine.ui.overlay import OverlayHUD
+    from engine.ui.hud.overlay import OverlayHUD
+    from engine.ui.hud.sampler import MetricSampler
 
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
+    hud_conf: HUDConfig = hud_config or HUDConfig()
     swap_buffer = SwapBuffer()
     # API 層で CC スナップショット適用関数を注入（engine は api を知らない）
     try:
@@ -248,14 +256,59 @@ def run_sketch(
     except Exception:  # pragma: no cover - フォールバック
         _apply_cc_snapshot = None  # type: ignore[assignment]
 
+    # メトリクス収集（HUD 用）を注入（spawn 安全なトップレベル関数）
+    def _metrics_snapshot() -> dict[str, dict[str, int]]:  # noqa: D401
+        """shape/effect のキャッシュ累計を取得する（前後差分の材）。"""
+        try:
+            s_info = _ShapesAPI.cache_info()
+        except Exception:
+            s_info = {"hits": 0, "misses": 0}
+        try:
+            e_info = _effects_counters()
+        except Exception:
+            e_info = {"compiled": 0, "enabled": 0, "hits": 0, "misses": 0}
+        return {
+            "shape": {
+                "hits": int(s_info.get("hits", 0)),
+                "misses": int(s_info.get("misses", 0)),
+            },
+            "effect": {
+                "compiled": int(e_info.get("compiled", 0)),
+                "enabled": int(e_info.get("enabled", 0)),
+                "hits": int(e_info.get("hits", 0)),
+                "misses": int(e_info.get("misses", 0)),
+            },
+        }
+
+    # HUD/CACHE が無効なら計測関数は渡さない
+    if not (hud_conf.enabled and hud_conf.show_cache_status):
+        _metrics_snapshot = None  # type: ignore[assignment]
+
     worker_pool = WorkerPool(
         fps=fps,
         draw_callback=draw_callable,
         cc_snapshot=cc_snapshot_fn,
         apply_cc_snapshot=_apply_cc_snapshot,
         num_workers=worker_count,
+        metrics_snapshot=_metrics_snapshot,
     )
-    stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)
+
+    # HUD: キャッシュ HIT/MISS を受け取って更新（有効時のみ）
+    on_metrics_cb: Optional[Callable[[Mapping[str, str]], None]] = None
+    if hud_conf.enabled and hud_conf.show_cache_status:
+
+        def _on_metrics(flags):  # type: ignore[no-untyped-def]
+            try:
+                shape_status = str(flags.get("shape", "MISS"))
+                effect_status = str(flags.get("effect", "MISS"))
+                sampler.data["CACHE/SHAPE"] = shape_status
+                sampler.data["CACHE/EFFECT"] = effect_status
+            except Exception:
+                pass
+
+        on_metrics_cb = _on_metrics
+
+    stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q, on_metrics=on_metrics_cb)
 
     # ---- ⑤ Window & ModernGL --------------------------------------
     rendering_window = RenderWindow(window_width, window_height, bg_color=background)  # type: ignore[abstract]
@@ -264,8 +317,11 @@ def run_sketch(
     mgl_ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
 
     # ----  モニタリング ----------------------------------------
-    sampler = MetricSampler(swap_buffer)
-    overlay = OverlayHUD(rendering_window, sampler)
+    sampler: MetricSampler | None = None
+    overlay: OverlayHUD | None = None
+    if hud_conf.enabled:
+        sampler = MetricSampler(swap_buffer, config=hud_conf)
+        overlay = OverlayHUD(rendering_window, sampler, config=hud_conf)
     export_service = ExportService()  # Stage3以降で GCodeWriter を接続
     _current_g_job: str | None = None
 
@@ -289,12 +345,16 @@ def run_sketch(
 
     # ---- Draw callbacks ----------------------------------
     rendering_window.add_draw_callback(line_renderer.draw)
-    rendering_window.add_draw_callback(overlay.draw)
+    if overlay is not None:
+        rendering_window.add_draw_callback(overlay.draw)
 
     # ---- ⑦ FrameCoordinator ---------------------------------------
-    frame_clock = FrameClock(
-        [midi_service, worker_pool, stream_receiver, line_renderer, sampler, overlay]
-    )
+    tickables: list[Tickable] = [midi_service, worker_pool, stream_receiver, line_renderer]
+    if sampler is not None:
+        tickables.append(sampler)
+    if overlay is not None:
+        tickables.append(overlay)
+    frame_clock = FrameClock(tickables)
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
 
     # ---- ⑧ pyglet イベント -----------------------------------------
@@ -318,26 +378,31 @@ def run_sketch(
                 else:
                     # 低コスト（overlayあり）: 画面バッファをそのまま保存
                     p = save_png(rendering_window, scale=1.0, include_overlay=True)
-                overlay.show_message(f"Saved PNG: {p}")
+                if overlay is not None:
+                    overlay.show_message(f"Saved PNG: {p}")
             except Exception as e:  # 失敗時のHUD表示
-                overlay.show_message(f"PNG 保存失敗: {e}", level="error")
+                if overlay is not None:
+                    overlay.show_message(f"PNG 保存失敗: {e}", level="error")
         # G-code 保存（G / Shift+G）
         if sym == key.G and not (mods & key.MOD_SHIFT):
             nonlocal _current_g_job
             if _current_g_job is not None:
-                overlay.show_message("G-code エクスポート実行中", level="warn")
+                if overlay is not None:
+                    overlay.show_message("G-code エクスポート実行中", level="warn")
                 return
             front = swap_buffer.get_front()
             if front is None or front.is_empty:
-                overlay.show_message(
-                    "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
-                )
+                if overlay is not None:
+                    overlay.show_message(
+                        "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
+                    )
                 return
             coords, offsets = front.as_arrays(copy=True)
             try:
                 job_id = export_service.submit_gcode_job((coords, offsets), simulate=True)
             except RuntimeError:
-                overlay.show_message("G-code エクスポート実行中", level="warn")
+                if overlay is not None:
+                    overlay.show_message("G-code エクスポート実行中", level="warn")
                 return
             _current_g_job = job_id
 
@@ -346,18 +411,23 @@ def run_sketch(
                 nonlocal _current_g_job
                 assert _current_g_job is not None
                 prog = export_service.progress(_current_g_job)
-                overlay.set_progress("gcode", prog.done_vertices, prog.total_vertices)
+                if overlay is not None:
+                    overlay.set_progress("gcode", prog.done_vertices, prog.total_vertices)
                 if prog.state in ("completed", "failed", "cancelled"):
                     # 終了処理
-                    overlay.clear_progress("gcode")
+                    if overlay is not None:
+                        overlay.clear_progress("gcode")
                     if prog.state == "completed" and prog.path is not None:
-                        overlay.show_message(f"Saved G-code: {prog.path}")
+                        if overlay is not None:
+                            overlay.show_message(f"Saved G-code: {prog.path}")
                     elif prog.state == "failed":
-                        overlay.show_message(f"G-code 失敗: {prog.error}", level="error")
+                        if overlay is not None:
+                            overlay.show_message(f"G-code 失敗: {prog.error}", level="error")
                     elif prog.state == "cancelled":
-                        overlay.show_message(
-                            "G-code エクスポートをキャンセルしました", level="warn"
-                        )
+                        if overlay is not None:
+                            overlay.show_message(
+                                "G-code エクスポートをキャンセルしました", level="warn"
+                            )
                     pyglet.clock.unschedule(_poll_progress)
                     _current_g_job = None
 
@@ -365,7 +435,8 @@ def run_sketch(
         # Shift+G → キャンセル
         if sym == key.G and (mods & key.MOD_SHIFT) and _current_g_job is not None:
             export_service.cancel(_current_g_job)
-            overlay.show_message("G-code エクスポートをキャンセルします", level="warn")
+            if overlay is not None:
+                overlay.show_message("G-code エクスポートをキャンセルします", level="warn")
 
     @rendering_window.event
     def on_close():  # noqa: ANN001

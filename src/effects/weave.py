@@ -13,6 +13,7 @@ import math
 import numpy as np
 from numba import njit, types
 from numba.typed import List
+
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
 

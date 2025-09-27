@@ -94,7 +94,9 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
   - `core/frame_clock.py`, `core/tickable.py`: フレーム調停と更新インターフェース。
   - `runtime/`: `WorkerPool`, `StreamReceiver`, `buffer` 等の並行処理。
   - `render/renderer.py`: ライン描画（正射影行列、倍精度→GPU転送）。
-  - `ui/overlay.py`, `ui/monitor.py`: HUD とメトリクス。
+  - `ui/hud/overlay.py`, `ui/hud/sampler.py`: HUD とメトリクス。
+  - `ui/hud/`: `HUDConfig` とフィールド定義（HUD 表示/計測のオプション制御）。
+  - キャッシュ累計スナップショット取得は `api.sketch` 内のトップレベル関数で実装し、Worker へ関数注入する（engine は api を参照しない）。
   - `io/`: MIDI 接続・スナップショット取得。
 - `effects/`: 幾何処理のオペレータ群と `registry.py`。
   - 代表例: `affine(auto_center: bool, pivot: Vec3, angles_rad: Vec3, scale: Vec3)` —
@@ -371,7 +373,7 @@ Tips:
 - Engine/Core: `core/geometry.py`, `core/frame_clock.py`, `core/render_window.py`, `core/tickable.py`
 - Engine/Runtime: `runtime/worker.py`, `runtime/receiver.py`, `runtime/buffer.py`
 - Engine/Render: `render/renderer.py`, `render/line_mesh.py`, `render/shader.py`
-- Engine/UI/Monitor: `ui/overlay.py`, `ui/monitor.py`
+- Engine/UI/Monitor: `ui/hud/overlay.py`, `ui/hud/sampler.py`
 - Effects: `effects/*.py`, `effects/registry.py`
 - Shapes: `shapes/*.py`, `shapes/registry.py`
 - Common/Util: `common/*.py`, `util/*.py`（`constants.py`, `utils.py`, `geom3d_ops.py` など）

@@ -9,9 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Mapping
 
-from .cc_snapshot import CCSnapshot
-
 from ..core.tickable import Tickable
+from .cc_snapshot import CCSnapshot
 from .manager import MidiControllerManager
 
 

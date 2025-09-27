@@ -35,6 +35,17 @@ pytest -q -m smoke
 python main.py
 ```
 
+HUD 設定の例（任意）:
+```
+from engine.ui.hud import HUDConfig
+from api.sketch import run_sketch
+
+# CACHE 表示を有効化し、CPU/MEM を無効化
+cfg = HUDConfig(show_cache_status=True, show_cpu_mem=False)
+
+run_sketch(user_draw, hud_config=cfg)
+```
+
 独自 Shape の登録例（最小）:
 ```
 from api import shape, G

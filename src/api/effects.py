@@ -164,6 +164,41 @@ class _CompiledPipeline:
             }
 
 
+def global_cache_counters() -> dict[str, int]:
+    """エフェクト（compiled pipelines）全体のヒット/ミス累計を集計する。
+
+    Returns
+    -------
+    dict[str, int]
+        以下のキーを持つ辞書。
+        - "compiled": 現在存在する compiled pipelines の数
+        - "enabled": そのうちキャッシュが有効（maxsize!=0）なものの数
+        - "hits": 全 compiled の `_hits` 合計
+        - "misses": 全 compiled の `_misses` 合計
+
+    Notes
+    -----
+    UI/HUD 側で前後差分から HIT/MISS を判定するのに用いる。
+    """
+    with _GLOBAL_LOCK:
+        compiled_list = list(_GLOBAL_COMPILED_CACHE.values())
+        compiled = len(compiled_list)
+        enabled = 0
+        hits = 0
+        misses = 0
+        for cp in compiled_list:
+            try:
+                # 有効判定
+                if getattr(cp, "_cache_maxsize", None) != 0:
+                    enabled += 1
+                hits += int(getattr(cp, "_hits", 0))
+                misses += int(getattr(cp, "_misses", 0))
+            except Exception:
+                # 不正アクセスは無視（集計に影響しない）
+                pass
+        return {"compiled": compiled, "enabled": enabled, "hits": hits, "misses": misses}
+
+
 class Pipeline:
     def __init__(self, steps: Sequence[PipelineStep], *, cache_maxsize: int | None = 128):
         self._steps = list(steps)

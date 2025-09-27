@@ -171,7 +171,7 @@ Stage 4 — PNG エクスポートラッパ
 - 合格基準: 生成ファイルのピクセル数が期待通り（`scale` 反映）、エラー時に説明的例外。
 
 Stage 5 — HUD 拡張（メッセージ/進捗）
-- [x] `engine/ui/overlay.py` に簡易 API を追加:
+- [x] `engine/ui/hud/overlay.py` に簡易 API を追加:
   - [x] `show_message(text: str, level: Literal["info","warn","error"] = "info", timeout_sec=3)`
   - [x] `set_progress(key: str, done: int, total: int)` / `clear_progress(key: str)`
 - 合格基準: 実行時に一時メッセージが表示され、進捗が % で更新/消去できる。
