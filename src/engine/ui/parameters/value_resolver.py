@@ -23,6 +23,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
+
 from engine.ui.parameters.state import (
     ParameterDescriptor,
     ParameterStore,
@@ -444,7 +445,6 @@ class ParameterValueResolver:
             return value
         return None
 
-    @staticmethod
     @staticmethod
     def _component_default_actual(
         *,
