@@ -11,15 +11,20 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
-import pyglet
+# pyglet は任意依存のため、解析時に欠如しても問題にならないようガード
+try:  # pragma: no cover - 環境依存
+    import pyglet as _pyglet  # type: ignore
+except Exception:  # pragma: no cover - 未導入/ヘッドレス
+    _pyglet = None  # type: ignore[assignment]
+pyglet: Any = _pyglet
 
 from util.paths import ensure_screenshots_dir
 
 
 def save_png(
-    window: "pyglet.window.Window",
+    window: Any,
     path: Path | None = None,
     *,
     scale: float = 1.0,
@@ -78,8 +83,11 @@ def save_png(
         return path
     else:
         # FBO 経由で高解像度（overlay なし）を描画
+        # importlib 経由で動的に取得（pyright の missing import を回避）
         try:
-            import moderngl as mgl  # noqa: F401  # 遅延インポート（存在確認のみ）
+            import importlib
+
+            importlib.import_module("moderngl")
         except Exception as e:  # pragma: no cover - 実行時依存
             raise RuntimeError(f"ModernGL の利用に失敗: {e}") from e
 
@@ -99,6 +107,7 @@ def save_png(
         if width <= 0 or height <= 0:
             raise ValueError("出力解像度が不正です（width/height <= 0）")
 
+        fbo = None
         try:
             fbo = ctx.simple_framebuffer((width, height), components=4)  # type: ignore[attr-defined]
             fbo.use()
@@ -124,7 +133,8 @@ def save_png(
             except Exception:
                 pass
             try:
-                fbo.release()
+                if fbo is not None:
+                    fbo.release()
             except Exception:
                 pass
 

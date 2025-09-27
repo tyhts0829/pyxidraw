@@ -15,14 +15,17 @@ from threading import Thread
 from typing import Any, Iterable
 
 try:  # dearpygui の存在は環境依存なのでガード
-    import dearpygui.dearpygui as dpg  # type: ignore
+    import dearpygui.dearpygui as _dpg  # type: ignore
 except Exception:  # pragma: no cover - headless/未導入用フォールバック
-    dpg = None  # type: ignore[assignment]
+    _dpg = None  # type: ignore[assignment]
+# 解析器に Optional を意識させないため Any にアサイン
+dpg: Any = _dpg
 
 try:  # pyglet があれば描画フレームを統合（メインスレッド駆動）
-    import pyglet  # type: ignore
+    import pyglet as _pyglet  # type: ignore
 except Exception:  # pragma: no cover - headless/未導入
-    pyglet = None  # type: ignore[assignment]
+    _pyglet = None  # type: ignore[assignment]
+pyglet: Any = _pyglet
 
 from .state import (
     ParameterDescriptor,
@@ -36,7 +39,7 @@ from .state import (
 
 if dpg is None:  # pragma: no cover - import 不可時のダミー実装
 
-    class _ParameterWindowStub:  # type: ignore[override]
+    class ParameterWindow:  # type: ignore[override]
         """DPG 未導入/ヘッドレス環境向けのダミーウィンドウ。"""
 
         def __init__(
@@ -59,11 +62,9 @@ if dpg is None:  # pragma: no cover - import 不可時のダミー実装
         def mount(self, _descriptors: list[ParameterDescriptor]) -> None:
             return None
 
-    __all__ = ["ParameterWindow"]
-
 else:
 
-    class _ParameterWindowImpl:  # type: ignore[override]
+    class ParameterWindow:  # type: ignore[override]
         """Dear PyGui によるパラメータウィンドウ。"""
 
         def __init__(
@@ -363,7 +364,5 @@ else:
                 # 失敗しても既定スタイルで継続
                 pass
 
-    __all__ = ["ParameterWindow"]
 
-# 公開エイリアス
-ParameterWindow = _ParameterWindowStub if dpg is None else _ParameterWindowImpl
+__all__ = ["ParameterWindow"]

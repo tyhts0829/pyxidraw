@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import math
-import numbers
 import operator
+from typing import cast
 
 
 ####
@@ -110,8 +110,8 @@ class RegularPolyhedron:
         # 最初の３法線を求める.
         rm = Matrix33(cosXY, -sinXY, 0, sinXY, cosXY, 0, +0, 0, 1)
         n1 = ((p1 - p3) * (p2 - p1)).normalize()
-        n2 = (rm * n1).normalize()
-        n3 = (rm * n2).normalize()
+        n2 = cast(Vector3, rm * n1).normalize()
+        n3 = cast(Vector3, rm * n2).normalize()
 
         # 頂点と法線の一覧を作成する.
         self.main_vertex = S.create_vector_list(p1, p2, p3)
@@ -147,7 +147,7 @@ class RegularPolyhedron:
 ####
 
 
-class Vector3(numbers.Integral):
+class Vector3:
     MESSAGE_FORMAT = "(%+.6e, %+.6e, %+.6e)"
 
     def __init__(self, *args):
@@ -324,7 +324,7 @@ class Vector3(numbers.Integral):
     def __imul__(self, rhs):
         x1, y1, z1 = self.value
         if type(rhs) in (int, float):
-            self.value = (x1 * rhs, y1 * rhs, z1 * rhs)
+            self.value = [x1 * rhs, y1 * rhs, z1 * rhs]
             return self
         if type(rhs) is Vector3:
             x2, y2, z2 = rhs.value
@@ -410,7 +410,7 @@ class Vector3(numbers.Integral):
 ####
 
 
-class Matrix33(numbers.Integral):
+class Matrix33:
     def __init__(self, *args):
         if len(args) == 9:
             self.value = list(args)

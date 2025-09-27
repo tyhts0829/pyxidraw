@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from engine.ui.parameters.state import (
     ParameterLayoutConfig,
