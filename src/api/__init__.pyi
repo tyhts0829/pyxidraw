@@ -107,10 +107,10 @@ class _PipelineBuilder(Protocol):
     # meta: factor (type=number, range=[0.0, 50.0])
     def explode(self, *, factor: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        中心から外側へ頂点を放射状に移動させるエフェクト。
+        連続線を線分単位に分断し、各線分を中心から外側へ平行移動する。
 
         引数:
-            factor: 移動距離（mm 単位）
+            factor: 各線分（単一点含む）の移動距離（mm 単位）
         """
         ...
     # meta: direction (type=vec3)
