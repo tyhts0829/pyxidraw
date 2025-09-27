@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Mapping
-
 from api.sketch import run_sketch
 from engine.core.geometry import Geometry
 
 
-def _draw(_t: float, _cc: Mapping[int, float]) -> Geometry:
+def _draw(_t: float) -> Geometry:
     # 最小ジオメトリ
     import numpy as np
 

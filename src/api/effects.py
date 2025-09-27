@@ -182,6 +182,13 @@ class Pipeline:
             if runtime_signature in _GLOBAL_COMPILED_CACHE:
                 compiled = _GLOBAL_COMPILED_CACHE.pop(runtime_signature)
                 _GLOBAL_COMPILED_CACHE[runtime_signature] = compiled
+                # Builder の cache_maxsize 設定を反映（再利用時にも尊重）
+                try:
+                    compiled._cache_maxsize = self._cache_maxsize  # type: ignore[attr-defined]
+                    if self._cache_maxsize == 0:
+                        compiled.clear_cache()
+                except Exception:
+                    pass
             else:
                 compiled_steps: list[
                     tuple[str, Callable[..., Geometry], tuple[tuple[str, object], ...]]
@@ -318,7 +325,8 @@ class PipelineBuilder:
         return self._pipeline
 
     def build(self) -> Pipeline:
-        # 実体を生成して保持（以後の __call__/cache_info で再利用）
+        # 実体を生成して保持（以後の __call__/cache_info で再利用）。
+        # 厳格検証は行わない（未知キーはランタイム呼び出し時のシグネチャで検出され得る）。
         return self._ensure_pipeline()
 
     def __call__(self, g: Geometry) -> Geometry:

@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
-from api import G, run_sketch, shape
+from api import G, cc, run_sketch, shape
 from engine.core.geometry import Geometry
 
 
@@ -35,10 +35,10 @@ def my_star(*, points: int = 7, r: float = 80.0, inner: float = 0.5) -> Geometry
     return Geometry.from_lines([xy])
 
 
-def user_draw(t: float, cc: dict[int, float]) -> Geometry:  # noqa: D401 - 簡潔
+def user_draw(t: float) -> Geometry:  # noqa: D401 - 簡潔
     # 時間で半径をゆっくり変調（視覚変化）。CC#1 でも上書き可能。
     base_r = 80.0 + 10.0 * np.sin(t * 0.8)
-    r = base_r + 40.0 * float(cc.get(1, 0.0))
+    r = base_r + 40.0 * (cc[1] * 1.0)
     return G.my_star(points=7, r=r, inner=0.5)
 
 

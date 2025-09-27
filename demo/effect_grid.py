@@ -16,7 +16,7 @@ from __future__ import annotations
 import sys
 from math import ceil
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 # src/ を import パスへ追加（main.py と同様の簡易ブート）
 ROOT = Path(__file__).resolve().parents[1]
@@ -162,7 +162,7 @@ _LABELS_GEO: Geometry | None = None
 ANGULAR_SPEED = 0.6  # [rad/s]
 
 
-def draw(t: float, _cc: Mapping[int, float]) -> Geometry:
+def draw(t: float) -> Geometry:
     global _CELL_GEOMS, _CELL_CENTERS, _LABELS_GEO
     if _CELL_GEOMS is None:
         _initialize_grid()

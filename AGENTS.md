@@ -10,7 +10,7 @@
 - '報告して'や'どう思う？'や'提案して'といった指示は、聞かれたことだけ答え、コードを先回りして変更しないこと。
 - ルート AGENTS.md の最小項目（Build/Test/Style/Safety/PR）を常に最新化
 - ルート architecture.md は実装（src/ 配下）と同期しています。差分を見つけた場合は、該当コードの参照箇所とともに更新してください。
-- shape/effect の公開パラメータは実値（float/int/bool/vector）で受け取り、`__param_meta__` の min/max/step を RangeHint（実レンジ）として利用する（値変換レイヤは撤廃。クランプは表示上のみ）。
+- shape/effect の公開パラメータは実値（float/int/bool/vector）で受け取り、`__param_meta__` の min/max/step を RangeHint（実レンジ）として利用する（値変換レイヤは撤廃。クランプは表示上のみ）。RangeHint 未指定時は 0–1 の既定レンジ。
 - コード改善を指示された場合、コード変更前に、改善アクションを細分化したチェックリストを新規.md ファイルとして保存し、私にそれでいいか確認してください。その後、私の返答に基づいて改善を行い、完了アイテムをチェックしていき、何が完了し、何が完了していないかを常に明確にして下さい。改善の中で気がついた、私に事前確認したほうがいいことや、さらなる改善提案があれば、その md ファイルに追記して報告してください。
 - 回答は日本語。
 
@@ -59,6 +59,15 @@
 - 設定: `config.yaml`, `configs/default.yaml`
 - テスト: `tests/`（`smoke`/`integration`/`e2e`/`perf`/`optional`）
 - CI: `.github/workflows/verify-stubs.yml`
+
+## パラメータ GUI / cc ルール（現行仕様）
+
+- cc は `api.cc` のグローバル辞書（`cc[i] -> float(0..1)`、未定義は 0.0）。`draw(t)` 内で自由に数値計算に使用。
+- GUI は「draw 内で未指定（＝既定値採用）の引数のみ」を対象に表示・調整する。
+- 優先順位は「明示引数 > GUI > 既定値」。MIDI→GUI の自動上書きは行わない（midi_override は廃止）。
+- RangeHint は `__param_meta__` がある場合のみ用い、無い場合は 0–1 の既定レンジで扱う（クランプは表示上のみ）。
+- Runtime は `set_inputs(t)` のみを扱い、cc は関知しない（cc は `api.cc` 内でフレーム毎スナップショットとして更新）。
+ - macOS 注記: Dear PyGui は UI イベントをメインスレッドで処理する必要があるため、pyglet が利用可能な環境では `pyglet.clock.schedule_interval` でメインスレッドから DPG を駆動。pyglet 未導入時はバックグラウンドスレッド／スタブで無害化する。
 
 ## Testing / CI ルール
 

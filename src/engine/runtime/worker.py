@@ -54,18 +54,27 @@ class _WorkerProcess(mp.Process):
         self,
         task_q: mp.Queue,
         result_q: mp.Queue,
-        draw_callback: Callable[[float, Mapping[int, float]], Geometry],
+        draw_callback: Callable[[float], Geometry],
+        apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
     ):
         super().__init__(daemon=True)
         self.task_q, self.result_q = task_q, result_q
         self.draw_callback = draw_callback
+        self.apply_cc_snapshot = apply_cc_snapshot
 
     def run(self) -> None:
         """頂点データとフレームIDを持つ RenderPacket を生成し、結果キューに送る。"""
         logger = logging.getLogger(__name__)
         for task in iter(self.task_q.get, None):  # None = sentinel
             try:
-                geometry = self.draw_callback(task.t, task.cc_state)
+                # CC スナップショットを適用（API レイヤから受け取った関数を使用）
+                try:
+                    if self.apply_cc_snapshot is not None:
+                        self.apply_cc_snapshot(task.cc_state)
+                except Exception:
+                    pass
+                # t のみを渡す（cc は api.cc 側で参照）
+                geometry = self.draw_callback(task.t)
                 self.result_q.put(RenderPacket(geometry, task.frame_id))
             except Exception as e:  # 例外を親へ
                 # デバッグ用：分類情報を付与
@@ -86,9 +95,10 @@ class WorkerPool(Tickable):
     def __init__(
         self,
         fps: int,
-        draw_callback: Callable[[float, Mapping[int, float]], Geometry],
+        draw_callback: Callable[[float], Geometry],
         cc_snapshot,
         num_workers: int = 4,
+        apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None = None,
     ):
         self._fps = fps
         self._frame_iter = itertools.count()
@@ -97,6 +107,7 @@ class WorkerPool(Tickable):
         self._result_q: Queue[RenderPacket | WorkerTaskError] | mp.Queue
         self._cc_snapshot = cc_snapshot
         self._draw_callback = draw_callback
+        self._apply_cc_snapshot = apply_cc_snapshot
         self._inline = num_workers < 1
         if self._inline:
             # スレッド内で完結させるため、シリアライズを避ける queue.Queue を利用する
@@ -105,7 +116,7 @@ class WorkerPool(Tickable):
         else:
             self._result_q = mp.Queue()
             self._workers = [
-                _WorkerProcess(self._task_q, self._result_q, draw_callback)
+                _WorkerProcess(self._task_q, self._result_q, draw_callback, apply_cc_snapshot)
                 for _ in range(num_workers)
             ]
             for w in self._workers:
@@ -124,7 +135,13 @@ class WorkerPool(Tickable):
             task = RenderTask(frame_id=frame_id, t=self._elapsed_time, cc_state=self._cc_snapshot())
             if self._inline:
                 try:
-                    geometry = self._draw_callback(task.t, task.cc_state)
+                    # CC スナップショットを適用（インライン時）
+                    try:
+                        if self._apply_cc_snapshot is not None:
+                            self._apply_cc_snapshot(task.cc_state)
+                    except Exception:
+                        pass
+                    geometry = self._draw_callback(task.t)
                     self._result_q.put(RenderPacket(geometry, task.frame_id))
                 except Exception as exc:  # 例外を揃える
                     self._result_q.put(WorkerTaskError(task.frame_id, exc))

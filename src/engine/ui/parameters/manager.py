@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Mapping
+from typing import Callable
 
 from engine.core.geometry import Geometry
 
@@ -20,7 +20,7 @@ class ParameterManager:
 
     def __init__(
         self,
-        user_draw: Callable[[float, Mapping[int, float]], Geometry],
+        user_draw: Callable[[float], Geometry],
         *,
         layout: ParameterLayoutConfig | None = None,
         lazy_trace: bool = True,
@@ -32,13 +32,15 @@ class ParameterManager:
         self.controller = ParameterWindowController(self.store, layout=layout)
         self._initialized = False
 
-    def initialize(self, cc_snapshot: Mapping[int, float]) -> None:
+    def initialize(self) -> None:
         if self._initialized:
             return
         activate_runtime(self.runtime)
         self.runtime.begin_frame()
         try:
-            self._user_draw(0.0, cc_snapshot)
+            # 初回は t=0 のみ登録（cc は api.cc 側に閉じる）
+            self.runtime.set_inputs(0.0)
+            self._user_draw(0.0)
         finally:
             deactivate_runtime()
         descriptors = self.store.descriptors()
@@ -48,17 +50,13 @@ class ParameterManager:
             self.controller.set_visibility(False)
         self._initialized = True
 
-    def draw(self, t: float, cc_values: Mapping[int, float]) -> Geometry:
+    def draw(self, t: float) -> Geometry:
         activate_runtime(self.runtime)
         self.runtime.begin_frame()
         try:
-            merged_cc = self.controller.apply_overrides(cc_values)
-            # 時刻/CC スナップショットを Runtime に渡す（GUI 由来の override は ParameterStore 側で適用）
-            try:
-                self.runtime.set_inputs(t, merged_cc)
-            except Exception:
-                pass
-            return self._user_draw(t, merged_cc)
+            # 現在の CC は api.cc に閉じる（GUI は Store 経由）
+            self.runtime.set_inputs(t)
+            return self._user_draw(t)
         finally:
             deactivate_runtime()
 

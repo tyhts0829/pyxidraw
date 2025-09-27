@@ -7,7 +7,7 @@ import pytest
 from api.sketch import run_sketch
 
 
-def _dummy_draw(t: float, cc):  # noqa: ANN001
+def _dummy_draw(t: float):  # noqa: ANN001
     import numpy as np
 
     from engine.core.geometry import Geometry

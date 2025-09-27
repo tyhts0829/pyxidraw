@@ -1,6 +1,6 @@
 """
 どこで: `api.sketch`（実行ランナー）。
-何を: ユーザの `user_draw(t, cc)->Geometry` をワーカで駆動し、GL でレンダ・HUD 表示・MIDI 入力を統合。
+何を: ユーザの `user_draw(t)->Geometry` をワーカで駆動し、GL でレンダ・HUD 表示・MIDI 入力を統合。
 なぜ: 少ない記述で対話的なスケッチ実行と計測を可能にするため（UI/MIDI は任意で自動フォールバック）。
 
 api.sketch — スケッチ実行・描画ランナー（リアルタイム UI + MIDI 入力）
@@ -11,7 +11,7 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 
 主エントリポイント:
 - `run_sketch(user_draw, *, canvas_size="A5", render_scale=4, fps=None, ... )`:
-  - `user_draw(t: float, cc: Mapping[int, float]) -> Geometry` を一定レートで呼び出し、
+  - `user_draw(t: float) -> Geometry` を一定レートで呼び出し、
     返された `Geometry` を GPU でレンダリングする。
   - ウィンドウは `pyglet`、描画は `ModernGL` を用いたラインレンダラにより行う。
   - バックグラウンド側で `WorkerPool` が `user_draw` を実行し、`SwapBuffer` 経由で
@@ -59,9 +59,10 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
     import numpy as np
     from engine.core.geometry import Geometry
 
-    def user_draw(t, cc):
+    def user_draw(t):
         # 半径を時間と CC#1 で変調した円
-        r = 50 + 30 * float(cc.get(1, 0.0))
+        from api import cc
+        r = 50 + 30 * (cc[1] * 1.0)
         theta = np.linspace(0, 2*np.pi, 200, endpoint=False)
         xy = np.c_[r*np.cos(theta), r*np.sin(theta)]
         return Geometry.from_lines([xy])
@@ -92,7 +93,7 @@ from util.constants import CANVAS_SIZES
 
 
 def run_sketch(
-    user_draw: Callable[[float, Mapping[int, float]], Geometry],
+    user_draw: Callable[[float], Geometry],
     *,
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: float = 4.0,
@@ -212,15 +213,9 @@ def run_sketch(
     # init_only の場合は重い依存を読み込まずに早期リターン
     parameter_manager: ParameterManager | None = None
     if use_parameter_gui and not init_only:
-        try:
-            initial_cc = cc_snapshot_fn()
-        except Exception:
-            initial_cc = {}
         parameter_manager = ParameterManager(user_draw)
-        parameter_manager.initialize(initial_cc)
-        draw_callable = cast(
-            Callable[[float, Mapping[int, float]], Geometry], parameter_manager.draw
-        )
+        parameter_manager.initialize()
+        draw_callable = cast(Callable[[float], Geometry], parameter_manager.draw)
         worker_count = 0
     else:
         draw_callable = user_draw
@@ -247,10 +242,17 @@ def run_sketch(
 
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
     swap_buffer = SwapBuffer()
+    # API 層で CC スナップショット適用関数を注入（engine は api を知らない）
+    try:
+        from api.cc import set_snapshot as _apply_cc_snapshot
+    except Exception:  # pragma: no cover - フォールバック
+        _apply_cc_snapshot = None  # type: ignore[assignment]
+
     worker_pool = WorkerPool(
         fps=fps,
         draw_callback=draw_callable,
         cc_snapshot=cc_snapshot_fn,
+        apply_cc_snapshot=_apply_cc_snapshot,
         num_workers=worker_count,
     )
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q)

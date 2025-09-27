@@ -290,9 +290,10 @@ from .shapes import ShapesAPI as ShapesAPI
 
 G: _GShapes
 E: _Effects
+cc: Any
 from shapes.registry import shape as shape
 from effects.registry import effect as effect
 from .sketch import run_sketch as run_sketch, run_sketch as run
 __all__ = [
-    'G', 'E', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry',
+    'G', 'E', 'cc', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry',
 ]

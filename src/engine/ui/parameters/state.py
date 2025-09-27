@@ -18,7 +18,7 @@ from typing import Any, Callable, Iterable, Literal
 
 ValueType = Literal["float", "int", "bool", "enum", "vector"]
 SourceType = Literal["shape", "effect"]
-OverrideSource = Literal["gui", "midi"]
+OverrideSource = Literal["gui"]
 
 
 @dataclass(frozen=True)
@@ -54,13 +54,10 @@ class ParameterValue:
 
     original: Any
     override: Any | None = None
-    midi_override: Any | None = None
     timestamp: float = field(default_factory=time.time)
 
     def resolve(self) -> Any:
-        # CC をプライマリに（midi > gui > original）
-        if self.midi_override is not None:
-            return self.midi_override
+        # GUI > original のみ
         if self.override is not None:
             return self.override
         return self.original
@@ -86,7 +83,6 @@ class ParameterStore:
         self._values: dict[str, ParameterValue] = {}
         self._listeners: list[Subscriber] = []
         self._lock = RLock()
-        self._last_notification: float = 0.0
 
     # --- 登録 / 問合せ ---
     def register(self, descriptor: ParameterDescriptor, value: Any) -> None:
@@ -148,49 +144,19 @@ class ParameterStore:
         self,
         param_id: str,
         value: Any,
-        *,
-        source: OverrideSource = "gui",
     ) -> OverrideResult:
         # 実値はそのまま保持し、ここではクランプしない
         clamped = False
         with self._lock:
             entry = self._values.setdefault(param_id, ParameterValue(original=value))
-            if source == "gui":
-                entry.override = value
-            else:
-                entry.midi_override = value
+            entry.override = value
             entry.timestamp = time.time()
         self._notify({param_id})
-        return OverrideResult(value=value, clamped=clamped, source=source)
+        return OverrideResult(value=value, clamped=clamped, source="gui")
 
-    def clear_override(self, param_id: str, *, source: OverrideSource = "gui") -> None:
-        with self._lock:
-            entry = self._values.get(param_id)
-            if entry is None:
-                return
-            changed = False
-            if source == "gui" and entry.override is not None:
-                entry.override = None
-                changed = True
-            if source == "midi" and entry.midi_override is not None:
-                entry.midi_override = None
-                changed = True
-            if changed:
-                entry.timestamp = time.time()
-        if changed:
-            self._notify({param_id})
+    # Reset 機能は削除（要件簡素化）
 
-    def clear_all_overrides(self) -> None:
-        with self._lock:
-            changed: set[str] = set()
-            for param_id, value in self._values.items():
-                if value.override is not None or value.midi_override is not None:
-                    value.override = None
-                    value.midi_override = None
-                    value.timestamp = time.time()
-                    changed.add(param_id)
-        if changed:
-            self._notify(changed)
+    # Reset 機能は削除（要件簡素化）
 
     # --- リスナー ---
     def subscribe(self, listener: Subscriber) -> None:
@@ -233,34 +199,15 @@ class ParameterLayoutConfig:
     padding: int = 8
     font_size: int = 12
     value_precision: int = 3
-    default_range_multiplier: float = 1.0
 
     def derive_range(self, *, name: str, value_type: ValueType, default_value: Any) -> RangeHint:
-        """値ヒューリスティックから範囲を推定する。"""
-        multiplier = self.default_range_multiplier
+        """最小構成の既定レンジ: 数値は 0..1、bool は 0/1。"""
         if value_type == "bool":
             return RangeHint(0, 1, step=1)
-        if value_type == "enum":
-            return RangeHint(0, 1)
-        if value_type in {"float", "vector"}:
-            base = float(default_value) if default_value is not None else 0.0
-            if base == 0.0:
-                lo, hi = 0.0, 1.0
-            else:
-                delta = max(abs(base), 1.0) * multiplier
-                lo, hi = base - delta, base + delta
-            if any(token in name for token in ("scale", "subdiv", "freq")):
-                lo = max(0.0, lo)
-            return RangeHint(lo, hi)
         if value_type == "int":
-            base_int = int(default_value or 0)
-            delta_int = max(abs(base_int), 1)
-            lo = base_int - delta_int
-            hi = base_int + delta_int
-            if any(token in name for token in ("count", "segments", "subdiv")):
-                lo = max(0, lo)
-            return RangeHint(lo, hi, step=1)
-        return RangeHint(0, 1)
+            return RangeHint(0, 1, step=1)
+        # float/enum/vector も 0..1 を既定とする
+        return RangeHint(0.0, 1.0)
 
 
 class ParameterRegistry:

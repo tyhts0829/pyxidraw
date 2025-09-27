@@ -10,7 +10,6 @@
 - ステップ追加: `E.pipeline.<effect>(..., **params)`
 - ビルド: `.build() -> Pipeline`
 - 実行: `Pipeline(g: Geometry) -> Geometry`
-- 厳格モード: `.strict(enabled: bool)`（既定 True）
 - キャッシュ: `.cache(maxsize: int | None)`（既定 無制限 / 0 で無効）
 
 ```
@@ -27,8 +26,8 @@ pipe = (
 out = pipe(base)
 ```
 
-## 厳格モードとパラメータ検証
-- 未知キーは例外にする（strict=True）。
+## パラメータ検証
+- ビルド時の厳格検証は行わない（未知キーは許容）。実行時にエフェクト関数のシグネチャで自然に TypeError となり得る。
 - `effects` は `__param_meta__` を任意で公開可能（型/範囲/choices）。
 - 外部仕様（JSON など）に対する検証 API は提供しない（縮減方針）。
 

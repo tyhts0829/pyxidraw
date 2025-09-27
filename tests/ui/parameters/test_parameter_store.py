@@ -27,16 +27,16 @@ def test_parameter_store_resolve_and_override():
     result = store.set_override(descriptor.id, 5.0)
     assert result.clamped is False
     assert store.current_value(descriptor.id) == 5.0
-
-    store.clear_override(descriptor.id)
-    assert store.current_value(descriptor.id) == 0.5
+    # Reset 機能は削除済み
 
 
 def test_layout_config_derives_positive_range():
-    layout = ParameterLayoutConfig(default_range_multiplier=1.0)
+    layout = ParameterLayoutConfig()
     hint = layout.derive_range(name="scale", value_type="float", default_value=0.0)
     assert hint.min_value == 0.0
     assert hint.max_value == 1.0
 
     hint_int = layout.derive_range(name="count", value_type="int", default_value=4)
-    assert hint_int.min_value <= 4 <= hint_int.max_value
+    # 最小構成では int も 0..1 とする
+    assert hint_int.min_value == 0
+    assert hint_int.max_value == 1

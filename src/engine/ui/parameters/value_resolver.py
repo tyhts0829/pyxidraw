@@ -23,8 +23,6 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
-
-from engine.ui.parameters.cc_binding import CCBinding  # CC マーカー
 from engine.ui.parameters.state import (
     ParameterDescriptor,
     ParameterStore,
@@ -70,7 +68,6 @@ class ParameterValueResolver:
         doc: str | None,
         param_meta: Mapping[str, Mapping[str, Any]],
         skip: set[str] | None = None,
-        cc_snapshot: Mapping[int, float] | None = None,
     ) -> dict[str, Any]:
         merged, sources = self._merge_with_defaults(params, signature, skip=skip)
         updated: dict[str, Any] = {}
@@ -93,40 +90,7 @@ class ParameterValueResolver:
                     doc=doc,
                     meta_entry=meta_entry,
                     has_default=self._has_default(signature, key),
-                    cc_snapshot=cc_snapshot,
                 )
-                continue
-
-            if isinstance(raw_value, CCBinding):
-                # CC マーカー: CC スナップショットから値を取得し、midi_override として適用
-                cc_val = 0.0
-                if cc_snapshot is not None:
-                    cc_val = float(cc_snapshot.get(raw_value.index, 0.0))
-                if callable(raw_value.map):
-                    try:
-                        cc_val = float(raw_value.map(cc_val))
-                    except Exception:
-                        cc_val = float(cc_val)
-                # Descriptor 登録（original は default_actual）、midi_override をセット
-                descriptor = ParameterDescriptor(
-                    id=descriptor_id,
-                    label=f"{context.label_prefix} · {key}",
-                    source=context.scope,
-                    category=context.scope,
-                    value_type=value_type,
-                    default_value=default_actual,
-                    range_hint=self._range_hint_from_meta(
-                        value_type=value_type,
-                        meta=meta_entry,
-                        component_index=None,
-                        default_value=default_actual,
-                    ),
-                    help_text=doc,
-                    vector_group=None,
-                )
-                self._store.register(descriptor, default_actual)
-                self._store.set_override(descriptor_id, cc_val, source="midi")
-                updated[key] = self._store.resolve(descriptor_id, default_actual)
                 continue
 
             if self._is_numeric_type(value_type):
@@ -149,6 +113,7 @@ class ParameterValueResolver:
                 descriptor_id=descriptor_id,
                 param_name=key,
                 value=raw_value,
+                source=source,
                 doc=doc,
                 default_value=default_actual,
                 meta_entry=meta_entry,
@@ -170,25 +135,27 @@ class ParameterValueResolver:
         value_type: ValueType,
         has_default: bool,
     ) -> Any:
-        hint = self._range_hint_from_meta(
-            value_type=value_type,
-            meta=meta_entry,
-            component_index=None,
-            default_value=default_actual,
-        )
-        descriptor = ParameterDescriptor(
-            id=descriptor_id,
-            label=f"{context.label_prefix} · {param_name}",
-            source=context.scope,
-            category=context.scope,
-            value_type=value_type,
-            default_value=default_actual,
-            range_hint=hint,
-            help_text=doc,
-            vector_group=None,
-        )
-        actual_value = default_actual if source == "default" else raw_value
-        return self._register_scalar(descriptor, actual_value)
+        if source == "default":
+            hint = self._range_hint_from_meta(
+                value_type=value_type,
+                meta=meta_entry,
+                component_index=None,
+                default_value=default_actual,
+            )
+            descriptor = ParameterDescriptor(
+                id=descriptor_id,
+                label=f"{context.label_prefix} · {param_name}",
+                source=context.scope,
+                category=context.scope,
+                value_type=value_type,
+                default_value=default_actual,
+                range_hint=hint,
+                help_text=doc,
+                vector_group=None,
+            )
+            return self._register_scalar(descriptor, default_actual)
+        # provided は登録せず、そのまま返す
+        return raw_value
 
     def _resolve_vector(
         self,
@@ -202,9 +169,8 @@ class ParameterValueResolver:
         doc: str | None,
         meta_entry: Mapping[str, Any],
         has_default: bool,
-        cc_snapshot: Mapping[int, float] | None = None,
     ) -> tuple[Any, ...]:
-        # 提供値は CCBinding 混在の可能性があるため、float 化せずにそのまま展開
+        # 提供値は数値列の可能性があるため、そのまま展開
         provided_values_mixed: list[Any]
         if isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes)):
             provided_values_mixed = list(raw_value)
@@ -242,7 +208,7 @@ class ParameterValueResolver:
                 hint=component_hint,
             )
 
-            # 実際に与えられた値（数値 or CCBinding）
+            # 実際に与えられた値（数値/未指定）
             if provided_values_mixed:
                 if idx < len(provided_values_mixed):
                     v_prov = provided_values_mixed[idx]
@@ -252,43 +218,32 @@ class ParameterValueResolver:
             else:
                 v_prov = None
 
-            descriptor = ParameterDescriptor(
-                id=component_id,
-                label=f"{context.label_prefix} · {param_name}.{suffix}",
-                source=context.scope,
-                category=context.scope,
-                value_type="float",
-                default_value=base_original,
-                range_hint=component_hint,
-                help_text=doc,
-                vector_group=descriptor_id,
-            )
-            # original を決定: provided 数値なら original=provided、
-            # CCBinding/未指定は base_original のまま
-            if not isinstance(v_prov, CCBinding) and v_prov is not None and source != "default":
-                try:
-                    original_value = float(v_prov)
-                except Exception:
-                    original_value = float(base_original)
-            else:
+            if source == "default":
+                descriptor = ParameterDescriptor(
+                    id=component_id,
+                    label=f"{context.label_prefix} · {param_name}.{suffix}",
+                    source=context.scope,
+                    category=context.scope,
+                    value_type="float",
+                    default_value=base_original,
+                    range_hint=component_hint,
+                    help_text=doc,
+                    vector_group=descriptor_id,
+                )
                 original_value = float(base_original)
-            self._store.register(descriptor, original_value)
-
-            # override 適用（midi > gui）
-            if isinstance(v_prov, CCBinding):
-                cc_val = 0.0
-                if cc_snapshot is not None:
-                    cc_val = float(cc_snapshot.get(v_prov.index, 0.0))
-                if callable(v_prov.map):
+                self._store.register(descriptor, original_value)
+                resolved = float(self._store.resolve(component_id, original_value))
+                resolved_vals.append(resolved)
+            else:
+                # provided 値（数値ならそれを採用、未指定なら base）
+                if v_prov is not None:
                     try:
-                        cc_val = float(v_prov.map(cc_val))
+                        resolved = float(v_prov)
                     except Exception:
-                        cc_val = float(cc_val)
-                self._store.set_override(component_id, cc_val, source="midi")
-            # 数値 provided は original として登録済み。ここで GUI override は付与しない。
-
-            resolved = float(self._store.resolve(component_id, original_value))
-            resolved_vals.append(resolved)
+                        resolved = float(base_original)
+                else:
+                    resolved = float(base_original)
+                resolved_vals.append(resolved)
 
         return tuple(resolved_vals)
 
@@ -299,6 +254,7 @@ class ParameterValueResolver:
         descriptor_id: str,
         param_name: str,
         value: Any,
+        source: str,
         doc: str | None,
         default_value: Any,
         meta_entry: Mapping[str, Any] | None,
@@ -321,21 +277,23 @@ class ParameterValueResolver:
             value_type == "enum" and bool(choices_list)
         )
         # choices は後で param_meta から渡すよう `_determine_value_type` と resolve 経路を拡張してもよい
-        descriptor = ParameterDescriptor(
-            id=descriptor_id,
-            label=f"{context.label_prefix} · {param_name}",
-            source=context.scope,
-            category=context.scope,
-            value_type=value_type,
-            default_value=default_value,
-            range_hint=None,
-            help_text=doc,
-            vector_group=None,
-            supported=supported,
-            choices=choices_list,
-        )
-        self._store.register(descriptor, value)
-        return self._store.resolve(descriptor.id, value)
+        if source == "default":
+            descriptor = ParameterDescriptor(
+                id=descriptor_id,
+                label=f"{context.label_prefix} · {param_name}",
+                source=context.scope,
+                category=context.scope,
+                value_type=value_type,
+                default_value=default_value,
+                range_hint=None,
+                help_text=doc,
+                vector_group=None,
+                supported=supported,
+                choices=choices_list,
+            )
+            self._store.register(descriptor, value)
+            return self._store.resolve(descriptor.id, value)
+        return value
 
     def _register_scalar(self, descriptor: ParameterDescriptor, value: Any) -> Any:
         self._store.register(descriptor, value)
@@ -457,38 +415,17 @@ class ParameterValueResolver:
         meta: Mapping[str, Any],
         component_index: int | None,
         default_value: Any | None,
-    ) -> RangeHint:
+    ) -> RangeHint | None:
         min_value = self._extract_meta_component(meta.get("min"), component_index)
         max_value = self._extract_meta_component(meta.get("max"), component_index)
         step = self._extract_meta_component(meta.get("step"), component_index)
-
-        default_min, default_max, default_step = self._default_actual_range(value_type)
-        actual_min = min_value if min_value is not None else None
-        actual_max = max_value if max_value is not None else None
-        actual_step = step if step is not None else default_step
-
-        if actual_min is None or actual_max is None:
-            inferred_min, inferred_max = self._infer_range_from_default(
-                default_value=default_value,
-                value_type=value_type,
-                fallback_min=default_min,
-                fallback_max=default_max,
-            )
-            if actual_min is None:
-                actual_min = inferred_min
-            if actual_max is None:
-                actual_max = inferred_max
-
-        if actual_min == actual_max:
-            if value_type == "int":
-                actual_max = int(actual_min) + 1
-            else:
-                actual_max = float(actual_min) + 1.0
-
+        if min_value is None or max_value is None:
+            return None
+        # step は任意。scale は固定。
         return RangeHint(
-            min_value=float(actual_min),
-            max_value=float(actual_max),
-            step=actual_step,
+            min_value=float(min_value),
+            max_value=float(max_value),
+            step=step,
             scale="linear",
         )
 
@@ -508,62 +445,16 @@ class ParameterValueResolver:
         return None
 
     @staticmethod
-    def _default_actual_range(
-        value_type: ValueType,
-    ) -> tuple[float | int, float | int, float | int | None]:
-        if value_type == "bool":
-            return 0, 1, 1
-        if value_type == "int":
-            return 0, 1, 1
-        return 0.0, 1.0, None
-
-    @staticmethod
-    def _infer_range_from_default(
-        *,
-        default_value: Any | None,
-        value_type: ValueType,
-        fallback_min: float | int,
-        fallback_max: float | int,
-    ) -> tuple[float | int, float | int]:
-        if isinstance(default_value, (int, float)) and not isinstance(default_value, bool):
-            if fallback_min == 0 and fallback_max == 1:
-                return fallback_min, fallback_max
-            center = float(default_value)
-            span = max(abs(center), 1.0)
-            if value_type == "int":
-                span_int = max(int(round(span)), 1)
-                lower = int(center - span_int)
-                if lower < 0:
-                    lower = 0
-                upper = int(center + span_int)
-                if upper <= lower:
-                    upper = lower + 1
-                return lower, upper
-            lower_f = center - span
-            upper_f = center + span
-            if upper_f <= lower_f:
-                upper_f = lower_f + 1.0
-            return lower_f, upper_f
-        return fallback_min, fallback_max
-
     @staticmethod
     def _component_default_actual(
         *,
         default_values: list[float],
         idx: int,
         has_default: bool,
-        hint: RangeHint,
+        hint: RangeHint | None,
     ) -> float:
         if has_default and idx < len(default_values):
             return float(default_values[idx])
-        lo = hint.min_value
-        hi = hint.max_value
-        if lo is not None and hi is not None:
-            return float((float(lo) + float(hi)) / 2.0)
-        if lo is not None:
-            return float(lo)
-        if hi is not None:
-            return float(hi)
         return 0.0
 
     @staticmethod

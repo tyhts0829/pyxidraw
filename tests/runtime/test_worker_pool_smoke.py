@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import Mapping
 
 import numpy as np
 import pytest
@@ -10,7 +9,7 @@ from engine.core.geometry import Geometry
 from engine.runtime.worker import WorkerPool
 
 
-def _draw_cb(t: float, _cc: Mapping[int, float]) -> Geometry:  # noqa: ANN001
+def _draw_cb(t: float) -> Geometry:  # noqa: ANN001
     pts = np.array([[0.0 + t * 0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32)
     return Geometry.from_lines([pts])
 

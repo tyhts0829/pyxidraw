@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
 from engine.ui.parameters.state import (
@@ -55,15 +54,14 @@ class ParameterRuntime:
         self._introspector = FunctionIntrospector()
         self._resolver = ParameterValueResolver(store)
         self._t: float = 0.0
-        self._cc_snapshot: Mapping[int, float] = {}
+        # cc はランタイムでは扱わない（api.cc 内に閉じる）
 
     def set_lazy(self, lazy: bool) -> None:
         self._lazy = lazy
 
-    def set_inputs(self, t: float, cc_snapshot: Mapping[int, float]) -> None:
-        """時間`t`と CC のスナップショットを登録する。"""
+    def set_inputs(self, t: float) -> None:
+        """時間`t`のみを登録する。"""
         self._t = float(t)
-        self._cc_snapshot = dict(cc_snapshot)
 
     # --- フレーム制御 ---
     def begin_frame(self) -> None:
@@ -89,7 +87,6 @@ class ParameterRuntime:
             signature=info.signature,
             doc=info.doc,
             param_meta=info.param_meta,
-            cc_snapshot=self._cc_snapshot,
         )
 
     # --- エフェクト ---
@@ -112,7 +109,6 @@ class ParameterRuntime:
             doc=info.doc,
             param_meta=info.param_meta,
             skip={"g"},
-            cc_snapshot=self._cc_snapshot,
         )
 
 

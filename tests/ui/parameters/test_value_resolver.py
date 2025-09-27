@@ -61,8 +61,9 @@ def test_parameter_value_resolver_passes_through_provided_actual_value():
         skip={"g"},
     )
     assert resolved["amplitude_mm"] == pytest.approx(0.5)
+    # provided 値は GUI 対象外のため Store には登録されない
     stored = store.original_value("effect.displace#0.amplitude_mm")
-    assert stored == pytest.approx(0.5)
+    assert stored is None
 
 
 def test_parameter_value_resolver_passes_through_large_actual_value():
@@ -85,7 +86,7 @@ def test_parameter_value_resolver_passes_through_large_actual_value():
     assert resolved["amplitude_mm"] == pytest.approx(2.5)
 
 
-def test_parameter_value_resolver_handles_vector_params():
+def test_parameter_value_resolver_handles_vector_params_defaults_register_gui():
     store = ParameterStore()
     resolver = ParameterValueResolver(store)
     context = ParameterContext(scope="effect", name="rotate", index=1)
@@ -93,14 +94,15 @@ def test_parameter_value_resolver_handles_vector_params():
 
     resolved = resolver.resolve(
         context=context,
-        params={"angles_rad": (0.1, 0.2, 0.3)},
+        params={},
         signature=signature,
         doc=None,
         param_meta={"angles_rad": {"min": (-1.0, -1.0, -1.0), "max": (1.0, 1.0, 1.0)}},
         skip={"g"},
     )
 
-    assert resolved["angles_rad"] == pytest.approx((0.1, 0.2, 0.3))
+    # 既定値採用のため GUI 登録され、値はデフォルト
+    assert resolved["angles_rad"] == pytest.approx((0.0, 0.0, 0.0))
     descriptor_ids = {desc.id for desc in store.descriptors()}
     assert "effect.rotate#1.angles_rad.x" in descriptor_ids
     assert "effect.rotate#1.angles_rad.z" in descriptor_ids

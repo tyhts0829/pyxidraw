@@ -258,7 +258,7 @@ def _initialize_grid() -> None:
 
 
 # ---- draw ---------------------------------------------------------------- #
-def draw(t: float, _cc: Mapping[int, float]) -> Geometry:
+def draw(t: float) -> Geometry:
     global _CELL_GEOMS, _CELL_CENTERS, _LABELS_GEO
     if _CELL_GEOMS is None:
         _initialize_grid()

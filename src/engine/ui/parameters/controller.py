@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 from .state import ParameterLayoutConfig, ParameterStore
 from .window import ParameterWindow
@@ -30,13 +30,9 @@ class ParameterWindowController:
         if self._window is None and self._visible:
             self._window = ParameterWindow(store=self._store, layout=self._layout)  # type: ignore[abstract]
 
-    def tick(self, _dt: float) -> None:
-        # 現状は pyglet 側の schedule に委ねるため処理なし
-        return None
+    # tick は不要（DPG はバックグラウンド駆動）
 
-    def apply_overrides(self, cc_snapshot: Mapping[int, float]) -> Mapping[int, float]:
-        # 現状は GUI と CC の直接連携は未実装。総域マッピングを維持して返す。
-        return cc_snapshot
+    # cc と GUI のマージは行わない（cc は api 側に限定）。GUI は Store の override で反映される。
 
     def set_visibility(self, visible: bool) -> None:
         self._visible = visible

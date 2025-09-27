@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
-from api import E, G, effect, run_sketch
+from api import E, G, cc, effect, run_sketch
 from engine.core.geometry import Geometry
 
 
@@ -28,12 +28,12 @@ def my_shift(g: Geometry, *, dx: float = 20.0, dy: float = 0.0) -> Geometry:
     return g.translate(dx, dy, 0.0)
 
 
-def user_draw(t: float, cc: dict[int, float]) -> Geometry:  # noqa: D401 - 簡潔
+def user_draw(t: float) -> Geometry:  # noqa: D401 - 簡潔
     # ベース形状（正多角形）
     base = G.polygon(n_sides=5).scale(120, 120, 1).translate(150, 120, 0)
 
     # 時間で x 方向にふらつかせる（CC#1 で強さを加算）
-    dx = 25.0 * float(np.sin(t * 1.4)) + 50.0 * float(cc.get(1, 0.0))
+    dx = 25.0 * float(np.sin(t * 1.4)) + 50.0 * (cc[1] * 1.0)
 
     pipe = E.pipeline.my_shift(dx=dx, dy=0.0).build()
     return pipe(base)

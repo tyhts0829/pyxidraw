@@ -50,12 +50,12 @@
   - 公開インポート経路の単一路線: ユーザー拡張の登録デコレータは `from api import shape` のみを公式に提供（破壊的変更で統一）。
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
-  - 厳格モード（既定 `strict=True`）で未知パラメータを検出（外部保存/復元/仕様検証の API は提供しない）。
+  - 厳格検証（build 時の未知パラメータ検出）は行わない。実行時に関数シグネチャで自然に検出され得る。
   - 単層 LRU キャッシュ（インスタンス内）: 入力 `Geometry.digest` × パイプライン定義ハッシュでヒット判定。
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
     - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
     - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
-  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「パラメータ（`common.param_utils.params_to_tuple` による整形）の blake2b-64」を積み、128bit に集約。
+  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「量子化後パラメータ（`common.param_utils.signature_tuple`）の blake2b-64」を積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
 - パラメータ GUI（Dear PyGui）
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する。
@@ -63,6 +63,7 @@
   - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
   - 多プロセスとの相性を考慮し、GUI 有効時は `WorkerPool` が Inline モード（単一プロセス実行）に切替わる。
+  - macOS 注記: Dear PyGui は UI イベントをメインスレッドで処理する必要があるため、可能なら `pyglet.clock.schedule_interval` でメインスレッドから `render_dearpygui_frame()` を駆動する。`pyglet` 未導入時はバックグラウンドスレッドで `start_dearpygui()` を駆動（ヘッドレス/未導入環境ではスタブが有効）。
 
 ## データフロー（概略）
 ```
@@ -70,14 +71,14 @@ G.<shape>() --> Geometry --(E.pipeline.*.build())--> Pipeline(Geometry->Geometry
        \
         +---> translate/scale/rotate (Geometry API) ------------------+
 
-user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Window(HUD)
+user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Window(HUD)
                                                    ^                        |
                                               StreamReceiver <--- FrameClock + Tickables
 ```
 
 ### 実行ループと並行性（Frame/Tick モデル）
 - `FrameClock` が登録された Tickable を固定順序で毎フレーム実行。
-- `WorkerPool`（既定は multiprocessing。パラメータ GUI 有効時は Inline モード）が `draw(t, cc)` を実行して `Geometry` を生成。
+- `WorkerPool`（既定は multiprocessing。パラメータ GUI 有効時は Inline モード）が `draw(t)` を実行して `Geometry` を生成。
 - `StreamReceiver` は結果キューを読み、最新フレームのみを `SwapBuffer` に反映（古いフレームは棄却）。
 - `LineRenderer` は `SwapBuffer` の front を検知して GPU に頂点群を一括転送し、`LINE_STRIP + primitive restart` で描画。
 - 例外はワーカ側で `WorkerTaskError` に包んでメインスレッドに再送出（デバッグ容易性と失敗の早期顕在化）。
@@ -112,7 +113,7 @@ user draw(t, cc) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)-->
 from api import E, G, run
 
 
-def draw(t, cc):
+def draw(t):
     # t は秒、cc は MIDI CC の正規化値（Mapping[int, float], 0.0–1.0）。
     # 時間/CC 依存パラメータがある場合は毎フレーム Pipeline を構築する（キャッシュはほぼミスする前提）。
     g = G.sphere(subdivisions=cc[1])
@@ -146,11 +147,11 @@ Tips:
 ## MIDI と入力（要点）
 - `run(..., use_midi=True)` で可能なら実機 MIDI に接続。未接続時はフォールバック（`midi_strict=True` で失敗を致命扱い）。
 - 線の太さは `run(..., line_thickness=0.0006)` で指定可能（クリップ空間 -1..1 基準の半幅相当）。
-- `draw(t, cc)` の `cc` は `Mapping[int, float]`（0.0–1.0 の正規化値）。`engine/io` がスナップショットを供給。
+- CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
 
 ## テストとの接点（要点）
 - `Geometry` はスナップショット（`digest`）で回帰検知しやすい。
-- パイプラインは `strict` により未知キーを検出。キャッシュは `cache(maxsize=...)` で制御可能。
+- パイプラインは build 時検証を行わず、実行時に自然に検出される。キャッシュは `cache(maxsize=...)` で制御可能。
 
 ## 拡張のガイド（最短ルート）
 - Shape の追加: `shapes/` に実装し `@shape` で登録。`generate(**params) -> Geometry` を返す。
@@ -200,12 +201,12 @@ Tips:
 
 ## 並行処理（WorkerPool / StreamReceiver / SwapBuffer）
 - 登場要素
-  - `WorkerPool`: `multiprocessing.Process` を N 個起動し、`draw(t, cc)` をバックグラウンド実行。
+  - `WorkerPool`: `multiprocessing.Process` を N 個起動し、`draw(t)` をバックグラウンド実行。
   - `StreamReceiver`: 結果キューをポーリングし、最新フレームのみを `SwapBuffer` に保存。
   - `SwapBuffer`: front/back のダブルバッファと `version` カウンタ、イベントで構成。
 - データの流れ
-  1) `FrameClock.tick()` ごとに `WorkerPool.tick()` が `RenderTask(frame_id, t, cc)` を `task_q` へ投入。
-  2) 各ワーカが `draw()` 実行→`RenderPacket(geometry, frame_id)` を `result_q` へ。
+  1) `FrameClock.tick()` ごとに `WorkerPool.tick()` が `RenderTask(frame_id, t, cc_state)` を `task_q` へ投入。
+  2) 各ワーカは API 層から注入された関数で `api.cc.set_snapshot(cc_state)` を呼び、ついでに `draw(t)` を実行→`RenderPacket(geometry, frame_id)` を `result_q` へ。
   3) `StreamReceiver.tick()` が `result_q` を非ブロッキングで最大 K 件（既定 2）処理し、最新 `frame_id` のみを `SwapBuffer.push()`。
   4) `LineRenderer.tick()` が `SwapBuffer.try_swap()` を呼び、準備済みなら front/back を交換。
 - バックプレッシャ/スキップ
@@ -225,7 +226,7 @@ Tips:
   - `PipelineBuilder.cache(maxsize=None|0|N)`、または `PXD_PIPELINE_CACHE_MAXSIZE` で設定。
   - 実装は `OrderedDict` による LRU 風（ヒットで末尾へ、上限超過で先頭を追い出し）。
 - 厳格検証
-  - `PipelineBuilder.strict(True)`（既定）でビルド時に各エフェクト関数シグネチャと `params` のキーを照合。未知キーがあれば `TypeError`。
+  - build 時に未知キーは検証しない（厳格モードは廃止）。
 （削除）
 
 ## レジストリと公開 API
@@ -242,6 +243,12 @@ Tips:
   - 数値系（float/int/bool/vector）は実値で受け取り、`__param_meta__` の min/max/step を RangeHint（表示レンジ）として用いる。
   - 非数値（文字列・列挙など）は GUI スライダー対象外（必要に応じてトグル/選択肢として扱う）。
   - 根拠: `engine.ui.parameters` のスライダーは None を扱わず、表示時に `float(None)` が例外となるため。
+- パラメータ UI/cc のルール（現行仕様）
+  - cc は `api.cc` のグローバル辞書（`cc[i] -> float(0..1)`、未定義は 0.0）。`draw(t)` 内から数値式として自由に利用する。
+  - GUI は「draw 内で未指定（＝シグネチャの既定値が採用された）引数のみ」を対象として表示・調整する。
+  - 値の優先順位は「明示引数 > GUI > 既定値」。MIDI による GUI 上書きは行わない（midi_override は廃止）。
+  - RangeHint は `__param_meta__` がある場合のみ使用し、無い場合は 0–1 の既定レンジで扱う（クランプは表示上のみ）。
+  - Runtime は `set_inputs(t)` のみ受け取り、cc は関与しない（cc は `api.cc` でフレーム毎に更新される）。
 - 公開面
 - 利用者は `from api import G, E, run, Geometry` のみに依存。
   - 上位（api）→下位（engine/common/util/effects/shapes）と一方向の依存。`engine` は `api` を知らない。

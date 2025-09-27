@@ -33,14 +33,14 @@ def test_parameter_runtime_tracks_shape_overrides():
     runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
     activate_runtime(runtime)
     runtime.begin_frame()
-    params = {"radius": 2.0}
-    updated = runtime.before_shape_call("circle", dummy_shape, params)
-    assert updated["radius"] == 2.0
+    # 未指定（デフォルト採用）で GUI 対象として登録
+    updated = runtime.before_shape_call("circle", dummy_shape, {})
+    assert updated["radius"] == 1.0
     descriptor_id = "shape.circle#0.radius"
     store.set_override(descriptor_id, 0.5)
 
     runtime.begin_frame()
-    updated = runtime.before_shape_call("circle", dummy_shape, params)
+    updated = runtime.before_shape_call("circle", dummy_shape, {})
     assert updated["radius"] == 0.5
     deactivate_runtime()
 
@@ -57,9 +57,8 @@ def test_parameter_runtime_handles_effect_vectors():
         fn=dummy_effect,
         params=params,
     )
+    # provided 値はそのまま渡され、GUI 登録は行われない
     assert updated["angles_rad"] == (0.1, 0.2, 0.3)
-    descriptor_ids = {desc.id for desc in store.descriptors()}
-    assert "effect.rotate#0.angles_rad.x" in descriptor_ids
     deactivate_runtime()
 
 
@@ -131,7 +130,6 @@ def test_parameter_runtime_uses_fallback_range_for_missing_meta():
     runtime.before_shape_call("capsule", dummy_shape_with_defaults, {})
 
     descriptor = store.get_descriptor("shape.capsule#0.radius")
-    assert descriptor.range_hint is not None
-    # 既定値周りの安全側レンジ（中心±span）
-    assert descriptor.range_hint.min_value <= 1.0 <= descriptor.range_hint.max_value
+    # RangeHint 推定は Resolver では行わない（GUI 側で 0–1 fallback）
+    assert descriptor.range_hint is None
     deactivate_runtime()

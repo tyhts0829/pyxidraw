@@ -19,7 +19,7 @@ try:  # dearpygui の存在は環境依存なのでガード
 except Exception:  # pragma: no cover - headless/未導入用フォールバック
     dpg = None  # type: ignore[assignment]
 
-try:  # pyglet があれば描画フレームを統合（任意）
+try:  # pyglet があれば描画フレームを統合（メインスレッド駆動）
     import pyglet  # type: ignore
 except Exception:  # pragma: no cover - headless/未導入
     pyglet = None  # type: ignore[assignment]
@@ -103,7 +103,7 @@ else:
                 )
             dpg.set_primary_window(root, True)
 
-            # 最小テーマ（パディングのみ + enum コントラスト）
+            # 最小テーマ（パディングのみ）
             self._setup_theme()
 
             # 初期マウント
@@ -115,9 +115,11 @@ else:
             # 表示 + 駆動
             dpg.show_viewport()
             if pyglet is not None:
+                # macOS では UI イベントはメインスレッド限定のため、pyglet に統合してフレームを駆動
                 self._using_pyglet = True
                 pyglet.clock.schedule_interval(self._tick, 1 / 60)
             else:
+                # pyglet が無ければバックグラウンドスレッドで Dear PyGui を駆動
                 self._thread = Thread(target=self._run_loop, name="DPGLoop", daemon=True)
                 self._thread.start()
 
@@ -178,8 +180,7 @@ else:
                                 if not it.supported:
                                     continue
                                 self._create_row(table, it)
-                                # 初期のハイライト適用（override があれば強調）
-                                self._update_highlight(it.id)
+                                # 差分ハイライトは行わない
 
                 for desc in sorted_desc:
                     if current_cat is None:
@@ -303,7 +304,7 @@ else:
             # vector は list → tuple へ
             if isinstance(value, list):
                 value = tuple(value)
-            self._store.set_override(pid, value, source="gui")
+            self._store.set_override(pid, value)
 
         def _on_store_change(self, ids: Iterable[str]) -> None:
             # 差分のみ反映（同値更新は DPG 側で冪等）
@@ -326,8 +327,7 @@ else:
                         dpg.set_value(pid, value)
                     except Exception:
                         pass
-                    # 差分ハイライト付与/解除
-                    self._update_highlight(pid)
+                    # 差分ハイライトは行わない
             finally:
                 self._syncing = False
 
@@ -335,6 +335,7 @@ else:
 
         # ---- 駆動 ----
         def _tick(self, _dt: float) -> None:
+            # pyglet のスケジューラからメインスレッドで呼ばれる
             try:
                 if dpg.is_dearpygui_running():
                     dpg.render_dearpygui_frame()
@@ -347,7 +348,7 @@ else:
             except Exception:
                 pass
 
-        # ---- テーマ（最小: パディング + enum コントラスト） ----
+        # ---- テーマ（最小: パディングのみ） ----
         def _setup_theme(self) -> None:
             try:
                 with dpg.theme() as theme:
@@ -357,56 +358,9 @@ else:
                         dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, pad, pad)
                         dpg.add_theme_style(dpg.mvStyleVar_FramePadding, pad, max(1, pad // 2))
                         dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, pad, max(1, pad // 2))
-                    # enum（radio）の選択視認性: チェックマーク色を強調
-                    with dpg.theme_component(dpg.mvRadioButton):
-                        dpg.add_theme_color(dpg.mvThemeCol_CheckMark, (30, 140, 255, 255))
-                    # enum（combo 内の選択肢）: 選択ハイライトのコントラストを上げる
-                    with dpg.theme_component(dpg.mvSelectable):
-                        dpg.add_theme_color(dpg.mvThemeCol_Header, (30, 140, 255, 64))
-                        dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (30, 140, 255, 96))
-                        dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (30, 140, 255, 128))
                 dpg.bind_theme(theme)
-                # 差分ハイライト用の軽量テーマ（アイテム単位で適用）
-                with dpg.theme() as highlight:
-                    with dpg.theme_component(dpg.mvAll):
-                        dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (40, 120, 200, 64))
-                        dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (40, 120, 200, 96))
-                        dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (40, 120, 200, 128))
-                        dpg.add_theme_color(dpg.mvThemeCol_Border, (30, 140, 255, 200))
-                        dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 1.0)
-                self._highlight_theme = highlight
             except Exception:
                 # 失敗しても既定スタイルで継続
-                pass
-
-        # ---- 差分ハイライト適用 ----
-        def _update_highlight(self, pid: str) -> None:
-            try:
-                if not dpg.does_item_exist(pid):
-                    return
-                # 差分（current != original）で強調。vector は比較前に正規化。
-                try:
-                    desc = self._store.get_descriptor(pid)
-                except Exception:
-                    desc = None  # type: ignore[assignment]
-                curr = self._store.current_value(pid)
-                orig = self._store.original_value(pid)
-                if desc is not None and getattr(desc, "value_type", None) == "vector":
-                    if isinstance(curr, list):
-                        curr = tuple(curr)
-                    if isinstance(orig, list):
-                        orig = tuple(orig)
-                changed = curr is not None and orig is not None and curr != orig
-                if changed and self._highlight_theme is not None:
-                    dpg.bind_item_theme(pid, self._highlight_theme)
-                else:
-                    # テーマ解除（グローバルテーマへ戻す）
-                    try:
-                        dpg.bind_item_theme(pid, None)  # type: ignore[arg-type]
-                    except Exception:
-                        pass
-            except Exception:
-                # ハイライト失敗は無視
                 pass
 
     __all__ = ["ParameterWindow"]
