@@ -107,10 +107,10 @@ class _PipelineBuilder(Protocol):
     # meta: factor (type=number, range=[0.0, 50.0])
     def explode(self, *, factor: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        連続線を線分単位に分断し、各線分を中心から外側へ平行移動する。
+        連続線を線分単位に分断し、外側への押し出しは行わずに短くする。
 
         引数:
-            factor: 各線分（単一点含む）の移動距離（mm 単位）
+            factor: 短縮強度の基準長（mm 単位）
         """
         ...
     # meta: direction (type=vec3)
