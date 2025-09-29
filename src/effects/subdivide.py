@@ -20,6 +20,7 @@ Notes
 -----
 - 極短セグメントを含む線は、最短セグメント長が閾値を下回るとそこで分割を停止（sqrt 回避のため二乗距離で判定）。
 - 頂点数は概ね `2^d * (n-1) + 1` に増加するため、大きな d ではコストが増える点に留意。
+- 合計頂点数の上限ガード（`MAX_TOTAL_VERTICES=10_000_000`）に達した時点で以降のライン処理を打ち切る。
 """
 
 from __future__ import annotations
@@ -35,6 +36,8 @@ from .registry import effect
 MAX_SUBDIVISIONS = 10
 MIN_SEG_LEN = 0.01
 MIN_SEG_LEN_SQ = float(MIN_SEG_LEN * MIN_SEG_LEN)
+# 出力合計頂点数の上限（ガード）
+MAX_TOTAL_VERTICES = 10_000_000
 
 
 @effect()
@@ -58,11 +61,19 @@ def subdivide(g: Geometry, *, subdivisions: int = 5) -> Geometry:
     if divisions <= 0:
         return Geometry(coords.copy(), offsets.copy())
 
-    result = []
+    result: list[np.ndarray] = []
+    total_vertices = 0
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
-        subdivided = _subdivide_core(vertices, divisions)
+        base_n = int(vertices.shape[0])
+        # 合計上限ガード: 残余許容量が基礎点数を下回る場合は以降を打ち切り
+        remaining = MAX_TOTAL_VERTICES - total_vertices
+        if remaining <= 0 or remaining < base_n:
+            break
+        # 各ラインに対する上限を渡し、反復途中で停止可能にする
+        subdivided = _subdivide_core(vertices, divisions, int(remaining))
         result.append(subdivided)
+        total_vertices += int(subdivided.shape[0])
 
     return Geometry.from_lines(result)
 
@@ -73,7 +84,7 @@ subdivide.__param_meta__ = {
 
 
 @njit(fastmath=True, cache=True)
-def _subdivide_core(vertices: np.ndarray, subdivisions: int) -> np.ndarray:
+def _subdivide_core(vertices: np.ndarray, subdivisions: int, max_vertices: int) -> np.ndarray:
     """単一頂点配列の細分化処理（Numba 最適化）。
 
     - 全セグメントの最小二乗距離が `MIN_SEG_LEN_SQ` 未満なら分割を停止。
@@ -98,7 +109,11 @@ def _subdivide_core(vertices: np.ndarray, subdivisions: int) -> np.ndarray:
         n = result.shape[0]
         if n < 2:
             break
-        new_vertices = np.empty((2 * n - 1, result.shape[1]), dtype=result.dtype)
+        # 上限を超える見込みならここで停止
+        new_n = 2 * n - 1
+        if max_vertices > 0 and new_n > max_vertices:
+            break
+        new_vertices = np.empty((new_n, result.shape[1]), dtype=result.dtype)
 
         # 偶数インデックスに元の頂点を配置
         new_vertices[::2] = result

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pyright: reportMissingImports=false
+
 """
 どこで: `shapes.text`。
 何を: フォントアウトラインからテキストのポリラインを生成する（mm 単位）。
@@ -388,12 +390,16 @@ def text(
     return Geometry.from_lines(all_vertices)
 
 
-text.__param_meta__ = {
-    "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
-    "font": {"type": "string"},
-    "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
-    "text_align": {"choices": ["left", "center", "right"]},
-    "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},
-    "line_height": {"type": "number", "min": 0.8, "max": 3.0, "step": 0.1},
-    "flatten_tol_em": {"type": "number", "min": 0.001, "max": 0.1, "step": 0.001},
-}
+setattr(
+    text,
+    "__param_meta__",
+    {
+        "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
+        "font": {"type": "string"},
+        "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
+        "text_align": {"choices": ["left", "center", "right"]},
+        "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},
+        "line_height": {"type": "number", "min": 0.8, "max": 3.0, "step": 0.1},
+        "flatten_tol_em": {"type": "number", "min": 0.001, "max": 0.1, "step": 0.001},
+    },
+)

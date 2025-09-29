@@ -22,21 +22,22 @@
 
 ## 実装チェックリスト（How）
 
-- [ ] モジュール定数を追加: `MAX_SUBDIVISIONS = 10`, `MIN_SEG_LEN = 0.01`（必要なら `MIN_SEG_LEN_SQ`）。
-- [ ] 関数シグネチャを整数へ: `def subdivide(g: Geometry, *, subdivisions: int = 5) -> Geometry`。
-- [ ] クランプロジックを `MAX_SUBDIVISIONS` に統一（丸め/float 入力の廃止）。
-- [ ] `_subdivide_core` の最小長チェックを「全セグメントの二乗距離の最小値」で判定。
-- [ ] `_subdivide_core` の配列確保を `np.empty((2*n-1, 3), dtype=...)` に変更。
-- [ ] ループ内の早期停止条件も二乗距離ベースに更新（再判定）。
-- [ ] 公開 docstring を NumPy スタイルで整理（Parameters/Returns/Notes）。
-- [ ] `__param_meta__` は現状維持（0–10 の RangeHint）。
+- [x] モジュール定数を追加: `MAX_SUBDIVISIONS = 10`, `MIN_SEG_LEN = 0.01`（`MIN_SEG_LEN_SQ` 併用）。
+- [x] 関数シグネチャを整数へ: `def subdivide(g: Geometry, *, subdivisions: int = 5) -> Geometry`。
+- [x] クランプロジックを `MAX_SUBDIVISIONS` に統一（丸め/float 入力の廃止）。
+- [x] `_subdivide_core` の最小長チェックを「全セグメントの二乗距離の最小値」で判定。
+- [x] `_subdivide_core` の配列確保を `np.empty((2*n-1, 3), dtype=...)` に変更。
+- [x] ループ内の早期停止条件も二乗距離ベースに更新（再判定）。
+- [x] 公開 docstring を NumPy スタイルで整理（Parameters/Returns/Notes）。
+- [x] `__param_meta__` は現状維持（0–10 の RangeHint）。
+- [x] 合計頂点数の上限ガード（`MAX_TOTAL_VERTICES = 10_000_000`）を追加。
 
 ## 追加検討（要確認）
 
-- [yes] 頂点数上限制御を導入するか（案: 最終頂点数上限 ~ 1e6。超過見込みなら分割回数を縮減または break）
+- [x] 合計頂点数上限（10,000,000 点）でガード（実装済）。
 - [ ] Numba 依存の optional 化（`dash` のように環境変数で切替）を行うか。既存エフェクトとの方針統一。
-- [yes] `MIN_SEG_LEN` の既定値 0.01 は妥当か（単位: 座標系 mm 相当）。UI に露出しない定数のままで良いか。
-- [yes] `subdivisions` の GUI 範囲は 0–10 のままで良いか。
+- [ ] `MIN_SEG_LEN` の既定値 0.01 は妥当か（単位: 座標系 mm 相当）。UI に露出しない定数のままで良いか。
+- [ ] `subdivisions` の GUI 範囲は 0–10 のままで良いか。
 
 ## 影響範囲
 
