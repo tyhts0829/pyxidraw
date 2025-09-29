@@ -35,7 +35,7 @@ class _GShapes(Protocol):
         ...
     def sphere(self, *, subdivisions: float = ..., sphere_type: float = ..., **_params: Any) -> Geometry:
         ...
-    def text(self, *, text: str = ..., font_size: float = ..., font: str = ..., font_number: int = ..., align: str = ..., **_params: Any) -> Geometry:
+    def text(self, *, text: str = ..., em_size_mm: float = ..., font: str = ..., font_index: int = ..., text_align: str = ..., tracking_em: float = ..., line_height: float = ..., flatten_tol_em: float = ..., **_params: Any) -> Geometry:
         ...
     def torus(self, *, major_radius: float = ..., minor_radius: float = ..., major_segments: int = ..., minor_segments: int = ..., **_params: Any) -> Geometry:
         ...
@@ -202,7 +202,7 @@ class _PipelineBuilder(Protocol):
         """
         ...
     # meta: subdivisions (type=integer, range=[0, 10])
-    def subdivide(self, *, subdivisions: float = ..., **_params: Any) -> _PipelineBuilder:
+    def subdivide(self, *, subdivisions: int = ..., **_params: Any) -> _PipelineBuilder:
         """
         中間点を追加して線を細分化（純関数）。
 

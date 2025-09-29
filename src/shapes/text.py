@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+"""
+どこで: `shapes.text`。
+何を: フォントアウトラインからテキストのポリラインを生成する（mm 単位）。
+なぜ: 実用的なテキスト描画（サイズ/整列/追い込み）を最小依存で提供するため。
+"""
+
 import logging
+import os
+import sys
+from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 from fontPens.flattenPen import FlattenPen
@@ -18,274 +27,225 @@ logger = logging.getLogger(__name__)
 
 
 @njit(fastmath=True, cache=True)
-def _get_initial_offset_fast(total_width: float, align_mode: int) -> float:
-    """行揃えモードに基づいて初期オフセットを計算する。
-
-    引数:
-        total_width: テキスト全体の幅
-        align_mode: 0=左寄せ, 1=中央, 2=右寄せ
-    """
-    if align_mode == 1:  # 中央
-        return -total_width / 2
-    elif align_mode == 2:  # 右寄せ
-        return -total_width
-    return 0.0  # 左寄せ
-
-
-@njit(fastmath=True, cache=True)
-def _normalize_vertices_fast(vertices_array: np.ndarray, units_per_em: float) -> np.ndarray:
-    """頂点列をユニット座標へ正規化する（njit）。"""
-    # 出力配列を作成
-    normalized = vertices_array.copy()
-
-    # ユニットサイズへ正規化
-    normalized[:, 0] = normalized[:, 0] / units_per_em
-    normalized[:, 1] = normalized[:, 1] / units_per_em
-
-    # 垂直方向の中心化と Y 軸反転（フォントは y=0 がベースライン）
-    # フォント座標は下→上なので Y を反転する
-    normalized[:, 1] = -normalized[:, 1] + 0.5
-
-    return normalized
-
-
-@njit(fastmath=True, cache=True)
-def _apply_text_transforms_fast(vertices: np.ndarray, x_offset: float, size: float) -> np.ndarray:
-    """水平方向のオフセットとスケール変換を適用する。"""
-    transformed = vertices.copy()
-
-    # 水平オフセットを適用
-    transformed[:, 0] += x_offset
-
-    # サイズスケールを適用
-    transformed[:, 0] *= size
-    transformed[:, 1] *= size
-    transformed[:, 2] *= size
-
-    return transformed
-
-
-@njit(fastmath=True, cache=True)
-def _process_vertices_batch_fast(
-    vertices_batch: np.ndarray, x_offsets: np.ndarray, size: float
+def _apply_offset_scale(
+    vertices: np.ndarray, x_offset: float, y_offset: float, scale: float
 ) -> np.ndarray:
-    """複数文字の頂点群をバッチで処理する。"""
-    batch_size = vertices_batch.shape[0]
-    max_vertices = vertices_batch.shape[1]
-
-    # 出力配列を作成
-    output = np.empty_like(vertices_batch)
-
-    for i in range(batch_size):
-        for j in range(max_vertices):
-            # オフセットとスケールを適用
-            output[i, j, 0] = (vertices_batch[i, j, 0] + x_offsets[i]) * size
-            output[i, j, 1] = vertices_batch[i, j, 1] * size
-            output[i, j, 2] = vertices_batch[i, j, 2] * size
-
-    return output
+    """xy オフセットと一様スケールを適用する。"""
+    out = vertices.copy()
+    out[:, 0] = (out[:, 0] + x_offset) * scale
+    out[:, 1] = (out[:, 1] + y_offset) * scale
+    return out
 
 
-@njit(fastmath=True, cache=True)
-def _convert_glyph_commands_to_vertices_fast(
-    move_points: np.ndarray, line_points: np.ndarray, close_flags: np.ndarray, units_per_em: float
-) -> np.ndarray:
-    """グリフのコマンド点を正規化済みの頂点へ変換する（njit）。"""
-    num_points = move_points.shape[0] + line_points.shape[0]
+class _LRU:
+    """単純な上限付き LRU キャッシュ（キー: str）。"""
 
-    if num_points == 0:
-        return np.empty((0, 3), dtype=np.float32)
+    def __init__(self, maxsize: int = 4096) -> None:
+        self.maxsize = int(maxsize)
+        self._od: "OrderedDict[str, Any]" = OrderedDict()
 
-    # 頂点配列を作成
-    vertices = np.empty((num_points, 3), dtype=np.float32)
+    def get(self, key: str) -> Any | None:
+        v = self._od.get(key)
+        if v is not None:
+            self._od.move_to_end(key)
+        return v
 
-    # move 点を追加
-    move_count = move_points.shape[0]
-    for i in range(move_count):
-        vertices[i, 0] = move_points[i, 0]
-        vertices[i, 1] = move_points[i, 1]
-        vertices[i, 2] = 0.0
-
-    # line 点を追加
-    line_count = line_points.shape[0]
-    for i in range(line_count):
-        vertices[move_count + i, 0] = line_points[i, 0]
-        vertices[move_count + i, 1] = line_points[i, 1]
-        vertices[move_count + i, 2] = 0.0
-
-    # 頂点を正規化
-    normalized = _normalize_vertices_fast(vertices, units_per_em)
-
-    return normalized
+    def set(self, key: str, value: Any) -> None:
+        self._od[key] = value
+        self._od.move_to_end(key)
+        if len(self._od) > self.maxsize:
+            self._od.popitem(last=False)
 
 
 class TextRenderer:
-    """フォントとテキスト描画を管理するシングルトン。"""
+    """フォントとグリフコマンドを提供するシングルトン。"""
 
     _instance = None
-    _fonts = {}  # フォントのキャッシュ
-    _glyph_cache = {}  # グリフコマンドのキャッシュ
-    _font_paths = None  # フォントパス一覧のキャッシュ
-    FONT_DIRS = [
-        Path("/Users/tyhts0829/Library/Fonts"),
-        Path("/System/Library/Fonts"),
-        Path("/System/Library/Fonts/Supplemental"),
-        Path("/Library/Fonts"),
-    ]
-    EXTENSIONS = [".ttf", ".otf", ".ttc"]
+    _fonts: dict[str, TTFont] = {}
+    _glyph_cache = _LRU(maxsize=4096)
+    _font_paths: list[Path] | None = None
+
+    EXTENSIONS = (".ttf", ".otf", ".ttc")
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
+    @staticmethod
+    def _os_font_dirs() -> list[Path]:
+        home = Path.home()
+        dirs: list[Path] = []
+        if sys.platform == "darwin":
+            dirs = [
+                home / "Library" / "Fonts",
+                Path("/System/Library/Fonts"),
+                Path("/System/Library/Fonts/Supplemental"),
+                Path("/Library/Fonts"),
+            ]
+        elif sys.platform.startswith("linux"):
+            dirs = [
+                Path("/usr/share/fonts"),
+                Path("/usr/local/share/fonts"),
+                home / ".fonts",
+                home / ".local/share/fonts",
+            ]
+        elif os.name == "nt":
+            windir = os.environ.get("WINDIR", r"C:\\Windows")
+            dirs = [Path(windir) / "Fonts"]
+        return [p for p in dirs if p.exists()]
+
     @classmethod
     def get_font_path_list(cls) -> list[Path]:
         """利用可能なフォントファイルのパス一覧を取得する。"""
         if cls._font_paths is None:
-            font_paths = []
-            for font_dir in cls.FONT_DIRS:
-                if font_dir.exists():
-                    for ext in cls.EXTENSIONS:
-                        font_paths.extend(font_dir.glob(f"*{ext}"))
-            cls._font_paths = font_paths
+            paths: list[Path] = []
+            for d in cls._os_font_dirs():
+                for ext in cls.EXTENSIONS:
+                    try:
+                        paths.extend(d.glob(f"**/*{ext}"))
+                    except Exception:
+                        continue
+            cls._font_paths = paths
         return cls._font_paths
 
     @classmethod
-    def get_font(cls, font_name: str = "Helvetica", font_number: int = 0) -> TTFont:
-        """フォントインスタンス（キャッシュ）を取得する。
-
-        引数:
-            font_name: フォント名またはパス
-            font_number: TTC ファイルのフォント番号
-
-        返り値:
-            TTFont インスタンス
-        """
-        cache_key = f"{font_name}_{font_number}"
-
-        if cache_key not in cls._fonts:
-            # フォント名で検索を試みる
-            font_paths = cls.get_font_path_list()
-            for font_path in font_paths:
-                if font_name.lower() in font_path.name.lower():
-                    if font_path.suffix == ".ttc":
-                        cls._fonts[cache_key] = TTFont(font_path, fontNumber=font_number)
-                    else:
-                        cls._fonts[cache_key] = TTFont(font_path)
-                    return cls._fonts[cache_key]
-
-            # 見つからなければ、直接パスとして解釈
-            font_path = Path(font_name)
-            if font_path.exists():
-                if font_path.suffix == ".ttc":
-                    cls._fonts[cache_key] = TTFont(font_path, fontNumber=font_number)
-                else:
-                    cls._fonts[cache_key] = TTFont(font_path)
-                return cls._fonts[cache_key]
-
-            # 見つからなければシステムフォントを既定として使用
-            logger.warning("Font '%s' not found, using default font", font_name)
-            default_font = Path("/System/Library/Fonts/Helvetica.ttc")
-            cls._fonts[cache_key] = TTFont(default_font, fontNumber=0)
-
-        return cls._fonts[cache_key]
+    def _default_font_candidate(cls) -> Path | None:
+        # OS 別の素直な候補
+        candidates: list[Path] = []
+        if sys.platform == "darwin":
+            candidates = [
+                Path("/System/Library/Fonts/Helvetica.ttc"),
+                Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+            ]
+        elif sys.platform.startswith("linux"):
+            candidates = [
+                Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+                Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
+            ]
+        elif os.name == "nt":
+            windir = os.environ.get("WINDIR", r"C:\\Windows")
+            candidates = [Path(windir) / "Fonts" / "arial.ttf"]
+        for c in candidates:
+            if c.exists():
+                return c
+        # 最後に探索済み一覧の先頭
+        font_paths = cls.get_font_path_list()
+        return font_paths[0] if font_paths else None
 
     @classmethod
-    def get_glyph_commands(cls, char: str, font_name: str, font_number: int) -> tuple:
-        """平坦化済みのグリフ描画コマンドを取得する（キャッシュ）。"""
-        cache_key = f"{font_name}_{font_number}_{char}"
+    def get_font(cls, font_name: str = "Helvetica", font_index: int = 0) -> TTFont:
+        """TTFont を取得（キャッシュ）。`font_name` は名前の部分一致 or パス。"""
+        try:
+            idx = int(font_index)
+        except Exception:
+            idx = 0
+        if idx < 0:
+            idx = 0
 
-        if cache_key not in cls._glyph_cache:
-            tt_font = cls.get_font(font_name, font_number)
+        cache_key = f"{font_name}|{idx}"
+        cached = cls._fonts.get(cache_key)
+        if cached is not None:
+            return cached
 
-            # フォントからグリフを取得
-            cmap = tt_font.getBestCmap()
-            if cmap is None:
-                cls._glyph_cache[cache_key] = tuple()
-                return cls._glyph_cache[cache_key]
+        # パス指定ならそれを優先
+        path = Path(font_name)
+        if path.exists():
+            if path.suffix.lower() == ".ttc":
+                font = TTFont(path, fontNumber=idx)
+            else:
+                font = TTFont(path)
+            cls._fonts[cache_key] = font
+            return font
 
-            glyph_name = cmap.get(ord(char))
-            if glyph_name is None:
-                # よくある文字に対するフォールバックを試す
-                if char.isascii() and char.isprintable():
-                    # グリフ名をそのまま使ってみる
-                    glyph_name = char
+        # 名前の部分一致で探索
+        for fp in cls.get_font_path_list():
+            if font_name.lower() in fp.name.lower():
+                if fp.suffix.lower() == ".ttc":
+                    font = TTFont(fp, fontNumber=idx)
                 else:
-                    logger.warning(
-                        "Character '%s' (U+%04X) not found in font '%s'.",
-                        char,
-                        ord(char),
-                        font_name,
-                    )
-                    cls._glyph_cache[cache_key] = tuple()
-                    return cls._glyph_cache[cache_key]
+                    font = TTFont(fp)
+                cls._fonts[cache_key] = font
+                return font
 
-            glyph_set = tt_font.getGlyphSet()
-            glyph = glyph_set.get(glyph_name)
-            if glyph is None:
-                logger.warning("Glyph '%s' not found in font '%s'.", glyph_name, font_name)
-                cls._glyph_cache[cache_key] = tuple()
-                return cls._glyph_cache[cache_key]
+        # 既定フォント
+        fallback = cls._default_font_candidate()
+        if fallback is None:
+            raise FileNotFoundError(
+                f"フォント '{font_name}' が見つからず、既定のフォントも検出できませんでした"
+            )
+        logger.warning("Font '%s' not found; using default '%s'", font_name, str(fallback))
+        if fallback.suffix.lower() == ".ttc":
+            font = TTFont(fallback, fontNumber=0)
+        else:
+            font = TTFont(fallback)
+        cls._fonts[cache_key] = font
+        return font
 
-            # グリフ描画コマンドを記録
-            recording_pen = RecordingPen()
-            glyph.draw(recording_pen)
+    @classmethod
+    def get_glyph_commands(
+        cls,
+        *,
+        char: str,
+        font_name: str,
+        font_index: int,
+        flat_seg_len_units: float,
+    ) -> tuple:
+        """平坦化済みのグリフコマンド（`RecordingPen.value` 互換タプル）を返す。"""
+        key = f"{font_name}|{font_index}|{char}|{round(float(flat_seg_len_units), 6)}"
+        cached = cls._glyph_cache.get(key)
+        if cached is not None:
+            return cached
 
-            # 曲線を線分へ平坦化
-            flattened_pen = RecordingPen()
-            flatten_pen = FlattenPen(flattened_pen, approximateSegmentLength=5, segmentLines=True)
-            recording_pen.replay(flatten_pen)
+        tt_font = cls.get_font(font_name, font_index)
+        cmap = tt_font.getBestCmap()
+        if cmap is None:
+            cls._glyph_cache.set(key, tuple())
+            return tuple()
 
-            cls._glyph_cache[cache_key] = tuple(flattened_pen.value)
+        glyph_name = cmap.get(ord(char))
+        if glyph_name is None:
+            if char.isascii() and char.isprintable():
+                glyph_name = char
+            else:
+                logger.warning(
+                    "Character '%s' (U+%04X) not found in font '%s'", char, ord(char), font_name
+                )
+                cls._glyph_cache.set(key, tuple())
+                return tuple()
 
-        return cls._glyph_cache[cache_key]
+        glyph_set = tt_font.getGlyphSet()
+        glyph = glyph_set.get(glyph_name)
+        if glyph is None:
+            logger.warning("Glyph '%s' not found in font '%s'", glyph_name, font_name)
+            cls._glyph_cache.set(key, tuple())
+            return tuple()
+
+        rec = RecordingPen()
+        glyph.draw(rec)
+
+        flat = RecordingPen()
+        flatten_pen = FlattenPen(
+            flat, approximateSegmentLength=float(flat_seg_len_units), segmentLines=True
+        )
+        rec.replay(flatten_pen)
+
+        result = tuple(flat.value)
+        cls._glyph_cache.set(key, result)
+        return result
 
 
 # パフォーマンスのためのグローバルインスタンス
 TEXT_RENDERER = TextRenderer()
 
 
-@shape
-def text(
-    *,
-    text: str = "HELLO",
-    font_size: float = 0.4,
-    font: str = "Helvetica",
-    font_number: int = 0,
-    align: str = "center",
-    **params: Any,
-) -> Geometry:
-    """フォントのアウトラインから線分として文字列を生成します。"""
-    tt_font = TEXT_RENDERER.get_font(font, font_number)
-    units_per_em = tt_font["head"].unitsPerEm  # type: ignore
-    total_width = 0.0
-    for ch in text:
-        total_width += _get_char_advance(ch, tt_font)
-    align_mode = 1 if align == "center" else 2 if align == "right" else 0
-    x_offset = _get_initial_offset_fast(total_width, align_mode)
-    char_data: list[tuple[np.ndarray, float]] = []
-    cur = x_offset
-    for ch in text:
-        if ch != " ":
-            glyph_cmds = TEXT_RENDERER.get_glyph_commands(ch, font, font_number)
-            if glyph_cmds:
-                for verts in _glyph_commands_to_vertices(list(glyph_cmds), units_per_em):
-                    if len(verts) > 0:
-                        char_data.append((verts, cur))
-        cur += _get_char_advance(ch, tt_font)
-    vertices_list: list[np.ndarray] = []
-    for verts, xo in char_data:
-        vertices_list.append(_apply_text_transforms_fast(verts, xo, font_size))
-    return Geometry.from_lines(vertices_list)
-
-
-def _get_char_advance(char: str, tt_font: TTFont) -> float:
+def _get_char_advance_em(char: str, tt_font: TTFont) -> float:
+    """1em を 1.0 とした advance の比率を返す。"""
     if char == " ":
         try:
-            space_width = tt_font["hmtx"].metrics["space"][0]  # type: ignore
-            return space_width / tt_font["head"].unitsPerEm  # type: ignore
-        except KeyError:
+            space_width = tt_font["hmtx"].metrics["space"][0]  # type: ignore[index]
+            return float(space_width) / float(tt_font["head"].unitsPerEm)  # type: ignore[index]
+        except Exception:
             return 0.25
     cmap = tt_font.getBestCmap()
     if cmap is None:
@@ -294,46 +254,146 @@ def _get_char_advance(char: str, tt_font: TTFont) -> float:
     if glyph_name is None:
         return 0.0
     try:
-        advance_width = tt_font["hmtx"].metrics[glyph_name][0]  # type: ignore
-        return advance_width / tt_font["head"].unitsPerEm  # type: ignore
-    except KeyError:
+        advance_width = tt_font["hmtx"].metrics[glyph_name][0]  # type: ignore[index]
+        return float(advance_width) / float(tt_font["head"].unitsPerEm)  # type: ignore[index]
+    except Exception:
         return 0.0
 
 
-def _glyph_commands_to_vertices(glyph_commands: list, units_per_em: float) -> list[np.ndarray]:
+def _glyph_commands_to_vertices_mm(
+    glyph_commands: Iterable,
+    units_per_em: float,
+    em_size_mm: float,
+    x_em: float,
+    y_em: float,
+) -> list[np.ndarray]:
+    """RecordingPen.value から mm 単位の頂点列へ変換する。"""
     vertices_list: list[np.ndarray] = []
-    current_path: list[list[float]] = []
+    cur: list[list[float]] = []
     for command in glyph_commands:
         cmd_type, cmd_values = command
         if cmd_type == "moveTo":
-            if current_path:
-                vertices_list.append(
-                    _normalize_vertices_fast(np.array(current_path, dtype=np.float32), units_per_em)
+            if cur:
+                arr = np.array(cur, dtype=np.float32)
+                # Y 軸反転（描画座標系に合わせる）
+                arr[:, 1] *= -1.0
+                arr = _apply_offset_scale(
+                    arr, x_em * units_per_em, y_em * units_per_em, em_size_mm / units_per_em
                 )
-                current_path = []
+                vertices_list.append(arr)
+                cur = []
             x, y = cmd_values[0]
-            current_path.append([x, y, 0])
+            cur.append([x, y])
         elif cmd_type == "lineTo":
             x, y = cmd_values[0]
-            current_path.append([x, y, 0])
+            cur.append([x, y])
         elif cmd_type == "closePath":
-            if current_path:
-                if len(current_path) > 1 and current_path[0] != current_path[-1]:
-                    current_path.append(current_path[0])
-                vertices_list.append(
-                    _normalize_vertices_fast(np.array(current_path, dtype=np.float32), units_per_em)
+            if cur:
+                if len(cur) > 1 and (cur[0][0] != cur[-1][0] or cur[0][1] != cur[-1][1]):
+                    cur.append([cur[0][0], cur[0][1]])
+                arr = np.array(cur, dtype=np.float32)
+                # Y 軸反転（描画座標系に合わせる）
+                arr[:, 1] *= -1.0
+                arr = _apply_offset_scale(
+                    arr, x_em * units_per_em, y_em * units_per_em, em_size_mm / units_per_em
                 )
-                current_path = []
-    if current_path:
-        vertices_list.append(
-            _normalize_vertices_fast(np.array(current_path, dtype=np.float32), units_per_em)
+                vertices_list.append(arr)
+                cur = []
+    if cur:
+        arr = np.array(cur, dtype=np.float32)
+        # Y 軸反転（描画座標系に合わせる）
+        arr[:, 1] *= -1.0
+        arr = _apply_offset_scale(
+            arr, x_em * units_per_em, y_em * units_per_em, em_size_mm / units_per_em
         )
+        vertices_list.append(arr)
     return vertices_list
 
 
+@shape
+def text(
+    *,
+    text: str = "HELLO",
+    em_size_mm: float = 10.0,
+    font: str = "Helvetica",
+    font_index: int = 0,
+    text_align: str = "left",
+    tracking_em: float = 0.0,
+    line_height: float = 1.2,
+    flatten_tol_em: float = 0.01,
+) -> Geometry:
+    """フォントアウトラインからテキストを生成する（mm）。
+
+    引数:
+        text: 描画する文字列（`\n` で複数行）。
+        em_size_mm: 1em の高さを mm で指定。
+        font: フォント名（部分一致）またはパス。
+        font_index: `.ttc` のサブフォント番号。
+        text_align: 行揃え（`left|center|right`）。
+        tracking_em: 文字間の追加トラッキング（em 比）。
+        line_height: 行送り（em 比）。
+        flatten_tol_em: 平坦化許容差（em 基準の近似セグメント長）。
+
+    返り値:
+        Geometry: mm 単位のポリライン集合。
+    """
+    try:
+        fi = int(font_index)
+    except Exception:
+        fi = 0
+    if fi < 0:
+        fi = 0
+
+    tt_font = TEXT_RENDERER.get_font(font, fi)
+    units_per_em = float(tt_font["head"].unitsPerEm)  # type: ignore[index]
+    seg_len_units = max(1.0, float(flatten_tol_em) * units_per_em)
+
+    lines = text.split("\n")
+    all_vertices: list[np.ndarray] = []
+    y_em = 0.0
+    for li, line in enumerate(lines):
+        # 行幅（em）
+        width_em = 0.0
+        for ch in line:
+            width_em += _get_char_advance_em(ch, tt_font) + (tracking_em if ch != "\n" else 0.0)
+        if line:
+            width_em -= tracking_em  # 末尾のトラッキングは除去
+
+        if text_align == "center":
+            x_em = -width_em / 2.0
+        elif text_align == "right":
+            x_em = -width_em
+        else:
+            x_em = 0.0
+
+        # 1 文字ずつアウトラインを積む
+        cur_x_em = x_em
+        for ch in line:
+            if ch != " ":
+                cmds = TEXT_RENDERER.get_glyph_commands(
+                    char=ch, font_name=font, font_index=fi, flat_seg_len_units=seg_len_units
+                )
+                if cmds:
+                    all_vertices.extend(
+                        _glyph_commands_to_vertices_mm(
+                            cmds, units_per_em, float(em_size_mm), cur_x_em, y_em
+                        )
+                    )
+            cur_x_em += _get_char_advance_em(ch, tt_font) + tracking_em
+
+        # 次の行へ（下方向へ）
+        if li < len(lines) - 1:
+            y_em -= float(line_height)
+
+    return Geometry.from_lines(all_vertices)
+
+
 text.__param_meta__ = {
-    "font_size": {"type": "number", "min": 5, "max": 50},
+    "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
     "font": {"type": "string"},
-    "font_number": {"type": "integer", "min": 0, "max": 10},
-    "align": {"choices": ["left", "center", "right"]},
+    "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
+    "text_align": {"choices": ["left", "center", "right"]},
+    "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},
+    "line_height": {"type": "number", "min": 0.8, "max": 3.0, "step": 0.1},
+    "flatten_tol_em": {"type": "number", "min": 0.001, "max": 0.1, "step": 0.001},
 }

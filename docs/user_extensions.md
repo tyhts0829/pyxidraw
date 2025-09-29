@@ -13,6 +13,7 @@ from __future__ import annotations
 from api import effect  # 将来: ルート公開を予定（現状は effects.registry.effect を直接使っても可）
 from engine.core.geometry import Geometry  # 型ヒント用（任意）
 
+
 @effect(name="my_fx")
 def my_fx(g: Geometry) -> Geometry:
     # ここで g を加工して新しい Geometry を返す
@@ -30,6 +31,7 @@ from __future__ import annotations
 from api import shape  # 唯一の公開経路
 from engine.core.geometry import Geometry
 
+
 @shape(name="my_star")
 def my_star(*, points: int = 5, r: float = 50, inner: float = 0.5) -> Geometry:
     import numpy as np
@@ -46,14 +48,14 @@ def my_star(*, points: int = 5, r: float = 50, inner: float = 0.5) -> Geometry:
 ## 3) 使い方（登録後）
 
 ```python
-from api import G, E
+from api import E, G
 
 # 形状の生成
 base = G.my_star(points=7, r=80)
 
 # パイプラインに組み込み
 pipe = (E.pipeline
-          .ripple(amplitude=0.5)
+          .wobble(amplitude=0.5)
           .my_fx()  # さきほど登録した effect を使用
           .build())
 

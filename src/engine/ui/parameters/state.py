@@ -198,7 +198,7 @@ class ParameterLayoutConfig:
     row_height: int = 28
     padding: int = 8
     font_size: int = 12
-    value_precision: int = 3
+    value_precision: int = 6
 
     def derive_range(self, *, name: str, value_type: ValueType, default_value: Any) -> RangeHint:
         """最小構成の既定レンジ: 数値は 0..1、bool は 0/1。"""

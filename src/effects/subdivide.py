@@ -1,37 +1,60 @@
 """
 subdivide エフェクト（線の細分化）
 
-- 各ポリラインの全セグメントへ中点挿入を繰り返し、滑らかさと頂点密度を上げます。
-- 最短閾値や最大回数を設け、過剰な分割やゼロ長の暴走を防ぎます。
+- 各ポリラインの全セグメントへ中点挿入を繰り返し、滑らかさと頂点密度を上げる。
+- 最小セグメント長と最大回数でガードし、過剰分割や極短線での暴走を防止する。
 
-パラメータ:
-- subdivisions: 分割回数（0–10）。
+Parameters
+----------
+g : Geometry
+    入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+subdivisions : int, default 5
+    分割回数（0–10 でクランプ）。0 以下は no-op。
 
-効果:
-- 曲率の高い箇所の表現力が向上し、後段の破線/塗り/ノイズ下地としても有用です。
+Returns
+-------
+Geometry
+    分割後のジオメトリ。`Geometry.from_lines` で正規化され、dtype/offsets の不変条件を満たす。
+
+Notes
+-----
+- 極短セグメントを含む線は、最短セグメント長が閾値を下回るとそこで分割を停止（sqrt 回避のため二乗距離で判定）。
+- 頂点数は概ね `2^d * (n-1) + 1` に増加するため、大きな d ではコストが増える点に留意。
 """
 
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 
 from .registry import effect
 
+# モジュール定数（停止条件/回数上限）
+MAX_SUBDIVISIONS = 10
+MIN_SEG_LEN = 0.01
+MIN_SEG_LEN_SQ = float(MIN_SEG_LEN * MIN_SEG_LEN)
+
 
 @effect()
-def subdivide(g: Geometry, *, subdivisions: float = 5.0) -> Geometry:
-    """中間点を追加して線を細分化（純関数）。"""
+def subdivide(g: Geometry, *, subdivisions: int = 5) -> Geometry:
+    """中間点を追加して線を細分化（純関数）。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    subdivisions : int, default 5
+        分割回数。0 以下は no-op。`MAX_SUBDIVISIONS` にクランプ。
+    """
     coords, offsets = g.as_arrays(copy=False)
-    if subdivisions <= 0.0:
+    if subdivisions <= 0:
         return Geometry(coords.copy(), offsets.copy())
 
-    MAX_DIVISIONS = 10
-    divisions = int(round(subdivisions))
-    if divisions > MAX_DIVISIONS:
-        divisions = MAX_DIVISIONS
+    divisions = int(subdivisions)
+    if divisions > MAX_SUBDIVISIONS:
+        divisions = MAX_SUBDIVISIONS
     if divisions <= 0:
         return Geometry(coords.copy(), offsets.copy())
 
@@ -45,29 +68,37 @@ def subdivide(g: Geometry, *, subdivisions: float = 5.0) -> Geometry:
 
 
 subdivide.__param_meta__ = {
-    "subdivisions": {"type": "integer", "min": 0, "max": 10, "step": 1},
+    "subdivisions": {"type": "integer", "min": 0, "max": MAX_SUBDIVISIONS, "step": 1},
 }
 
 
 @njit(fastmath=True, cache=True)
 def _subdivide_core(vertices: np.ndarray, subdivisions: int) -> np.ndarray:
-    """単一頂点配列の細分化処理（Numba最適化）"""
-    if len(vertices) < 2 or subdivisions <= 0:
+    """単一頂点配列の細分化処理（Numba 最適化）。
+
+    - 全セグメントの最小二乗距離が `MIN_SEG_LEN_SQ` 未満なら分割を停止。
+    - 分割回数は `MAX_SUBDIVISIONS` でクランプ。
+    """
+    n0 = vertices.shape[0]
+    if n0 < 2 or subdivisions <= 0:
         return vertices
 
-    # 最小長チェック - 短すぎる線分は分割しない
-    MIN_LENGTH = 0.01
-    if np.linalg.norm(vertices[0] - vertices[1]) < MIN_LENGTH:
-        return vertices
+    # 初期の全体最小セグ長チェック（平方長で比較、sqrt 回避）
+    d0 = vertices[1:] - vertices[:-1]
+    if d0.shape[0] > 0:
+        dsq0 = d0[:, 0] * d0[:, 0] + d0[:, 1] * d0[:, 1] + d0[:, 2] * d0[:, 2]
+        if np.min(dsq0) < MIN_SEG_LEN_SQ:  # type: ignore[operator]
+            return vertices
 
     # 分割回数制限 - フリーズ防止
-    MAX_DIVISIONS = 10
-    subdivisions = min(subdivisions, MAX_DIVISIONS)
+    subdivisions = subdivisions if subdivisions <= MAX_SUBDIVISIONS else MAX_SUBDIVISIONS
 
     result = vertices.copy()
     for _ in range(subdivisions):
-        n = len(result)
-        new_vertices = np.zeros((2 * n - 1, result.shape[1]), dtype=result.dtype)
+        n = result.shape[0]
+        if n < 2:
+            break
+        new_vertices = np.empty((2 * n - 1, result.shape[1]), dtype=result.dtype)
 
         # 偶数インデックスに元の頂点を配置
         new_vertices[::2] = result
@@ -77,8 +108,11 @@ def _subdivide_core(vertices: np.ndarray, subdivisions: int) -> np.ndarray:
 
         result = new_vertices
 
-        # 再度最小長チェック
-        if len(result) >= 2 and np.linalg.norm(result[0] - result[1]) < MIN_LENGTH:
-            break
+        # 再度、全体最小セグ長による停止判定
+        d = result[1:] - result[:-1]
+        if d.shape[0] > 0:
+            dsq = d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1] + d[:, 2] * d[:, 2]
+            if np.min(dsq) < MIN_SEG_LEN_SQ:  # type: ignore[operator]
+                break
 
     return result

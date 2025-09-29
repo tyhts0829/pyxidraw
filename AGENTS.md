@@ -125,7 +125,7 @@
 
 ## コミット & PR ルール
 
-- タイトル: Conventional Commits（例: `feat(effects): add ripple clamp`）
+- タイトル: Conventional Commits（例: `feat(effects): add wobble clamp`）
 - 必須: Lint/Format/Type/Test 緑、必要時スタブ更新。差分の要約と根拠（ログ/出力）を PR に記載。
 - 提出前: 初回 `pre-commit install`、以降 `pre-commit run -a`。
 

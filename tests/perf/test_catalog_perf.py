@@ -56,7 +56,6 @@ def _try_import_all_effect_modules() -> None:
         "fill",
         "offset",
         "repeat",
-        "ripple",
         "rotate",
         "scale",
         "subdivide",

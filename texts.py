@@ -14,10 +14,15 @@ CANVAS_SIZE = 400
 
 def draw(t: float) -> Geometry:
     """デモ描画関数（MIDI は `api.cc` で制御）。"""
-    base = G.text(text="this is mukai syutoku", font_size=20).translate(
-        CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0
-    )
-    pipe = E.pipeline.fill(angle_rad=cc[7], density=cc[8])
+    # 破壊的変更に伴い、新しい引数へ移行
+    # - font_size → em_size_mm（1em 高さ[mm]）
+    # - align → text_align
+    base = G.text(
+        text="this is mukai syutoku",
+        em_size_mm=20,
+        text_align="center",
+    ).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+    pipe = E.pipeline.fill(angle_rad=cc[1], density=cc[2] * 10)
     return pipe(base)
 
 
