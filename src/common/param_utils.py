@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
-from typing import Any, Iterable, Mapping, Tuple
+from typing import Any, Callable, Iterable, Mapping, Tuple
 
 import numpy as np
 
@@ -54,6 +54,7 @@ __all__ = [
     "params_to_tuple",
     "quantize_params",
     "signature_tuple",
+    "params_signature",
 ]
 
 
@@ -124,13 +125,14 @@ def _env_quant_step(default_step: float | None) -> float:
         return float(default_step)
     env = os.getenv("PXD_PIPELINE_QUANT_STEP")
     try:
-        return float(env) if env is not None else 1e-3
+        return float(env) if env is not None else 1e-6
     except Exception:
-        return 1e-3
+        return 1e-6
 
 
 def _quantize_scalar(value: Any, step: float) -> Any:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    # float（および np.floating）のみ量子化。int/bool はそのまま。
+    if isinstance(value, (float, np.floating)):
         return round(float(value) / float(step)) * float(step)
     return value
 
@@ -151,6 +153,7 @@ def quantize_params(
     meta = meta or {}
 
     out: dict[str, object] = {}
+    changed = False
     for k, v in params.items():
         m = meta.get(k, {})
         step = m.get("step")
@@ -164,11 +167,36 @@ def quantize_params(
             for idx, comp in enumerate(v):
                 s = steps[idx if idx < len(steps) else -1]
                 s_val = float(s) if isinstance(s, (int, float)) else step_default
-                result.append(_quantize_scalar(comp, s_val))
+                q = _quantize_scalar(comp, s_val)
+                if not changed and q != comp:
+                    # NaN の場合は同値扱い（両者が NaN なら変化なし）
+                    try:
+                        if not (
+                            isinstance(q, float)
+                            and isinstance(comp, float)
+                            and np.isnan(q)
+                            and np.isnan(comp)
+                        ):
+                            changed = True
+                    except Exception:
+                        changed = True
+                result.append(q)
             out[k] = tuple(result)
             continue
         s = float(step) if isinstance(step, (int, float)) else step_default
-        out[k] = _quantize_scalar(v, s)
+        qv = _quantize_scalar(v, s)
+        if not changed and qv != v:
+            try:
+                if not (
+                    isinstance(qv, float) and isinstance(v, float) and np.isnan(qv) and np.isnan(v)
+                ):
+                    changed = True
+            except Exception:
+                changed = True
+        out[k] = qv
+    # 変化なしの場合は元の dict をそのまま返す（割り当て削減）
+    if not changed and isinstance(params, dict):
+        return params  # type: ignore[return-value]
     return out
 
 
@@ -181,3 +209,16 @@ def signature_tuple(
     """量子化→ハッシュ可能化まで行い、署名タプルを返す。"""
     q = quantize_params(params, meta, default_step=default_step)
     return params_to_tuple(q)  # type: ignore[return-value]
+
+
+def params_signature(
+    fn: Callable[..., Any], params: Mapping[str, Any], *, default_step: float | None = None
+) -> Tuple[Tuple[str, object], ...]:
+    """関数の `__param_meta__` を考慮してパラメータ署名タプルを生成する。
+
+    - float は量子化対象。既定 1e-6（`PXD_PIPELINE_QUANT_STEP` 上書き可）。
+    - int/bool は非量子化でそのまま。
+    - ベクトルは成分ごとに量子化。`meta['step']` 指定があれば優先。
+    """
+    meta = getattr(fn, "__param_meta__", {}) or {}
+    return signature_tuple(params, meta, default_step=default_step)

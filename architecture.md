@@ -55,7 +55,7 @@
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
     - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
     - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
-  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「量子化後パラメータ（`common.param_utils.signature_tuple`）の blake2b-64」を積み、128bit に集約。
+  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「量子化後パラメータ署名（`common.param_utils.params_signature` ベース）の blake2b-64」を積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
 - パラメータ GUI（Dear PyGui）
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する（`ParameterWindow` は `engine.ui.parameters.dpg_window` に実装）。
@@ -242,7 +242,10 @@ Tips:
   - パラメータメタ `__param_meta__`（任意）は UI 表示のヒントとして利用する。
 - パラメータ規約（重要）
   - すべての Shape/Effect 関数の引数は None を受け付けない（Optional 禁止）。既定値にも None を使用しない。
-  - 数値系（float/int/bool/vector）は実値で受け取り、`__param_meta__` の min/max/step を RangeHint（表示レンジ）として用いる。
+  - 数値系（float/int/bool/vector）は実値で受け取る。
+  - RangeHint（表示レンジ）は `__param_meta__` の min/max/step を参照。
+  - キャッシュ鍵（署名）生成時は `__param_meta__['step']` を用いて「float のみ量子化」する（int/bool は非量子化）。未指定時の既定は 1e-6（`PXD_PIPELINE_QUANT_STEP` で上書き可）。ベクトルは成分ごとに適用し、step の成分が不足する場合は末尾値で補完する。
+  - 備考: Effects は量子化後の値がそのまま実行引数になる。Shapes はキャッシュ鍵に量子化を使うが、実行にはランタイム解決後の値（非量子化）を渡す。
   - 非数値（文字列・列挙など）は GUI スライダー対象外（必要に応じてトグル/選択肢として扱う）。
   - 根拠: `engine.ui.parameters` のスライダーは None を扱わず、表示時に `float(None)` が例外となるため。
 - パラメータ UI/cc のルール（現行仕様）

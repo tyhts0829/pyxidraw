@@ -66,3 +66,16 @@ out = pipe(base)
 - ユーザ拡張は import 時にデコレータが実行されて登録されます。実行前に拡張モジュールを import してください。
 - 既存の `effects.registry` / `shapes.registry` を直接 import しても動作しますが、今後の安定 API としては `api` 経由を推奨します。
 - 依存方向のポリシー（architecture.md 参照）により、`engine/*` から registry を参照しない設計です。
+
+---
+
+## 付録: `__param_meta__` の `step` の意味（量子化/RangeHint）
+
+- RangeHint（UI の表示レンジ）は `min/max/step` を参照します（UI 側でのクランプ/表示のため）。
+- キャッシュ鍵（署名）生成でも `step` を用います（`common.param_utils.params_signature`）。
+  - 対象は float（`float | np.floating`）のみ。int/bool は非量子化。
+  - 既定粒度は 1e-6。環境変数 `PXD_PIPELINE_QUANT_STEP` で上書き可。
+  - ベクトルは成分ごとに適用。`step` をタプルや配列で与えると成分ごとに異なる粒度を指定できます（不足分は末尾値で補完）。
+- 実行時の値
+  - Effects: 量子化後の値が関数の実引数として渡されます。
+  - Shapes: 量子化はキャッシュ鍵生成のみに使われ、関数にはランタイム解決後の値が渡されます。

@@ -37,7 +37,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from common.param_utils import signature_tuple as _signature_tuple
+from common.param_utils import params_signature as _params_signature
 from effects.registry import get_effect
 from engine.core.geometry import Geometry
 from engine.ui.parameters import get_active_runtime
@@ -268,8 +268,7 @@ class Pipeline:
                         index=idx,
                     )
                 )
-            meta = getattr(fn, "__param_meta__", {}) or {}
-            params_tuple = _signature_tuple(params, meta)
+            params_tuple = _params_signature(fn, params)
             runtime_sig_list.append((st.name, params_tuple))
 
         runtime_signature = tuple(runtime_sig_list)

@@ -36,27 +36,27 @@
   - 取得した `fn.__param_meta__` を渡す（`step` を量子化に適用）。
 
 チェックリスト（実装手順）
-- [ ] 設計確定: 「整数は非量子化、浮動小数点のみ量子化」「既定は 1e-6、`__param_meta__['step']` を優先」を採用
-- [ ] 共通: 量子化デフォルト `1e-6` 化（env 未設定時の既定）
-  - [ ] `src/common/param_utils.py:122` の既定値を `1e-6` に変更
-  - [ ] `DEFAULT_SIGNATURE_STEP = 1e-6` を導入し、ドキュメント化
-- [ ] 共通: 量子化対象を「float のみ」に限定
-  - [ ] `src/common/param_utils.py:132-135` `_quantize_scalar()` を更新（int/bool はパススルー）
-  - [ ] ベクトル成分でも float のみ量子化（実装は `_quantize_scalar` で担保）。
-- [ ] 共通: API（署名生成）で `meta['step']` を適用
-  - [ ] `src/common/param_utils.py:175` `signature_tuple()` を更新（`meta['step']` 優先、未指定は 1e-6）
-  - [ ] 関連 docstring/コメントを更新
-- [ ] 共通: 署名一元化ヘルパーの導入と経路一本化
-  - [ ] `common/param_utils.py` に `params_signature(fn, params)` を追加
-  - [ ] `src/api/effects.py` と `src/api/shapes.py` で `params_signature` を使用
-  - [ ] `_params_to_tuple` を廃止し、参照箇所をすべて置換
-- [ ] effects: 呼び出し側は `params_signature()` を使用
-  - [ ] `src/api/effects.py:271` 近辺の鍵生成を `params_signature(fn, params)` に置換
-  - [ ] コメントを「float は 1e-6（または meta step）で量子化」に更新
-- [ ] shapes: ランタイム無効時も「float のみ 1e-6 量子化」で鍵生成
-  - [ ] `src/api/shapes.py:220` で `_params_to_tuple` → `params_signature` に変更
-  - [ ] `fn.__param_meta__` を取得して渡す（`step` を適用）
-  - [ ] コメント更新（ランタイム有無で鍵生成の方針差を解消）
+- [x] 設計確定: 「整数は非量子化、浮動小数点のみ量子化」「既定は 1e-6、`__param_meta__['step']` を優先」を採用
+- [x] 共通: 量子化デフォルト `1e-6` 化（env 未設定時の既定）
+  - [x] `src/common/param_utils.py:122` の既定値を `1e-6` に変更
+  - [x] 既定値は `_env_quant_step(None)` で一元化（専用定数は導入せず）
+- [x] 共通: 量子化対象を「float のみ」に限定
+  - [x] `src/common/param_utils.py:132-135` `_quantize_scalar()` を更新（int/bool はパススルー）
+  - [x] ベクトル成分でも float のみ量子化（実装は `_quantize_scalar` で担保）。
+- [x] 共通: API（署名生成）で `meta['step']` を適用
+  - [x] `src/common/param_utils.py:175` `signature_tuple()` は現仕様で `meta['step']` を尊重
+  - [x] 早期パス（変化なし参照返し）を `quantize_params` に追加
+- [x] 共通: 署名一元化ヘルパーの導入と経路一本化
+  - [x] `common/param_utils.py` に `params_signature(fn, params)` を追加
+  - [x] `src/api/effects.py` と `src/api/shapes.py` で `params_signature` を使用
+  - [x] `_params_to_tuple` を廃止し、参照箇所をすべて置換
+- [x] effects: 呼び出し側は `params_signature()` を使用
+  - [x] `src/api/effects.py:271` 近辺の鍵生成を `params_signature(fn, params)` に置換
+  - [x] コメントを「float は 1e-6（または meta step）で量子化」に更新
+- [x] shapes: ランタイム無効時も「float のみ 1e-6 量子化」で鍵生成
+  - [x] `src/api/shapes.py:220` で `_params_to_tuple` → `params_signature` に変更
+  - [x] `fn.__param_meta__` を取得して渡す（`step` を適用）
+  - [x] コメント更新（ランタイム有無で鍵生成の方針差を解消）
 - [ ] 影響調査: 旧挙動（1e-3/整数量子化）に依存した閾値テストや HUD 表示がないか確認
   - [ ] 影響があればテスト更新
 - [ ] テスト追加（最小限）
@@ -99,3 +99,12 @@
 - src/api/shapes.py:220
 
 以上、問題なければこの計画に沿って実装に着手します。修正中に追加の確認事項が出た場合は本ファイルへ追記し、進捗チェックボックスを更新していきます。
+
+---
+
+検証結果（実行ログ抜粋）
+- 変更ファイル限定 Lint/Format/TypeCheck
+  - ruff/black/isort/mypy: OK（対象: `src/common/param_utils.py`, `src/api/effects.py`, `src/api/shapes.py`）
+- スモークテスト: OK
+  - コマンド: `pytest -q -m smoke`
+  - 結果: 16 passed, 127 deselected in 約1.5s（macOS, Python 3.10）

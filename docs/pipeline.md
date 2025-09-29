@@ -39,6 +39,14 @@ out = pipe(base)
 - 不変パラメータのパイプラインは再利用で高速化。`.cache(maxsize=N)` で上限制御。
 - `PXD_PIPELINE_CACHE_MAXSIZE` で既定値を上書き可能。
 
+### 量子化と鍵の安定化（重要）
+- パラメータは署名生成前に量子化される（`common.param_utils.params_signature`）。
+  - 対象は float（`float | np.floating`）のみ。int/bool は非量子化。
+  - 粒度は `__param_meta__['step']` を優先し、未指定時の既定は 1e-6。環境変数 `PXD_PIPELINE_QUANT_STEP` で既定を上書き可能。
+  - ベクトルは成分ごとに適用。`step` がタプル/配列で短い場合は末尾値で補完。
+- Effects は量子化後の値がそのまま実行時の引数になる（再現性と安定性を優先）。
+- Shapes はキャッシュ鍵の生成に量子化を使うが、実行にはランタイム解決後の値を渡す（UI と直呼びの一貫性を優先）。
+
 ## スタブと IDE 補助
 - `api/__init__.pyi` は `tools/gen_g_stubs.py` により自動生成。
 - 形状 `G` とエフェクト `E.pipeline` のメソッドには引数の短い説明を含む。

@@ -27,7 +27,7 @@ Design
 - 責務境界: 生成は `G`/各 shape 関数、変換は `Geometry`、加工は `E.pipeline`。
 - キャッシュ: 形状生成結果の LRU（maxsize=128）は本モジュールに集約。
 - 動的ディスパッチ: インスタンス `__getattr__` で遅延解決し、`G.sphere(...)` の形で提供。
-- 再現性と性能: `_params_to_tuple()` でパラメータを決定的・ハッシュ可能に正規化し、
+- 再現性と性能: `params_signature()` でパラメータを量子化→ハッシュ可能に正規化し、
   プロセス内 LRU を適用。
 - 例外方針: 未登録名は `AttributeError`。生成器側の失敗は各シェイプが責任。
 
@@ -53,8 +53,7 @@ from typing import Any, Callable, Iterable
 
 # レジストリ登録の副作用を発火させるため、shapes パッケージを 1 度だけ import すれば十分
 import shapes  # noqa: F401  (登録目的の副作用)
-from common.param_utils import params_to_tuple as _params_to_tuple
-from common.param_utils import signature_tuple as _signature_tuple
+from common.param_utils import params_signature as _params_signature
 from engine.core.geometry import Geometry, LineLike
 from engine.ui.parameters import get_active_runtime
 from engine.ui.parameters.runtime import resolve_without_runtime
@@ -165,25 +164,7 @@ class ShapesAPI:
             return data
         return Geometry.from_lines(data)
 
-    @staticmethod
-    def _params_to_tuple(**params: Any) -> ParamsTuple:
-        """ハッシュ可能なタプルへパラメータを正規化する。
-
-        Parameters
-        ----------
-        **params : Any
-            形状関数へ渡される任意のパラメータ。
-
-        Returns
-        -------
-        ParamsTuple
-            キー昇順かつ不変要素に正規化されたタプル。
-
-        Notes
-        -----
-        キャッシュキーの安定化と等価性の保証が目的。
-        """
-        return _params_to_tuple(dict(params))
+    # _params_to_tuple は廃止（署名は params_signature で統一）
 
     def _build_shape_method(self, name: str) -> Callable[..., Geometry]:
         """レジストリ名から `G.<name>(**params)` を構築する。
@@ -210,14 +191,13 @@ class ShapesAPI:
                 self.__dict__.pop(name, None)
                 raise AttributeError(f"'{self.__class__.__name__}' has no attribute '{name}'")
             runtime = get_active_runtime()
+            fn = get_shape_generator(name)
             if runtime is not None:
                 # Runtime 介在時も LRU を有効化するため、解決後の最終値（量子化後）で鍵を作る
-                fn = get_shape_generator(name)
                 resolved = dict(runtime.before_shape_call(name, fn, dict(params)))
-                meta = getattr(fn, "__param_meta__", {}) or {}
-                params_tuple = _signature_tuple(resolved, meta)
+                params_tuple = _params_signature(fn, resolved)
                 return self._cached_shape(name, params_tuple)
-            params_tuple = self._params_to_tuple(**params)
+            params_tuple = _params_signature(fn, dict(params))
             return self._cached_shape(name, params_tuple)
 
         _shape_method.__name__ = name
