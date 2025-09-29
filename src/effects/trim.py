@@ -45,7 +45,7 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
         return vertices
     distances = [0.0]
     for i in range(len(vertices) - 1):
-        dist = np.linalg.norm(vertices[i + 1] - vertices[i])
+        dist = float(np.linalg.norm(vertices[i + 1] - vertices[i]))
         distances.append(distances[-1] + dist)
     total_length = distances[-1]
     if total_length == 0:
@@ -56,8 +56,8 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
     start_point = _interpolate_at_distance(vertices, distances, start_dist)
     if start_point is not None:
         trimmed_vertices.append(start_point)
-    for i, dist in enumerate(distances):
-        if start_dist < dist < end_dist:
+    for i, dist_val in enumerate(distances):
+        if start_dist < dist_val < end_dist:
             trimmed_vertices.append(vertices[i])
     end_point = _interpolate_at_distance(vertices, distances, end_dist)
     if end_point is not None and (
@@ -68,7 +68,7 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
 
 
 @effect()
-def trim(g: Geometry, *, start_param: float = 0.1, end_param: float = 0.9) -> Geometry:
+def trim(g: Geometry, *, start_param: float = 0.1, end_param: float = 0.5) -> Geometry:
     """ポリラインの一部区間だけを残すトリム処理（純関数）。
 
     0.0–1.0 の正規化パラメータで開始/終了位置を指定し、その区間の線分を残します。

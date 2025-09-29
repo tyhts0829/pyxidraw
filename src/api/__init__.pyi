@@ -175,38 +175,29 @@ class _PipelineBuilder(Protocol):
             pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
         """
         ...
-    # meta: amplitude (type=number, range=[0.0, 20.0])
-    # meta: frequency (type=number, range=[(0.0, 0.0, 0.0), (0.2, 0.2, 0.2)])
-    # meta: phase (type=number, range=[0.0, 6.283185307179586])
-    def ripple(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
-        """
-        座標値に基づくサイン波ゆらぎ（ウォブル）を各軸に適用する純関数エフェクト。
-
-        引数:
-            amplitude: 変位の大きさ（座標単位, mm 相当）
-            frequency: 空間周波数 [cycles per unit]
-            phase: 位相オフセット（ラジアン）
-        """
-        ...
+    # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     # meta: angles_rad (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
-    def rotate(self, *, pivot: Vec3 = ..., angles_rad: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    def rotate(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
-        回転（新形式のみ）。
+        回転（auto_center 対応）。
 
         引数:
-            pivot: 回転の中心
+            auto_center: True なら平均座標を中心に使用
+            pivot: 回転の中心（`auto_center=False` のとき有効）
             angles_rad: (rx, ry, rz) ラジアン角
         """
         ...
+    # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     # meta: scale (type=vec3, range=[(0.1, 0.1, 0.1), (5.0, 5.0, 5.0)])
-    def scale(self, *, pivot: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    def scale(self, *, auto_center: bool = ..., pivot: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
-        スケール変換を適用（純関数）。
+        スケール変換を適用（auto_center 対応）。
 
         引数:
-            pivot: スケーリングの中心（`(x, y, z)`）
+            auto_center: True なら平均座標を中心に使用
+            pivot: スケーリングの中心（`auto_center=False` のとき有効）
             scale: 各軸の倍率（`(sx, sy, sz)`）
         """
         ...

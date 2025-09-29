@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .dpg_window import ParameterWindow
 from .state import ParameterLayoutConfig, ParameterStore
-from .window import ParameterWindow
 
 
 class ParameterWindowController:

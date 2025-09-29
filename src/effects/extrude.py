@@ -39,7 +39,7 @@ def extrude(
     direction: Vec3 = (0.0, 0.0, 0.0),
     distance: float = 10.0,
     scale: float = 0.5,
-    subdivisions: float = 0,
+    subdivisions: float = 4,
     center_mode: Literal["origin", "auto"] = "auto",
 ) -> Geometry:
     """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。

@@ -1,11 +1,12 @@
 """
 rotate エフェクト（回転）
 
-- ピボット点を中心に、XYZ 各軸の回転角（ラジアン）を指定して回転します。
-- 実装は `Geometry.rotate` に委譲し、新規インスタンスを返す純関数です。
+- 中心の選択（auto_center or pivot）に基づき、XYZ 各軸の回転角（ラジアン）を適用。
+- 実装は `Geometry.rotate` に委譲し、新規インスタンスを返す純関数。
 
 パラメータ:
-- pivot: 回転中心（Vec3）。
+- auto_center: True ならジオメトリの平均座標を中心に使用。False なら `pivot` を使用。
+- pivot: 回転中心（Vec3）。`auto_center=False` のときのみ有効。
 - angles_rad: (rx, ry, rz) [rad]（右手系）。
 """
 
@@ -23,22 +24,37 @@ from .registry import effect
 def rotate(
     g: Geometry,
     *,
+    auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
-    angles_rad: Vec3 = (0.0, 0.0, 0.0),
+    angles_rad: Vec3 = (np.pi / 4, np.pi / 4, np.pi / 4),
 ) -> Geometry:
-    """回転（新形式のみ）。
+    """回転（auto_center 対応）。
 
     引数:
-        pivot: 回転の中心
+        auto_center: True なら平均座標を中心に使用。False なら `pivot` を中心に使用
+        pivot: 回転の中心（`auto_center=False` のとき有効）
         angles_rad: (rx, ry, rz) ラジアン角
     """
-    cx, cy, cz = pivot
+    # 角度を正規化
     rx, ry, rz = float(angles_rad[0]), float(angles_rad[1]), float(angles_rad[2])
-    return g.rotate(x=rx, y=ry, z=rz, center=(cx, cy, cz))
+
+    # 中心を決定（auto_center 優先）
+    if auto_center:
+        coords, offsets = g.as_arrays(copy=False)
+        if coords.shape[0] == 0:
+            # 空ジオメトリは no-op（Geometry.rotate と整合）
+            return Geometry(coords.copy(), offsets.copy())
+        center = tuple(coords.mean(axis=0).astype(np.float32))  # type: ignore[assignment]
+    else:
+        cx, cy, cz = pivot
+        center = (cx, cy, cz)
+
+    return g.rotate(x=rx, y=ry, z=rz, center=center)
 
 
 # 後方互換クラスは廃止（関数APIのみ）
 rotate.__param_meta__ = {
+    "auto_center": {"type": "bool"},
     "pivot": {
         "type": "vec3",
         "min": (-300.0, -300.0, -300.0),

@@ -15,7 +15,6 @@ from . import extrude  # noqa: F401
 from . import fill  # noqa: F401
 from . import offset  # noqa: F401
 from . import repeat  # noqa: F401
-from . import ripple  # noqa: F401
 from . import rotate  # noqa: F401
 from . import scale  # noqa: F401
 from . import subdivide  # noqa: F401

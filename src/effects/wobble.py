@@ -52,8 +52,8 @@ def _wobble_vertices(
 def wobble(
     g: Geometry,
     *,
-    amplitude: float = 2.5,
-    frequency: float | Vec3 = 0.02,
+    amplitude: float = 2.0,
+    frequency: float | Vec3 = 0.1,
     phase: float = 0.0,
 ) -> Geometry:
     """線にウォブル/波の歪みを追加（純関数）。

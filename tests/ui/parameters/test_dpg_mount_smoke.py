@@ -1,12 +1,12 @@
 import pytest
 
+from engine.ui.parameters.dpg_window import ParameterWindow
 from engine.ui.parameters.state import (
     ParameterDescriptor,
     ParameterLayoutConfig,
     ParameterStore,
     RangeHint,
 )
-from engine.ui.parameters.window import ParameterWindow
 
 try:
 
