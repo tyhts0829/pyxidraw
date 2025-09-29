@@ -4,6 +4,11 @@
       `Geometry` を得る。結果は `RenderPacket` としてキューへ送出し、例外は `WorkerTaskError`
       で文脈付きに伝搬。`tick(dt)` は FPS に従いタスクを発行し、`close()` は安全に停止する。
 なぜ: 生成（CPU 計算）をメインスレッドから切り離し、描画ループをブロックせずに安定駆動するため。
+
+注意（重要）:
+- macOS など `multiprocessing` が spawn 方式の環境では、サブプロセスに渡すコールバック
+  （`draw_callback`/`apply_cc_snapshot`/`metrics_snapshot`）は「ピクル可能＝トップレベル定義」である必要がある。
+  ローカル関数や `functools.partial` でクロージャを含むものは避けること。
 """
 
 from __future__ import annotations
@@ -48,7 +53,12 @@ class WorkerTaskError(Exception):
 
 
 class _WorkerProcess(mp.Process):
-    """バックグラウンドで draw_callback を呼び RenderPacket を生成する。"""
+    """バックグラウンドで draw_callback を呼び RenderPacket を生成する。
+
+    ピクル要件:
+    - `draw_callback`/`apply_cc_snapshot`/`metrics_snapshot` はトップレベル関数など
+      ピクル可能な参照を渡すこと（spawn 互換）。
+    """
 
     def __init__(
         self,

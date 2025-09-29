@@ -187,8 +187,8 @@ NOISE_GRADIENTS_3D = np.array(NOISE_CONST["GRAD3"], dtype=np.float32)
 def displace(
     g: Geometry,
     *,
-    amplitude_mm: float = 5.0,
-    spatial_freq: float | Vec3 = (0.05, 0.05, 0.05),
+    amplitude_mm: float = 8.0,
+    spatial_freq: float | Vec3 = (0.04, 0.04, 0.04),
     t_sec: float = 0.0,
 ) -> Geometry:
     """3次元頂点にPerlinノイズを追加（クリーンAPI）。"""

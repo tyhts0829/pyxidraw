@@ -284,6 +284,8 @@ def run_sketch(
         _apply_cc_snapshot = None  # type: ignore[assignment]
 
     # メトリクス収集（HUD 用）。HUD/CACHE 無効時は None を渡す。
+    # 注意: macOS 等の spawn 環境では、ワーカープロセスへ渡す関数は
+    # ピクル可能（トップレベル定義）である必要がある。
     metrics_snapshot_fn = (
         _hud_metrics_snapshot if (hud_conf.enabled and hud_conf.show_cache_status) else None
     )
