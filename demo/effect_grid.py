@@ -43,7 +43,12 @@ PADDING = 10.0  # セル内の余白（内側マージン）—フィット時�
 GAP = 10.0  # セル間の間隔（外側ギャップ）—レイアウト時にセル間へ加算
 LINE_THICKNESS = 0.0006  # 描画線の太さ（スクリーン座標に対する比率）
 EDGE_MARGIN = 30.0  # ウィンドウ外枠の余白（上下左右, px 相当）
-
+SUBDIVIDE_TARGET = [
+    "displace",
+    "ripple",
+    "twist",
+    "wobble",
+]  # これらのエフェクトには事前に subdivide を挟む
 # ラベルはシンプルに固定サイズで描画
 
 
@@ -135,7 +140,15 @@ def _initialize_grid() -> None:
         try:
             fn = get_effect(name)
             params = _build_params(name, fn)
-            effected = fn(base, **params).translate(cx - inner_w * 0.5, cy - inner_h * 0.5, 0.0)
+
+            # 必要に応じて事前に subdivide を挟む
+            src = base
+            if name in SUBDIVIDE_TARGET:
+                subdivide_fn = get_effect("subdivide")
+                # subdivide のデフォルトパラメータを使用（重さ回避のため制限は effect 側で実施）
+                src = subdivide_fn(src)
+
+            effected = fn(src, **params).translate(cx - inner_w * 0.5, cy - inner_h * 0.5, 0.0)
         except Exception:
             effected = G.empty()
 

@@ -187,7 +187,7 @@ NOISE_GRADIENTS_3D = np.array(NOISE_CONST["GRAD3"], dtype=np.float32)
 def displace(
     g: Geometry,
     *,
-    amplitude_mm: float = 0.5,
+    amplitude_mm: float = 5.0,
     spatial_freq: float | Vec3 = (0.05, 0.05, 0.05),
     t_sec: float = 0.0,
 ) -> Geometry:
