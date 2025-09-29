@@ -25,8 +25,8 @@ from .registry import effect
 def ripple(
     g: Geometry,
     *,
-    amplitude: float = 1.5,
-    frequency: float | Vec3 = 0.03,
+    amplitude: float = 2.0,
+    frequency: float | Vec3 = 0.1,
     phase: float = 0.0,
 ) -> Geometry:
     """座標値に基づくサイン波ゆらぎ（ウォブル）を各軸に適用する純関数エフェクト。
