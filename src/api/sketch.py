@@ -96,6 +96,33 @@ from .effects import global_cache_counters as _effects_counters
 from .shapes import ShapesAPI as _ShapesAPI
 
 
+def _hud_metrics_snapshot() -> dict[str, dict[str, int]]:
+    """shape/effect のキャッシュ累計を取得する（HUD 用差分の材）。
+
+    multiprocessing の spawn 方式でもシリアライズ可能なトップレベル関数として定義する。
+    """
+    try:
+        s_info = _ShapesAPI.cache_info()
+    except Exception:
+        s_info = {"hits": 0, "misses": 0}
+    try:
+        e_info = _effects_counters()
+    except Exception:
+        e_info = {"compiled": 0, "enabled": 0, "hits": 0, "misses": 0}
+    return {
+        "shape": {
+            "hits": int(s_info.get("hits", 0)),
+            "misses": int(s_info.get("misses", 0)),
+        },
+        "effect": {
+            "compiled": int(e_info.get("compiled", 0)),
+            "enabled": int(e_info.get("enabled", 0)),
+            "hits": int(e_info.get("hits", 0)),
+            "misses": int(e_info.get("misses", 0)),
+        },
+    }
+
+
 def run_sketch(
     user_draw: Callable[[float], Geometry],
     *,
@@ -256,33 +283,10 @@ def run_sketch(
     except Exception:  # pragma: no cover - フォールバック
         _apply_cc_snapshot = None  # type: ignore[assignment]
 
-    # メトリクス収集（HUD 用）を注入（spawn 安全なトップレベル関数）
-    def _metrics_snapshot() -> dict[str, dict[str, int]]:  # noqa: D401
-        """shape/effect のキャッシュ累計を取得する（前後差分の材）。"""
-        try:
-            s_info = _ShapesAPI.cache_info()
-        except Exception:
-            s_info = {"hits": 0, "misses": 0}
-        try:
-            e_info = _effects_counters()
-        except Exception:
-            e_info = {"compiled": 0, "enabled": 0, "hits": 0, "misses": 0}
-        return {
-            "shape": {
-                "hits": int(s_info.get("hits", 0)),
-                "misses": int(s_info.get("misses", 0)),
-            },
-            "effect": {
-                "compiled": int(e_info.get("compiled", 0)),
-                "enabled": int(e_info.get("enabled", 0)),
-                "hits": int(e_info.get("hits", 0)),
-                "misses": int(e_info.get("misses", 0)),
-            },
-        }
-
-    # HUD/CACHE が無効なら計測関数は渡さない
-    if not (hud_conf.enabled and hud_conf.show_cache_status):
-        _metrics_snapshot = None  # type: ignore[assignment]
+    # メトリクス収集（HUD 用）。HUD/CACHE 無効時は None を渡す。
+    metrics_snapshot_fn = (
+        _hud_metrics_snapshot if (hud_conf.enabled and hud_conf.show_cache_status) else None
+    )
 
     worker_pool = WorkerPool(
         fps=fps,
@@ -290,7 +294,7 @@ def run_sketch(
         cc_snapshot=cc_snapshot_fn,
         apply_cc_snapshot=_apply_cc_snapshot,
         num_workers=worker_count,
-        metrics_snapshot=_metrics_snapshot,
+        metrics_snapshot=metrics_snapshot_fn,
     )
 
     # HUD: キャッシュ HIT/MISS を受け取って更新（有効時のみ）

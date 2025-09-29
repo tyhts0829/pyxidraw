@@ -192,7 +192,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(width, height),
-        render_scale=2.5,
+        render_scale=4.5,
         use_midi=False,
         use_parameter_gui=False,
         workers=1,
