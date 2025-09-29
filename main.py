@@ -15,7 +15,7 @@ CANVAS_SIZE = 400
 def draw(t: float) -> Geometry:
     """デモ描画関数（MIDI は `api.cc` で制御）。"""
     base = G.polyhedron().scale(cc[1] * 500).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-    pipe = E.pipeline.affine().extrude().build()
+    pipe = E.pipeline.affine().extrude().subdivide().displace().build()
     return pipe(base)
 
 

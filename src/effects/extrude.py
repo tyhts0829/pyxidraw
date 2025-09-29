@@ -29,7 +29,7 @@ from .registry import effect
 
 MAX_DISTANCE = 200.0
 MAX_SCALE = 3.0
-MAX_SUBDIVISIONS = 5
+MAX_SUBDIVISIONS = 8
 
 
 @effect()

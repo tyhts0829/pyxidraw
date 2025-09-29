@@ -116,7 +116,7 @@ class _PipelineBuilder(Protocol):
     # meta: direction (type=vec3)
     # meta: distance (type=number, range=[0.0, 200.0])
     # meta: scale (type=number, range=[0.0, 3.0])
-    # meta: subdivisions (type=integer, range=[0, 5])
+    # meta: subdivisions (type=integer, range=[0, 8])
     # choices: center_mode in ['origin', 'auto']
     def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: float = ..., center_mode: str = ..., **_params: Any) -> _PipelineBuilder:
         """
@@ -126,7 +126,7 @@ class _PipelineBuilder(Protocol):
             direction: vec3
             distance: number, range [0.0, 200.0]
             scale: number, range [0.0, 3.0]
-            subdivisions: integer, range [0, 5]
+            subdivisions: integer, range [0, 8]
             center_mode: choices { 'origin', 'auto' }
         """
         ...
