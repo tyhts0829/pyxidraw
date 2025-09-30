@@ -42,14 +42,14 @@ MAX_TOTAL_VERTICES = 10_000_000
 
 @effect()
 def subdivide(g: Geometry, *, subdivisions: int = 5) -> Geometry:
-    """中間点を追加して線を細分化（純関数）。
+    """中間点を追加して線を細分化。
 
     Parameters
     ----------
     g : Geometry
         入力ジオメトリ。
     subdivisions : int, default 5
-        分割回数。0 以下は no-op。`MAX_SUBDIVISIONS` にクランプ。
+        分割回数（0 で no-op, 10 にクランプ）。
     """
     coords, offsets = g.as_arrays(copy=False)
     if subdivisions <= 0:

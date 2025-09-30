@@ -80,7 +80,7 @@ def dash_kernel(coords: float32[:, :], offsets: int32[:], dash: float32, gap: fl
 ```
 
 - 実装時はまず純 Python で同構造を採用し、将来 `try-import numba` で `njit(cache=True)` を任意有効化。
-- 既定は numba 無し（依存追加なし）。環境変数で opt-in（例: `PXD_USE_NUMBA_DASH=1`）。
+- 既定は numba 無し（依存追加なし）。環境変数で opt-in（例: `PYX_USE_NUMBA=1` または個別に `PYX_USE_NUMBA_DASH=1`。レガシー `PXD_USE_NUMBA_DASH` も可）。
 
 ---
 
@@ -108,7 +108,7 @@ def dash_kernel(coords: float32[:, :], offsets: int32[:], dash: float32, gap: fl
 - [ ] 数値安定化（eps/side）の固定化と境界テスト
 - [ ] 回帰テスト（機能/性能）
 - [ ] `architecture.md` 差分があれば更新
-- [x]（任意）`PXD_USE_NUMBA_DASH` による njit 経路の用意（依存は追加しない）
+- [x]（任意）`PYX_USE_NUMBA[_DASH]` による njit 経路の用意（依存は追加しない）
 
 ---
 

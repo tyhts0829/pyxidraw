@@ -56,7 +56,9 @@ PADDING: float = 10.0  # セル内の余白（内側マージン）
 GAP: float = 10.0  # セル間の間隔（外側ギャップ）
 LINE_THICKNESS: float = 0.0006  # 描画線の太さ（スクリーン座標比）
 EDGE_MARGIN: float = 30.0  # ウィンドウ外枠の余白（上下左右, px 相当）
-LABEL_FONT_SIZE: int = 15  # ラベル描画のフォントサイズ（1em 高さ[mm]）
+LABEL_FONT_SIZE: int = 12  # ラベル描画のフォントサイズ（1em 高さ[mm]）
+# ラベル塗りつぶし（ハッチ）設定（エフェクトは既定値を使用）
+LABEL_USE_FILL: bool = True
 SUBDIVIDE_TARGET = [
     "displace",
     "twist",
@@ -123,9 +125,18 @@ def _make_label_geo(text: str, origin: tuple[float, float]) -> Geometry:
     """ラベル用の Geometry を生成する。環境依存エラーは呼び出し側で握りつぶす。"""
     x0, y0 = origin
     label = _shorten(text)
-    return G.text(text=label, em_size_mm=float(LABEL_FONT_SIZE), text_align="left").translate(
+    g = G.text(text=label, em_size_mm=float(LABEL_FONT_SIZE), text_align="left").translate(
         x0, y0, 0.0
     )
+    if LABEL_USE_FILL:
+        try:
+            fill_fn = get_effect("fill")
+            # 既定パラメータでハッチング（lines, angle=45°, density=35）
+            g = fill_fn(g, angle_rad=0, density=50)
+        except Exception:
+            # フォント/numba 不在などの環境差は無視してアウトラインのみ描画
+            pass
+    return g
 
 
 @dataclass

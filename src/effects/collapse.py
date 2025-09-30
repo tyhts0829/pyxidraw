@@ -386,7 +386,7 @@ def collapse(
     g: Geometry,
     *,
     intensity: float = 5.0,
-    subdivisions: float = 6.0,
+    subdivisions: int = 6,
 ) -> Geometry:
     """線分を細分化してノイズで変形。
 
@@ -395,18 +395,14 @@ def collapse(
     g : Geometry
         入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
     intensity : float, default 5.0
-        変位量（mm 相当）。0 で変化なし（no-op）。
-    subdivisions : float, default 6.0
-        細分回数（実数は丸めて整数に変換）。0 で変化なし（no-op）。
-    Notes
-    -----
-    - Numba が利用可能な環境では、同等出力を保ったまま `njit` による高速化を適用する。
-      未導入環境では NumPy 実装にフォールバックする（出力は同一）。
+        変位量（mm 相当）。0 で no-op。
+    subdivisions : int, default 6
+        細分回数（0 で no-op, 10 にクランプ）。
     """
     coords, offsets = g.as_arrays(copy=False)
-    if coords.shape[0] == 0 or intensity == 0.0 or subdivisions <= 0.0:
+    if coords.shape[0] == 0 or intensity == 0.0 or subdivisions <= 0:
         return Geometry(coords.copy(), offsets.copy())
-    divisions = max(1, int(round(subdivisions)))
+    divisions = max(1, int(subdivisions))
 
     # Numba の使用可否（存在時は既定で使用、環境変数で無効化可能）
     use_numba_env = os.environ.get("PYX_USE_NUMBA", "1")

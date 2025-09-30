@@ -24,16 +24,17 @@ from .registry import effect
 
 
 @effect()
-def twist(g: Geometry, *, angle: float = 60.0, axis: str = "y") -> Geometry:
-    """位置に応じて軸回りにねじるエフェクト（角度は度）。
+def twist(g: Geometry, *, angle_rad: float = math.pi / 3, axis: str = "y") -> Geometry:
+    """位置に応じて軸回りにねじる。
 
-    引数:
-        g: 入力ジオメトリ。
-        angle: 最大ねじれ角（度）。デフォルトは 60°（視認性と過度な破綻のバランス）。
-        axis: ねじれ軸（"x"|"y"|"z"）。
-
-    返り値:
-        ねじれ適用後の `Geometry`。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    angle_rad : float, default pi/3
+        最大ねじれ角（ラジアン）。0 で no-op。
+    axis : str, default 'y'
+        ねじれ軸（'x'|'y'|'z'）。
     """
     coords, offsets = g.as_arrays(copy=False)
     if g.is_empty:
@@ -55,7 +56,7 @@ def twist(g: Geometry, *, angle: float = 60.0, axis: str = "y") -> Geometry:
 
     # 各頂点の正規化位置 t = 0..1
     t = (coords[:, axis_idx] - lo) / rng
-    max_rad = math.radians(angle)
+    max_rad = float(angle_rad)
     # -max..+max に分布させる（中心0）
     twist_rad = (t - 0.5) * 2.0 * max_rad
 
@@ -86,6 +87,6 @@ def twist(g: Geometry, *, angle: float = 60.0, axis: str = "y") -> Geometry:
 
 
 twist.__param_meta__ = {
-    "angle": {"type": "number", "min": 0.0, "max": 360.0},
+    "angle_rad": {"type": "number", "min": 0.0, "max": 2 * math.pi},
     "axis": {"choices": ["x", "y", "z"]},
 }

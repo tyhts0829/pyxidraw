@@ -24,18 +24,14 @@ from .registry import effect
 
 @effect()
 def explode(g: Geometry, *, factor: float = 25.0) -> Geometry:
-    """連続線を線分単位に分断し、外側への押し出しは行わずに短くする。
+    """連続線を線分単位に分断し外側へずらす（全体スケールで短縮）。
 
-    概念的には「各線分を中点方向に外へ `factor` だけ並進 → 全体を元サイズへ
-    スケールバック」と等価な結果を、直接計算で得る。XYZ 方向に対応し、線分長は
-    全体スケール係数 `s` に応じて短縮される。単一点ポリラインは 1 点のまま処理する。
-
-    引数:
-        g: 入力ジオメトリ。
-        factor: 短縮強度の基準長（mm 単位）。
-
-    返り値:
-        線分分断・短縮後の `Geometry`。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    factor : float, default 25.0
+        移動距離の基準 [mm]。0 で no-op。
     """
     coords, offsets = g.as_arrays(copy=False)
     if g.is_empty:

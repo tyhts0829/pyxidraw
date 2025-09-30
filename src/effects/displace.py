@@ -17,8 +17,9 @@ displace エフェクト（Perlin ノイズ変位）
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit  # type: ignore[attr-defined]
 
+from common.param_utils import ensure_vec3
 from common.types import Vec3
 from engine.core.geometry import Geometry
 from util.constants import NOISE_CONST
@@ -191,7 +192,19 @@ def displace(
     spatial_freq: float | Vec3 = (0.04, 0.04, 0.04),
     t_sec: float = 0.0,
 ) -> Geometry:
-    """3次元頂点にPerlinノイズを追加（クリーンAPI）。"""
+    """3次元頂点に Perlin ノイズ変位を追加。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    amplitude_mm : float, default 8.0
+        変位量 [mm]。0 で no-op。
+    spatial_freq : float | tuple[float, float, float], default (0.04,0.04,0.04)
+        空間周波数（float は等方、Vec3 で各軸別）。
+    t_sec : float, default 0.0
+        時間オフセット（アニメ的ノイズの位相）。
+    """
     coords, offsets = g.as_arrays(copy=False)
 
     # パラメータ解決（新形式のみ）
@@ -199,13 +212,12 @@ def displace(
     freq_val = spatial_freq
     ti = float(t_sec)
 
-    # 周波数の整形
+    # 周波数の整形（float | Vec3 → Vec3）。単一値は全成分に拡張。
     if isinstance(freq_val, (int, float)):
-        freq_tuple = (freq_val, freq_val, freq_val)
-    elif len(freq_val) == 1:  # type: ignore[arg-type]
-        freq_tuple = (freq_val[0], freq_val[0], freq_val[0])  # type: ignore[index]
+        fx = fy = fz = float(freq_val)
     else:
-        freq_tuple = tuple(freq_val)  # type: ignore[arg-type]
+        fx, fy, fz = ensure_vec3(tuple(float(x) for x in freq_val))  # type: ignore[arg-type]
+    freq_tuple: tuple[float, float, float] = (fx, fy, fz)
 
     new_coords = _apply_noise_to_coords(
         coords,

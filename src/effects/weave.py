@@ -11,8 +11,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from numba import njit, types
-from numba.typed import List
+from numba import njit, types  # type: ignore[attr-defined]
+from numba.typed import List  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
@@ -24,20 +24,32 @@ from .registry import effect
 def weave(
     g: Geometry,
     *,
-    num_candidate_lines: float = 100.0,
-    relaxation_iterations: float = 15.0,
+    num_candidate_lines: int = 100,
+    relaxation_iterations: int = 15,
     step: float = 0.125,
 ) -> Geometry:
-    """形状にウェブ状のストリング構造を追加（純関数）。"""
+    """形状にウェブ状のストリング構造を追加。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    num_candidate_lines : int, default 100
+        候補線本数（0–500 にクランプ）。
+    relaxation_iterations : int, default 15
+        弾性緩和の反復回数（0–50 にクランプ）。
+    step : float, default 0.125
+        1 ステップの移動係数（0.0–0.5）。
+    """
     MAX_NUM_CANDIDATE_LINES = 500
     MAX_RELAXATION_ITERATIONS = 50
     MAX_STEP = 0.5
 
     coords, offsets = g.as_arrays(copy=False)
     result_lines: list[np.ndarray] = []
-    num_lines = int(round(num_candidate_lines))
+    num_lines = int(num_candidate_lines)
     num_lines = max(0, min(MAX_NUM_CANDIDATE_LINES, num_lines))
-    iterations = int(round(relaxation_iterations))
+    iterations = int(relaxation_iterations)
     iterations = max(0, min(MAX_RELAXATION_ITERATIONS, iterations))
     step_size = float(step)
     if step_size < 0.0:

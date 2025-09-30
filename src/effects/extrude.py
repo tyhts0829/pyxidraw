@@ -39,14 +39,25 @@ def extrude(
     direction: Vec3 = (0.0, 0.0, 0.0),
     distance: float = 10.0,
     scale: float = 0.5,
-    subdivisions: float = 4,
+    subdivisions: int = 4,
     center_mode: Literal["origin", "auto"] = "auto",
 ) -> Geometry:
-    """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。
+    """2D/3Dポリラインを指定方向に押し出し、側面エッジを生成。
 
-    注意:
-        `direction` のノルムが 0（実質ゼロを含む）または `distance=0` の場合は
-        平行移動は行わず、スケールのみ適用する。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    direction : tuple[float, float, float], default (0.0,0.0,0.0)
+        押し出し方向ベクトル。
+    distance : float, default 10.0
+        実距離 [mm]。0 で平行移動なし。
+    scale : float, default 0.5
+        複製線のスケール係数。
+    subdivisions : int, default 4
+        細分回数（0–8 にクランプ）。
+    center_mode : {'origin','auto'}, default 'auto'
+        スケールの中心。
     """
     coords, offsets = g.as_arrays(copy=False)
     if g.is_empty or offsets.size < 2:
@@ -54,7 +65,7 @@ def extrude(
 
     distance_scaled = max(0.0, min(MAX_DISTANCE, float(distance)))
     scale_scaled = max(0.0, min(MAX_SCALE, float(scale)))
-    subdivisions_int = int(round(subdivisions))
+    subdivisions_int = int(subdivisions)
     if subdivisions_int < 0:
         subdivisions_int = 0
     if subdivisions_int > MAX_SUBDIVISIONS:

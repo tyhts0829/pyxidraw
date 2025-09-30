@@ -30,13 +30,16 @@ def scale(
 ) -> Geometry:
     """スケール変換を適用（auto_center 対応）。
 
-    引数:
-        auto_center: True なら平均座標を中心に使用。False なら `pivot` を中心に使用
-        pivot: スケーリングの中心（`auto_center=False` のとき有効）
-        scale: 各軸の倍率（`(sx, sy, sz)`）
-
-    返り値:
-        スケーリング後の `Geometry`。
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    auto_center : bool, default True
+        True なら平均座標を中心に使用。False なら `pivot` を使用。
+    pivot : tuple[float, float, float], default (0.0,0.0,0.0)
+        変換の中心（`auto_center=False` のとき有効）。
+    scale : tuple[float, float, float], default (0.75,0.75,0.75)
+        各軸の倍率。
     """
     sx, sy, sz = scale
 

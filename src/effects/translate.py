@@ -22,7 +22,15 @@ def translate(
     *,
     delta: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
-    """指定ベクトルで平行移動（Geometry メソッドに委譲）。"""
+    """指定ベクトルで平行移動。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    delta : tuple[float, float, float], default (0.0,0.0,0.0)
+        平行移動量 [mm]。全成分 0 または空入力で no-op。
+    """
     ox, oy, oz = float(delta[0]), float(delta[1]), float(delta[2])
     if ox == 0.0 and oy == 0.0 and oz == 0.0 or g.is_empty:
         coords, offsets = g.as_arrays(copy=False)

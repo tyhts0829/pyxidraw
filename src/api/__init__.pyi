@@ -71,7 +71,7 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: intensity (type=number, range=[0.0, 10.0])
     # meta: subdivisions (type=integer, range=[0, 10])
-    def collapse(self, *, intensity: float = ..., subdivisions: float = ..., **_params: Any) -> _PipelineBuilder:
+    def collapse(self, *, intensity: float = ..., subdivisions: int = ..., **_params: Any) -> _PipelineBuilder:
         """
         線分を細分化してノイズで変形。
 
@@ -96,7 +96,7 @@ class _PipelineBuilder(Protocol):
     # meta: t_sec (type=number, range=[0.0, 60.0])
     def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | tuple[float, float, float] = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        3次元頂点にPerlinノイズを追加（クリーンAPI）。
+        3次元頂点に Perlin ノイズ変位を追加。
 
         引数:
             amplitude_mm: number, range [0.0, 50.0]
@@ -107,10 +107,10 @@ class _PipelineBuilder(Protocol):
     # meta: factor (type=number, range=[0.0, 50.0])
     def explode(self, *, factor: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        連続線を線分単位に分断し、外側への押し出しは行わずに短くする。
+        連続線を線分単位に分断し外側へずらす（全体スケールで短縮）。
 
         引数:
-            factor: 短縮強度の基準長（mm 単位）
+            factor: number, range [0.0, 50.0]
         """
         ...
     # meta: direction (type=vec3)
@@ -118,9 +118,9 @@ class _PipelineBuilder(Protocol):
     # meta: scale (type=number, range=[0.0, 3.0])
     # meta: subdivisions (type=integer, range=[0, 8])
     # choices: center_mode in ['origin', 'auto']
-    def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: float = ..., center_mode: str = ..., **_params: Any) -> _PipelineBuilder:
+    def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: int = ..., center_mode: str = ..., **_params: Any) -> _PipelineBuilder:
         """
-        2D/3Dポリラインを指定方向に押し出し、側面エッジを生成（純関数）。
+        2D/3Dポリラインを指定方向に押し出し、側面エッジを生成。
 
         引数:
             direction: vec3
@@ -183,9 +183,9 @@ class _PipelineBuilder(Protocol):
         回転（auto_center 対応）。
 
         引数:
-            auto_center: True なら平均座標を中心に使用
-            pivot: 回転の中心（`auto_center=False` のとき有効）
-            angles_rad: (rx, ry, rz) ラジアン角
+            auto_center: bool
+            pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
+            angles_rad: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
         """
         ...
     # meta: auto_center (type=bool)
@@ -196,15 +196,15 @@ class _PipelineBuilder(Protocol):
         スケール変換を適用（auto_center 対応）。
 
         引数:
-            auto_center: True なら平均座標を中心に使用
-            pivot: スケーリングの中心（`auto_center=False` のとき有効）
-            scale: 各軸の倍率（`(sx, sy, sz)`）
+            auto_center: bool
+            pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
+            scale: vec3, range [(0.1, 0.1, 0.1), (5.0, 5.0, 5.0)]
         """
         ...
     # meta: subdivisions (type=integer, range=[0, 10])
     def subdivide(self, *, subdivisions: int = ..., **_params: Any) -> _PipelineBuilder:
         """
-        中間点を追加して線を細分化（純関数）。
+        中間点を追加して線を細分化。
 
         引数:
             subdivisions: integer, range [0, 10]
@@ -213,7 +213,7 @@ class _PipelineBuilder(Protocol):
     # meta: delta (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     def translate(self, *, delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
-        指定ベクトルで平行移動（Geometry メソッドに委譲）。
+        指定ベクトルで平行移動。
 
         引数:
             delta: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
@@ -223,30 +223,30 @@ class _PipelineBuilder(Protocol):
     # meta: end_param (type=number, range=[0.0, 1.0])
     def trim(self, *, start_param: float = ..., end_param: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        ポリラインの一部区間だけを残すトリム処理（純関数）。
+        ポリラインの一部区間だけを残す。
 
         引数:
-            start_param: 開始位置（0.0–1.0）
-            end_param: 終了位置（0.0–1.0）
+            start_param: number, range [0.0, 1.0]
+            end_param: number, range [0.0, 1.0]
         """
         ...
-    # meta: angle (type=number, range=[0.0, 360.0])
+    # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
     # choices: axis in ['x', 'y', 'z']
-    def twist(self, *, angle: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder:
+    def twist(self, *, angle_rad: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder:
         """
-        位置に応じて軸回りにねじるエフェクト（角度は度）。
+        位置に応じて軸回りにねじる。
 
         引数:
-            angle: 最大ねじれ角（度）
-            axis: ねじれ軸（"x"|"y"|"z"）
+            angle_rad: number, range [0.0, 6.283185307179586]
+            axis: choices { 'x', 'y', 'z' }
         """
         ...
     # meta: num_candidate_lines (type=integer, range=[0, 500])
     # meta: relaxation_iterations (type=integer, range=[0, 50])
     # meta: step (type=number, range=[0.0, 0.5])
-    def weave(self, *, num_candidate_lines: float = ..., relaxation_iterations: float = ..., step: float = ..., **_params: Any) -> _PipelineBuilder:
+    def weave(self, *, num_candidate_lines: int = ..., relaxation_iterations: int = ..., step: float = ..., **_params: Any) -> _PipelineBuilder:
         """
-        形状にウェブ状のストリング構造を追加（純関数）。
+        形状にウェブ状のストリング構造を追加。
 
         引数:
             num_candidate_lines: integer, range [0, 500]

@@ -30,10 +30,16 @@ def rotate(
 ) -> Geometry:
     """回転（auto_center 対応）。
 
-    引数:
-        auto_center: True なら平均座標を中心に使用。False なら `pivot` を中心に使用
-        pivot: 回転の中心（`auto_center=False` のとき有効）
-        angles_rad: (rx, ry, rz) ラジアン角
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    auto_center : bool, default True
+        True なら平均座標を中心に使用。False なら `pivot` を使用。
+    pivot : tuple[float, float, float], default (0.0,0.0,0.0)
+        回転の中心（`auto_center=False` のとき有効）。
+    angles_rad : tuple[float, float, float], default (π/4, π/4, π/4)
+        (rx, ry, rz) ラジアン角。
     """
     # 角度を正規化
     rx, ry, rz = float(angles_rad[0]), float(angles_rad[1]), float(angles_rad[2])

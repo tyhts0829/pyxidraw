@@ -40,11 +40,18 @@ except Exception:  # pragma: no cover - 実行環境に依存
 
 
 def _use_numba() -> bool:
-    """Numba 経路を使うかの判定（存在時は既定で有効、環境変数で無効化可）。"""
+    """Numba 経路を使うかの判定（既定で有効、環境変数で無効化可）。"""
     if not _HAVE_NUMBA:
         return False
-    v = os.environ.get("PXD_USE_NUMBA_DASH", "1")
-    return v not in ("0", "false", "False", "FALSE")
+    # 優先度: 共通フラグ -> エフェクト別（新） -> エフェクト別（旧）
+    off_values = {"0", "false", "False", "FALSE"}
+    if os.environ.get("PYX_USE_NUMBA") in off_values:
+        return False
+    if os.environ.get("PYX_USE_NUMBA_DASH") in off_values:
+        return False
+    if os.environ.get("PXD_USE_NUMBA_DASH") in off_values:  # legacy
+        return False
+    return True
 
 
 # ── Numba kernels（存在時のみ定義）──────────────────────────────────────────
@@ -85,8 +92,8 @@ if _HAVE_NUMBA:  # pragma: no cover - numba の有無に依存
             e_idx = np.searchsorted(s, end)
             interior = e_idx - s_idx
             if interior < 0:
-                interior = 0
-            total_vertices += 2 + interior
+                interior = 0  # type: ignore[assignment]
+            total_vertices += 2 + int(interior)
         return total_vertices, m
 
     @njit(cache=True, fastmath=True)  # type: ignore[misc]
@@ -167,7 +174,7 @@ if _HAVE_NUMBA:  # pragma: no cover - numba の有無に依存
             # start 補間
             s0 = s_idx - 1
             if s0 < 0:
-                s0 = 0
+                s0 = 0  # type: ignore[assignment]
             s1 = s_idx
             den = s[s1] - s[s0]
             if den == 0.0:
@@ -181,7 +188,7 @@ if _HAVE_NUMBA:  # pragma: no cover - numba の有無に依存
             # end 補間
             e0 = e_idx - 1
             if e0 < 0:
-                e0 = 0
+                e0 = 0  # type: ignore[assignment]
             e1 = e_idx
             dene = s[e1] - s[e0]
             if dene == 0.0:

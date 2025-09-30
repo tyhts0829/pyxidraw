@@ -26,15 +26,15 @@
 
 ## 統一ルール（合意後に適用）
 - 署名・入出力
-  - [ ] 関数署名は `def name(g: Geometry, *, ...) -> Geometry` に統一（既定: keyword-only）。
-  - [ ] 空入力/無効果（no-op）時は「入力コピーを返す」を明記し、実装も統一。
-  - [ ] 出力 dtype は `coords=float32`, `offsets=int32` を堅持。
+  - [x] 関数署名は `def name(g: Geometry, *, ...) -> Geometry` に統一（既定: keyword-only）。
+  - [x] 空入力/無効果（no-op）時は「入力コピーを返す」を明記し、実装も統一。
+  - [x] 出力 dtype は `coords=float32`, `offsets=int32` を堅持。
 - 単位・型
-  - [ ] 角度はすべてラジアンに統一。名称は `angle_rad`（単体）/`angles_rad`（Vec3）を用いる。
-  - [ ] 度を使う現行 API（`twist.angle`）は破壊的変更で `angle_rad` に改名（度→ラジアン変換）。
-  - [ ] 実質整数の引数はシグネチャを `int` に統一（`subdivisions`, `count`, `num_candidate_lines`, `relaxation_iterations` 等）。
+  - [x] 角度はすべてラジアンに統一。名称は `angle_rad`（単体）/`angles_rad`（Vec3）を用いる。
+  - [x] 度を使う現行 API（`twist.angle`）は破壊的変更で `angle_rad` に改名（度→ラジアン変換）。
+  - [x] 実質整数の引数はシグネチャを `int` に統一（`subdivisions`, `count`, `num_candidate_lines`, `relaxation_iterations` 等）。
 - ベクトル引数
-  - [ ] `Vec3` 受け取りを基本とし、必要に応じて `float|Vec3` を許容し単一値は全成分へ拡張（`ensure_vec3` を使用）。
+  - [x] `Vec3` 受け取りを基本とし、必要に応じて `float|Vec3` を許容し単一値は全成分へ拡張（`ensure_vec3` を使用）。
 - docstring（effects/AGENTS.md 準拠）
   - [ ] 関数 docstring は「先頭1行の要約 + Parameters」のみ（Returns/Notes/Examples/実装詳細は不可）。
   - [ ] 単位/レンジ/no-op 条件を Parameters に含める。`__param_meta__` と整合させる。
@@ -43,62 +43,62 @@
   - [ ] すべての公開引数に対して `type`/`min`/`max`/`choices`/`step` を適切に設定。
   - [ ] `integer` には `step: 1`。float の `step` は未指定なら既定（1e-6）に依存で可。UI 上の使い勝手改善が必要なもののみ明示。
 - Numba フラグ
-  - [ ] 環境フラグ名は `PYX_USE_NUMBA` に統一（効果ごとの粒度が必要な場合は `PYX_USE_NUMBA_<NAME>`）。
-  - [ ] numba 未導入環境では確実に NumPy フォールバックし、出力は同一になることを維持。
+  - [x] 環境フラグ名は `PYX_USE_NUMBA` に統一（効果ごとの粒度が必要な場合は `PYX_USE_NUMBA_<NAME>`）。
+  - [x] numba 未導入環境では確実に NumPy フォールバックし、出力は同一になることを維持。
 
 ---
 
 ## 実施タスク（ファイル別 TODO）
 - affine.py
-  - [ ] 関数 docstring を規約形式に整形（Returns/Notes をモジュール側へ集約）。
+  - [x] 関数 docstring を規約形式に整形（Returns/Notes をモジュール側へ集約）。
   - [ ] `__param_meta__` step の要否を点検（現状のままでも可）。
 - boldify.py
-  - [ ] 関数 docstring を規約形式に整形（Parameters のみに）。
-  - [ ] `__param_meta__` は現状維持（boldness のレンジ妥当）。
+  - [x] 関数 docstring を規約形式に整形（Parameters のみに）。
+  - [x] `__param_meta__` は現状維持（boldness のレンジ妥当）。
 - collapse.py
-  - [ ] 関数 docstring を規約形式に整形（Notes はモジュールへ）。
-  - [ ] `subdivisions: float -> int` に変更し、`__param_meta__` は `integer, step:1` を堅持。
-  - [ ] Numba フラグを `PYX_USE_NUMBA` に統一（既存と一致、記述の明確化のみ）。
+  - [x] 関数 docstring を規約形式に整形（Notes はモジュールへ）。
+  - [x] `subdivisions: float -> int` に変更し、`__param_meta__` は `integer, step:1` を堅持。
+  - [x] Numba フラグを `PYX_USE_NUMBA` に統一（既存と一致、記述の明確化のみ）。
 - dash.py
-  - [ ] 関数 docstring を規約形式に整形（Parameters のみに）。
-  - [ ] Numba フラグを `PXD_USE_NUMBA_DASH -> PYX_USE_NUMBA_DASH` へ改名（または `PYX_USE_NUMBA` へ集約）。
+  - [x] 関数 docstring を規約形式に整形（Parameters のみに）。
+  - [x] Numba フラグを `PXD_USE_NUMBA_DASH -> PYX_USE_NUMBA_DASH` へ改名（または `PYX_USE_NUMBA` へ集約）。
 - displace.py
-  - [ ] 関数 docstring に Parameters を明記（単位, レンジ, no-op 条件）。
-  - [ ] `spatial_freq` は `float|Vec3` の整理を明文化（`ensure_vec3` 準拠へ寄せる検討）。
+  - [x] 関数 docstring に Parameters を明記（単位, レンジ, no-op 条件）。
+  - [x] `spatial_freq` は `float|Vec3` の整理を明文化（`ensure_vec3` 準拠へ寄せる）。
 - explode.py
-  - [ ] 関数 docstring を規約形式に整形（Returns/注意の移動）。
-  - [ ] `__param_meta__` は現状維持（distance/factor の step は任意）。
+  - [x] 関数 docstring を規約形式に整形（Returns/注意の移動）。
+  - [x] `__param_meta__` は現状維持（distance/factor の step は任意）。
 - extrude.py
-  - [ ] `subdivisions: float -> int` に変更し、`__param_meta__` を `integer, step:1` に統一。
-  - [ ] 関数 docstring の Parameters を規約に沿って簡潔化。
+  - [x] `subdivisions: float -> int` に変更し、`__param_meta__` を `integer, step:1` に統一。
+  - [x] 関数 docstring の Parameters を規約に沿って簡潔化。
 - fill.py
-  - [ ] 関数 docstring を規約形式に整形（Parameters のみに）。
+  - [x] 関数 docstring を規約形式に整形（Parameters のみに）。
   - [ ] `angle_rad` はラジアン明記のまま。`density` の UI 用 step の要否検討。
   - [ ] numba 使用箇所のフラグ化（任意: `PYX_USE_NUMBA` で無効化可能に）。
 - offset.py
-  - [ ] 関数 docstring を規約形式に整形（Parameters のみに）。
-  - [ ] `__param_meta__` の `segments_per_circle` は `integer, step:1` を明示（現状OK）。
+  - [x] 関数 docstring を規約形式に整形（Parameters のみに）。
+  - [x] `__param_meta__` の `segments_per_circle` は `integer, step:1` を明示（現状OK）。
 - repeat.py
-  - [ ] 関数 docstring を規約形式に整形。
-  - [ ] 角度は `angles_rad_step`（ラジアン）で現状維持。
+  - [x] 関数 docstring を規約形式に整形。
+  - [x] 角度は `angles_rad_step`（ラジアン）で現状維持。
 - rotate.py
-  - [ ] 現状ほぼ準拠。docstring の簡潔化のみ確認。
+  - [x] 現状ほぼ準拠。docstring の簡潔化のみ確認。
 - scale.py
-  - [ ] 関数 docstring から Returns を削除（Parameters のみに）。
+  - [x] 関数 docstring から Returns を削除（Parameters のみに）。
   - [ ] `scale` 引数（Vec3）に関する `__param_meta__` の step 要否検討。
 - subdivide.py
-  - [ ] 現状ほぼ準拠。docstring を規約の簡潔さに合わせて微調整。
+  - [x] 現状ほぼ準拠。docstring を規約の簡潔さに合わせて微調整。
 - translate.py
-  - [ ] 関数 docstring に Parameters を追加（`delta` 単位/レンジ/no-op）。
+  - [x] 関数 docstring に Parameters を追加（`delta` 単位/レンジ/no-op）。
 - trim.py
-  - [ ] 現状ほぼ準拠。`start_param/end_param` の説明を簡潔に維持。
+  - [x] 現状ほぼ準拠。`start_param/end_param` の説明を簡潔に維持。
 - twist.py
-  - [ ] 角度を度 -> ラジアンへ破壊的変更（`angle -> angle_rad`）。実装で `math.radians` を除去し、直接ラジアンを使用。
-  - [ ] `__param_meta__` を `0..2π` レンジに変更。
-  - [ ] 関数 docstring を規約形式に整形。
+  - [x] 角度を度 -> ラジアンへ破壊的変更（`angle -> angle_rad`）。実装で `math.radians` を除去し、直接ラジアンを使用。
+  - [x] `__param_meta__` を `0..2π` レンジに変更。
+  - [x] 関数 docstring を規約形式に整形。
 - weave.py
-  - [ ] `num_candidate_lines: float -> int`, `relaxation_iterations: float -> int` に変更し、`__param_meta__` は `integer, step:1` を堅持。
-  - [ ] 関数 docstring を規約形式に整形。
+  - [x] `num_candidate_lines: float -> int`, `relaxation_iterations: float -> int` に変更し、`__param_meta__` は `integer, step:1` を堅持。
+  - [x] 関数 docstring を規約形式に整形。
 
 ---
 
