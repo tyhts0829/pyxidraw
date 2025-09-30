@@ -152,7 +152,6 @@ class ParameterValueResolver:
                 default_value=default_actual,
                 range_hint=hint,
                 help_text=doc,
-                vector_group=None,
             )
             return self._register_scalar(descriptor, default_actual)
         # provided は登録せず、そのまま返す
@@ -171,82 +170,42 @@ class ParameterValueResolver:
         meta_entry: Mapping[str, Any],
         has_default: bool,
     ) -> tuple[Any, ...]:
-        # 提供値は数値列の可能性があるため、そのまま展開
-        provided_values_mixed: list[Any]
-        if isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes)):
-            provided_values_mixed = list(raw_value)
-        else:
-            provided_values_mixed = []
+        # 提供値（provided）は登録せず、実値をタプルとしてそのまま返す
+        if source == "provided":
+            if isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes)):
+                try:
+                    return tuple(float(v) for v in raw_value)  # type: ignore[return-value]
+                except Exception:
+                    pass
+            return tuple(self._ensure_sequence(default_actual))
 
-        # 既定値は数値列として扱う（登録時 original に使用）
+        # default 採用時のみ GUI に登録（親 Descriptor 1 件）。
         default_values = self._ensure_sequence(default_actual)
-        length = max(len(provided_values_mixed), len(default_values))
-        if length == 0:
-            return tuple()
+        if not default_values:
+            # 次善: 長さ 3 のゼロベクトル
+            default_values = [0.0, 0.0, 0.0]
+        dim = max(2, min(len(default_values), 4))
+        default_tuple = tuple(default_values[:dim])  # type: ignore[assignment]
 
-        resolved_vals: list[float] = []
-        for idx in range(length):
-            suffix = _VECTOR_SUFFIX[idx] if idx < len(_VECTOR_SUFFIX) else str(idx)
-            component_id = f"{descriptor_id}.{suffix}"
-
-            # 範囲ヒントは meta があれば採用、無ければ推定
-            component_hint = self._range_hint_from_meta(
-                value_type="float",
-                meta=meta_entry,
-                component_index=idx,
-                default_value=(
-                    default_values[idx]
-                    if idx < len(default_values)
-                    else (default_values[-1] if default_values else None)
-                ),
-            )
-
-            # default を基準に original を導出（後で provided 数値なら置き換える）
-            base_original = self._component_default_actual(
-                default_values=default_values,
-                idx=idx,
-                has_default=has_default,
-                hint=component_hint,
-            )
-
-            # 実際に与えられた値（数値/未指定）
-            if provided_values_mixed:
-                if idx < len(provided_values_mixed):
-                    v_prov = provided_values_mixed[idx]
-                else:
-                    # 足りない成分は最後の指定値を踏襲（従来互換）
-                    v_prov = provided_values_mixed[-1]
-            else:
-                v_prov = None
-
-            if source == "default":
-                descriptor = ParameterDescriptor(
-                    id=component_id,
-                    label=f"{context.label_prefix} · {param_name}.{suffix}",
-                    source=context.scope,
-                    category=context.scope,
-                    value_type="float",
-                    default_value=base_original,
-                    range_hint=component_hint,
-                    help_text=doc,
-                    vector_group=descriptor_id,
-                )
-                original_value = float(base_original)
-                self._store.register(descriptor, original_value)
-                resolved = float(self._store.resolve(component_id, original_value))
-                resolved_vals.append(resolved)
-            else:
-                # provided 値（数値ならそれを採用、未指定なら base）
-                if v_prov is not None:
-                    try:
-                        resolved = float(v_prov)
-                    except Exception:
-                        resolved = float(base_original)
-                else:
-                    resolved = float(base_original)
-                resolved_vals.append(resolved)
-
-        return tuple(resolved_vals)
+        vector_hint = self._vector_range_hint_from_meta(meta_entry, dim)
+        descriptor = ParameterDescriptor(
+            id=descriptor_id,
+            label=f"{context.label_prefix} · {param_name}",
+            source=context.scope,
+            category=context.scope,
+            value_type="vector",
+            default_value=default_tuple,
+            range_hint=None,
+            help_text=doc,
+            vector_hint=vector_hint,
+        )
+        self._store.register(descriptor, default_tuple)
+        resolved = self._store.resolve(descriptor_id, default_tuple)
+        # store は Any を返すため、tuple を保証
+        try:
+            return tuple(resolved)  # type: ignore[return-value]
+        except Exception:
+            return default_tuple
 
     def _resolve_passthrough(
         self,
@@ -288,7 +247,6 @@ class ParameterValueResolver:
                 default_value=default_value,
                 range_hint=None,
                 help_text=doc,
-                vector_group=None,
                 supported=supported,
                 choices=choices_list,
             )
@@ -300,17 +258,7 @@ class ParameterValueResolver:
         self._store.register(descriptor, value)
         return self._store.resolve(descriptor.id, value)
 
-    def _register_vector(
-        self,
-        descriptors: list[ParameterDescriptor],
-        values: list[float],
-    ) -> list[float]:
-        resolved: list[float] = []
-        for descriptor, value in zip(descriptors, values):
-            self._store.register(descriptor, value)
-            resolved_value = self._store.resolve(descriptor.id, value)
-            resolved.append(float(resolved_value))
-        return resolved
+    # _register_vector は親 Descriptor 化に伴い廃止
 
     @staticmethod
     def _merge_with_defaults(
@@ -429,6 +377,38 @@ class ParameterValueResolver:
             step=step,
             scale="linear",
         )
+
+    def _vector_range_hint_from_meta(self, meta: Mapping[str, Any], dim: int):
+        from engine.ui.parameters.state import VectorRangeHint  # 局所 import（循環回避）
+
+        try:
+            mins = []
+            maxs = []
+            steps = []
+            for i in range(dim):
+                mv = self._extract_meta_component(meta.get("min"), i)
+                xv = self._extract_meta_component(meta.get("max"), i)
+                sv = self._extract_meta_component(meta.get("step"), i)
+                mins.append(float(mv) if mv is not None else None)
+                maxs.append(float(xv) if xv is not None else None)
+                steps.append(sv if isinstance(sv, (int, float)) else None)
+            if any(v is None for v in mins) or any(v is None for v in maxs):
+                return None
+            if dim == 4:
+                return VectorRangeHint(
+                    min_values=(mins[0], mins[1], mins[2], mins[3]),  # type: ignore[arg-type]
+                    max_values=(maxs[0], maxs[1], maxs[2], maxs[3]),  # type: ignore[arg-type]
+                    steps=(steps[0], steps[1], steps[2], steps[3]),  # type: ignore[arg-type]
+                    scale="linear",
+                )
+            return VectorRangeHint(
+                min_values=(mins[0], mins[1], mins[2]),  # type: ignore[arg-type]
+                max_values=(maxs[0], maxs[1], maxs[2]),  # type: ignore[arg-type]
+                steps=(steps[0], steps[1], steps[2]),  # type: ignore[arg-type]
+                scale="linear",
+            )
+        except Exception:
+            return None
 
     @staticmethod
     def _extract_meta_component(value: Any, component_index: int | None) -> float | int | None:

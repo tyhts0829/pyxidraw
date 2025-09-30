@@ -101,8 +101,11 @@ def test_parameter_value_resolver_handles_vector_params_defaults_register_gui():
         skip={"g"},
     )
 
-    # 既定値採用のため GUI 登録され、値はデフォルト
+    # 既定値採用のため GUI 登録され、親ベクトル Descriptor が 1 件作成される
     assert resolved["angles_rad"] == pytest.approx((0.0, 0.0, 0.0))
     descriptor_ids = {desc.id for desc in store.descriptors()}
-    assert "effect.rotate#1.angles_rad.x" in descriptor_ids
-    assert "effect.rotate#1.angles_rad.z" in descriptor_ids
+    assert "effect.rotate#1.angles_rad" in descriptor_ids
+    # value_type は vector、vector_hint(min/max) が設定される（メタがあれば）
+    d = store.get_descriptor("effect.rotate#1.angles_rad")
+    assert d.value_type == "vector"
+    assert d.vector_hint is not None

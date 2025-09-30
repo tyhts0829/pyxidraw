@@ -1,92 +1,108 @@
-# Parameter GUI: Vec3 を floatx×3 スライダで扱う 改善計画
+# Parameter GUI: Vec3 を float スライダ3本で扱う — クリーン実装計画（破壊的変更前提）
 
-目的: パラメータ GUI において、Vec3（例: `angles_rad: Vec3`）の未指定引数に対し、float スライダを 3 本（x/y/z）並列表示で操作できるようにする。既存の `ParameterStore`/`ValueResolver` の挙動（成分ごとの Descriptor 登録・`vector_group` によるグルーピング情報付与）を活かし、UI 側で見た目を一体化する。
+目的: 既存の「成分ごとに別 Descriptor を発行する」設計を廃止し、Vec3 を「単一の vector パラメータ」として一次情報化。GUI は1行に x/y/z の3スライダ（float×3）を水平配置して編集する。内部状態・同期・API すべてをシンプルにする。
 
-## 現状と課題
-- 既存の解決: `engine.ui.parameters.value_resolver.ParameterValueResolver` は、Vec3 既定値採用時に各成分を `value_type="float"` の Descriptor として登録し、`vector_group` に元のパラメータ ID を設定している（例: `effect.rotate#1.angles_rad.x`）。参照: `src/engine/ui/parameters/value_resolver.py:190` 以降の `_resolve_vector()`。
-- UI 側: `src/engine/ui/parameters/dpg_window.py:159` の `mount()` は Descriptor を 1 つずつ行にして描画し、`_create_widget()` は `value_type="float"` を単一スライダとして扱う。`value_type="vector"` 分岐はあるが、Resolver は「ベクトルの親 Descriptor」を発行していないため未使用。
-- ギャップ: Vec3 を 3 本の float スライダとして“1 行にまとめて”表示・編集できる仕組みがない（各成分がバラバラの行になる）。
+## 採用方針（破壊的変更点）
+- Vector は「親 Descriptor 1 つ」に統一（成分ごとの Descriptor を撤廃）。
+- Range ヒントは Vector 専用の `VectorRangeHint` を導入（min/max/step を各成分で保持）。
+- ParameterStore は親 ID（例: `effect.rotate#1.angles_rad`）で tuple 値を保持・上書きする（成分 ID は廃止）。
+- ParameterWindow は vector1行で 3 スライダ（x/y/z）を生成し、親 ID の値を合成して Store を更新。
+- ValueResolver は vector 既定値採用時に「親 Descriptor」を1件のみ登録。提供値ありのときは GUI 登録しない（従来ルール維持）。
+- 既存テスト（成分 ID を期待）は更新する。
 
-## 目標（要件）
-- Vec3 の各成分（x/y/z）を 1 行に横並びで表示し、float スライダで編集できること（以降「floatx×3」）。
-- ラベルは親パラメータ名（例: `rotate#1 · angles_rad`）を左列に 1 つだけ表示。右列に x/y/z の 3 スライダを配置。
-- ストアの ID は従来通り各成分 ID（例: `...angles_rad.x`）をタグとして用い、双方向同期（GUI → Store → GUI）が保たれること。
-- RangeHint（min/max/step）が成分ごとにあれば尊重。無い場合は `ParameterLayoutConfig.derive_range()` の既定（0..1）を使う。
-- 優先順位ポリシーは維持（明示引数 > GUI > 既定値）。提供値がある場合は GUI に登録しない（現仕様のまま）。
+## 設計概要
+- 型/メタ
+  - ParameterDescriptor
+    - `value_type`: `"float" | "int" | "bool" | "enum" | "vector"`
+    - `default_value`: vector の場合は `tuple[float, float, float]`
+    - `range_hint`: scalar 用（従来）。vector の場合は `None`。
+    - `vector_hint`: `VectorRangeHint | None`（新設）
+  - VectorRangeHint（新設）
+    - `min_values: tuple[float, float, float]`
+    - `max_values: tuple[float, float, float]`
+    - `steps: tuple[float | None, float | None, float | None]`
+- 値解決（src/engine/ui/parameters/value_resolver.py）
+  - `_resolve_vector()` を簡素化: 親 Descriptor を1件だけ発行し、`vector_hint` を設定。Store.register → Store.resolve も親 ID で実施。
+  - 既存の成分分解ロジック・`_register_vector()` は削除。
+- ストア（src/engine/ui/parameters/state.py）
+  - 既存 API のまま（original/override は Any）。vector は tuple をそのまま保持。クランプ/量子化はしない。
+  - `RangeHint` はそのまま存置（scalar 用）。`VectorRangeHint` を追加（新規型）。
+- GUI（src/engine/ui/parameters/dpg_window.py）
+  - `value_type=="vector"` の分岐で 1 行に 3 スライダを生成（x,y,z）。
+  - スライダ ID は内部タグ（例: `f"{parent_id}::x"`）を用い、`user_data=(parent_id, axis_index)` で親に紐付け。
+  - `_on_widget_change()` は `(parent_id, idx)` を受け取り、Store の親値 tuple を取り出して成分差し替え→ `set_override(parent_id, new_tuple)`。
+  - `_on_store_change()` は親 ID を受けたら、内部タグ群へ各成分値を `dpg.set_value()` で反映。
+  - Range は `vector_hint` の各成分を使用（無い場合は 0..1 を既定）。
 
-## 実装方針（最小差分）
-1) グルーピング導入（UI 側のみ）
-   - `dpg_window.ParameterWindow.mount()` 内で、`vector_group`（非 None）をキーに Descriptor をまとめる。
-   - グループに属さない Descriptor は従来通り 1 行で描画。
-   - グループに属する Descriptor は「1 行＝親パラメータ」「右列＝x/y/z 3 スライダ」を生成。
+## 影響（Breaking changes）
+- Store/Descriptor から成分 ID（`.x/.y/.z`）が消え、親 ID のみに統一。
+- `tests/ui/parameters/test_value_resolver.py::test_parameter_value_resolver_handles_vector_params_defaults_register_gui` の期待を変更（親 ID 登録の確認に更新）。
+- UI 出力構造（タグ構成）が変わるが、外部 API（公開 API 層）には影響しない。
 
-2) 成分順序・表示
-   - サフィックス `.x/.y/.z(.w)` を優先順に整列（`x,y,z,w`）。
-   - ラベルは左列に親名（`{name}#{index} · {param}`）。右側に各スライダのミニラベル（x/y/z）またはツールチップ無しのアイテム間余白で区別。
+## 実装詳細（手順）
+1) 型追加/変更
+   - state.py
+     - `VectorRangeHint`（新規 dataclass）を追加。
+     - `ParameterDescriptor` に `vector_hint: VectorRangeHint | None` を追加し、`value_type=="vector"` のときだけ使用。
+     - `RangeHint`（既存）は scalar 用として据え置き。
+     - `ParameterLayoutConfig` に `derive_vector_range(dim=3)` を追加（既定は各成分 0..1）。
+2) 値解決の刷新
+   - value_resolver.py
+     - `_resolve_vector()` を親 Descriptor 登録に変更。`_register_vector()` を削除。
+     - `param_meta` の `min/max/step` がベクトルのとき `VectorRangeHint` を組み立て。
+3) GUI 刷新
+   - dpg_window.py
+     - `_create_widget()` の `vt=="vector"` 分岐を、`dpg.add_slider_float` を3本並列に生成する実装へ差し替え。
+     - 内部タグ（`parent_id::x|y|z`）を用いた更新・同期ハンドリングを実装。
+     - `mount()` は従来通り Descriptor を 1 件ずつ行化（グルーピングは不要になる）。
+4) 既存ロジックの清掃
+   - `vector_group` フィールドは廃止予定（将来の親子表現に不要）。まずは未使用化→後段で削除。
 
-3) スライダ生成
-   - 既存の数値スライダ生成ロジックを再利用（`_create_widget()` の float/int 分岐）。ただしグループ行では 3 つの `dpg.add_slider_float` を横並びで追加。
-   - `tag` は各成分の `descriptor.id` をそのまま使用（Store の通知と一致）。
-   - 値/レンジは各成分の `range_hint` を優先し、無ければ `ParameterLayoutConfig.derive_range()` を使用。
-
-4) 同期処理
-   - `_on_widget_change()` は既存のままで、各成分スライダの `user_data` に成分 ID を渡す。
-   - `_on_store_change()` も既存のままで、各成分 ID に対して `dpg.set_value()` を行う。
-
-5) 後方互換・削除しないもの
-   - `value_type=="vector"` 分岐は残す（将来の親 Descriptor 対応に備えたフォールバック）。ただし現仕様では利用されない。
-
-## 変更ファイル（想定・参照）
-- `src/engine/ui/parameters/dpg_window.py:159` 付近（`mount()` 内の並べ替えと行生成）
-- `src/engine/ui/parameters/dpg_window.py:201` 付近（`_create_row()` からベクトル行に委譲する処理を追加）
-- 必要ならヘルパ（同ファイル内関数）を追加: `__group_descriptors_by_vector_group(items)` と `__create_vector_row(parent, group_key, items)`
+## 追加・変更ファイル（想定）
+- 変更: `src/engine/ui/parameters/state.py`（`VectorRangeHint` 追加、`ParameterDescriptor` 拡張、`ParameterLayoutConfig` に vector 既定追加）
+- 変更: `src/engine/ui/parameters/value_resolver.py`（vector の親 Descriptor 登録・簡素化）
+- 変更: `src/engine/ui/parameters/dpg_window.py`（vector UI を float×3 スライダで表示・同期）
+- 更新: `architecture.md`（Vec3 の扱い方と根拠を追記。参照: `state.py`, `value_resolver.py`, `dpg_window.py`）
+- 更新: 近接 AGENTS.md（parameters 配下）の “vector は x/y/z/w に分割” 記述をアップデート（親 Descriptor 一体化へ）
 
 ## テスト計画（編集ファイル優先の高速ループ）
-- 既存テストの活用
-  - `tests/ui/parameters/test_value_resolver.py::test_parameter_value_resolver_handles_vector_params_defaults_register_gui` は、成分 ID が登録されることを確認済み（UI 変更不要）。
-- 追加（純ロジックのユニットテスト）
-  - `dpg_window.py` 内に「グルーピングだけ」を返す純関数（副作用なし）を切り出し、`tests/ui/parameters/test_layout_grouping.py` を新設。
-    - 入力: `ParameterDescriptor` 群
-    - 期待: `vector_group` ごとに `x,y,z` 整列・その他は単独行
-- DPG 依存のマウント E2E は最小（`test_dpg_mount_smoke.py` の範囲）に留める。
+- 更新: `tests/ui/parameters/test_value_resolver.py::test_parameter_value_resolver_handles_vector_params_defaults_register_gui`
+  - 期待: `effect.rotate#1.angles_rad`（親 ID）が Descriptor 登録されること。
+  - 値: 既定 tuple が返ること。
+- 追加: `tests/ui/parameters/test_vector_widget.py`
+  - DPG 未導入環境でのスタブ下でも API 例外が出ないこと（smoke）。
+  - Store の親 ID override により内部タグ（`::x|y|z`）スライダ値が更新されること（`_on_store_change` 経由の間接検証）。
 
 実行コマンド（変更ファイル限定）:
-- Lint: `ruff check --fix src/engine/ui/parameters/dpg_window.py`
-- Format: `black src/engine/ui/parameters/dpg_window.py && isort src/engine/ui/parameters/dpg_window.py`
-- TypeCheck: `mypy src/engine/ui/parameters/dpg_window.py`
-- Test (UI/parameters): `pytest -q tests/ui/parameters -k grouping`
+- Lint: `ruff check --fix src/engine/ui/parameters`
+- Format: `black src/engine/ui/parameters && isort src/engine/ui/parameters`
+- TypeCheck: `mypy src/engine/ui/parameters`
+- Test: `pytest -q tests/ui/parameters -k vector`
 
 ## 具体的作業チェックリスト
-- [ ] dpg_window: グループ化ロジックを実装（`vector_group` 単位）
-- [ ] dpg_window: Vec3 行のスライダ 3 本生成（x/y/z 並列）
-- [ ] dpg_window: `_create_row()` をベクトル行と単独行で分岐
-- [ ] dpg_window: `mount()` でカテゴリ内の項目をグループ化して描画
-- [ ] テスト: グルーピング純関数を追加しユニットテスト
-- [ ] ruff/black/isort/mypy（変更ファイルのみ）を通す
-- [ ] `pytest -q tests/ui/parameters` 緑（smoke + 追加テスト）
-- [ ] `architecture.md` に「Vec3 は GUI で floatx×3 スライダをグループ表示」追記（参照先コードも明記）
+- [ ] state: `VectorRangeHint` を追加、`ParameterDescriptor` に `vector_hint` を追加
+- [ ] state: `ParameterLayoutConfig.derive_vector_range()` を追加
+- [ ] resolver: `_resolve_vector()` を親 Descriptor 登録に刷新（成分登録の撤廃）
+- [ ] resolver: `param_meta(min/max/step)` から `VectorRangeHint` を構築
+- [ ] dpg: vector 行にスライダ3本を水平配置し、親 ID の値を合成更新
+- [ ] dpg: `_on_store_change()` で親 ID 通知から内部タグへ反映
+- [ ] 清掃: `vector_group` の未使用化（後続で除去）
+- [ ] テスト更新/追加（上記）
+- [ ] ruff/black/isort/mypy（変更ファイルのみ）
+- [ ] `pytest -q tests/ui/parameters` 緑
+- [ ] `architecture.md`/AGENTS を実装と同期
 
-## 確認したいこと（要回答）
-- 表示形式:
-  - 右列の 3 スライダは「水平に並べる」で良いか。各スライダのミニラベル（x/y/z）を表示するか、省略して並び順で判断するか。
-  - スライダ幅の配分（等幅で 3 分割で良いか）。
-- ステップ処理:
-  - `RangeHint.step` がある場合、UI で丸める（量子化）か。現状は「クランプのみ UI、量子化は署名生成のみ」だが、UI 丸めを許容するか。
-- Vec4 対応:
-  - 将来の Vec4（w あり）も同実装で水平 4 本とするか（並び順 `x,y,z,w`）。
-- ラベル表記:
-  - 左列ラベルは `"{name}#{index} · {param}"` 固定で良いか。現在の成分行ラベル（`... · angles_rad.x`）からの変更に問題ないか。
+## 既定判断（確認不要の動作）
+- スライダのラベルは右列の各軸に小さく `x/y/z` を表示。
+- ステップは UI スライダの仕様に従い、`VectorRangeHint.steps[i]` が指定されていればその粒度で操作（丸めは UI 任せ）。Store は実値をそのまま保持し、追加の量子化は行わない。
+- Vec4 は同実装で水平4本（`x,y,z,w`）。`VectorRangeHint` は 3/4 成分に対応。
+- 既定レンジは各軸 0..1。`__param_meta__` があれば実レンジを尊重。
 
-## 互換性・影響
-- API/Store 互換: 破壊的変更なし（ID/値解決は従来通り）。UI の見た目のみ改善。
-- 既存の `value_type=="vector"` ウィジェット分岐は温存（未使用のまま）。
-
-## 実施後の完了条件
-- 変更ファイルに対して `ruff/black/isort/mypy` が成功。
-- `pytest -q tests/ui/parameters` 緑。
-- `architecture.md` と実装の整合（該当ファイル参照付きで更新）。
+## 完了条件
+- 変更ファイルに対する `ruff/black/isort/mypy` が成功。
+- `pytest -q -m smoke` および `tests/ui/parameters` が緑。
+- `architecture.md` と実装の差分ゼロ（参照箇所明記）。
 
 ---
 
-作業開始可否・上記の確認事項の方針をご指示ください。合意後、チェックリストを消し込みながら実装します。
-
+この方針で実装に移行してよければ、そのまま着手します。必要に応じて段階的に PR を分割します（型/Resolver → GUI → 清掃/Docs）。

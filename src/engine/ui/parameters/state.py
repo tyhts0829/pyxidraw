@@ -32,6 +32,19 @@ class RangeHint:
 
 
 @dataclass(frozen=True)
+class VectorRangeHint:
+    """ベクトル用の範囲ヒント（各成分ごとの実レンジ）。"""
+
+    min_values: tuple[float, float, float] | tuple[float, float, float, float]
+    max_values: tuple[float, float, float] | tuple[float, float, float, float]
+    steps: (
+        tuple[float | None, float | None, float | None]
+        | tuple[float | None, float | None, float | None, float | None]
+    )
+    scale: str | None = None  # linear / log 等（現状は linear 固定）
+
+
+@dataclass(frozen=True)
 class ParameterDescriptor:
     """GUI に表示するパラメータのメタ情報。"""
 
@@ -43,7 +56,7 @@ class ParameterDescriptor:
     default_value: Any
     range_hint: RangeHint | None = None
     help_text: str | None = None
-    vector_group: str | None = None
+    vector_hint: VectorRangeHint | None = None
     supported: bool = True
     choices: list[str] | None = None
 
@@ -208,6 +221,23 @@ class ParameterLayoutConfig:
             return RangeHint(0, 1, step=1)
         # float/enum/vector も 0..1 を既定とする
         return RangeHint(0.0, 1.0)
+
+    def derive_vector_range(self, *, dim: int = 3) -> VectorRangeHint:
+        """ベクトルの既定レンジ（各軸 0..1、step 未指定）。"""
+        dim = 4 if dim >= 4 else 3
+        if dim == 4:
+            return VectorRangeHint(
+                min_values=(0.0, 0.0, 0.0, 0.0),
+                max_values=(1.0, 1.0, 1.0, 1.0),
+                steps=(None, None, None, None),
+                scale="linear",
+            )
+        return VectorRangeHint(
+            min_values=(0.0, 0.0, 0.0),
+            max_values=(1.0, 1.0, 1.0),
+            steps=(None, None, None),
+            scale="linear",
+        )
 
 
 class ParameterRegistry:

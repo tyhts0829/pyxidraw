@@ -27,11 +27,7 @@ except Exception:  # pragma: no cover - headless/未導入
     _pyglet = None  # type: ignore[assignment]
 pyglet: Any = _pyglet
 
-from .state import (
-    ParameterDescriptor,
-    ParameterLayoutConfig,
-    ParameterStore,
-)
+from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore
 
 # ------------------------------
 # ヘッドレス/未導入環境のスタブ
@@ -64,7 +60,7 @@ if dpg is None:  # pragma: no cover - import 不可時のダミー実装
 
 else:
 
-    class ParameterWindow:  # type: ignore[override]
+    class ParameterWindow:  # type: ignore[override, no-redef]
         """Dear PyGui によるパラメータウィンドウ。"""
 
         def __init__(
@@ -241,31 +237,54 @@ else:
                 )
             if vt == "vector":
                 vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
-                if len(vec) == 4:
-                    return dpg.add_input_float4(
-                        tag=desc.id,
-                        parent=parent,
-                        label="",
-                        default_value=vec,  # type: ignore[arg-type]
-                        format=f"%.{self._layout.value_precision}f",
-                        callback=self._on_widget_change,
-                        user_data=desc.id,
-                    )
-                return dpg.add_input_float3(
-                    tag=desc.id,
-                    parent=parent,
-                    label="",
-                    default_value=(vec + [0.0, 0.0, 0.0])[:3],  # type: ignore[arg-type]
-                    format=f"%.{self._layout.value_precision}f",
-                    callback=self._on_widget_change,
-                    user_data=desc.id,
-                )
+                dim = 4 if len(vec) >= 4 else 3
+                # レンジは vector_hint を優先、無ければ既定 0..1
+                vh = desc.vector_hint
+                if vh is None:
+                    default_vh = self._layout.derive_vector_range(dim=dim)
+                    vmin = list(default_vh.min_values)
+                    vmax = list(default_vh.max_values)
+                else:
+                    vmin = list(vh.min_values)
+                    vmax = list(vh.max_values)
+                # 右列に水平配置で 3/4 本生成（各スライダの幅は 1/3 or 1/4 に抑制）
+                with dpg.table(
+                    parent=parent, header_row=False, policy=dpg.mvTable_SizingStretchSame
+                ) as vec_table:
+                    for _ in range(dim):
+                        dpg.add_table_column(width_stretch=True)
+                    with dpg.table_row():
+                        for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
+                            # 列送りAPIに依存せず、各セルを明示して配置（クリーンな実装）
+                            _cell_ctx = getattr(dpg, "table_cell", None)
+                            if callable(_cell_ctx):
+                                cell_cm = _cell_ctx()
+                            else:  # pragma: no cover - 非対応環境のフォールバック（最悪でも1列にスタック）
+                                from contextlib import nullcontext as _nullcontext
+
+                                cell_cm = _nullcontext()
+                            with cell_cm:
+                                tag = f"{desc.id}::{suffix}"
+                                default_component = float(vec[i]) if i < len(vec) else 0.0
+                                slider_id = dpg.add_slider_float(
+                                    tag=tag,
+                                    label="",
+                                    default_value=default_component,
+                                    min_value=float(vmin[i]) if i < len(vmin) else 0.0,
+                                    max_value=float(vmax[i]) if i < len(vmax) else 1.0,
+                                    format=f"%.{self._layout.value_precision}f",
+                                    callback=self._on_widget_change,
+                                    user_data=(desc.id, i),
+                                )
+                                # セル幅にフィット
+                                dpg.set_item_width(slider_id, -1)
+                return vec_table
             # 数値（float/int）
             hint = desc.range_hint or self._layout.derive_range(
                 name=desc.id, value_type=desc.value_type, default_value=desc.default_value
             )
             if vt == "int":
-                return dpg.add_slider_int(
+                slider_id = dpg.add_slider_int(
                     tag=desc.id,
                     parent=parent,
                     label="",
@@ -275,8 +294,11 @@ else:
                     callback=self._on_widget_change,
                     user_data=desc.id,
                 )
+                # scalar もベクトルと同等に“3列分”の横幅（セル全幅）を占有
+                dpg.set_item_width(slider_id, -1)
+                return slider_id
             # float 既定
-            return dpg.add_slider_float(
+            slider_id_f = dpg.add_slider_float(
                 tag=desc.id,
                 parent=parent,
                 label="",
@@ -287,6 +309,9 @@ else:
                 callback=self._on_widget_change,
                 user_data=desc.id,
             )
+            # scalar もベクトルと同等に“3列分”の横幅（セル全幅）を占有
+            dpg.set_item_width(slider_id_f, -1)
+            return slider_id_f
 
         # Reset 操作は未実装（要望により撤廃）
 
@@ -300,11 +325,26 @@ else:
         ) -> None:  # noqa: D401
             if self._syncing:
                 return
+            # user_data が (parent_id, axis_index) ならベクトルの一部更新
+            if isinstance(user_data, (list, tuple)) and len(user_data) == 2:
+                parent_id = str(user_data[0])
+                idx = int(user_data[1])
+                try:
+                    current = self._store.current_value(parent_id)
+                    if not isinstance(current, (list, tuple)):
+                        current = self._store.original_value(parent_id)
+                    vec = list(current) if isinstance(current, (list, tuple)) else [0.0, 0.0, 0.0]
+                    dim = 4 if len(vec) >= 4 else 3
+                    # 現在ベクトルと同次元で更新
+                    base = (vec + [0.0] * dim)[:dim]
+                    base[idx] = float(app_data)
+                    self._store.set_override(parent_id, tuple(base))
+                    return
+                except Exception:
+                    return
+            # それ以外は単一値
             pid = str(user_data)
             value = app_data
-            # vector は list → tuple へ
-            if isinstance(value, list):
-                value = tuple(value)
             self._store.set_override(pid, value)
 
         def _on_store_change(self, ids: Iterable[str]) -> None:
@@ -312,22 +352,37 @@ else:
             self._syncing = True
             try:
                 for pid in ids:
-                    if not dpg.does_item_exist(pid):
+                    # まず直接タグが存在する場合（scalar 等）
+                    if dpg.does_item_exist(pid):
+                        value = self._store.current_value(pid)
+                        if value is None:
+                            value = self._store.original_value(pid)
+                        try:
+                            dpg.set_value(pid, value)
+                        except Exception:
+                            pass
+                        continue
+                    # 親ベクトル ID の場合は子スライダへ反映
+                    try:
+                        desc = self._store.get_descriptor(pid)
+                    except Exception:
+                        desc = None
+                    if desc is None or desc.value_type != "vector":
                         continue
                     value = self._store.current_value(pid)
                     if value is None:
                         value = self._store.original_value(pid)
-                    # vector は list を期待するため変換
-                    try:
-                        desc = self._store.get_descriptor(pid)
-                        if desc.value_type == "vector" and isinstance(value, tuple):
-                            value = list(value)
-                    except Exception:
-                        pass
-                    try:
-                        dpg.set_value(pid, value)
-                    except Exception:
-                        pass
+                    if not isinstance(value, (list, tuple)):
+                        continue
+                    vec = list(value)
+                    for i, suffix in enumerate(("x", "y", "z", "w")[: len(vec)]):
+                        tag = f"{pid}::{suffix}"
+                        if not dpg.does_item_exist(tag):
+                            continue
+                        try:
+                            dpg.set_value(tag, float(vec[i]))
+                        except Exception:
+                            pass
                     # 差分ハイライトは行わない
             finally:
                 self._syncing = False
