@@ -32,6 +32,18 @@ from effects.registry import get_effect, list_effects
 from engine.core.geometry import Geometry
 
 # === 調整可能な定数 =======================================================
+# 描画から除外するエフェクト関数名（定数）
+EFFECT_TRANSLATE: str = "translate"
+EFFECT_SUBDIVIDE: str = "subdivide"
+EFFECT_AFFINE: str = "affine"
+EFFECT_ROTATE: str = "rotate"
+EXCLUDED_EFFECTS: set[str] = {
+    EFFECT_TRANSLATE,
+    EFFECT_SUBDIVIDE,
+    EFFECT_AFFINE,
+    EFFECT_ROTATE,
+}
+
 # 参照形状（全セルで同じ形状を使う）
 REFERENCE_SHAPE: str = "polyhedron"
 # 4 = icosahedron（_TYPE_ORDER の 0..4 に対応）
@@ -126,7 +138,7 @@ class GridCache:
 def _initialize_grid() -> None:
     """セルの静的ジオメトリ（回転前）とラベルを構築してキャッシュする。"""
     global _CACHE
-    names = list_effects()
+    names = [n for n in list_effects() if n not in EXCLUDED_EFFECTS]
     names.sort()
 
     cell_w, cell_h = CELL_SIZE
@@ -161,7 +173,7 @@ def _initialize_grid() -> None:
             # 必要に応じて事前に subdivide を挟む
             src = base
             if name in SUBDIVIDE_TARGET:
-                subdivide_fn = get_effect("subdivide")
+                subdivide_fn = get_effect(EFFECT_SUBDIVIDE)
                 # subdivide はデフォルトパラメータで実行（重さは effect 側で制御）
                 src = subdivide_fn(src)
 
@@ -208,7 +220,7 @@ def draw(t: float) -> Geometry:
 
 
 if __name__ == "__main__":
-    names = list_effects()
+    names = [n for n in list_effects() if n not in EXCLUDED_EFFECTS]
     cols = max(1, int(COLUMNS))
     rows = int(ceil(len(names) / cols)) if names else 1
     cell_w, cell_h = CELL_SIZE

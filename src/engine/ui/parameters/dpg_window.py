@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from threading import Thread
-from typing import Any, ContextManager, Iterable, cast
+from typing import Any, ContextManager, Iterable, Sequence, cast
 
 try:  # dearpygui の存在は環境依存なのでガード
     import dearpygui.dearpygui as _dpg  # type: ignore
@@ -455,14 +455,27 @@ else:
                                 "grab_min_size": getattr(dpg, "mvStyleVar_GrabMinSize", None),
                             }
 
-                            def _add_style(var: Any, value: Any) -> None:
+                            def _add_style(
+                                var: Any, value: float | int | Sequence[float | int]
+                            ) -> None:
                                 if not var:
                                     return
                                 try:
-                                    if isinstance(value, (list, tuple)) and len(value) >= 2:
-                                        dpg.add_theme_style(var, float(value[0]), float(value[1]))
-                                    else:
-                                        dpg.add_theme_style(var, float(value))
+                                    # 数値のシーケンス（str/bytes は除外）を明確に扱う
+                                    if isinstance(value, Sequence) and not isinstance(
+                                        value, (str, bytes)
+                                    ):
+                                        seq = cast(Sequence[float | int], value)
+                                        if len(seq) >= 2:
+                                            dpg.add_theme_style(var, float(seq[0]), float(seq[1]))
+                                            return
+                                        if len(seq) == 1:
+                                            dpg.add_theme_style(var, float(seq[0]))
+                                            return
+                                        # 長さ 0 の場合は適用しない
+                                        return
+                                    # 単一値
+                                    dpg.add_theme_style(var, float(cast(float | int, value)))
                                 except Exception:
                                     pass
 
