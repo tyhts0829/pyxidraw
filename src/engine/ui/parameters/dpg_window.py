@@ -28,12 +28,7 @@ except Exception:  # pragma: no cover - headless/未導入
     _pyglet = None  # type: ignore[assignment]
 pyglet: Any = _pyglet
 
-from .state import (
-    ParameterDescriptor,
-    ParameterLayoutConfig,
-    ParameterStore,
-    ParameterThemeConfig,
-)
+from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore, ParameterThemeConfig
 
 # ------------------------------
 # ヘッドレス/未導入環境のスタブ
@@ -283,6 +278,14 @@ else:
                 with dpg.table(
                     parent=parent, header_row=False, policy=dpg.mvTable_SizingStretchSame
                 ) as vec_table:
+                    # ネストしたテーブルのセル余白を 0 にして、単一スライダー行と縦サイズを揃える
+                    try:
+                        with dpg.theme() as _vec_theme:
+                            with dpg.theme_component(dpg.mvAll):
+                                dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 1, 0)
+                        dpg.bind_item_theme(vec_table, _vec_theme)
+                    except Exception:
+                        pass
                     for _ in range(dim):
                         dpg.add_table_column(width_stretch=True)
                     with dpg.table_row():

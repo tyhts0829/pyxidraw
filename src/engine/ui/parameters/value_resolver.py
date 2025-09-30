@@ -145,7 +145,7 @@ class ParameterValueResolver:
             )
             descriptor = ParameterDescriptor(
                 id=descriptor_id,
-                label=f"{context.label_prefix} · {param_name}",
+                label=f"{context.label_prefix}: {param_name}",
                 source=context.scope,
                 category=context.scope,
                 value_type=value_type,
@@ -190,7 +190,7 @@ class ParameterValueResolver:
         vector_hint = self._vector_range_hint_from_meta(meta_entry, dim)
         descriptor = ParameterDescriptor(
             id=descriptor_id,
-            label=f"{context.label_prefix} · {param_name}",
+            label=f"{context.label_prefix}: {param_name}",
             source=context.scope,
             category=context.scope,
             value_type="vector",
@@ -240,7 +240,7 @@ class ParameterValueResolver:
         if source == "default":
             descriptor = ParameterDescriptor(
                 id=descriptor_id,
-                label=f"{context.label_prefix} · {param_name}",
+                label=f"{context.label_prefix}: {param_name}",
                 source=context.scope,
                 category=context.scope,
                 value_type=value_type,
