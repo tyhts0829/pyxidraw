@@ -34,11 +34,16 @@ def _generate_line_fill(
 
     # 角度が指定されている場合はポリゴンを回転（交点計算用の作業座標）
     if angle != 0.0:
-        cos_a, sin_a = np.cos(-angle), np.sin(-angle)  # Inverse rotation for polygon
-        center = np.mean(coords_2d, axis=0)
-        coords_2d_centered = coords_2d - center
-        rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-        work_2d = coords_2d_centered @ rot_matrix.T + center
+        # 逆回転（作業座標へ）
+        cos_inv, sin_inv = np.cos(-angle), np.sin(-angle)
+        center_inv = np.mean(coords_2d, axis=0)
+        coords_2d_centered = coords_2d - center_inv
+        rot2_inv = np.array([[cos_inv, -sin_inv], [sin_inv, cos_inv]])
+        work_2d = coords_2d_centered @ rot2_inv.T + center_inv
+        # 正回転（生成した水平線を元角度へ戻す）を事前計算
+        cos_fwd, sin_fwd = np.cos(angle), np.sin(angle)
+        center_fwd = np.mean(vertices_2d[:, :2], axis=0)
+        rot2_fwd = np.array([[cos_fwd, -sin_fwd], [sin_fwd, cos_fwd]])
     else:
         work_2d = coords_2d
 
@@ -84,18 +89,14 @@ def _generate_line_fill(
         for i in range(0, len(intersections_sorted) - 1, 2):
             if i + 1 < len(intersections_sorted):
                 x1, x2 = intersections_sorted[i], intersections_sorted[i + 1]
-                line_2d = np.array([[x1, y], [x2, y]])
+                line_2d = np.array([[x1, y], [x2, y]], dtype=np.float32)
 
                 # 必要に応じて正方向の回転を適用
                 if angle != 0.0:
-                    cos_a, sin_a = np.cos(angle), np.sin(angle)
-                    center = np.mean(vertices_2d[:, :2], axis=0)  # Use original center
-                    line_2d_centered = line_2d - center
-                    rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-                    line_2d = line_2d_centered @ rot_matrix.T + center
+                    line_2d = (line_2d - center_fwd) @ rot2_fwd.T + center_fwd
 
                 # 3D に戻す
-                line_3d = np.hstack([line_2d, np.zeros((2, 1))])
+                line_3d = np.hstack([line_2d, np.zeros((2, 1), dtype=np.float32)])
 
                 # 元の姿勢に戻す
                 line_final = transform_back(line_3d, rotation_matrix, z_offset)
@@ -193,10 +194,15 @@ def _generate_line_fill_evenodd_multi(
     # 角度回転のための中心（全体）
     center = np.mean(coords_2d, axis=0)
     work_2d = coords_2d
+    rot2_fwd: np.ndarray | None = None
     if angle != 0.0:
-        cos_a, sin_a = np.cos(-angle), np.sin(-angle)
-        rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]], dtype=np.float32)
-        work_2d = (coords_2d - center) @ rot.T + center
+        # 逆回転（作業座標へ）
+        cos_inv, sin_inv = np.cos(-angle), np.sin(-angle)
+        rot_inv = np.array([[cos_inv, -sin_inv], [sin_inv, cos_inv]], dtype=np.float32)
+        work_2d = (coords_2d - center) @ rot_inv.T + center
+        # 正回転（線分を戻す）
+        cos_fwd, sin_fwd = np.cos(angle), np.sin(angle)
+        rot2_fwd = np.array([[cos_fwd, -sin_fwd], [sin_fwd, cos_fwd]], dtype=np.float32)
 
     # 参照間隔用の“未回転”高さ（角度に依存しない間隔を実現）
     ref_min_y = float(np.min(coords_2d[:, 1]))
@@ -245,11 +251,9 @@ def _generate_line_fill_evenodd_multi(
             if x2 - x1 <= 1e-9:
                 continue
             seg2d = np.array([[x1, y], [x2, y]], dtype=np.float32)
-            if angle != 0.0:
-                # 元の角度へ戻す
-                cos_b, sin_b = np.cos(angle), np.sin(angle)
-                rot_b = np.array([[cos_b, -sin_b], [sin_b, cos_b]], dtype=np.float32)
-                seg2d = (seg2d - center) @ rot_b.T + center
+            if angle != 0.0 and rot2_fwd is not None:
+                # 元の角度へ戻す（前計算した行列を使用）
+                seg2d = (seg2d - center) @ rot2_fwd.T + center
             # 3D に（一定 z）
             seg3d = np.hstack([seg2d, np.full((2, 1), z0, dtype=np.float32)])
             out_lines.append(seg3d)
@@ -313,12 +317,11 @@ def _generate_dot_fill_evenodd_multi(
         return []
 
     z0 = float(coords[0, 2])
+    offsets_i32 = offsets.astype(np.int32, copy=False)
     out_lines: list[np.ndarray] = []
     for yy in y_values:
         for xx in x_values:
-            if _point_in_polylines_evenodd_njit(
-                coords_2d, offsets.astype(np.int32), float(xx), float(yy)
-            ):
+            if _point_in_polylines_evenodd_njit(coords_2d, offsets_i32, float(xx), float(yy)):
                 # 小十字
                 seg_h_2d = np.array([[xx - r, yy], [xx + r, yy]], dtype=np.float32)
                 seg_v_2d = np.array([[xx, yy - r], [xx, yy + r]], dtype=np.float32)
@@ -330,17 +333,7 @@ def _generate_dot_fill_evenodd_multi(
     return out_lines
 
 
-def _find_line_intersections(polygon: np.ndarray, y: float) -> list[float]:
-    """水平線とポリゴンエッジの交点を検索します。"""
-    intersections_array = find_line_intersections_njit(polygon, y)
-    # Convert back to list and remove invalid values (-1)
-    return [x for x in intersections_array if x != -1]
-
-
-def _point_in_polygon(polygon: np.ndarray, point: list[float]) -> bool:
-    """レイキャスティングアルゴリズムを使用して点がポリゴン内部にあるかをチェックします。"""
-    x, y = point
-    return point_in_polygon_njit(polygon, x, y)
+## 以前の Python 実装ヘルパは NumPy/Numba 実装へ統合済みのため削除
 
 
 @effect()
@@ -363,6 +356,11 @@ def fill(
         ハッチ角（ラジアン）。XY 共平面では偶奇規則で内外を判定。
     density : float, default 35.0
         本数/グリッド密度。0 で no-op。最大は内部定数（100）。
+
+    Notes
+    -----
+    間隔は未回転の参照高さに基づき角度に依存せず一定だが、スキャン範囲は角度を考慮した
+    作業座標で決まるため、角度により実生成本数は多少変動する。
     """
     coords, offsets = g.as_arrays(copy=False)
     if density <= 0 or offsets.size <= 1:
@@ -408,7 +406,7 @@ def fill(
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
 fill.__param_meta__ = {
     "mode": {"choices": ["lines", "cross", "dots"]},
-    "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES},
+    "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES, "step": 1.0},
     "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
 }
 
