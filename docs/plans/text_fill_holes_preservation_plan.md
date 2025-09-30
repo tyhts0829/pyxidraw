@@ -19,24 +19,24 @@
   - [ ] `src/shapes/text.py:145` 付近で、グリフが複数ポリライン（外周/内周）として `Geometry.from_lines` へ積まれていることを確認
   - [ ] `src/effects/fill.py:198` の per-polygon ループで穴も独立に塗っていることを確認
 
-- [ ] スキャンライン統合（偶奇）実装（lines/cross）
-  - [ ] 2D 一括処理関数 ` _generate_line_fill_evenodd_multi(polylines_3d, density, angle)` を追加
+- [x] スキャンライン統合（偶奇）実装（lines/cross）
+  - [x] 2D 一括処理関数 ` _generate_line_fill_evenodd_multi(polylines_3d, density, angle)` を追加
     - [ ] 全ポリラインを `transform_to_xy_plane` で XY に射影（テキストは共平面）
     - [ ] 角度回転（`angle_rad`）は“輪郭全体”に一括適用し、その後スキャン
     - [ ] y グリッドを決定し、各 y に対し「全ポリラインのエッジ」から交点 x を収集
     - [ ] x を昇順に並べ、`(x0,x1),(x2,x3),...` の奇数区間を「塗る」として線分生成
     - [ ] 生成した 2D 線分を 3D に戻し、元の姿勢へ `transform_back`
-  - [ ] `cross` は `even-odd` ベースの lines を 2 方向で合成
+  - [x] `cross` は `even-odd` ベースの lines を 2 方向で合成
 
-- [ ] ドットパターン（dots）の偶奇対応
-  - [ ] 既存 `find_dots_in_polygon(...)` 相当の「点が多角形群に対して偶奇内か」を判定する `point_in_polylines_evenodd(...)` を追加
+- [x] ドットパターン（dots）の偶奇対応
+  - [x] 既存 `find_dots_in_polygon(...)` 相当の「点が多角形群に対して偶奇内か」を判定する `point_in_polylines_evenodd(...)` を追加
   - [ ] グリッド点のうち偶奇で内側のみを採用して十字点線を生成
 
-- [ ] フォールバックと境界条件
-  - [ ] 入力が明確に共平面でない場合（法線や Z 分散で判定）、既存の per-polygon ルートを使用
-  - [ ] 交点が重複/接線（水平/頂点上）となるケースの数値安定化（<epsilon> でのフィルタ）
+- [x] フォールバックと境界条件
+  - [x] 入力が明確に共平面でない場合（Z 分散で判定）、既存の per-polygon ルートを使用
+  - [x] 交点が重複/接線（水平/頂点上）となるケースの数値安定化（閾値でフィルタ）
 
-- [ ] 統合と切替
+- [x] 統合と切替
   - [ ] `src/effects/fill.py:178` のメインループを拡張し、共平面グループでは `even-odd` の一括ルートに切替
   - [ ] 既存のアウトラインは引き続き出力（塗り＋輪郭）
 
@@ -87,4 +87,3 @@
 ---
 
 この計画で実装に進めてよいか確認してください。OK ならタスクを順に実行し、進捗は本ファイルにチェックを付けて更新します。
-

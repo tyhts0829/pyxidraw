@@ -22,7 +22,7 @@ def draw(t: float) -> Geometry:
         em_size_mm=20,
         text_align="center",
     ).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-    pipe = E.pipeline.fill(angle_rad=cc[1], density=cc[2] * 10)
+    pipe = E.pipeline.fill(angle_rad=cc[1] * 3.14, density=cc[2] * 50)
     return pipe(base)
 
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
-        render_scale=5,
+        render_scale=3,
         use_midi=True,
         use_parameter_gui=True,
         workers=6,
