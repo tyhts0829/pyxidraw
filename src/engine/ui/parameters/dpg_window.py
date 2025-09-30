@@ -11,8 +11,9 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from threading import Thread
-from typing import Any, Iterable
+from typing import Any, ContextManager, Iterable, cast
 
 try:  # dearpygui の存在は環境依存なのでガード
     import dearpygui.dearpygui as _dpg  # type: ignore
@@ -256,14 +257,12 @@ else:
                     with dpg.table_row():
                         for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
                             # 列送りAPIに依存せず、各セルを明示して配置（クリーンな実装）
-                            _cell_ctx = getattr(dpg, "table_cell", None)
-                            if callable(_cell_ctx):
-                                cell_cm = _cell_ctx()
-                            else:  # pragma: no cover - 非対応環境のフォールバック（最悪でも1列にスタック）
-                                from contextlib import nullcontext as _nullcontext
-
-                                cell_cm = _nullcontext()
-                            with cell_cm:
+                            # `ExitStack` を用い、`table_cell()` が無い環境でも型安全に no-op とする
+                            with ExitStack() as _cell_stack:
+                                _cell_ctx = getattr(dpg, "table_cell", None)
+                                if callable(_cell_ctx):
+                                    _cm = cast(ContextManager[Any], _cell_ctx())
+                                    _cell_stack.enter_context(_cm)
                                 tag = f"{desc.id}::{suffix}"
                                 default_component = float(vec[i]) if i < len(vec) else 0.0
                                 slider_id = dpg.add_slider_float(
