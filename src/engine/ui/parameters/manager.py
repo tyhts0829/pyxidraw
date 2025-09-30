@@ -12,7 +12,13 @@ from engine.core.geometry import Geometry
 
 from .controller import ParameterWindowController
 from .runtime import ParameterRuntime, activate_runtime, deactivate_runtime
-from .state import ParameterLayoutConfig, ParameterStore
+from .state import (
+    ParameterLayoutConfig,
+    ParameterStore,
+    ParameterThemeConfig,
+    ParameterWindowConfig,
+)
+from util.utils import load_config
 
 
 class ParameterManager:
@@ -27,9 +33,52 @@ class ParameterManager:
     ) -> None:
         self._user_draw = user_draw
         self.store = ParameterStore()
+
+        # 設定ファイルから Parameter GUI 見た目設定を読み込み（未指定時は既定）
+        cfg = load_config() or {}
+        pg_cfg = cfg.get("parameter_gui", {}) if isinstance(cfg.get("parameter_gui"), dict) else {}
+
+        # layout は引数優先。未指定なら設定から生成し、それも無ければ既定値。
+        if layout is None:
+            lcfg = pg_cfg.get("layout", {}) if isinstance(pg_cfg.get("layout"), dict) else {}
+            # 比率は 0.1..0.9 にクランプ
+            try:
+                ratio_val = float(lcfg.get("label_column_ratio", 0.5))
+            except Exception:
+                ratio_val = 0.5
+            ratio_val = max(0.1, min(0.9, ratio_val))
+            layout = ParameterLayoutConfig(
+                row_height=int(lcfg.get("row_height", 28)),
+                padding=int(lcfg.get("padding", 8)),
+                font_size=int(lcfg.get("font_size", 12)),
+                value_precision=int(lcfg.get("value_precision", 6)),
+                label_column_ratio=ratio_val,
+            )
+
+        # window config
+        wcfg_raw = pg_cfg.get("window", {}) if isinstance(pg_cfg.get("window"), dict) else {}
+        window_cfg = ParameterWindowConfig(
+            width=int(wcfg_raw.get("width", 420)),
+            height=int(wcfg_raw.get("height", 640)),
+            title=str(wcfg_raw.get("title", "Parameters")),
+        )
+
+        # theme config（自由形式のディクショナリ）
+        tcfg_raw = pg_cfg.get("theme", {}) if isinstance(pg_cfg.get("theme"), dict) else {}
+        theme_cfg = ParameterThemeConfig(
+            style=dict(
+                tcfg_raw.get("style", {}) if isinstance(tcfg_raw.get("style"), dict) else {}
+            ),
+            colors=dict(
+                tcfg_raw.get("colors", {}) if isinstance(tcfg_raw.get("colors"), dict) else {}
+            ),
+        )
+
         self.runtime = ParameterRuntime(self.store, layout=layout)
         self.runtime.set_lazy(lazy_trace)
-        self.controller = ParameterWindowController(self.store, layout=layout)
+        self.controller = ParameterWindowController(
+            self.store, layout=layout, window_cfg=window_cfg, theme_cfg=theme_cfg
+        )
         self._initialized = False
 
     def initialize(self) -> None:

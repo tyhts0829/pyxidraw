@@ -9,7 +9,12 @@ from __future__ import annotations
 from typing import Any
 
 from .dpg_window import ParameterWindow
-from .state import ParameterLayoutConfig, ParameterStore
+from .state import (
+    ParameterLayoutConfig,
+    ParameterStore,
+    ParameterThemeConfig,
+    ParameterWindowConfig,
+)
 
 
 class ParameterWindowController:
@@ -20,15 +25,26 @@ class ParameterWindowController:
         store: ParameterStore,
         *,
         layout: ParameterLayoutConfig | None = None,
+        window_cfg: ParameterWindowConfig | None = None,
+        theme_cfg: ParameterThemeConfig | None = None,
     ) -> None:
         self._store = store
         self._layout = layout or ParameterLayoutConfig()
+        self._window_cfg = window_cfg or ParameterWindowConfig()
+        self._theme_cfg = theme_cfg or ParameterThemeConfig()
         self._window: Any | None = None
         self._visible: bool = True
 
     def start(self) -> None:
         if self._window is None and self._visible:
-            self._window = ParameterWindow(store=self._store, layout=self._layout)  # type: ignore[abstract]
+            self._window = ParameterWindow(  # type: ignore[abstract]
+                store=self._store,
+                layout=self._layout,
+                width=self._window_cfg.width,
+                height=self._window_cfg.height,
+                title=self._window_cfg.title,
+                theme=self._theme_cfg,
+            )
 
     # tick は不要（DPG はバックグラウンド駆動）
 

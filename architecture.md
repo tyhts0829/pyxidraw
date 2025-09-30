@@ -62,6 +62,7 @@
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と Descriptor 登録を行い、GUI override を適用してから元の関数へ委譲（変換レイヤは廃止し、実値を扱う）。
   - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
+  - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
   - 多プロセスとの相性を考慮し、GUI 有効時は `WorkerPool` が Inline モード（単一プロセス実行）に切替わる。
   - macOS 注記: Dear PyGui は UI イベントをメインスレッドで処理する必要があるため、可能なら `pyglet.clock.schedule_interval` でメインスレッドから `render_dearpygui_frame()` を駆動する。`pyglet` 未導入時はバックグラウンドスレッドで `start_dearpygui()` を駆動（ヘッドレス/未導入環境ではスタブが有効）。
 

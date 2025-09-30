@@ -28,7 +28,12 @@ except Exception:  # pragma: no cover - headless/未導入
     _pyglet = None  # type: ignore[assignment]
 pyglet: Any = _pyglet
 
-from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore
+from .state import (
+    ParameterDescriptor,
+    ParameterLayoutConfig,
+    ParameterStore,
+    ParameterThemeConfig,
+)
 
 # ------------------------------
 # ヘッドレス/未導入環境のスタブ
@@ -72,12 +77,14 @@ else:
             width: int = 420,
             height: int = 640,
             title: str = "Parameters",
+            theme: ParameterThemeConfig | None = None,
         ) -> None:
             self._store = store
             self._layout = layout
             self._width = width
             self._height = height
             self._title = title
+            self._theme = theme
 
             self._syncing = False
             self._thread: Thread | None = None
@@ -101,7 +108,7 @@ else:
                 )
             dpg.set_primary_window(root, True)
 
-            # 最小テーマ（パディングのみ）
+            # テーマ適用（指定があれば優先、無くても最小テーマを適用）
             self._setup_theme()
 
             # 初期マウント
@@ -171,9 +178,33 @@ else:
                         return
                     label = cat if cat else "General"
                     with dpg.collapsing_header(label=label, parent=scroll, default_open=True):
-                        with dpg.table(header_row=False) as table:
-                            dpg.add_table_column(label="Parameter")
-                            dpg.add_table_column(label="Value")
+                        # 列幅の比率を設定に基づいてストレッチ適用
+                        table_policy = getattr(dpg, "mvTable_SizingStretchProp", None)
+                        if table_policy is None:
+                            table_policy = getattr(dpg, "mvTable_SizingStretchSame", None)
+                        with dpg.table(header_row=False, policy=table_policy) as table:
+                            # 0.1..0.9 にクランプし、左右の weight とする
+                            try:
+                                left = float(self._layout.label_column_ratio)
+                            except Exception:
+                                left = 0.5
+                            left = 0.1 if left < 0.1 else (0.9 if left > 0.9 else left)
+                            right = max(0.1, 1.0 - left)
+                            try:
+                                dpg.add_table_column(
+                                    label="Parameter",
+                                    width_stretch=True,
+                                    init_width_or_weight=left,
+                                )
+                                dpg.add_table_column(
+                                    label="Value",
+                                    width_stretch=True,
+                                    init_width_or_weight=right,
+                                )
+                            except Exception:
+                                # 旧環境向けフォールバック（等分）
+                                dpg.add_table_column(label="Parameter")
+                                dpg.add_table_column(label="Value")
                             for it in items:
                                 if not it.supported:
                                     continue
@@ -407,12 +438,86 @@ else:
         def _setup_theme(self) -> None:
             try:
                 with dpg.theme() as theme:
-                    # 全体のパディング/スペーシングのみ調整
                     with dpg.theme_component(dpg.mvAll):
-                        pad = int(self._layout.padding)
-                        dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, pad, pad)
-                        dpg.add_theme_style(dpg.mvStyleVar_FramePadding, pad, max(1, pad // 2))
-                        dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, pad, max(1, pad // 2))
+                        # スタイル適用
+                        style_applied = False
+                        if self._theme is not None and isinstance(self._theme.style, dict):
+                            style_applied = True
+                            smap = {
+                                "window_padding": getattr(dpg, "mvStyleVar_WindowPadding", None),
+                                "frame_padding": getattr(dpg, "mvStyleVar_FramePadding", None),
+                                "item_spacing": getattr(dpg, "mvStyleVar_ItemSpacing", None),
+                                "frame_rounding": getattr(dpg, "mvStyleVar_FrameRounding", None),
+                                "grab_rounding": getattr(dpg, "mvStyleVar_GrabRounding", None),
+                                "grab_min_size": getattr(dpg, "mvStyleVar_GrabMinSize", None),
+                            }
+
+                            def _add_style(var: Any, value: Any) -> None:
+                                if not var:
+                                    return
+                                try:
+                                    if isinstance(value, (list, tuple)) and len(value) >= 2:
+                                        dpg.add_theme_style(var, float(value[0]), float(value[1]))
+                                    else:
+                                        dpg.add_theme_style(var, float(value))
+                                except Exception:
+                                    pass
+
+                            for key, var in smap.items():
+                                if key in self._theme.style:
+                                    _add_style(var, self._theme.style[key])
+
+                        if not style_applied:
+                            # 既定の最小スタイル（padding ベース）
+                            pad = int(self._layout.padding)
+                            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, pad, pad)
+                            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, pad, max(1, pad // 2))
+                            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, pad, max(1, pad // 2))
+
+                        # 色適用（config では RGBA 0..255 を推奨。0..1 float も許容し 0..255 に拡大）
+                        if self._theme is not None and isinstance(self._theme.colors, dict):
+                            cmap = {
+                                "text": getattr(dpg, "mvThemeCol_Text", None),
+                                "window_bg": getattr(dpg, "mvThemeCol_WindowBg", None),
+                                "frame_bg": getattr(dpg, "mvThemeCol_FrameBg", None),
+                                "frame_bg_hovered": getattr(dpg, "mvThemeCol_FrameBgHovered", None),
+                                "frame_bg_active": getattr(dpg, "mvThemeCol_FrameBgActive", None),
+                                "header": getattr(dpg, "mvThemeCol_Header", None),
+                                "header_hovered": getattr(dpg, "mvThemeCol_HeaderHovered", None),
+                                "header_active": getattr(dpg, "mvThemeCol_HeaderActive", None),
+                                # アクセントはスライダーの Grab に反映
+                                "accent": getattr(dpg, "mvThemeCol_SliderGrab", None),
+                                "accent_active": getattr(dpg, "mvThemeCol_SliderGrabActive", None),
+                            }
+
+                            def _to_dpg_color(value: Any) -> Any:
+                                try:
+                                    if isinstance(value, (list, tuple)) and len(value) >= 4:
+                                        vals = [
+                                            float(value[0]),
+                                            float(value[1]),
+                                            float(value[2]),
+                                            float(value[3]),
+                                        ]
+                                        # 0..1 の場合は 0..255 へ拡大
+                                        if all(0.0 <= v <= 1.0 for v in vals):
+                                            return [int(round(v * 255)) for v in vals]
+                                        return [int(round(v)) for v in vals]
+                                except Exception:
+                                    return None
+                                return None
+
+                            for key, var in cmap.items():
+                                if not var:
+                                    continue
+                                if key in self._theme.colors:
+                                    col = _to_dpg_color(self._theme.colors[key])
+                                    if col is not None:
+                                        try:
+                                            dpg.add_theme_color(var, col)
+                                        except Exception:
+                                            pass
+
                 dpg.bind_theme(theme)
             except Exception:
                 # 失敗しても既定スタイルで継続

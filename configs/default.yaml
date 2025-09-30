@@ -152,3 +152,36 @@ midi_devices:
 # - `io.cc_dir`: CC スナップショットの保存先。相対パスは実行CWD基準。
 io:
   cc_dir: data/cc
+
+# Parameter GUI の外観既定
+parameter_gui:
+  window:
+    width: 720
+    height: 640
+    title: "Parameters"
+  layout:
+    padding: 8
+    row_height: 28
+    font_size: 12
+    value_precision: 3
+    # 左ラベル:右スライダーの比率（0.1..0.9）。0.5で等分。
+    label_column_ratio: 0.3
+  theme:
+    style:
+      window_padding: [8, 8]
+      frame_padding: [8, 4]
+      item_spacing: [8, 4]
+      frame_rounding: 0
+      grab_rounding: 0
+      grab_min_size: 12
+    colors:
+      text: [242, 242, 242, 255]
+      window_bg: [33, 33, 33, 255]
+      frame_bg: [51, 51, 51, 255]
+      frame_bg_hovered: [71, 71, 71, 255]
+      frame_bg_active: [84, 84, 84, 255]
+      header: [56, 56, 56, 255]
+      header_hovered: [71, 71, 71, 255]
+      header_active: [84, 84, 84, 255]
+      accent: [63, 114, 174, 255]
+      accent_active: [51, 115, 230, 255]

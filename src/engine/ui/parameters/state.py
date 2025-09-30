@@ -212,6 +212,8 @@ class ParameterLayoutConfig:
     padding: int = 8
     font_size: int = 12
     value_precision: int = 6
+    # ラベル:値（スライダー）列の比率（0.1..0.9）。既定は等分（0.5）。
+    label_column_ratio: float = 0.5
 
     def derive_range(self, *, name: str, value_type: ValueType, default_value: Any) -> RangeHint:
         """最小構成の既定レンジ: 数値は 0..1、bool は 0/1。"""
@@ -238,6 +240,31 @@ class ParameterLayoutConfig:
             steps=(None, None, None),
             scale="linear",
         )
+
+
+@dataclass(frozen=True)
+class ParameterWindowConfig:
+    """Parameter GUI ウィンドウの寸法/タイトル設定。
+
+    - 設定未指定時は `width=420`, `height=640`, `title="Parameters"` を用いる。
+    """
+
+    width: int = 420
+    height: int = 640
+    title: str = "Parameters"
+
+
+@dataclass(frozen=True)
+class ParameterThemeConfig:
+    """Parameter GUI のテーマ（スタイル/色）設定。
+
+    - Dear PyGui の StyleVar/ThemeCol に相当するキーを受け取り、そのまま適用する。
+    - キーは存在するもののみを適用し、欠損はスキップするフェイルソフト設計。
+    - colors は RGBA (0..1) を前提とする。
+    """
+
+    style: dict[str, Any] = field(default_factory=dict)
+    colors: dict[str, Any] = field(default_factory=dict)
 
 
 class ParameterRegistry:

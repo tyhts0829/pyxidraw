@@ -31,17 +31,17 @@ parameter_gui:
       frame_rounding: 4
       grab_rounding: 4
       grab_min_size: 12
-    colors:              # Dear PyGui ThemeCol 相当（RGBA, 0.0..1.0）
-      text: [0.95, 0.95, 0.95, 1.0]
-      window_bg: [0.13, 0.13, 0.13, 1.0]
-      frame_bg: [0.20, 0.20, 0.20, 1.0]
-      frame_bg_hovered: [0.28, 0.28, 0.28, 1.0]
-      frame_bg_active: [0.33, 0.33, 0.33, 1.0]
-      header: [0.22, 0.22, 0.22, 1.0]
-      header_hovered: [0.28, 0.28, 0.28, 1.0]
-      header_active: [0.33, 0.33, 0.33, 1.0]
-      accent: [0.35, 0.60, 0.98, 1.0]  # Grab/Slider 等へ反映
-      accent_active: [0.20, 0.45, 0.90, 1.0]
+    colors:              # Dear PyGui ThemeCol 相当（RGBA, 0..255）
+      text: [242, 242, 242, 255]
+      window_bg: [33, 33, 33, 255]
+      frame_bg: [51, 51, 51, 255]
+      frame_bg_hovered: [71, 71, 71, 255]
+      frame_bg_active: [84, 84, 84, 255]
+      header: [56, 56, 56, 255]
+      header_hovered: [71, 71, 71, 255]
+      header_active: [84, 84, 84, 255]
+      accent: [89, 153, 250, 255]  # Grab/Slider 等へ反映
+      accent_active: [51, 115, 230, 255]
 ```
 
 実装タスク（チェックリスト）:
@@ -53,7 +53,7 @@ parameter_gui:
 - [ ] 既定値追加: `configs/default.yaml` に `parameter_gui` を追加
 - [ ] 型定義追加: `src/engine/ui/parameters/state.py`
   - [ ] `@dataclass ParameterWindowConfig(width:int, height:int, title:str)`
-  - [ ] `@dataclass ParameterThemeConfig(style: dict[str, Any], colors: dict[str, tuple[float,float,float,float]])`
+  - [ ] `@dataclass ParameterThemeConfig(style: dict[str, Any], colors: dict[str, list[int]])`
   - [ ] 既存 `ParameterLayoutConfig` は据え置き（必要なら docstring 追補）
 - [ ] 設定読込: `ParameterManager` 初期化時に `util.utils.load_config()` から `parameter_gui` を取得
   - [ ] `ParameterWindowConfig`/`ParameterLayoutConfig`/`ParameterThemeConfig` を構築
@@ -84,7 +84,7 @@ parameter_gui:
 補足/トレードオフ:
 - `config.yaml` の shallow merge により、`parameter_gui` を部分上書きすると同キー以下は全置換となる（将来の限定ディープマージは要検討）。
 - DPG は明示高さ API が限定的なため、スライダー高さは padding/grab サイズで近似制御する。
-- カラー表現は RGBA float 0..1 に統一（`canvas.background_color` と整合）。
+- カラー表現は RGBA 0..255（config 推奨）。0..1 float も互換で受け付け、内部で 0..255 に拡大。
 
 確認事項（ご回答ください）:
 - [ ] 上記スキーマ/命名で進めてよいか
@@ -101,4 +101,3 @@ parameter_gui:
 
 注記:
 - 既に類似の計画メモがある場合（例: `docs/parameter_gui_cfg_plan.md`）、本計画は色/ウィンドウ寸法に焦点を当てた最新版として扱い、実装時に内容を統合します。
-
