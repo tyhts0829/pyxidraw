@@ -13,7 +13,7 @@ from .registry import shape
 @shape
 def attractor(
     *,
-    attractor_type: str = "aizawa",
+    attractor_type: str = "lorenz",
     points: int = 10000,
     dt: float = 0.01,
     scale: float = 1.0,

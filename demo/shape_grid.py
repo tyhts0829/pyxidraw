@@ -23,11 +23,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 # 登録の副作用を有効にする
 import shapes  # noqa: F401  # register all shapes
+import effects  # noqa: F401  # register all effects (for fill)
 from api import G, run  # type: ignore  # after sys.path tweak
 from engine.core.geometry import Geometry
 from engine.ui.parameters.introspection import FunctionIntrospector
 from engine.ui.parameters.state import ParameterLayoutConfig
 from shapes.registry import get_shape, list_shapes
+from effects.registry import get_effect  # for labeling fill
 
 # === レイアウト/描画定数 ===================================================
 CELL_SIZE = (100.0, 100.0)  # (w, h)
@@ -36,6 +38,8 @@ PADDING = 10.0  # セル内の余白（内側マージン）—フィット時�
 GAP = 10.0  # セル間の間隔（外側ギャップ）—レイアウト時にセル間へ加算
 LINE_THICKNESS = 0.0006  # 描画線の太さ（スクリーン座標に対する比率）
 EDGE_MARGIN = 30.0  # ウィンドウ外枠の余白（上下左右, px 相当）
+LABEL_FONT_SIZE_MM = 10.0  # ラベルのフォントサイズ（1em 高さ[mm]）
+FAIL_MARK_SIZE = 8.0  # 失敗印（×）の一辺サイズ
 
 # パラメータ代表値の比率（レンジ内の中間値を使う）
 DEFAULT_RATIO = 0.5
@@ -77,35 +81,55 @@ def _shorten(text: str, *, max_len: int = 22) -> str:
     return f"{text[:head]}…{text[-tail:]}"
 
 
-def _value_type_of(meta_type: str | None, default: Any) -> str:
-    mt = (meta_type or "").lower()
-    if mt in {"number", "float"}:
-        return "float"
-    if mt in {"integer", "int"}:
-        return "int"
-    if mt == "bool":
-        return "bool"
+def _value_type_of(meta: Mapping[str, Any] | None, default: Any) -> str:
+    """値型を推定する。
+
+    優先順位:
+    - __param_meta__ の type が vec2/vec3/vector → vector
+    - __param_meta__ の min/max がシーケンス → vector
+    - 既定値がシーケンス長 2/3/4 → vector
+    - 上記以外は default の型から推定（bool/int/float）
+    """
+    mt = str(meta.get("type", "")).lower() if isinstance(meta, Mapping) else ""
     if mt in {"vec2", "vec3", "vector"}:
         return "vector"
-    # 推定
+    if mt in {"string", "str"}:
+        return "string"
+    if isinstance(meta, Mapping) and "choices" in meta:
+        return "enum"
+    if isinstance(meta, Mapping):
+        mn, mx = meta.get("min"), meta.get("max")
+        if isinstance(mn, Sequence) and isinstance(mx, Sequence) and len(mn) == len(mx):
+            if len(mn) in (2, 3, 4):
+                return "vector"
+    # 文字列は Sequence 判定から除外
+    if (
+        isinstance(default, Sequence)
+        and not isinstance(default, (str, bytes, bytearray))
+        and len(default) in (2, 3, 4)
+    ):
+        return "vector"
+    if isinstance(default, str):
+        return "string"
     if isinstance(default, bool):
         return "bool"
     if isinstance(default, int) and not isinstance(default, bool):
         return "int"
     if isinstance(default, float):
         return "float"
-    if isinstance(default, Sequence) and len(default) in (2, 3):
-        return "vector"
     return "float"
 
 
-def _as_tuple3(value: Any, *, fill: float = 0.0) -> tuple[float, float, float]:
-    if isinstance(value, Sequence) and len(value) >= 3:
-        return (float(value[0]), float(value[1]), float(value[2]))
-    if isinstance(value, Sequence) and len(value) == 2:
-        return (float(value[0]), float(value[1]), fill)
+def _as_tuple(value: Any, dim: int, *, fill: float = 0.0) -> tuple[float, ...]:
+    if isinstance(value, Sequence) and len(value) >= dim:
+        return tuple(float(value[i]) for i in range(dim))
+    if isinstance(value, Sequence):
+        vals = [float(value[i]) for i in range(len(value))]
+        while len(vals) < dim:
+            vals.append(fill)
+        return tuple(vals)
     v = float(value) if isinstance(value, (int, float)) else fill
-    return (v, v, v)
+    return tuple(v for _ in range(dim))
 
 
 def _denorm_scalar(
@@ -131,24 +155,38 @@ def _denorm_scalar(
     return float(v)
 
 
-def _denorm_vector(
-    default: Any, *, name: str, meta: Mapping[str, Any] | None
-) -> tuple[float, float, float]:
+def _vector_dim(meta: Mapping[str, Any] | None, default: Any) -> int:
+    if isinstance(default, Sequence) and len(default) in (2, 3, 4):
+        return len(default)
+    if isinstance(meta, Mapping):
+        mn, mx = meta.get("min"), meta.get("max")
+        if isinstance(mn, Sequence) and isinstance(mx, Sequence) and len(mn) == len(mx):
+            if len(mn) in (2, 3, 4):
+                return len(mn)
+    return 3
+
+
+def _denorm_vector(default: Any, *, name: str, meta: Mapping[str, Any] | None) -> tuple[float, ...]:
+    dim = _vector_dim(meta, default)
     # meta にベクトル min/max があれば成分ごとに適用
-    if meta and isinstance(meta.get("min"), Sequence) and isinstance(meta.get("max"), Sequence):
-        mins = _as_tuple3(meta["min"], fill=0.0)
-        maxs = _as_tuple3(meta["max"], fill=1.0)
+    if (
+        isinstance(meta, Mapping)
+        and isinstance(meta.get("min"), Sequence)
+        and isinstance(meta.get("max"), Sequence)
+    ):
+        mins = _as_tuple(meta["min"], dim, fill=0.0)
+        maxs = _as_tuple(meta["max"], dim, fill=1.0)
         out = []
         for lo, hi in zip(mins, maxs):
             v = float(lo) + (float(hi) - float(lo)) * DEFAULT_RATIO
             out.append(float(v))
-        return (out[0], out[1], out[2])
+        return tuple(out)
     # ヒューリスティック（各成分同一レンジ）
-    base = _as_tuple3(default, fill=0.0)
+    base = _as_tuple(default, dim, fill=0.0)
     rng = _LAYOUT_CFG.derive_range(name=name, value_type="vector", default_value=base[0])
     lo, hi = float(rng.min_value), float(rng.max_value)
     v = lo + (hi - lo) * DEFAULT_RATIO
-    return (v, v, v)
+    return tuple(v for _ in range(dim))
 
 
 def _build_params(name: str, fn: Any) -> dict[str, Any]:
@@ -172,8 +210,7 @@ def _build_params(name: str, fn: Any) -> dict[str, Any]:
             continue
         # meta 情報
         m = meta.get(p.name)
-        m_type = None if m is None else str(m.get("type", ""))
-        value_type = _value_type_of(m_type, p.default)
+        value_type = _value_type_of(m, p.default)
 
         try:
             if value_type == "vector":
@@ -188,6 +225,16 @@ def _build_params(name: str, fn: Any) -> dict[str, Any]:
                 params[p.name] = float(
                     _denorm_scalar(p.default, name=p.name, value_type="float", meta=m)
                 )
+            elif value_type in {"string", "enum"}:
+                # 文字列/列挙はデフォルト値を尊重。デフォルトが無い場合は choices の先頭を使う
+                if p.default is not p.empty:
+                    params[p.name] = p.default
+                elif (
+                    isinstance(m, Mapping)
+                    and isinstance(m.get("choices"), Sequence)
+                    and m["choices"]
+                ):
+                    params[p.name] = m["choices"][0]
             else:
                 # 未知型はデフォルトを尊重
                 if p.default is not p.empty:
@@ -205,6 +252,18 @@ _CELL_GEOMS: list[Geometry] | None = None
 _CELL_CENTERS: list[tuple[float, float]] | None = None
 _LABELS_GEO: Geometry | None = None
 ANGULAR_SPEED = 0.6  # [rad/s]
+
+
+def _make_fail_mark(ox: float, oy: float, *, cell_h: float) -> Geometry:
+    """セル左上に小さな × 印（2 本線）を描くジオメトリを返す。"""
+    # 左上に配置（内側 PADDING 分だけ余白）
+    x0 = ox + PADDING
+    y0 = oy + cell_h - PADDING - FAIL_MARK_SIZE
+    p1 = (x0, y0, 0.0)
+    p2 = (x0 + FAIL_MARK_SIZE, y0 + FAIL_MARK_SIZE, 0.0)
+    p3 = (x0 + FAIL_MARK_SIZE, y0, 0.0)
+    p4 = (x0, y0 + FAIL_MARK_SIZE, 0.0)
+    return Geometry.from_lines([[p1, p2], [p3, p4]])
 
 
 def _initialize_grid() -> None:
@@ -240,6 +299,8 @@ def _initialize_grid() -> None:
             g = _fit_into(g, width=inner_w, height=inner_h, center=(cx, cy))
         except Exception:
             g = G.empty()
+            # 失敗印を追加
+            labels = labels.concat(_make_fail_mark(ox, oy, cell_h=cell_h))
 
         _CELL_GEOMS.append(g)
         _CELL_CENTERS.append((cx, cy))
@@ -247,12 +308,22 @@ def _initialize_grid() -> None:
         # ラベル（静的）
         try:
             label = _shorten(name)
-            label_geo = G.text(text=label, font_size=0.2).translate(
+            label_geo = G.text(text=label, em_size_mm=LABEL_FONT_SIZE_MM).translate(
                 ox + PADDING, oy + PADDING * 0.9, 0.0
             )
+            # ラベルにハッチフィル（効果が使えない環境では無視）
+            try:
+                fill_fn = get_effect("fill")
+                label_geo = fill_fn(label_geo, angle_rad=0, density=50)
+            except Exception:
+                pass
             labels = labels.concat(label_geo)
         except Exception:
             pass
+
+        # 生成自体は成功したが空だった場合も印を付ける
+        if g.is_empty:
+            labels = labels.concat(_make_fail_mark(ox, oy, cell_h=cell_h))
 
     _LABELS_GEO = labels
 
