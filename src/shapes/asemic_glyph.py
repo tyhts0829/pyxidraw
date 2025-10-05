@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+# pyright: reportMissingImports=false
+
 import math
 import random
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, Iterator, cast
 
 import numpy as np
 from numba import njit
@@ -142,7 +144,8 @@ def random_walk_strokes_generator(
         各ストロークを構成するノードのインデックスリスト
     """
     if rng is None:
-        rng = random
+        # 明示的に Random インスタンスを用いて型と挙動を安定化
+        rng = random.Random()
 
     n = len(nodes)
     # 隣接リストのコピー（メモリ効率を考慮してset使用）
@@ -234,7 +237,7 @@ def snap_stroke(original: list[Point3D], config: AsemicGlyphConfig) -> list[Poin
         if abs(new_x - last[0]) < 1e-10 and abs(new_y - last[1]) < 1e-10:
             continue
 
-        new_point = (new_x, new_y, 0)
+        new_point = (new_x, new_y, 0.0)
         snapped.append(new_point)
     return snapped
 
@@ -437,7 +440,7 @@ def generate_nodes(
             radius = max_radius * (i / (num_nodes - 1))
             x = cx + radius * math.cos(angle)
             y = cy + radius * math.sin(angle)
-            nodes.append((x, y, 0))
+            nodes.append((float(x), float(y), 0.0))
 
     elif placement_mode == "radial":
         # 放射状配置: 中心から複数の直線上にノードを配置
@@ -626,11 +629,11 @@ class DiacriticFactory:
     def create_umlaut(center: Point3D, radius: float) -> list[np.ndarray]:
         """ウムラウトアクセントを生成する。"""
         dot_radius = radius * 0.3
-        offsets = [(-radius * 0.5, 0), (radius * 0.5, 0)]
+        offsets = [(-radius * 0.5, 0.0), (radius * 0.5, 0.0)]
         dots = []
 
         for dx, dy in offsets:
-            dot_center = (center[0] + dx, center[1] + dy, 0)
+            dot_center = (center[0] + dx, center[1] + dy, 0.0)
             dots.append(_create_circle_njit(dot_center[0], dot_center[1], dot_radius))
 
         return dots
@@ -655,16 +658,8 @@ class DiacriticFactory:
         """セディーヤアクセントを生成する。"""
         return _create_cedilla_njit(center[0], center[1], radius)
 
-    DIACRITIC_TYPES = {
-        "circle": create_circle.__func__,
-        "tilde": create_tilde.__func__,
-        "grave": create_grave.__func__,
-        "umlaut": create_umlaut.__func__,
-        "acute": create_acute.__func__,
-        "circumflex": create_circumflex.__func__,
-        "caron": create_caron.__func__,
-        "cedilla": create_cedilla.__func__,
-    }
+    # DIACRITIC_TYPES はクラス定義後に設定する（__func__ アクセス不要のため）
+    DIACRITIC_TYPES: dict[str, Any]
 
     @classmethod
     def create_random_diacritic(
@@ -672,7 +667,7 @@ class DiacriticFactory:
     ) -> list[np.ndarray]:
         """ランダムなディアクリティカルを生成する。"""
         if rng is None:
-            rng = random
+            rng = random.Random()
 
         diacritic_type = rng.choice(list(cls.DIACRITIC_TYPES.keys()))
         result = cls.DIACRITIC_TYPES[diacritic_type](center, radius)
@@ -705,13 +700,14 @@ def add_diacritic(
         rng: 乱数生成器（テスト用）
     """
     if rng is None:
-        rng = random
+        rng = random.Random()
 
     for i in used_nodes:
         if rng.random() < diacritic_probability:
             offset_x = rng.uniform(-diacritic_radius, diacritic_radius)
             offset_y = rng.uniform(-diacritic_radius, diacritic_radius)
-            diacritic_center = (nodes[i][0] + offset_x, nodes[i][1] + offset_y, 0)
+            nx, ny, _ = nodes[i]
+            diacritic_center = (float(nx) + offset_x, float(ny) + offset_y, 0.0)
 
             diacritic_shapes = DiacriticFactory.create_random_diacritic(
                 diacritic_center, diacritic_radius, rng
@@ -764,7 +760,20 @@ def asemic_glyph(
     return Geometry.from_lines(vertices_list)
 
 
-asemic_glyph.__param_meta__ = {
+# クラス定義後に DIACRITIC_TYPES を設定
+DiacriticFactory.DIACRITIC_TYPES = {
+    "circle": DiacriticFactory.create_circle,
+    "tilde": DiacriticFactory.create_tilde,
+    "grave": DiacriticFactory.create_grave,
+    "umlaut": DiacriticFactory.create_umlaut,
+    "acute": DiacriticFactory.create_acute,
+    "circumflex": DiacriticFactory.create_circumflex,
+    "caron": DiacriticFactory.create_caron,
+    "cedilla": DiacriticFactory.create_cedilla,
+}
+
+# 関数オブジェクトへの動的属性付与は Any 経由で型検査を回避
+cast(Any, asemic_glyph).__param_meta__ = {
     "region": {"type": "number", "min": (-1.0, -1.0, 0.0, 0.0), "max": (0.0, 0.0, 1.0, 1.0)},
     "smoothing_radius": {"type": "number", "min": 0.0, "max": 0.2},
     "diacritic_probability": {"type": "number", "min": 0.0, "max": 1.0},

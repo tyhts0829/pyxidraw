@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, cast
 
-import numpy as np
+# numpy は実行時依存だが、型チェック環境に未導入の場合がある。
+# pyright の欠落依存報告は本ファイル内で抑止する。
+import numpy as np  # type: ignore[reportMissingImports]
 
 from engine.core.geometry import Geometry
 
@@ -165,14 +167,24 @@ class ThreeScrollAttractor(BaseAttractor):
 
 
 class DeJongAttractor:
-    def __init__(self, a=1.4, b=-2.3, c=2.4, d=-2.1, steps=10000, scale=1.0, initial_state=(0, 0)):
+    def __init__(
+        self,
+        a: float = 1.4,
+        b: float = -2.3,
+        c: float = 2.4,
+        d: float = -2.1,
+        steps: int = 10000,
+        scale: float = 1.0,
+        initial_state: tuple[float, float] = (0.0, 0.0),
+    ):
         self.a = a
         self.b = b
         self.c = c
         self.d = d
         self.steps = steps
         self.scale = scale
-        self.initial_state = initial_state
+        # 明示的に 2 要素のタプルで保持
+        self.initial_state: tuple[float, float] = initial_state
 
     def _map(self, state: tuple[float, float]) -> tuple[float, float]:
         x, y = state
@@ -182,9 +194,10 @@ class DeJongAttractor:
 
     def integrate(self, initial_state: tuple[float, float] | None = None) -> np.ndarray:
         if initial_state is None:
-            state = self.initial_state
+            state: tuple[float, float] = self.initial_state
         else:
-            state = tuple(initial_state)
+            # そのまま 2 要素タプルとして扱う（長さ不定の tuple へ拡張しない）
+            state = (float(initial_state[0]), float(initial_state[1]))
 
         # Pre-allocate with dtype for better performance
         trajectory = np.empty((self.steps, 3), dtype=np.float32)
@@ -201,7 +214,8 @@ class DeJongAttractor:
         return trajectory
 
 
-attractor.__param_meta__ = {
+# 関数属性への動的付与は Pyright が警告するため、cast(Any, ...) で明示的に許可する。
+cast(Any, attractor).__param_meta__ = {
     "attractor_type": {
         "choices": ["aizawa", "lorenz", "rossler", "three_scroll", "dejong"],
     },
