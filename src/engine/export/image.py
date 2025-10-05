@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 # pyglet は任意依存のため、解析時に欠如しても問題にならないようガード
 try:  # pragma: no cover - 環境依存
@@ -32,6 +32,9 @@ def save_png(
     transparent: bool = False,
     mgl_context: object | None = None,
     draw: Callable[[], None] | None = None,
+    name_prefix: Optional[str] = None,
+    width_mm: Optional[float] = None,
+    height_mm: Optional[float] = None,
 ) -> Path:
     """現在のウィンドウ内容を PNG として保存する。
 
@@ -40,7 +43,8 @@ def save_png(
     window : pyglet.window.Window
         対象ウィンドウ。
     path : Path | None
-        出力先パス。None の場合は既定の `screenshots/` にタイムスタンプ名で保存。
+        出力先パス。None の場合は既定の `screenshots/` に命名規則
+        `{name_prefix}_{W}x{H}_{yymmdd_hhmmss}.png`（prefix なし: `YYYYmmdd_HHMMSS_{W}x{H}.png`）で保存。
     scale : float, default 1.0
         画像のスケール。1.0 以外は現段階では未対応（NotImplementedError）。
     include_overlay : bool, default True
@@ -66,12 +70,23 @@ def save_png(
 
     if path is None:
         out_dir = ensure_screenshots_dir()
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # ファイル名は実際の保存ピクセル数を反映
-        scale_tag = 1.0 if include_overlay else float(scale)
-        w = int(round(float(window.width) * scale_tag))
-        h = int(round(float(window.height) * scale_tag))
-        path = _unique_path(out_dir / f"{ts}_{w}x{h}.png")
+        # W/H はキャンバス寸法 [mm] を優先。未指定時はピクセルから推定（既存挙動に近い）。
+        if width_mm and width_mm > 0 and height_mm and height_mm > 0:
+            dims = f"{int(round(width_mm))}x{int(round(height_mm))}"
+        else:
+            # ピクセルベース（従来）。include_overlay=True では scale=1.0 固定。
+            scale_tag = 1.0 if include_overlay else float(scale)
+            w = int(round(float(getattr(window, "width", 0)) * scale_tag))
+            h = int(round(float(getattr(window, "height", 0)) * scale_tag))
+            dims = f"{w}x{h}" if w > 0 and h > 0 else "unknownWxH"
+
+        if name_prefix:
+            ts = datetime.now().strftime("%y%m%d_%H%M%S")
+            base = f"{name_prefix}_{dims}_{ts}"
+        else:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base = f"{ts}_{dims}"
+        path = _unique_path(out_dir / f"{base}.png")
 
     if include_overlay:
         # バッファからそのまま保存（RGBA）

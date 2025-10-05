@@ -18,12 +18,12 @@
   - `G`: G-code 保存（ジオメトリから生成、オーバーレイ非含有、非ブロッキング）。
   - `Shift+G`: 実行中の G-code エクスポートをキャンセル。
 - 保存先/ファイル名
-  - PNG: ルート直下 `screenshots/`（存在しなければ作成）。
+  - PNG: `data/screenshot/`（存在しなければ作成）。
     - 既定ファイル名: `YYYYmmdd_HHMMSS_{w}x{h}.png`。
   - G-code: `data/gcode/`（存在しなければ作成）。
     - 既定ファイル名: `YYYYmmdd_HHMMSS_{W}x{H}_mm.gcode`。
 - 成功時のフィードバック
-  - HUD に一時メッセージ（例: `Saved PNG: screenshots/20250920_223012_1200x1200.png` / `Saved G-code: data/gcode/...`）。
+  - HUD に一時メッセージ（例: `Saved PNG: data/screenshot/20250920_223012_1200x1200.png` / `Saved G-code: data/gcode/...`）。
   - 失敗時は HUD に理由込みで表示（例外の要約）。
 
 ## 出力フォーマット仕様
@@ -82,7 +82,7 @@
   - G-code は `.gcode.part` に逐次書き出し、成功時に最終ファイル名へリネーム。キャンセル/失敗時は `.part` を削除。
 
 ## 設定値と既定
-- 既定ディレクトリ: PNG は `screenshots/`、G-code は `data/gcode/`。
+- 既定ディレクトリ: PNG は `data/screenshot/`、G-code は `data/gcode/`。
 - PNG 既定: `scale=1.0`、`include_overlay=True`、`transparent=False`。
 - G-code 既定: `travel_feed=3000.0`、`draw_feed=1500.0`、`z_up=5.0`、`z_down=0.2`、`y_down=False`、`origin=(0.0,0.0)`。
 - 上限/警告: `scale>4.0` は GPU メモリ次第で失敗し得るため HUD で警告。
@@ -97,7 +97,7 @@
   - G-code: ヘッダ/フッタ、`G0/G1` 行、座標丸め、行間移動の有無が想定どおり。
   - PNG: オフスクリーン FBO で所定サイズの RGBA が得られること（ピクセル数のみ検証）。
 - E2E（任意）
-  - ホットキー押下で `screenshots/` と `data/gcode/` にファイルが生成されること。
+  - ホットキー押下で `data/screenshot/` と `data/gcode/` にファイルが生成されること。
   - `include_overlay=False` で HUD 文言が PNG に含まれないこと（差分判定の簡易チェック）。
 
 ## 実装タスクリスト（最小）

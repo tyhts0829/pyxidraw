@@ -12,14 +12,14 @@ from .utils import _find_project_root
 
 
 def ensure_screenshots_dir() -> Path:
-    """スクリーンショット出力先 `screenshots/` を作成して返す。
+    """スクリーンショット出力先 `data/screenshot/` を作成して返す。
 
-    - プロジェクトルート直下に作成する。
+    - プロジェクトルート直下の `data/screenshot/` に作成する。
     - 既存の場合もそのまま Path を返す。
     - 並行呼び出しに対して `exist_ok=True` で安全。
     """
     root = _find_project_root(Path(__file__).parent)
-    out = root / "screenshots"
+    out = root / "data" / "screenshot"
     out.mkdir(parents=True, exist_ok=True)
     return out
 

@@ -46,6 +46,7 @@ class _Job:
     # 追加メタ（将来: canvas_mm 等）
     params: object | None
     simulate: bool
+    name_prefix: Optional[str] = None
     # 進捗
     done_vertices: int = 0
     total_vertices: int = 0
@@ -81,6 +82,7 @@ class ExportService:
         params: object | None = None,
         *,
         simulate: bool = False,
+        name_prefix: Optional[str] = None,
     ) -> str:
         """G-code エクスポートジョブを投入し、`job_id` を返す。
 
@@ -95,6 +97,7 @@ class ExportService:
             offsets=np.ascontiguousarray(offsets, dtype=np.int32),
             params=params,
             simulate=simulate,
+            name_prefix=name_prefix,
         )
         job.total_vertices = int(job.coords.shape[0])
         with self._lock:
@@ -133,7 +136,17 @@ class ExportService:
 
     def _run_job(self, job: _Job) -> None:
         out_dir = ensure_gcode_dir()
-        final_path = _make_gcode_filename(out_dir)
+        # 推奨: パラメータからキャンバス寸法を取得
+        width_mm: Optional[float] = None
+        height_mm: Optional[float] = None
+        try:
+            # 遅延 import 回避のため isinstance は使わずダックタイピング
+            width_mm = getattr(job.params, "canvas_width_mm", None)  # type: ignore[assignment]
+            height_mm = getattr(job.params, "canvas_height_mm", None)  # type: ignore[assignment]
+        except Exception:
+            width_mm = None
+            height_mm = None
+        final_path = _make_gcode_filename(out_dir, width_mm, height_mm, job.name_prefix)
         part_path = final_path.with_suffix(final_path.suffix + ".part")
         job.part_path = part_path
         job.state = "running"
@@ -228,10 +241,27 @@ def _new_job_id() -> str:
     return f"job_{int(time.time()*1000)}_{threading.get_ident()}"
 
 
-def _make_gcode_filename(out_dir: Path) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # キャンバス寸法は将来付与（現時点は unknownWxH）
-    base = f"{ts}_unknownWxH_mm"
+def _make_gcode_filename(
+    out_dir: Path,
+    width_mm: Optional[float],
+    height_mm: Optional[float],
+    name_prefix: Optional[str] = None,
+) -> Path:
+    # prefix の有無でタイムスタンプ形式を切替
+    ts_prefixed = datetime.now().strftime("%y%m%d_%H%M%S")
+    ts_fallback = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    def dims_tag() -> str:
+        if width_mm and width_mm > 0 and height_mm and height_mm > 0:
+            return f"{int(round(width_mm))}x{int(round(height_mm))}"
+        return "unknownWxH"
+
+    if name_prefix:
+        base = f"{name_prefix}_{dims_tag()}_{ts_prefixed}"
+        path = out_dir / f"{base}.gcode"
+        return _unique_path(path)
+    # 旧仕様に近いフォールバック（_mm サフィックスを維持）
+    base = f"{ts_fallback}_{dims_tag()}_mm"
     path = out_dir / f"{base}.gcode"
     return _unique_path(path)
 

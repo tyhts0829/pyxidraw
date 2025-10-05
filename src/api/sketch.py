@@ -82,12 +82,15 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+from pathlib import Path
 from typing import Callable, Mapping, Optional, cast
 
 import numpy as np
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
+from engine.export.gcode import GCodeParams, GCodeWriter
 from engine.ui.hud.config import HUDConfig
 from engine.ui.parameters.manager import ParameterManager
 from util.constants import CANVAS_SIZES
@@ -328,7 +331,8 @@ def run_sketch(
     if hud_conf.enabled:
         sampler = MetricSampler(swap_buffer, config=hud_conf)
         overlay = OverlayHUD(rendering_window, sampler, config=hud_conf)
-    export_service = ExportService()  # Stage3以降で GCodeWriter を接続
+    # G-code エクスポート: 実 writer を接続
+    export_service = ExportService(writer=GCodeWriter())
     _current_g_job: str | None = None
 
     # ---- ⑥ 投影行列（正射影） --------------------------------------
@@ -371,6 +375,8 @@ def run_sketch(
         # PNG 保存（P / Shift+P）
         if sym == key.P:
             try:
+                # ファイル名のプレフィックス（エントリスクリプト名）とキャンバス寸法 [mm]
+                _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
                 if mods & key.MOD_SHIFT:
                     # 高解像度（overlayなし）: オフスクリーン描画でラインのみ保存
                     p = save_png(
@@ -380,10 +386,20 @@ def run_sketch(
                         transparent=False,
                         mgl_context=mgl_ctx,
                         draw=line_renderer.draw,
+                        name_prefix=_name_prefix,
+                        width_mm=float(canvas_width),
+                        height_mm=float(canvas_height),
                     )
                 else:
                     # 低コスト（overlayあり）: 画面バッファをそのまま保存
-                    p = save_png(rendering_window, scale=1.0, include_overlay=True)
+                    p = save_png(
+                        rendering_window,
+                        scale=1.0,
+                        include_overlay=True,
+                        name_prefix=_name_prefix,
+                        width_mm=float(canvas_width),
+                        height_mm=float(canvas_height),
+                    )
                 if overlay is not None:
                     overlay.show_message(f"Saved PNG: {p}")
             except Exception as e:  # 失敗時のHUD表示
@@ -405,7 +421,16 @@ def run_sketch(
                 return
             coords, offsets = front.as_arrays(copy=True)
             try:
-                job_id = export_service.submit_gcode_job((coords, offsets), simulate=True)
+                # ピクセル=mm 前提。キャンバス高さ [mm] を渡して厳密 Y 反転を使用。
+                gparams = GCodeParams(
+                    y_down=True,
+                    canvas_height_mm=float(canvas_height),
+                    canvas_width_mm=float(canvas_width),
+                )
+                _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
+                job_id = export_service.submit_gcode_job(
+                    (coords, offsets), params=gparams, simulate=False, name_prefix=_name_prefix
+                )
             except RuntimeError:
                 if overlay is not None:
                     overlay.show_message("G-code エクスポート実行中", level="warn")
