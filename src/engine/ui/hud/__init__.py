@@ -7,12 +7,13 @@
 from __future__ import annotations
 
 from .config import HUDConfig
-from .fields import CACHE_EFFECT, CACHE_SHAPE, CPU, FPS, MEM, VERTEX
+from .fields import CACHE_EFFECT, CACHE_SHAPE, CPU, FPS, LINE, MEM, VERTEX
 
 __all__ = [
     "HUDConfig",
     "FPS",
     "VERTEX",
+    "LINE",
     "CPU",
     "MEM",
     "CACHE_SHAPE",

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from .fields import CACHE_EFFECT, CACHE_SHAPE, CPU, FPS, MEM, VERTEX
+from .fields import CACHE_EFFECT, CACHE_SHAPE, CPU, FPS, LINE, MEM, VERTEX
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,8 @@ class HUDConfig:
         FPS 表示の有無。
     show_vertex_count : bool
         頂点数表示の有無。
+    show_line_count : bool
+        ライン数（ポリライン本数）表示の有無。
     show_cpu_mem : bool
         CPU/MEM 表示の有無（未使用時は psutil 呼び出しを抑止）。
     show_cache_status : bool
@@ -38,6 +40,7 @@ class HUDConfig:
     show_fps: bool = True
     show_vertex_count: bool = True
     show_cpu_mem: bool = True
+    show_line_count: bool = True
     show_cache_status: bool = True
     order: Sequence[str] | None = None
     sample_interval: float = 0.5
@@ -51,6 +54,8 @@ class HUDConfig:
             keys.append(FPS)
         if self.show_vertex_count:
             keys.append(VERTEX)
+        if self.show_line_count:
+            keys.append(LINE)
         if self.show_cpu_mem:
             keys.extend([CPU, MEM])
         if self.show_cache_status:

@@ -16,7 +16,7 @@ from engine.core.geometry import Geometry
 from ...core.tickable import Tickable
 from ...runtime.buffer import SwapBuffer
 from .config import HUDConfig
-from .fields import CPU, FPS, MEM, VERTEX
+from .fields import CPU, FPS, LINE, MEM, VERTEX
 
 
 class MetricSampler(Tickable):
@@ -65,6 +65,13 @@ class MetricSampler(Tickable):
         else:
             self.data.pop(VERTEX, None)
 
+        # ライン数（ポリライン本数）
+        if self._config.show_line_count:
+            lines = self._line_count(self._swap.get_front())
+            self.data[LINE] = f"{lines}"
+        else:
+            self.data.pop(LINE, None)
+
         # CPU/MEM
         if self._config.show_cpu_mem and self._proc is not None:
             try:
@@ -89,3 +96,13 @@ class MetricSampler(Tickable):
                 return f"{n:4.1f}{u}"
             n /= 1024
         return f"{n:4.1f}PB"
+
+    @staticmethod
+    def _line_count(geometry: Geometry | None) -> int:
+        if geometry is None:
+            return 0
+        try:
+            return geometry.n_lines
+        except Exception:
+            # 念のためのフォールバック
+            return int(geometry.offsets.shape[0] - 1) if geometry.offsets.size > 0 else 0

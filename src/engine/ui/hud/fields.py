@@ -9,6 +9,7 @@ from __future__ import annotations
 # 表示キー（ラベルの左側に出るキー文字列）
 FPS = "FPS"
 VERTEX = "VERTEX"
+LINE = "LINE"
 CPU = "CPU"
 MEM = "MEM"
 CACHE_SHAPE = "CACHE/SHAPE"
@@ -17,6 +18,7 @@ CACHE_EFFECT = "CACHE/EFFECT"
 __all__ = [
     "FPS",
     "VERTEX",
+    "LINE",
     "CPU",
     "MEM",
     "CACHE_SHAPE",
