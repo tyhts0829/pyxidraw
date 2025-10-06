@@ -57,8 +57,7 @@ class OverlayHUD(Tickable):
         self._meter_alpha_bg: int = int(self._config.meter_alpha_bg)
         self._meter_color_fg: tuple[int, int, int] = self._config.meter_color_fg
         self._smoothing_alpha: float = float(self._config.smoothing_alpha)
-        self._meter_position: str = "inline_right"
-        self._meter_right_margin_px: int = 10
+        self._meter_left_margin_px: int = 10
         try:
             cfg = _load_config() or {}
             hud_cfg = cfg.get("hud", {})
@@ -79,14 +78,11 @@ class OverlayHUD(Tickable):
                             self._meter_color_fg = (r, g, b)
                         except Exception:
                             pass
-                    pos = meters.get("meter_position")
-                    if isinstance(pos, str) and pos in {"inline_right", "inline_below"}:
-                        self._meter_position = pos
                     self._smoothing_alpha = float(
                         meters.get("smoothing_alpha", self._smoothing_alpha)
                     )
-                    self._meter_right_margin_px = int(
-                        meters.get("meter_right_margin_px", self._meter_right_margin_px)
+                    self._meter_left_margin_px = int(
+                        meters.get("meter_left_margin_px", self._meter_left_margin_px)
                     )
         except Exception:
             # コンフィグ読み込み失敗時は既定を維持
@@ -130,14 +126,9 @@ class OverlayHUD(Tickable):
             if self._config.show_meters:
                 bar_w = int(self._meter_width_px)
                 bar_h = int(self._meter_height_px)
-                if self._meter_position == "inline_right":
-                    # 右端揃え（テキストの右側＝画面右側に表示）
-                    bar_x = int(self.window.width - self._meter_right_margin_px - bar_w)
-                    bar_y = int(y + (line_h - bar_h) // 2)
-                else:  # inline_below
-                    bar_x = int(10)  # ラベル左端に合わせて左寄せ
-                    # 行内の下部に配置（次行と干渉しないよう中央寄せでも可）
-                    bar_y = int(y + 1)
+                # inline（縦位置はラベル行のセンターに揃える）
+                bar_x = int(self._meter_left_margin_px)
+                bar_y = int(y + (line_h - bar_h) // 2)
                 bg = self._bars_bg.get(key)
                 fg = self._bars_fg.get(key)
                 if bg is None:
@@ -236,7 +227,6 @@ class OverlayHUD(Tickable):
         # CACHE: MISS で塗りつぶし（1.0）、HIT で 0.0
         if key in ("CACHE/SHAPE", "CACHE/EFFECT"):
             status = str(self.sampler.data.get(key, "")).upper()
-            print(f"DEBUG: key={key} status={status}")
             if "MISS" in status:
                 return 1.0
             if "HIT" in status:

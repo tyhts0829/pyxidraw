@@ -159,16 +159,14 @@ hud:
     vertex_max: 1000000
     line_max: 1000000
     # 見た目（色/寸法/位置）
-    meter_width_px: 320
+    meter_width_px: 160
     meter_height_px: 6
     meter_gap_px: 6
     meter_alpha_fg: 220
     meter_alpha_bg: 120
     meter_color_fg: [50, 50, 50]
-    # 右端からの余白（inline_right時に有効）
-    meter_right_margin_px: 10
-    # 配置（inline_right / inline_below）
-    meter_position: inline_below
+    # 左端からの余白（inline_below 固定時のバー X 開始位置）
+    meter_left_margin_px: 130
     # 値の平滑化（EMA）
     smoothing_alpha: 0.5
 
