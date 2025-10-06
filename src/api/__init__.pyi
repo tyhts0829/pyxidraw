@@ -132,15 +132,17 @@ class _PipelineBuilder(Protocol):
         ...
     # choices: mode in ['lines', 'cross', 'dots']
     # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
-    # meta: density (type=number, range=[0.0, 100])
-    def fill(self, *, mode: str = ..., angle_rad: float = ..., density: float = ..., **_params: Any) -> _PipelineBuilder:
+    # meta: density (type=number, range=[0.0, 200])
+    # meta: remove_boundary (type=boolean)
+    def fill(self, *, mode: str = ..., angle_rad: float = ..., density: float = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
         閉じた形状をハッチング/ドットで塗りつぶし（純関数）。
 
         引数:
             mode: choices { 'lines', 'cross', 'dots' }
             angle_rad: number, range [0.0, 6.283185307179586]
-            density: number, range [0.0, 100]
+            density: number, range [0.0, 200]
+            remove_boundary: boolean
         """
         ...
     # choices: join in ['mitre', 'round', 'bevel']

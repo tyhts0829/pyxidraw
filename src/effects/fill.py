@@ -19,7 +19,7 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 from .registry import effect
 
 # 塗りつぶし線の最大密度（最大本数）
-MAX_FILL_LINES = 100
+MAX_FILL_LINES = 200
 
 
 def _generate_line_fill(
@@ -343,6 +343,7 @@ def fill(
     mode: str = "lines",
     angle_rad: float = 0.7853981633974483,  # pi/4 ≈ 45°
     density: float = 35.0,
+    remove_boundary: bool = False,
 ) -> Geometry:
     """閉じた形状をハッチング/ドットで塗りつぶし（純関数）。
 
@@ -356,6 +357,8 @@ def fill(
         ハッチ角（ラジアン）。XY 共平面では偶奇規則で内外を判定。
     density : float, default 35.0
         本数/グリッド密度。0 で no-op。最大は内部定数（100）。
+    remove_boundary : bool, default False
+        元の閉じた輪郭線を出力から除去する。False で輪郭を残す。
 
     Notes
     -----
@@ -373,10 +376,11 @@ def fill(
 
     # 平面XYなら複数輪郭を偶奇規則で一括処理（穴を保持）
     if _is_planar_xy(coords):
-        # まず元の輪郭を残す
+        # 元の輪郭を条件に応じて残す
         results: list[np.ndarray] = []
-        for i in range(len(offsets) - 1):
-            results.append(coords[offsets[i] : offsets[i + 1]].copy())
+        if not remove_boundary:
+            for i in range(len(offsets) - 1):
+                results.append(coords[offsets[i] : offsets[i + 1]].copy())
 
         if pat == "lines":
             results.extend(_generate_line_fill_evenodd_multi(coords, offsets, density, ang))
@@ -394,7 +398,13 @@ def fill(
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
         filled_results.extend(
-            _fill_single_polygon(vertices, pattern=pat, density=density, angle=ang)
+            _fill_single_polygon(
+                vertices,
+                pattern=pat,
+                density=density,
+                angle=ang,
+                remove_boundary=remove_boundary,
+            )
         )
 
     if not filled_results:
@@ -408,6 +418,7 @@ fill.__param_meta__ = {
     "mode": {"choices": ["lines", "cross", "dots"]},
     "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES, "step": 1.0},
     "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
+    "remove_boundary": {"type": "boolean"},
 }
 
 
@@ -417,12 +428,13 @@ def _fill_single_polygon(
     pattern: str,
     density: float,
     angle: float,
+    remove_boundary: bool,
 ) -> list[np.ndarray]:
     """単一ポリゴンに対して塗りつぶし線/ドットを生成し、元の輪郭と合わせて返す。"""
     if len(vertices) < 3:
         return [vertices]
 
-    out: list[np.ndarray] = [vertices]
+    out: list[np.ndarray] = [] if remove_boundary else [vertices]
     if pattern == "lines":
         fill_lines = _generate_line_fill(vertices, density, angle)
     elif pattern == "cross":
