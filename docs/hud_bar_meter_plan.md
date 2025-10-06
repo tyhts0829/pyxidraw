@@ -22,8 +22,8 @@
 - `CPU`：`value / 100`。
 - `MEM`：`rss / mem_max_bytes`。`mem_max_bytes` は `psutil.virtual_memory().total` を既定とし、設定で `process_peak`/`custom_bytes` も可（`configs/default.yaml` で上書き可）。
 - `FPS`：`fps / 60.0`（固定 60 を目標）。超過時は 1.0 で頭打ち。
-- `VERTEX`/`LINE`：ローリング上限（観測ピーク）でスケーリング。`peak_decay`（例: 0.99/秒）を設け、過去ピークに引きずられ過ぎないよう緩やかに減衰。
-  - 100% 条件：現在値が「減衰適用後のローリングピーク値」に一致したとき（＝セッション内の“最新ピーク”を更新したとき）。
+- `VERTEX`：`min(vertices / vertex_max, 1.0)`。`vertex_max` は既定 10,000,000（1000万点）。
+- `LINE`：`min(lines / line_max, 1.0)`。`line_max` は既定 5,000,000（500万線）。
 
 設定拡張（`HUDConfig` 案）
 - `show_meters: bool = True`（メータ全体の有効/無効）
@@ -34,7 +34,8 @@
 - `target_fps: float = 60.0`（固定 60）
 - `mem_scale: Literal['system_total','process_peak','custom'] = 'system_total'`（`configs/default.yaml` で上書き可）
 - `mem_custom_bytes: int | None = None`
-- `peak_decay_per_sec: float = 0.98`（LINES/VERTEX のピーク減衰率）
+- `vertex_max: int = 10_000_000`（既定）
+- `line_max: int = 5_000_000`（既定）
 
 実装変更点（小さく安全に）
 1) Sampler を拡張（数値の併走保管）
@@ -50,7 +51,7 @@
 
 3) 設定/API
    - `HUDConfig` に上記項目を追加。既定でメータ ON、互換性維持（設定未指定でも従来表示は維持）。
-   - `configs/default.yaml` に `hud.meters.mem_scale` 等のキーを追加し、`util.utils.load_config()` 経由で解決。
+   - `configs/default.yaml` に `hud.meters.mem_scale`、`hud.meters.vertex_max`、`hud.meters.line_max` 等のキーを追加し、`util.utils.load_config()` 経由で解決。
    - 既存のテキスト HUD と順序ロジックを流用（`resolved_order()`）。
 
 4) ドキュメント
@@ -75,14 +76,15 @@
 - MEM スケール：システム総メモリに対する比（`configs/default.yaml` で上書き可）。
 - 色：単色（段階色なし）。
 - バー寸法：160x6（既定）。
-- VERTEX/LINE の 100%：減衰後のローリングピークと一致時（動的上限）。
+- VERTEX の 100%：1000万点で 100%（固定上限、超過はクリップ）。
+- LINE の 100%：500万線で 100%（固定上限、超過はクリップ）。
 
 タスクチェックリスト（進行管理）
 - [ ] HUDConfig にメータ設定を追加（既定 ON、inline_right 固定）
 - [ ] MetricSampler に `values/ema/peaks` を追加し、各値更新
-- [ ] MEM/FPS/PEAK 正規化ヘルパを実装（単体テスト付き）
+- [ ] MEM/FPS/正規化ヘルパ（固定上限スケーリング）を実装（単体テスト付き）
 - [ ] OverlayHUD にバー描画（矩形再利用）を実装（単色）
-- [ ] `configs/default.yaml` に `hud.meters.mem_scale` 等を追加し、読込実装
+- [ ] `configs/default.yaml` に `hud.meters.mem_scale` / `hud.meters.vertex_max` / `hud.meters.line_max` を追加し、読込実装
 - [ ] ドキュメント更新（architecture.md）
 - [ ] 簡易スクショ作成（任意）
 - [ ] 変更ファイルの ruff/black/isort/mypy/最小 pytest を実施
