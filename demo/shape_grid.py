@@ -21,15 +21,16 @@ from typing import Any, Mapping, Sequence
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import effects  # noqa: F401  # register all effects (for fill)
+
 # 登録の副作用を有効にする
 import shapes  # noqa: F401  # register all shapes
-import effects  # noqa: F401  # register all effects (for fill)
 from api import G, run  # type: ignore  # after sys.path tweak
+from effects.registry import get_effect  # for labeling fill
 from engine.core.geometry import Geometry
 from engine.ui.parameters.introspection import FunctionIntrospector
 from engine.ui.parameters.state import ParameterLayoutConfig
 from shapes.registry import get_shape, list_shapes
-from effects.registry import get_effect  # for labeling fill
 
 # === レイアウト/描画定数 ===================================================
 CELL_SIZE = (100.0, 100.0)  # (w, h)

@@ -10,11 +10,17 @@ import time
 from typing import Literal
 
 import pyglet
+from pyglet.shapes import Rectangle
 from pyglet.window import Window
 
 from ...core.tickable import Tickable
 from .config import HUDConfig
 from .sampler import MetricSampler
+
+try:
+    from util.utils import load_config as _load_config  # type: ignore
+except Exception:  # pragma: no cover - フォールバック
+    _load_config = lambda: {}  # type: ignore[assignment]
 
 
 class OverlayHUD(Tickable):
@@ -39,6 +45,52 @@ class OverlayHUD(Tickable):
         # --- messages/progress ---
         self._messages: list[tuple[str, float, Literal["info", "warn", "error"]]] = []
         self._progress: dict[str, tuple[int, int]] = {}
+        # --- meters (bars) ---
+        self._bars_bg: dict[str, Rectangle] = {}
+        self._bars_fg: dict[str, Rectangle] = {}
+        self._meter_ema: dict[str, float] = {}
+        # メータ表示パラメータ（HUDConfig をベースに default.yaml で上書き）
+        self._meter_width_px: int = int(self._config.meter_width_px)
+        self._meter_height_px: int = int(self._config.meter_height_px)
+        self._meter_gap_px: int = int(self._config.meter_gap_px)
+        self._meter_alpha_fg: int = int(self._config.meter_alpha_fg)
+        self._meter_alpha_bg: int = int(self._config.meter_alpha_bg)
+        self._meter_color_fg: tuple[int, int, int] = self._config.meter_color_fg
+        self._smoothing_alpha: float = float(self._config.smoothing_alpha)
+        self._meter_position: str = "inline_right"
+        self._meter_right_margin_px: int = 10
+        try:
+            cfg = _load_config() or {}
+            hud_cfg = cfg.get("hud", {})
+            if isinstance(hud_cfg, dict):
+                meters = hud_cfg.get("meters", {})
+                if isinstance(meters, dict):
+                    self._meter_width_px = int(meters.get("meter_width_px", self._meter_width_px))
+                    self._meter_height_px = int(
+                        meters.get("meter_height_px", self._meter_height_px)
+                    )
+                    self._meter_gap_px = int(meters.get("meter_gap_px", self._meter_gap_px))
+                    self._meter_alpha_fg = int(meters.get("meter_alpha_fg", self._meter_alpha_fg))
+                    self._meter_alpha_bg = int(meters.get("meter_alpha_bg", self._meter_alpha_bg))
+                    col = meters.get("meter_color_fg")
+                    if isinstance(col, (list, tuple)) and len(col) >= 3:
+                        try:
+                            r, g, b = int(col[0]), int(col[1]), int(col[2])
+                            self._meter_color_fg = (r, g, b)
+                        except Exception:
+                            pass
+                    pos = meters.get("meter_position")
+                    if isinstance(pos, str) and pos in {"inline_right", "inline_below"}:
+                        self._meter_position = pos
+                    self._smoothing_alpha = float(
+                        meters.get("smoothing_alpha", self._smoothing_alpha)
+                    )
+                    self._meter_right_margin_px = int(
+                        meters.get("meter_right_margin_px", self._meter_right_margin_px)
+                    )
+        except Exception:
+            # コンフィグ読み込み失敗時は既定を維持
+            pass
 
     # -------- Tickable --------
     def tick(self, dt: float) -> None:
@@ -74,6 +126,56 @@ class OverlayHUD(Tickable):
                 lab.y = y
             lab.text = f"{key} : {self.sampler.data.get(key, '')}"
             new_labels[key] = lab
+            # メータの座標・EMA を更新
+            if self._config.show_meters:
+                bar_w = int(self._meter_width_px)
+                bar_h = int(self._meter_height_px)
+                if self._meter_position == "inline_right":
+                    # 右端揃え（テキストの右側＝画面右側に表示）
+                    bar_x = int(self.window.width - self._meter_right_margin_px - bar_w)
+                    bar_y = int(y + (line_h - bar_h) // 2)
+                else:  # inline_below
+                    bar_x = int(10)  # ラベル左端に合わせて左寄せ
+                    # 行内の下部に配置（次行と干渉しないよう中央寄せでも可）
+                    bar_y = int(y + 1)
+                bg = self._bars_bg.get(key)
+                fg = self._bars_fg.get(key)
+                if bg is None:
+                    bg = Rectangle(bar_x, bar_y, bar_w, bar_h, color=(50, 50, 50))
+                    bg.opacity = int(self._meter_alpha_bg)
+                    self._bars_bg[key] = bg
+                else:
+                    bg.x = bar_x
+                    bg.y = bar_y
+                    bg.width = bar_w
+                    bg.height = bar_h
+                if fg is None:
+                    r, g, b = self._meter_color_fg
+                    fg = Rectangle(bar_x, bar_y, 0, bar_h, color=(int(r), int(g), int(b)))
+                    fg.opacity = int(self._meter_alpha_fg)
+                    self._bars_fg[key] = fg
+                else:
+                    fg.x = bar_x
+                    fg.y = bar_y
+                    fg.height = bar_h
+                # 正規化値と EMA
+                ratio = self._normalized_ratio(key)
+                if ratio is not None:
+                    prev = self._meter_ema.get(key)
+                    a = float(self._smoothing_alpha)
+                    if prev is None:
+                        ema = float(ratio)
+                    else:
+                        ema = a * float(ratio) + (1.0 - a) * float(prev)
+                    self._meter_ema[key] = ema
+                    fg.width = int(round(bar_w * max(0.0, min(1.0, ema))))
+                else:
+                    self._meter_ema.pop(key, None)
+                    fg.width = 0
+            else:
+                # メータ非表示: キャッシュを掃除
+                self._bars_bg.pop(key, None)
+                self._bars_fg.pop(key, None)
         # 不要になったラベルは破棄（pyglet 側のリソース管理は任せる）
         self._labels = new_labels
         # メッセージの有効期限を掃除
@@ -82,7 +184,16 @@ class OverlayHUD(Tickable):
 
     # -------- draw --------
     def draw(self) -> None:
-        # 既存メトリクス
+        # メータ（バー）を先に描画して、その上にテキストを重ねる
+        if self._config.show_meters:
+            for key in self._labels.keys():
+                bg = self._bars_bg.get(key)
+                fg = self._bars_fg.get(key)
+                if bg is not None:
+                    bg.draw()
+                if fg is not None:
+                    fg.draw()
+        # テキストメトリクス
         for lab in self._labels.values():
             lab.draw()
         # 進捗 (%表示)
@@ -119,6 +230,37 @@ class OverlayHUD(Tickable):
                 color=rgba,
             )
             lbl.draw()
+
+    # -------- helpers --------
+    def _normalized_ratio(self, key: str) -> float | None:
+        # CACHE: MISS で塗りつぶし（1.0）、HIT で 0.0
+        if key in ("CACHE/SHAPE", "CACHE/EFFECT"):
+            status = str(self.sampler.data.get(key, "")).upper()
+            print(f"DEBUG: key={key} status={status}")
+            if "MISS" in status:
+                return 1.0
+            if "HIT" in status:
+                return 0.0
+            return 0.0
+        # Sampler 側で値が無ければ None
+        v = self.sampler.values.get(key)
+        if v is None:
+            return None
+        if key == "CPU":
+            return max(0.0, min(1.0, float(v) / 100.0))
+        if key == "MEM":
+            denom = float(max(1, self.sampler.mem_max_bytes()))
+            return max(0.0, min(1.0, float(v) / denom))
+        if key == "FPS":
+            denom = float(max(1e-6, self.sampler.target_fps()))
+            return max(0.0, min(1.0, float(v) / denom))
+        if key == "VERTEX":
+            denom = float(max(1, self.sampler.vertex_max()))
+            return max(0.0, min(1.0, float(v) / denom))
+        if key == "LINE":
+            denom = float(max(1, self.sampler.line_max()))
+            return max(0.0, min(1.0, float(v) / denom))
+        return None
 
     # ---- public helpers ----
     def show_message(

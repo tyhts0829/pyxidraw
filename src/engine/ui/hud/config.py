@@ -34,6 +34,26 @@ class HUDConfig:
         表示順（None なら既定順）。
     sample_interval : float
         MetricSampler のサンプリング周期（秒）。
+    show_meters : bool
+        横棒メータの表示有無（テキストの右側に表示）。
+    meter_width_px, meter_height_px, meter_gap_px : int
+        メータの横幅/高さ/テキストとの間隔（px）。
+    meter_alpha_fg, meter_alpha_bg : int
+        メータの不透明度（前景/背景, 0..255）。
+    meter_color_fg : tuple[int, int, int]
+        メータ前景のRGB（単色）。
+    smoothing_alpha : float
+        メータのEMA平滑化係数（0..1, 大きいほど追従）。
+    target_fps : float
+        FPS 正規化の基準値（既定 60）。
+    mem_scale : Literal['system_total','process_peak','custom']
+        メモリ正規化の基準。`custom` の場合は `mem_custom_bytes` を使用。
+    mem_custom_bytes : int | None
+        メモリ正規化のカスタム上限（バイト）。
+    vertex_max : int
+        頂点数の固定上限（100%に相当, 既定 10,000,000）。
+    line_max : int
+        ライン本数の固定上限（100%に相当, 既定 5,000,000）。
     """
 
     enabled: bool = True
@@ -44,6 +64,20 @@ class HUDConfig:
     show_cache_status: bool = True
     order: Sequence[str] | None = None
     sample_interval: float = 0.5
+    # meters
+    show_meters: bool = True
+    meter_width_px: int = 160
+    meter_height_px: int = 6
+    meter_gap_px: int = 6
+    meter_alpha_fg: int = 220
+    meter_alpha_bg: int = 120
+    meter_color_fg: tuple[int, int, int] = (0, 120, 220)
+    smoothing_alpha: float = 0.5
+    target_fps: float = 60.0
+    mem_scale: str = "system_total"
+    mem_custom_bytes: int | None = None
+    vertex_max: int = 10_000_000
+    line_max: int = 5_000_000
 
     def resolved_order(self) -> list[str]:
         """有効フラグに基づく既定順を返す（`order` 指定時はそれを優先）。"""

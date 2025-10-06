@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-# pyright: reportMissingImports=false
-
 import math
 import random
 from dataclasses import dataclass
@@ -14,6 +12,9 @@ from common.types import Vec3
 from engine.core.geometry import Geometry
 
 from .registry import shape
+
+# pyright: reportMissingImports=false
+
 
 # SciPy は重いため、必要時に遅延 import（相互依存/CI 安定性のため）
 

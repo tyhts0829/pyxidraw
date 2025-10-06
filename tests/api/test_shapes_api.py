@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from api import G
-from api.shapes import ShapesAPI
+from common.param_utils import params_to_tuple
 from engine.core.geometry import Geometry
 
 
@@ -22,8 +22,8 @@ def test_unknown_shape_attribute_raises() -> None:
 def test_params_to_tuple_stability() -> None:
     arr1 = np.array([1.0, 2.0, 3.0], dtype=np.float32)
     arr2 = np.array([1.0, 2.0, 3.0], dtype=np.float32).reshape(3)
-    t1 = ShapesAPI._params_to_tuple(arr=arr1, s={1, 2}, b=b"abc")
-    t2 = ShapesAPI._params_to_tuple(arr=arr2, s={2, 1}, b=bytearray(b"abc"))
+    t1 = params_to_tuple({"arr": arr1, "s": {1, 2}, "b": b"abc"})
+    t2 = params_to_tuple({"arr": arr2, "s": {2, 1}, "b": bytearray(b"abc")})
     assert t1 == t2
 
 

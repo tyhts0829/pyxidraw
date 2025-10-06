@@ -12,7 +12,7 @@
 - `FPS`：実効フレームレート [Hz]
 
 仕様概要（バー表示）
-- レイアウト：既存テキストの右側に横棒メータをインライン表示（`inline_right` 固定）。下段配置は当面非対応（将来拡張）。
+- レイアウト：既存テキストの右側に横棒メータをインライン表示（既定 `inline_right`）。`configs/default.yaml` の `hud.meters.meter_position` で `inline_below` に変更可。
 - バー幅/高さ：既定 `width=160px`, `height=6px`。行間 `gap=6px`。
 - 色：背景（薄灰, alpha 120）/ 前景（アクセント単色, alpha 220）。段階色は使用しない。
 - 数値表記：従来の `key : value` テキストは維持。バーは補助視覚要素。
@@ -51,7 +51,9 @@
 
 3) 設定/API
    - `HUDConfig` に上記項目を追加。既定でメータ ON、互換性維持（設定未指定でも従来表示は維持）。
-   - `configs/default.yaml` に `hud.meters.mem_scale`、`hud.meters.vertex_max`、`hud.meters.line_max` 等のキーを追加し、`util.utils.load_config()` 経由で解決。
+   - `configs/default.yaml` に `hud.meters.*` キーを追加し、`util.utils.load_config()` 経由で解決。
+     - 視覚: `meter_width_px`, `meter_height_px`, `meter_gap_px`, `meter_alpha_fg`, `meter_alpha_bg`, `meter_color_fg`, `meter_right_margin_px`, `meter_position`, `smoothing_alpha`
+     - 正規化: `mem_scale`, `mem_custom_bytes`, `vertex_max`, `line_max`
    - 既存のテキスト HUD と順序ロジックを流用（`resolved_order()`）。
 
 4) ドキュメント
@@ -71,7 +73,7 @@
 - 依存追加なし（`psutil` は既存利用）。
 
 確定事項（反映済み）
-- 配置：右側（inline_right 固定）。
+- 配置：既定は右側（inline_right）。`configs/default.yaml` で `inline_below` に変更可。
 - FPS 目標：固定 60。
 - MEM スケール：システム総メモリに対する比（`configs/default.yaml` で上書き可）。
 - 色：単色（段階色なし）。
@@ -80,14 +82,14 @@
 - LINE の 100%：500万線で 100%（固定上限、超過はクリップ）。
 
 タスクチェックリスト（進行管理）
-- [ ] HUDConfig にメータ設定を追加（既定 ON、inline_right 固定）
-- [ ] MetricSampler に `values/ema/peaks` を追加し、各値更新
-- [ ] MEM/FPS/正規化ヘルパ（固定上限スケーリング）を実装（単体テスト付き）
-- [ ] OverlayHUD にバー描画（矩形再利用）を実装（単色）
-- [ ] `configs/default.yaml` に `hud.meters.mem_scale` / `hud.meters.vertex_max` / `hud.meters.line_max` を追加し、読込実装
+- [x] HUDConfig にメータ設定を追加（既定 ON、inline_right 固定）
+- [x] MetricSampler に `values` を追加し、各値更新（MEMピーク保持）。
+- [x] MEM/FPS/正規化ヘルパ（固定上限スケーリング）を実装
+- [x] OverlayHUD にバー描画（矩形再利用）を実装（単色）
+- [x] `configs/default.yaml` に `hud.meters.mem_scale` / `hud.meters.vertex_max` / `hud.meters.line_max` を追加し、読込実装
 - [ ] ドキュメント更新（architecture.md）
 - [ ] 簡易スクショ作成（任意）
-- [ ] 変更ファイルの ruff/black/isort/mypy/最小 pytest を実施
+- [x] 変更ファイルの ruff/black/isort/mypy/最小 pytest を実施
 
 影響ファイル（予定）
 - `src/engine/ui/hud/config.py`

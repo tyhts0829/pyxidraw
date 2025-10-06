@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from api import E
 from api.effects import Pipeline, _is_json_like
 from engine.core.geometry import Geometry

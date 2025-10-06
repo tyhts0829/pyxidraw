@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from util.paths import ensure_gcode_dir, ensure_screenshots_dir
 from engine.export.service import ExportService
+from util.paths import ensure_gcode_dir, ensure_screenshots_dir
 
 
 @pytest.mark.smoke

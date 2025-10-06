@@ -4,7 +4,6 @@ import math
 import operator
 from typing import cast
 
-
 ####
 # 直径1の球に内接する正多面体のデータ生成
 ####

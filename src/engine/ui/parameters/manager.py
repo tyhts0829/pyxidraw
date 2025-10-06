@@ -9,8 +9,10 @@ from __future__ import annotations
 from typing import Callable
 
 from engine.core.geometry import Geometry
+from util.utils import load_config
 
 from .controller import ParameterWindowController
+from .persistence import load_overrides, save_overrides
 from .runtime import ParameterRuntime, activate_runtime, deactivate_runtime
 from .state import (
     ParameterLayoutConfig,
@@ -18,8 +20,6 @@ from .state import (
     ParameterThemeConfig,
     ParameterWindowConfig,
 )
-from .persistence import load_overrides, save_overrides
-from util.utils import load_config
 
 
 class ParameterManager:
