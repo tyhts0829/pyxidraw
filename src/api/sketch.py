@@ -310,8 +310,9 @@ def run_sketch(
             try:
                 shape_status = str(flags.get("shape", "MISS"))
                 effect_status = str(flags.get("effect", "MISS"))
-                sampler.data["CACHE/SHAPE"] = shape_status
+                # 効果 → シェイプの順で更新
                 sampler.data["CACHE/EFFECT"] = effect_status
+                sampler.data["CACHE/SHAPE"] = shape_status
             except Exception:
                 pass
 

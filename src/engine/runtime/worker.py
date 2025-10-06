@@ -97,19 +97,19 @@ class _WorkerProcess(mp.Process):
                     after = self.metrics_snapshot() if self.metrics_snapshot is not None else None
                 except Exception:
                     after = None
-                # HIT/MISS の二値判定
+                # HIT/MISS の二値判定（効果 → シェイプの順に判定）
                 flags = None
                 if isinstance(before, dict) and isinstance(after, dict):
                     try:
-                        s_hit = after.get("shape", {}).get("hits", 0) > before.get("shape", {}).get(
-                            "hits", 0
-                        )
                         e_hit = after.get("effect", {}).get("hits", 0) > before.get(
                             "effect", {}
                         ).get("hits", 0)
+                        s_hit = after.get("shape", {}).get("hits", 0) > before.get("shape", {}).get(
+                            "hits", 0
+                        )
                         flags = {
-                            "shape": "HIT" if s_hit else "MISS",
                             "effect": "HIT" if e_hit else "MISS",
+                            "shape": "HIT" if s_hit else "MISS",
                         }
                     except Exception:
                         flags = None

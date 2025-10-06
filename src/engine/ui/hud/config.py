@@ -93,7 +93,8 @@ class HUDConfig:
         if self.show_cpu_mem:
             keys.extend([CPU, MEM])
         if self.show_cache_status:
-            keys.extend([CACHE_SHAPE, CACHE_EFFECT])
+            # 表示順もエフェクト → シェイプに変更
+            keys.extend([CACHE_EFFECT, CACHE_SHAPE])
         return keys
 
 
