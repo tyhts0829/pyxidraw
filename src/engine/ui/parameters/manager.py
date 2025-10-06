@@ -18,6 +18,7 @@ from .state import (
     ParameterThemeConfig,
     ParameterWindowConfig,
 )
+from .persistence import load_overrides, save_overrides
 from util.utils import load_config
 
 
@@ -92,6 +93,11 @@ class ParameterManager:
             self._user_draw(0.0)
         finally:
             deactivate_runtime()
+        # ここで Descriptor が確定しているため、GUI マウント前に override を復元
+        try:
+            load_overrides(self.store)
+        except Exception:
+            pass
         descriptors = self.store.descriptors()
         if descriptors:
             self.controller.start()
@@ -110,4 +116,9 @@ class ParameterManager:
             deactivate_runtime()
 
     def shutdown(self) -> None:
+        # 終了時に override を保存（フェイルソフト）
+        try:
+            save_overrides(self.store)
+        except Exception:
+            pass
         self.controller.shutdown()

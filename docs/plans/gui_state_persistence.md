@@ -70,15 +70,15 @@
 
 ## 実装チェックリスト（作業単位）
 
-- [ ] `src/engine/ui/parameters/persistence.py` を追加（JSON 読書き + 量子化 + 例外安全）。
-- [ ] `ParameterManager.initialize()` にロード処理を追加（GUI 起動前に適用）。
-- [ ] `ParameterManager.shutdown()` にセーブ処理を追加（終了時に保存）。
-- [ ] `util.utils.load_config()` を用いた `parameter_gui.state_dir` の解決を実装。
-- [ ] 保存フォルダが存在しない場合に作成（`mkdir(parents=True, exist_ok=True)`）。
-- [ ] ベクトル/enum/bool/int/float のシリアライズ/デシリアライズ互換を確認。
-- [ ] 量子化: RangeHint/VectorRangeHint の step を優先し、無い場合は 1e-6（`PXD_PIPELINE_QUANT_STEP` 可）で丸め。
-- [ ] エラー時のフェイルソフト（読み込み失敗時は無視・新規起動、保存失敗はログのみ）。
-- [ ] ドキュメント更新（本計画を README/architecture にリンク、AGENTS.md の運用項目は現状維持）。
+- [x] `src/engine/ui/parameters/persistence.py` を追加（JSON 読書き + 量子化 + 例外安全）。
+- [x] `ParameterManager.initialize()` にロード処理を追加（GUI 起動前に適用）。
+- [x] `ParameterManager.shutdown()` にセーブ処理を追加（終了時に保存）。
+- [x] `util.utils.load_config()` を用いた `parameter_gui.state_dir` の解決を実装。
+- [x] 保存フォルダが存在しない場合に作成（`mkdir(parents=True, exist_ok=True)`）。
+- [x] ベクトル/enum/bool/int/float のシリアライズ/デシリアライズ互換を確認。
+- [x] 量子化: RangeHint/VectorRangeHint の step を優先し、無い場合は 1e-6（`PXD_PIPELINE_QUANT_STEP` 可）で丸め。
+- [x] エラー時のフェイルソフト（読み込み失敗時は無視・新規起動、保存失敗はログのみ）。
+– [ ] ドキュメント更新（本計画を README/architecture にリンク、AGENTS.md の運用項目は現状維持）。
 - [ ] 最小テスト追加（単体）
   - [ ] 登録 →override 設定 → 保存 → 新規 Store へロード → 値一致。
   - [ ] provided 値は保存対象外であること（現行仕様の保持）。
