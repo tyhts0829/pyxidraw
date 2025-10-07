@@ -3,10 +3,10 @@ from __future__ import annotations
 """
 概要（アルゴリズム要約）
 - 各ポリラインを XY 平面へ射影（場合により回転を伴う）
-- パターン（lines/cross/dots）に応じて塗りつぶし要素を生成
+- 指定した本数の方向（角度）でハッチ線を生成
 - 生成要素を元の 3D 姿勢に戻して合成
 
-密度は線/ドットの本数として扱い、最大で 100 本（グリッドでは 100×100）を生成します。
+密度は線の本数スケールとして扱い、最大で 200 本を生成します。
 """
 
 
@@ -20,6 +20,8 @@ from .registry import effect
 
 # 塗りつぶし線の最大密度（最大本数）
 MAX_FILL_LINES = 200
+NONPLANAR_EPS_ABS = 1e-5
+NONPLANAR_EPS_REL = 1e-4
 
 
 def _generate_line_fill(
@@ -105,72 +107,7 @@ def _generate_line_fill(
     return fill_lines
 
 
-def _generate_cross_fill(
-    vertices: np.ndarray, density: float, angle: float = 0.0
-) -> list[np.ndarray]:
-    """クロスハッチ塗りつぶしパターンを生成します。"""
-    lines1 = _generate_line_fill(vertices, density, angle)
-    lines2 = _generate_line_fill(vertices, density, angle + np.pi / 2)
-    return lines1 + lines2
-
-
-def _generate_dot_fill(vertices: np.ndarray, density: float) -> list[np.ndarray]:
-    """ドット塗りつぶしパターンを生成します。
-
-    実装メモ:
-    - レンダラは線分のみ描画するため「点」は表示されない。
-      そのため各グリッド点を小さな「クロス（＋）」の2線分として表現する。
-    - クロスのサイズはグリッド間隔に比例（視認性と過密回避のバランス）。
-    """
-    # Transform to XY plane
-    vertices_2d, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
-    coords_2d = vertices_2d[:, :2]
-
-    # Calculate bounding box
-    min_x, min_y = np.min(coords_2d, axis=0)
-    max_x, max_y = np.max(coords_2d, axis=0)
-
-    # Calculate spacing (inversed: 0=few dots, 1=many dots)
-    if density <= 0:
-        return []
-
-    # Calculate spacing for dot grid
-    # At density=1.0, we want many dots (MAX_FILL_LINES x MAX_FILL_LINES grid)
-    # At density=0.1, we want fewer dots
-    grid_size = int(round(density))
-    if grid_size < 2:
-        grid_size = 2
-    if grid_size > MAX_FILL_LINES:
-        grid_size = MAX_FILL_LINES
-    spacing = min(max_x - min_x, max_y - min_y) / grid_size
-    if spacing <= 0:
-        return []
-
-    # Pre-calculate grid points for better performance
-    x_values = np.arange(min_x, max_x + spacing, spacing)
-    y_values = np.arange(min_y, max_y + spacing, spacing)
-
-    # Use batch processing for finding dots (centers)
-    centers = find_dots_in_polygon(coords_2d, x_values, y_values)
-
-    # Represent a dot as a small cross of two short segments
-    r = float(spacing) * 0.18  # size ratio tuned for clarity
-    if r <= 0:
-        return []
-
-    out_lines: list[np.ndarray] = []
-    for i in range(len(centers)):
-        cx, cy = float(centers[i, 0]), float(centers[i, 1])
-        # Horizontal tiny segment
-        seg_h_2d = np.array([[cx - r, cy], [cx + r, cy]], dtype=np.float32)
-        seg_h_3d = np.hstack([seg_h_2d, np.zeros((2, 1), dtype=np.float32)])
-        out_lines.append(transform_back(seg_h_3d, rotation_matrix, z_offset))
-        # Vertical tiny segment
-        seg_v_2d = np.array([[cx, cy - r], [cx, cy + r]], dtype=np.float32)
-        seg_v_3d = np.hstack([seg_v_2d, np.zeros((2, 1), dtype=np.float32)])
-        out_lines.append(transform_back(seg_v_3d, rotation_matrix, z_offset))
-
-    return out_lines
+# 旧 cross/dots パターンは angle_sets による複方向ハッチへ統合
 
 
 # ── 偶奇規則ベースの多輪郭塗り（平面XY向け） ─────────────────────────────────
@@ -180,6 +117,28 @@ def _is_planar_xy(coords: np.ndarray, eps: float = 1e-6) -> bool:
         return False
     z = coords[:, 2]
     return float(np.max(z) - np.min(z)) <= float(eps)
+
+
+def _is_polygon_planar(
+    vertices: np.ndarray, *, eps_abs: float = NONPLANAR_EPS_ABS, eps_rel: float = NONPLANAR_EPS_REL
+) -> bool:
+    """単一ポリラインが“ほぼ平面”かを簡易判定する。
+
+    - `transform_to_xy_plane` で先頭3点が張る平面へ整列し、z 残差の最大値を評価する。
+    - 閾値は絶対/相対の最大値（相対は元座標のバウンディングボックス対角でスケール不変）。
+    """
+    if vertices.shape[0] < 3:
+        return False
+    v = np.asarray(vertices, dtype=np.float32)
+    v2d, _R, _z = transform_to_xy_plane(v)
+    z = v2d[:, 2]
+    z_span = float(np.max(np.abs(z))) if z.size else 0.0
+    # 元座標の対角長
+    mins = np.min(v, axis=0)
+    maxs = np.max(v, axis=0)
+    diag = float(np.sqrt(np.sum((maxs - mins) ** 2)))
+    threshold = max(float(eps_abs), float(eps_rel) * diag)
+    return z_span <= threshold
 
 
 def _generate_line_fill_evenodd_multi(
@@ -261,76 +220,7 @@ def _generate_line_fill_evenodd_multi(
     return out_lines
 
 
-def _generate_cross_fill_evenodd_multi(
-    coords: np.ndarray, offsets: np.ndarray, density: float, angle: float = 0.0
-) -> list[np.ndarray]:
-    """偶奇規則のクロスハッチ（XY 平面前提）。"""
-    lines1 = _generate_line_fill_evenodd_multi(coords, offsets, density, angle)
-    lines2 = _generate_line_fill_evenodd_multi(coords, offsets, density, angle + np.pi / 2)
-    return lines1 + lines2
-
-
-@njit(cache=True)
-def _point_in_polylines_evenodd_njit(
-    coords_2d: np.ndarray, offsets: np.ndarray, x: float, y: float
-) -> bool:
-    """複数ポリライン（2D）の偶奇規則内外判定。"""
-    inside = False
-    for i in range(len(offsets) - 1):
-        start = offsets[i]
-        end = offsets[i + 1]
-        if end - start < 3:
-            continue
-        poly = coords_2d[start:end]
-        if point_in_polygon_njit(poly, x, y):
-            inside = not inside
-    return inside
-
-
-def _generate_dot_fill_evenodd_multi(
-    coords: np.ndarray, offsets: np.ndarray, density: float
-) -> list[np.ndarray]:
-    """偶奇規則のドット（XY 平面前提、点は小さな十字）。"""
-    if density <= 0 or offsets.size <= 1:
-        return []
-
-    coords_2d = coords[:, :2].astype(np.float32, copy=False)
-    min_xy = np.min(coords_2d, axis=0)
-    max_xy = np.max(coords_2d, axis=0)
-    min_x, min_y = float(min_xy[0]), float(min_xy[1])
-    max_x, max_y = float(max_xy[0]), float(max_xy[1])
-
-    grid_size = int(round(float(density)))
-    if grid_size < 2:
-        grid_size = 2
-    if grid_size > MAX_FILL_LINES:
-        grid_size = MAX_FILL_LINES
-    spacing = min(max_x - min_x, max_y - min_y) / float(grid_size)
-    if spacing <= 0:
-        return []
-
-    x_values = np.arange(min_x, max_x + spacing, spacing, dtype=np.float32)
-    y_values = np.arange(min_y, max_y + spacing, spacing, dtype=np.float32)
-
-    r = float(spacing) * 0.18
-    if r <= 0:
-        return []
-
-    z0 = float(coords[0, 2])
-    offsets_i32 = offsets.astype(np.int32, copy=False)
-    out_lines: list[np.ndarray] = []
-    for yy in y_values:
-        for xx in x_values:
-            if _point_in_polylines_evenodd_njit(coords_2d, offsets_i32, float(xx), float(yy)):
-                # 小十字
-                seg_h_2d = np.array([[xx - r, yy], [xx + r, yy]], dtype=np.float32)
-                seg_v_2d = np.array([[xx, yy - r], [xx, yy + r]], dtype=np.float32)
-                seg_h_3d = np.hstack([seg_h_2d, np.full((2, 1), z0, dtype=np.float32)])
-                seg_v_3d = np.hstack([seg_v_2d, np.full((2, 1), z0, dtype=np.float32)])
-                out_lines.append(seg_h_3d)
-                out_lines.append(seg_v_3d)
-
-    return out_lines
+## 旧 cross/dots パターン関連の補助関数は廃止
 
 
 ## 以前の Python 実装ヘルパは NumPy/Numba 実装へ統合済みのため削除
@@ -340,23 +230,23 @@ def _generate_dot_fill_evenodd_multi(
 def fill(
     g: Geometry,
     *,
-    mode: str = "lines",
+    angle_sets: int = 1,
     angle_rad: float = 0.7853981633974483,  # pi/4 ≈ 45°
     density: float = 35.0,
     remove_boundary: bool = False,
 ) -> Geometry:
-    """閉じた形状をハッチング/ドットで塗りつぶし（純関数）。
+    """閉じた形状をハッチングで塗りつぶし（純関数）。
 
     Parameters
     ----------
     g : Geometry
         入力ジオメトリ。各行が 1 本のポリライン。
-    mode : str, default 'lines'
-        'lines'|'cross'|'dots'。0 本（density<=0）で no-op。
+    angle_sets : int, default 1
+        ハッチ方向の本数（1=単方向, 2=90°クロス, 3=60°間隔, ...）。
     angle_rad : float, default pi/4
         ハッチ角（ラジアン）。XY 共平面では偶奇規則で内外を判定。
     density : float, default 35.0
-        本数/グリッド密度。0 で no-op。最大は内部定数（100）。
+        ハッチ密度（本数のスケール）。0 で no-op。最大は内部定数（100）。
     remove_boundary : bool, default False
         元の閉じた輪郭線を出力から除去する。False で輪郭を残す。
 
@@ -364,15 +254,16 @@ def fill(
     -----
     間隔は未回転の参照高さに基づき角度に依存せず一定だが、スキャン範囲は角度を考慮した
     作業座標で決まるため、角度により実生成本数は多少変動する。
+    非XY共平面の入力では輪郭ごとの個別処理を行い、このとき各ポリラインが十分に平面で
+    ないと判定された場合は塗りをスキップして元の境界のみを返す。
     """
     coords, offsets = g.as_arrays(copy=False)
     if density <= 0 or offsets.size <= 1:
         return Geometry(coords.copy(), offsets.copy())
 
     density = max(0.0, min(MAX_FILL_LINES, float(density)))
-
-    pat = mode or "lines"
-    ang = float(angle_rad)
+    k = int(angle_sets) if int(angle_sets) > 0 else 1
+    ang0 = float(angle_rad)
 
     # 平面XYなら複数輪郭を偶奇規則で一括処理（穴を保持）
     if _is_planar_xy(coords):
@@ -382,14 +273,10 @@ def fill(
             for i in range(len(offsets) - 1):
                 results.append(coords[offsets[i] : offsets[i + 1]].copy())
 
-        if pat == "lines":
-            results.extend(_generate_line_fill_evenodd_multi(coords, offsets, density, ang))
-        elif pat == "cross":
-            results.extend(_generate_cross_fill_evenodd_multi(coords, offsets, density, ang))
-        elif pat == "dots":
-            results.extend(_generate_dot_fill_evenodd_multi(coords, offsets, density))
-        else:
-            results.extend(_generate_line_fill_evenodd_multi(coords, offsets, density, ang))
+        # 180° / k 間隔で k 方向のハッチを合成
+        for i in range(k):
+            ang_i = ang0 + (np.pi / k) * i
+            results.extend(_generate_line_fill_evenodd_multi(coords, offsets, density, ang_i))
 
         return Geometry.from_lines(results)
 
@@ -400,9 +287,9 @@ def fill(
         filled_results.extend(
             _fill_single_polygon(
                 vertices,
-                pattern=pat,
+                angle_sets=k,
                 density=density,
-                angle=ang,
+                angle=ang0,
                 remove_boundary=remove_boundary,
             )
         )
@@ -415,7 +302,7 @@ def fill(
 
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
 fill.__param_meta__ = {
-    "mode": {"choices": ["lines", "cross", "dots"]},
+    "angle_sets": {"type": "integer", "min": 1, "max": 6, "step": 1},
     "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES, "step": 1.0},
     "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
     "remove_boundary": {"type": "boolean"},
@@ -425,7 +312,7 @@ fill.__param_meta__ = {
 def _fill_single_polygon(
     vertices: np.ndarray,
     *,
-    pattern: str,
+    angle_sets: int,
     density: float,
     angle: float,
     remove_boundary: bool,
@@ -433,17 +320,15 @@ def _fill_single_polygon(
     """単一ポリゴンに対して塗りつぶし線/ドットを生成し、元の輪郭と合わせて返す。"""
     if len(vertices) < 3:
         return [vertices]
+    # 平面性が不足する場合は塗りをスキップ（境界のみ返す）
+    if not _is_polygon_planar(vertices):
+        return [vertices]
 
     out: list[np.ndarray] = [] if remove_boundary else [vertices]
-    if pattern == "lines":
-        fill_lines = _generate_line_fill(vertices, density, angle)
-    elif pattern == "cross":
-        fill_lines = _generate_cross_fill(vertices, density, angle)
-    elif pattern == "dots":
-        fill_lines = _generate_dot_fill(vertices, density)
-    else:
-        fill_lines = _generate_line_fill(vertices, density, angle)
-    out.extend(fill_lines)
+    k = int(angle_sets) if int(angle_sets) > 0 else 1
+    for i in range(k):
+        ang_i = angle + (np.pi / k) * i
+        out.extend(_generate_line_fill(vertices, density, ang_i))
     return out
 
 
@@ -505,21 +390,4 @@ def generate_line_intersections_batch(polygon: np.ndarray, y_values: np.ndarray)
     return results
 
 
-@njit(cache=True)
-def find_dots_in_polygon(
-    polygon: np.ndarray, x_values: np.ndarray, y_values: np.ndarray
-) -> np.ndarray:
-    """ポリゴン内部のグリッド点を高速に検索（Numba最適化版）。"""
-    # 結果配列を事前確保
-    max_points = len(x_values) * len(y_values)
-    points = np.empty((max_points, 2))
-    count = 0
-
-    for y in y_values:
-        for x in x_values:
-            if point_in_polygon_njit(polygon, x, y):
-                points[count, 0] = x
-                points[count, 1] = y
-                count += 1
-
-    return points[:count]
+## 旧 dots 用の交点探索は削除

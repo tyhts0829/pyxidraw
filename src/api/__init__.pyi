@@ -130,16 +130,16 @@ class _PipelineBuilder(Protocol):
             center_mode: choices { 'origin', 'auto' }
         """
         ...
-    # choices: mode in ['lines', 'cross', 'dots']
+    # meta: angle_sets (type=integer, range=[1, 6])
     # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
     # meta: density (type=number, range=[0.0, 200])
     # meta: remove_boundary (type=boolean)
-    def fill(self, *, mode: str = ..., angle_rad: float = ..., density: float = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
+    def fill(self, *, angle_sets: int = ..., angle_rad: float = ..., density: float = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
-        閉じた形状をハッチング/ドットで塗りつぶし（純関数）。
+        閉じた形状をハッチングで塗りつぶし（純関数）。
 
         引数:
-            mode: choices { 'lines', 'cross', 'dots' }
+            angle_sets: integer, range [1, 6]
             angle_rad: number, range [0.0, 6.283185307179586]
             density: number, range [0.0, 200]
             remove_boundary: boolean

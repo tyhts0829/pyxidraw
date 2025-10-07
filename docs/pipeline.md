@@ -20,7 +20,7 @@ base = G.polygon(n_sides=6)
 pipe = (
     E.pipeline
      .rotate(pivot=(200, 200, 0), angles_rad=(0, 0, 0.5))
-     .fill(mode="lines", angle_rad=0.0, density=0.6)
+     .fill(angle_sets=1, angle_rad=0.0, density=0.6)
      .build()
 )
 out = pipe(base)

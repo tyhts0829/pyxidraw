@@ -132,7 +132,7 @@ def _make_label_geo(text: str, origin: tuple[float, float]) -> Geometry:
         try:
             fill_fn = get_effect("fill")
             # 既定パラメータでハッチング（lines, angle=45°, density=35）
-            g = fill_fn(g, angle_rad=0, density=50)
+            g = fill_fn(g, angle_rad=0, density=50, angle_sets=4)
         except Exception:
             # フォント/numba 不在などの環境差は無視してアウトラインのみ描画
             pass

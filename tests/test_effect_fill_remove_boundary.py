@@ -21,7 +21,7 @@ def _all_lines(g):
 def test_fill_keep_boundary_default():
     g = G.polygon(n_sides=4)
     in_first = _first_line_coords(g)
-    pipe = E.pipeline.fill(mode="lines", density=10).build()
+    pipe = E.pipeline.fill(angle_sets=1, density=10).build()
     out = pipe(g)
     out_first = _first_line_coords(out)
     assert np.array_equal(in_first, out_first)
@@ -30,7 +30,7 @@ def test_fill_keep_boundary_default():
 def test_fill_remove_boundary_true():
     g = G.polygon(n_sides=4)
     in_first = _first_line_coords(g)
-    pipe = E.pipeline.fill(mode="lines", angle_rad=0.0, density=10, remove_boundary=True).build()
+    pipe = E.pipeline.fill(angle_sets=1, angle_rad=0.0, density=10, remove_boundary=True).build()
     out = pipe(g)
     lines = _all_lines(out)
     # 元ポリゴン線と完全一致するラインが含まれないこと
