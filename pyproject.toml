@@ -3,12 +3,12 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyxidraw5"
+name = "pyxidraw"
 version = "0.0.0"
 description = "Procedural line-geometry framework with effects and realtime rendering"
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{name = "PyXidraw5 contributors"}]
+authors = [{name = "PyXidraw contributors"}]
 license = {text = "MIT"}
 
 # ランタイム最小依存

@@ -146,7 +146,7 @@ def quantize_params(
     """パラメータ辞書を `step` に基づいて量子化する。
 
     - 数値/ベクトル: `__param_meta__[name]['step']` を優先し、無ければ環境変数
-      `PXD_PIPELINE_QUANT_STEP`、それも無ければ 1e-3。
+      `PXD_PIPELINE_QUANT_STEP`、それも無ければ 1e-6。
     - それ以外: 値はそのまま。
     """
     step_default = _env_quant_step(default_step)
