@@ -51,3 +51,6 @@ out = pipe(base)
 - `api/__init__.pyi` は `tools/gen_g_stubs.py` により自動生成。
 - 形状 `G` とエフェクト `E.pipeline` のメソッドには引数の短い説明を含む。
 - スタブは CI で同期検証（`tests/test_g_stub_sync.py`）。
+
+## 関連ユーティリティ
+- 時間変調（LFO）: パイプライン外の補助として `from api import lfo` を提供。詳細は `docs/lfo_spec.md` を参照。LFO は時間 `t` を入力に 0..1 の値を返し、効果パラメータや形状引数の連続変化に用いる。

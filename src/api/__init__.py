@@ -27,6 +27,7 @@ from shapes.registry import (
 )  # 公開唯一経路（api.shape）。shape_registry では再輸出しない。
 
 from .cc import cc
+from .lfo import lfo as lfo
 from .effects import E
 
 # 主要API
@@ -39,6 +40,7 @@ __all__ = [
     "G",  # 形状ファクトリ
     "E",  # エフェクトファクトリ
     "cc",  # 現在フレームの CC（MIDI）
+    "lfo",  # 低周波オシレータ（時間変調ユーティリティ）
     "shape",  # ユーザー拡張用デコレータ（唯一の公開経路）
     "effect",  # ユーザー拡張用デコレータ（唯一の公開経路）
     "run_sketch",  # 実行（詳細指定）

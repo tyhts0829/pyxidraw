@@ -373,7 +373,7 @@ Tips:
 - ワーカは Python マルチプロセスのため、起動コストや共有メモリの制約がある。短時間のスケッチでは `workers=1` も検討。
 
 ## 参考: 主要モジュールの対応表
-- API: `src/api/__init__.py`, `effects.py`, `sketch.py`, `shapes.py`
+- API: `src/api/__init__.py`, `effects.py`, `sketch.py`, `shapes.py`, `lfo.py`
 - Engine/Core: `core/geometry.py`, `core/frame_clock.py`, `core/render_window.py`, `core/tickable.py`
 - Engine/Runtime: `runtime/worker.py`, `runtime/receiver.py`, `runtime/buffer.py`
 - Engine/Render: `render/renderer.py`, `render/line_mesh.py`, `render/shader.py`

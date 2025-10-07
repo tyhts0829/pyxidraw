@@ -11,6 +11,7 @@
 - パイプライン/API: `docs/pipeline.md`
 - エフェクト一覧: `docs/effects.md`
 - シェイプ一覧: `docs/shapes.md`
+- LFO 仕様: `docs/lfo_spec.md`
 - 開発環境セットアップ: `docs/dev-setup.md`
 - コーディング規約/運用ガイド: `AGENTS.md`
 
@@ -59,6 +60,17 @@ def ring(*, r: float = 60.0, n: int = 200) -> Geometry:
     return Geometry.from_lines([xy])
 
 g = G.ring(r=80)
+```
+
+### 時間変調（LFO）の使用例
+```
+from api import lfo, cc
+
+osc = lfo(wave="sine", freq=0.25)  # 4秒周期で 0..1 を往復
+
+def user_draw(t):
+    r = 40 + 20 * osc(t) + 10 * cc[1]  # LFO と CC を併用
+    # ... r を使って Geometry を生成 ...
 ```
 
 ## 任意依存（実機/高速化など）

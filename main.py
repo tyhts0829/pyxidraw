@@ -8,10 +8,12 @@ sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
 
 import numpy as np
 
-from api import E, G, cc, run  # type: ignore  # after sys.path tweak
+from api import E, G, cc, lfo, run  # type: ignore  # after sys.path tweak
 from engine.core.geometry import Geometry  # type: ignore
 
 CANVAS_SIZE = 400
+
+osc = lfo(wave="sine", freq=0.1, octaves=4, persistence=0.5, lacunarity=2.0)
 
 
 def draw(t: float) -> Geometry:
@@ -25,7 +27,8 @@ def draw(t: float) -> Geometry:
         E.pipeline.affine(angles_rad=(cc[3] * np.pi, cc[4] * np.pi, cc[5] * np.pi))
         .fill(density=cc[6] * 200)
         .subdivide()
-        .displace(t_sec=t * cc[7] * 2)
+        .displace()
+        # .displace(t_sec=osc(t * cc[7]) * 100 * cc[8])
         .build()
     )
     return pipe(base)
@@ -35,7 +38,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
-        render_scale=3,
+        render_scale=5,
         use_midi=True,
         use_parameter_gui=True,
         workers=3,
