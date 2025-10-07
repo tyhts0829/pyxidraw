@@ -6,3 +6,4 @@ GUIのみ使ってMIDI機器を使わなかったときのパラメータ保存
 Numbaの環境変数統一
 頂点数、cpu, メモリをメーター化
 dashify線の重なり除去
+displaceのspacial_freqをVec3に変更

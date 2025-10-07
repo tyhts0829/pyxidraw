@@ -152,9 +152,9 @@ midi_devices:
 hud:
   meters:
     # メモリ正規化スケール（system_total/process_peak/custom）
-    mem_scale: system_total
+    mem_scale: custom
     # カスタム上限（mem_scale=custom 時のみ有効, bytes）
-    mem_custom_bytes: null
+    mem_custom_bytes: 2048000000
     # 頂点/ラインの固定上限（100%相当）
     vertex_max: 1000000
     line_max: 1000000
