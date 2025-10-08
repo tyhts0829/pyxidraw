@@ -10,6 +10,8 @@ from __future__ import annotations
 """
 
 
+from typing import Iterable
+
 import numpy as np
 from numba import njit  # type: ignore[attr-defined]
 
@@ -230,9 +232,9 @@ def _generate_line_fill_evenodd_multi(
 def fill(
     g: Geometry,
     *,
-    angle_sets: int = 1,
-    angle_rad: float = 0.7853981633974483,  # pi/4 ≈ 45°
-    density: float = 35.0,
+    angle_sets: int | list[int] | tuple[int, ...] = 1,
+    angle_rad: float | list[float] | tuple[float, ...] = 0.7853981633974483,  # pi/4 ≈ 45°
+    density: float | list[float] | tuple[float, ...] = 35.0,
     remove_boundary: bool = False,
 ) -> Geometry:
     """閉じた形状をハッチングで塗りつぶし（純関数）。
@@ -241,12 +243,15 @@ def fill(
     ----------
     g : Geometry
         入力ジオメトリ。各行が 1 本のポリライン。
-    angle_sets : int, default 1
+    angle_sets : int | list[int] | tuple[int, ...], default 1
         ハッチ方向の本数（1=単方向, 2=90°クロス, 3=60°間隔, ...）。
-    angle_rad : float, default pi/4
-        ハッチ角（ラジアン）。XY 共平面では偶奇規則で内外を判定。
-    density : float, default 35.0
-        ハッチ密度（本数のスケール）。0 で no-op。最大は内部定数（100）。
+        配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
+    angle_rad : float | list[float] | tuple[float, ...], default pi/4
+        ハッチ角（ラジアン）。配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
+        XY 共平面では外環＋穴のグループ単位で適用。
+    density : float | list[float] | tuple[float, ...], default 35.0
+        ハッチ密度（本数のスケール）。配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
+        0 以下はその図形では no-op。最大は内部定数（200）。
     remove_boundary : bool, default False
         元の閉じた輪郭線を出力から除去する。False で輪郭を残す。
 
@@ -258,25 +263,73 @@ def fill(
     ないと判定された場合は塗りをスキップして元の境界のみを返す。
     """
     coords, offsets = g.as_arrays(copy=False)
-    if density <= 0 or offsets.size <= 1:
+
+    def _as_float_seq(x: float | Iterable[float]) -> list[float]:
+        if isinstance(x, (int, float, np.floating)):
+            return [float(x)]
+        if isinstance(x, (list, tuple)):
+            return [float(v) for v in x]
+        # その他 Iterable は受け取らない（仕様上 list/tuple のみ）
+        raise TypeError("angle_rad/density は float または list/tuple[float] を指定してください")
+
+    density_seq = _as_float_seq(density)  # type: ignore[arg-type]
+    angle_seq = _as_float_seq(angle_rad)  # type: ignore[arg-type]
+
+    def _as_int_seq(x: int | Iterable[int]) -> list[int]:
+        if isinstance(x, (int, np.integer)):
+            return [int(x)]
+        if isinstance(x, (list, tuple)):
+            return [int(v) for v in x]
+        raise TypeError("angle_sets は int または list/tuple[int] を指定してください")
+
+    angle_sets_seq = _as_int_seq(angle_sets)  # type: ignore[arg-type]
+
+    if offsets.size <= 1:
         return Geometry(coords.copy(), offsets.copy())
 
-    density = max(0.0, min(MAX_FILL_LINES, float(density)))
-    k = int(angle_sets) if int(angle_sets) > 0 else 1
-    ang0 = float(angle_rad)
+    if all(d <= 0.0 for d in density_seq):
+        return Geometry(coords.copy(), offsets.copy())
+
+    # angle_sets は図形（グループ）ごとに決定する（配列時はサイクル）
 
     # 平面XYなら複数輪郭を偶奇規則で一括処理（穴を保持）
     if _is_planar_xy(coords):
-        # 元の輪郭を条件に応じて残す
         results: list[np.ndarray] = []
+
+        # 1) 境界保持（必要時）
         if not remove_boundary:
             for i in range(len(offsets) - 1):
                 results.append(coords[offsets[i] : offsets[i + 1]].copy())
 
-        # 180° / k 間隔で k 方向のハッチを合成
-        for i in range(k):
-            ang_i = ang0 + (np.pi / k) * i
-            results.extend(_generate_line_fill_evenodd_multi(coords, offsets, density, ang_i))
+        # 2) 外環＋穴のグループ化（入力順の外環ごとにグループを構成）
+        groups = _build_evenodd_groups(coords, offsets)
+
+        # 3) グループ単位で density/angle/angle_sets を順番適用し、方向を合成
+        for gi, ring_indices in enumerate(groups):
+            d = density_seq[gi % len(density_seq)]
+            if d <= 0.0:
+                continue
+            d = max(0.0, min(MAX_FILL_LINES, float(d)))
+            # グループの頂点配列にまとめ直し
+            lines: list[np.ndarray] = []
+            for idx in ring_indices:
+                s, e = int(offsets[idx]), int(offsets[idx + 1])
+                lines.append(coords[s:e])
+            if not lines:
+                continue
+            g_coords = np.concatenate(lines, axis=0)
+            g_offsets = np.zeros(len(lines) + 1, dtype=np.int32)
+            acc = 0
+            for i, ln in enumerate(lines):
+                acc += ln.shape[0]
+                g_offsets[i + 1] = acc
+
+            base_ang = angle_seq[gi % len(angle_seq)]
+            k_i = angle_sets_seq[gi % len(angle_sets_seq)]
+            k_i = int(k_i) if int(k_i) > 0 else 1
+            for i in range(k_i):
+                ang_i = float(base_ang) + (np.pi / k_i) * i
+                results.extend(_generate_line_fill_evenodd_multi(g_coords, g_offsets, d, ang_i))
 
         return Geometry.from_lines(results)
 
@@ -284,12 +337,21 @@ def fill(
     filled_results: list[np.ndarray] = []
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
+        d = density_seq[i % len(density_seq)]
+        if d <= 0.0:
+            # 塗り線無し、境界だけ保持
+            if not remove_boundary:
+                filled_results.append(vertices)
+            continue
+        base_ang = angle_seq[i % len(angle_seq)]
+        k_i = angle_sets_seq[i % len(angle_sets_seq)]
+        k_i = int(k_i) if int(k_i) > 0 else 1
         filled_results.extend(
             _fill_single_polygon(
                 vertices,
-                angle_sets=k,
-                density=density,
-                angle=ang0,
+                angle_sets=k_i,
+                density=max(0.0, min(MAX_FILL_LINES, float(d))),
+                angle=float(base_ang),
                 remove_boundary=remove_boundary,
             )
         )
@@ -388,6 +450,87 @@ def generate_line_intersections_batch(polygon: np.ndarray, y_values: np.ndarray)
         if len(intersections) >= 2:
             results.append((y, intersections))
     return results
+
+
+# ── グルーピング補助（XY 共平面、偶奇規則の外環＋穴をグループ化） ────────────────
+def _polygon_area_signed_2d(poly2d: np.ndarray) -> float:
+    x = poly2d[:, 0]
+    y = poly2d[:, 1]
+    # shoelace（閉路前提、最終辺は自動で %n ）
+    s = 0.0
+    n = poly2d.shape[0]
+    for i in range(n):
+        j = (i + 1) % n
+        s += float(x[i] * y[j] - x[j] * y[i])
+    return 0.5 * s
+
+
+def _polygon_centroid_2d(poly2d: np.ndarray) -> tuple[float, float]:
+    a = _polygon_area_signed_2d(poly2d)
+    if abs(a) < 1e-12:
+        c = np.mean(poly2d, axis=0)
+        return float(c[0]), float(c[1])
+    cx = 0.0
+    cy = 0.0
+    n = poly2d.shape[0]
+    for i in range(n):
+        j = (i + 1) % n
+        cross = float(poly2d[i, 0] * poly2d[j, 1] - poly2d[j, 0] * poly2d[i, 1])
+        cx += (poly2d[i, 0] + poly2d[j, 0]) * cross
+        cy += (poly2d[i, 1] + poly2d[j, 1]) * cross
+    f = 1.0 / (6.0 * a)
+    return float(cx * f), float(cy * f)
+
+
+def _build_evenodd_groups(coords: np.ndarray, offsets: np.ndarray) -> list[list[int]]:
+    n = len(offsets) - 1
+    if n <= 0:
+        return []
+    polys2d: list[np.ndarray] = []
+    centroids: list[tuple[float, float]] = []
+    areas: list[float] = []
+    for i in range(n):
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        p2d = coords[s:e, :2].astype(np.float32, copy=False)
+        polys2d.append(p2d)
+        centroids.append(_polygon_centroid_2d(p2d))
+        areas.append(abs(_polygon_area_signed_2d(p2d)))
+
+    containers: list[list[int]] = [[] for _ in range(n)]
+    for i in range(n):
+        cx, cy = centroids[i]
+        for j in range(n):
+            if i == j:
+                continue
+            if point_in_polygon_njit(polys2d[j], float(cx), float(cy)):
+                containers[i].append(j)
+
+    is_outer = [(len(containers[i]) % 2) == 0 for i in range(n)]
+    outer_indices = [i for i in range(n) if is_outer[i]]
+    groups: dict[int, list[int]] = {oi: [oi] for oi in outer_indices}
+
+    for i in range(n):
+        if is_outer[i]:
+            continue
+        cands = [j for j in outer_indices if j in containers[i]]
+        if cands:
+            # 最も内側の外環（面積が最小）を親にする
+            j_best = min(cands, key=lambda j: areas[j])
+            groups.setdefault(j_best, []).append(i)
+        else:
+            # 外環が見つからない稀なケースは単独グループに
+            groups.setdefault(i, []).append(i)
+
+    # 入力順に外環を並べ、グループのリングも入力順に並べる
+    ordered: list[list[int]] = []
+    for oi in outer_indices:
+        ring_is = groups.get(oi, [oi])
+        ordered.append(sorted(ring_is))
+    # 孤立グループ（外環が穴扱いになった等）の救済
+    for k, v in groups.items():
+        if k not in outer_indices:
+            ordered.append(sorted(v))
+    return ordered
 
 
 ## 旧 dots 用の交点探索は削除

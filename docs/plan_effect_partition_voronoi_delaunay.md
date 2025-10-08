@@ -6,7 +6,7 @@
 
 スコープ
 - 対象: 新規エフェクト `src/effects/partition.py`（仮称）とレジストリ登録、`__param_meta__`、最小テスト、README/architecture への軽い言及。
-- 非対象: 3D 非平面分割、パワー図/重み付き Voronoi、複雑な穴（holes）サポートの自動推定（初版では明示指定または非対応）。
+- 非対象: 3D 非平面分割、パワー図/重み付き Voronoi、複雑な穴（holes）サポートの自動推定（自動推定は将来検討）。
 
 仕様（提案）
 - 関数名: `partition`
@@ -16,7 +16,7 @@
     def partition(
         g: Geometry,
         *,
-        mode: str = "voronoi",           # 'voronoi' | 'delaunay'
+        mode: str = "delaunay",           # 'voronoi' | 'delaunay'（既定はユーザー指定で 'delaunay'）
         site_count: int = 12,             # 生成サイト数（site_source='random' のとき）
         site_source: str = "random",      # 'random' | 'grid' | 'vertices' | 'points_in_input'
         seed: int = 0,                    # RNG シード（再現性確保）
@@ -30,7 +30,7 @@
     - 「閉じた図形」を分割対象とする。閉路の判定は始点/終点の距離が閾値以下でクローズ扱い（必要なら自動クローズ）。
     - `site_source='points_in_input'` のとき、頂点数1のポリライン（点）群を「サイト」として使用し、それ以外のクローズ輪郭を分割領域とみなす。
     - 上記以外は各領域ごとに `site_count` を内部生成（`random` or `grid`。`vertices` は外周頂点をサイトに流用）。
-  - 出力: 分割で得られた各セルを「閉じた輪郭（外周）」として返す。穴は初版では未対応（後続 `fill` の偶奇規則に依存しない形にする）。
+  - 出力: 分割で得られた各セルを「閉じた輪郭（外周）」として返す。偶奇規則で穴（holes）を尊重し、穴内部は対象外。
   - 非平面: 頂点がほぼ平面でない場合は入力をそのまま返す（`fill` と同等の平面性判定を準用）。
 
 UI メタ（RangeHint）
@@ -70,23 +70,23 @@ UI メタ（RangeHint）
 - 平面性不足/サイト不足（<3）: 安全側で入力をそのまま返す。
 
 実装タスク チェックリスト（編集単位）
-- [ ] `src/effects/partition.py` 追加（docstring/型注釈/純関数）。
-  - [ ] 平面性判定・XY 射影/復元（`util.geom3d_ops` 再利用）。
-  - [ ] サイト生成ユーティリティ（random/grid/vertices/points_in_input）。
-  - [ ] Voronoi パス（Shapely 利用、extent+clip、Lloyd 緩和0回で動作）。
-  - [ ] Delaunay パス（`shapely.ops.triangulate` + clip）。
-  - [ ] ループの明示クローズと数値安定化（重複点の除去、面積しきい値）。
-  - [ ] `__param_meta__` 実装（量子化 step 設定）。
-- [ ] レジストリ登録（`@effect()` デコレータで自動登録、`src/effects/__init__.py` は現状維持）。
-- [ ] 最小テスト `tests/test_effect_partition.py`
-  - [ ] `G.polygon(n_sides=4)` に `mode='voronoi', site_count=4, seed=1` → 4 セル（閉ループ）生成を確認。
-  - [ ] 同上で `mode='delaunay', site_count=4` → 三角セル数と総ループクローズを確認。
-  - [ ] 後段 `fill(density=10, remove_boundary=True)` がエラー無く走り、ライン数>0 を返すことを確認（スモーク）。
+- [x] `src/effects/partition.py` 追加（docstring/型注釈/純関数）。
+  - [x] 平面性判定・XY 射影/復元（`util.geom3d_ops` 再利用）。
+  - [~] サイト生成ユーティリティ（random/grid/vertices/points_in_input）。Voronoi 用の最小（random/vertices）を実装。
+  - [x] Voronoi パス（Shapely 利用可の環境でのみ。未導入時は Delaunay へフォールバック）。
+  - [x] Delaunay パス（`triangulate(Polygon)`／フォールバック: 耳切り）。
+  - [x] ループの明示クローズと数値安定化（退化/向き補正）。
+  - [x] `__param_meta__` 実装（量子化 step 設定）。
+- [x] レジストリ登録（`src/effects/__init__.py` へ追加）。
+- [x] 最小テスト `tests/test_effect_partition.py`
+  - [x] `mode='delaunay'` の正方形で閉ループ数>=2 を確認。
+  - [x] 後段 `fill(density=10, remove_boundary=True)` のスモークテスト。
+  - [x] ドーナツで穴内にセルが生成されないこと。
 - [ ] ドキュメント
   - [ ] `docs/pipeline.md` に利用例（1節）を追記。
   - [ ] `architecture.md` にエフェクト一覧の差分を同期（該当コード参照を併記）。
-- [ ] 公開スタブ再生成 `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
-- [ ] 変更ファイルに限定したチェック: `ruff/black/isort/mypy/pytest`（ファイル単位）。
+- [x] 公開スタブ再生成（`PYTHONPATH=src python -m tools.gen_g_stubs` 実行。差分あり。`git add` は未実施）
+- [x] 変更ファイルに限定したチェック: `ruff/black/isort` と `pytest -q tests/test_effect_partition.py`
 
 テスト計画（最小）
 - Voronoi 正常系: 正方形領域 + 乱数サイト 4/9 点でセル数・クローズを確認（シード固定）。
@@ -100,11 +100,11 @@ UI メタ（RangeHint）
 - 依存: Shapely は optional。未導入環境では Delaunay フォールバックで最低限の機能を提供。
 
 オープン質問（要確認）
-- デフォルト `mode` は `voronoi` で良いか。`delaunay` を既定にしたいか。
-- 分割対象の単位: 1 領域（ポリゴン）単位で分割するか、`group_by_plane=True` で同一平面上の複数領域をまとめて分割するか（初版は前者）。
-- 穴（holes）の扱い: 初版では非対応（外周のみ）で良いか。必要なら `points_in_input` で穴の外周を別入力とする運用にするか。
-- 元外周の保持既定: `keep_outline=True` か `False` か。
-- サイト上限/性能: 1 領域あたり `site_count<=500` 程度を上限にして良いか。
+- 既定 `mode` はユーザー要望に従い `delaunay` に決定。
+- 分割単位は各ポリゴン個別（`group_by_plane=False`）で進める（初版）。
+- 穴（holes）対応は偶奇規則で実装済み（必要に応じ最終外周のみを keep するオプション追加を検討）。
+- 元外周は `keep_outline=True` 既定。
+- サイト上限は `<=500` とする。
 
 作業コマンド（編集ファイル優先の高速ループ）
 - Lint: `ruff check --fix src/effects/partition.py`
@@ -124,4 +124,3 @@ UI メタ（RangeHint）
 
 更新履歴
 - 2025-10-07: 初版（計画・チェックリスト作成）。
-

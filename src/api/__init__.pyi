@@ -134,7 +134,7 @@ class _PipelineBuilder(Protocol):
     # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
     # meta: density (type=number, range=[0.0, 200])
     # meta: remove_boundary (type=boolean)
-    def fill(self, *, angle_sets: int = ..., angle_rad: float = ..., density: float = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
+    def fill(self, *, angle_sets: int | list[int] | tuple[int, ...] = ..., angle_rad: float | list[float] | tuple[float, ...] = ..., density: float | list[float] | tuple[float, ...] = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
         閉じた形状をハッチングで塗りつぶし（純関数）。
 
@@ -156,6 +156,17 @@ class _PipelineBuilder(Protocol):
             join: choices { 'mitre', 'round', 'bevel' }
             segments_per_circle: integer, range [1, 100]
             distance: number, range [0.0, 25.0]
+        """
+        ...
+    # meta: site_count (type=integer, range=[1, 500])
+    # meta: seed (type=integer, range=[0, 2147483647])
+    def partition(self, *, site_count: int = ..., seed: int = ..., **_params: Any) -> _PipelineBuilder:
+        """
+        平面内の領域（偶奇規則）を Voronoi で分割し閉ループ群を返す（Shapely 必須）。
+
+        引数:
+            site_count: integer, range [1, 500]
+            seed: integer, range [0, 2147483647]
         """
         ...
     # meta: count (type=integer, range=[0, 25])

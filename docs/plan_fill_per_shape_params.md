@@ -17,36 +17,36 @@
   - 既存の `common.param_utils.quantize_params` は list/tuple に対応済み（成分ごと量子化→tuple 化）。追加対応は不要。
 
 実装タスク（チェックリスト）
-- [ ] `fill()` の型注釈と docstring を更新（配列受け入れとサイクリング仕様を明記）。
-- [ ] `density`/`angle_rad` の正規化ヘルパを追加（`_normalize_scalar_or_seq(x) -> list[float]`）。
-- [ ] XY 共平面パスのグルーピング実装:
-  - [ ] 各ポリラインの 2D 重心点を計算。
-  - [ ] `point_in_polygon_njit` を用いて包含関係（他ポリゴンに内包される数）を算出し、偶奇で外環/内環を判定。
-  - [ ] 各外環ごとに直下の内包リング（穴）を集めて 1 グループ化。
-  - [ ] グループ順（入力出現順の外環）に対し `density_seq[i%Ld]`/`angle_seq[i%La]` を割当。
-  - [ ] 既存の `_generate_line_fill_evenodd_multi` をグループ単位で呼び出し、`angle_sets` を適用して合成。
-  - [ ] `remove_boundary` の挙動を維持（False なら境界線を先頭に残す）。
-- [ ] 非平面パスの適用順序変更:
-  - [ ] 各ポリラインを個別処理し、インデックスに基づき `density`/`angle` をサイクル割当。
-  - [ ] 既存の平面性チェックとスキップ条件は維持。
-- [ ] 既存の `__param_meta__` は数値のまま据え置き。必要に応じ docstring に GUI 非対応注記を追記。
-- [ ] スタブ生成の型表現更新:
-  - [ ] `tools/gen_g_stubs._annotation_for_effect_param` を拡張し、`tuple[float, ...]` を正しく `tuple[float, ...]` として描画（現在の `Ellipsis` 表示を修正）。
-  - [ ] `list[float]` はそのまま描画。追加 import は不要（`list[...]` は組込み）
-  - [ ] 生成後、`src/api/__init__.pyi` の `fill` の引数型が `float | list[float] | tuple[float, ...]` になっていることを確認。
+- [x] `fill()` の型注釈と docstring を更新（配列受け入れとサイクリング仕様を明記）。
+- [x] `density`/`angle_rad` の正規化ヘルパを追加（`_normalize_scalar_or_seq(x) -> list[float]`）。
+- [x] XY 共平面パスのグルーピング実装:
+  - [x] 各ポリラインの 2D 重心点を計算。
+  - [x] `point_in_polygon_njit` を用いて包含関係（他ポリゴンに内包される数）を算出し、偶奇で外環/内環を判定。
+  - [x] 各外環ごとに直下の内包リング（穴）を集めて 1 グループ化。
+  - [x] グループ順（入力出現順の外環）に対し `density_seq[i%Ld]`/`angle_seq[i%La]` を割当。
+  - [x] 既存の `_generate_line_fill_evenodd_multi` をグループ単位で呼び出し、`angle_sets` を適用して合成。
+  - [x] `remove_boundary` の挙動を維持（False なら境界線を先頭に残す）。
+- [x] 非平面パスの適用順序変更:
+  - [x] 各ポリラインを個別処理し、インデックスに基づき `density`/`angle` をサイクル割当。
+  - [x] 既存の平面性チェックとスキップ条件は維持。
+- [x] 既存の `__param_meta__` は数値のまま据え置き。必要に応じ docstring に GUI 非対応注記を追記。
+- [x] スタブ生成の型表現更新:
+  - [x] `tools/gen_g_stubs._annotation_for_effect_param` を拡張し、`tuple[float, ...]` を正しく `tuple[float, ...]` として描画（現在の `Ellipsis` 表示を修正）。
+  - [x] `list[float]` はそのまま描画。追加 import は不要（`list[...]` は組込み）
+  - [x] 生成後、`src/api/__init__.pyi` の `fill` の引数型が `float | list[float] | tuple[float, ...]` になっていることを確認。
 
-テスト計画（変更ファイル優先）
+- テスト計画（変更ファイル優先）
 - 追加テスト（`tests/effects/test_fill_per_shape_params.py`）
-  - [ ] 平面・離散 3 図形: `density=[5,10,20]`, `angle=[0, pi/2]`, `angle_sets=1`
-    - 各図形の重心に対して出力線の中点が内包される線分を集計し、本数がおおよそ `density` に一致すること。
-    - 角度は各図形で交差角が異なること（方向ベクトルの atan2 で比較）。
+  - [x] 平面・離散 3 図形: `density=[5,10,20]`, `angle=[0, pi/2]`, `angle_sets=1`
+    - [x] 各図形の重心に対して出力線の中点が内包される線分を集計し、本数がおおよそ `density` に一致すること（概数比較）。
+    - [x] 角度は各図形で交差角が異なること（横/縦の判定で検証）。
   - [ ] サイクル動作: 5 図形に対し `density=[3,7]`, `angle=[0]` で 1,3,5 番目が 3、2,4 番目が 7 付近の本数になること。
   - [ ] 非平面 2 図形: 各図形に別々の `density/angle` が適用されること（境界保持含む）。
-  - [ ] 後方互換: スカラ指定時に既存テスト（`tests/test_effect_fill_*`）がすべて緑のままであること。
+  - [x] 後方互換: スカラ指定時に既存テスト（`tests/test_effect_fill_*`）がすべて緑のままであること。
 - 検証手順
-  - ruff/black/isort/mypy: 変更ファイルに限定して実行。
-  - pytest: 追加テストと既存の `tests/test_effect_fill_*` を優先実行。
-  - スタブ同期: `python -m tools.gen_g_stubs && git add src/api/__init__.pyi` → `pytest -q tests/stubs/test_g_stub_sync.py`。
+  - [x] ruff/black/isort/mypy: 変更ファイルに限定して実行。
+  - [x] pytest: 追加テストと既存の `tests/test_effect_fill_*` を優先実行。
+  - [x] スタブ同期: 生成して `tests/stubs/test_g_stub_sync.py` を緑化。
 
 互換性・リスク・方針
 - 後方互換: 既存コードはスカラ指定を継続利用可能。デフォルト値・既存メタは不変。

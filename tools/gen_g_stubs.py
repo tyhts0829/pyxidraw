@@ -265,6 +265,11 @@ def _annotation_for_effect_param(tp: Any, imports: set[str]) -> str:
 
         # Tuple[...] -> まず Vec3 判定、それ以外は組み込みの tuple[...] 記法
         if origin in (tuple,):
+            # 可変長タプル: tuple[T, ...]
+            if len(args) == 2 and args[1] is Ellipsis:
+                first = _annotation_for_effect_param(args[0], imports)
+                return f"tuple[{first}, ...]"
+            # 固定長3の float タプルは Vec3 へ
             if len(args) == 3 and all(a is float for a in args):
                 imports.add("from common.types import Vec3")
                 return "Vec3"
