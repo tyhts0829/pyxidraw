@@ -239,6 +239,21 @@ class ParameterValueResolver:
         )
         # choices は後で param_meta から渡すよう `_determine_value_type` と resolve 経路を拡張してもよい
         if source == "default":
+            # string の複数行/高さヒント（meta）を解釈
+            multiline = False
+            height: int | None = None
+            try:
+                if value_type == "string" and isinstance(meta_map, Mapping):
+                    ml_raw = meta_map.get("multiline")
+                    if isinstance(ml_raw, bool):
+                        multiline = ml_raw
+                    h_raw = meta_map.get("height")
+                    if isinstance(h_raw, (int, float)):
+                        height = int(h_raw)
+            except Exception:
+                multiline = False
+                height = None
+
             descriptor = ParameterDescriptor(
                 id=descriptor_id,
                 label=f"{context.label_prefix}: {param_name}",
@@ -250,6 +265,8 @@ class ParameterValueResolver:
                 help_text=doc,
                 supported=supported,
                 choices=choices_list,
+                string_multiline=multiline,
+                string_height=height,
             )
             self._store.register(descriptor, value)
             return self._store.resolve(descriptor.id, value)

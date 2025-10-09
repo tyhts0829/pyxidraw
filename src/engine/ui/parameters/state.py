@@ -59,6 +59,9 @@ class ParameterDescriptor:
     vector_hint: VectorRangeHint | None = None
     supported: bool = True
     choices: list[str] | None = None
+    # string 入力用 UI ヒント（明示制御）
+    string_multiline: bool = False
+    string_height: int | None = None
 
 
 @dataclass

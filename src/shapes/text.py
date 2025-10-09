@@ -383,9 +383,9 @@ def text(
                     )
             cur_x_em += _get_char_advance_em(ch, tt_font) + tracking_em
 
-        # 次の行へ（下方向へ）
+        # 次の行へ（下方向へ）。描画座標は Y 正が下方向のため、正方向に進める。
         if li < len(lines) - 1:
-            y_em -= float(line_height)
+            y_em += float(line_height)
 
     return Geometry.from_lines(all_vertices)
 
@@ -394,7 +394,7 @@ setattr(
     text,
     "__param_meta__",
     {
-        "text": {"type": "string"},
+        "text": {"type": "string", "multiline": True, "height": 80},
         "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
         # font は自由入力させない（GUI 非表示にするため choices を空に）
         "font": {"choices": []},

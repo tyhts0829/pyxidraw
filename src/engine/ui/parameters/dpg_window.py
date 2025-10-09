@@ -263,15 +263,22 @@ else:
                     user_data=desc.id,
                 )
             if vt == "string":
-                # 単一行の自由入力（multiline は採用しない）
-                txt_id = dpg.add_input_text(
-                    tag=desc.id,
-                    parent=parent,
-                    label="",
-                    default_value=str(value) if value is not None else "",
-                    callback=self._on_widget_change,
-                    user_data=desc.id,
-                )
+                # 自由入力（__param_meta__ で multiline/height を明示制御）
+                ml = bool(getattr(desc, "string_multiline", False))
+                h = getattr(desc, "string_height", None)
+                _kwargs: dict[str, Any] = {
+                    "tag": desc.id,
+                    "parent": parent,
+                    "label": "",
+                    "default_value": str(value) if value is not None else "",
+                    "callback": self._on_widget_change,
+                    "user_data": desc.id,
+                }
+                if ml:
+                    _kwargs["multiline"] = True
+                    if isinstance(h, int) and h > 0:
+                        _kwargs["height"] = int(h)
+                txt_id = dpg.add_input_text(**_kwargs)
                 dpg.set_item_width(txt_id, -1)
                 return txt_id
             if vt == "vector":
