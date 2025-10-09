@@ -158,14 +158,14 @@ class _PipelineBuilder(Protocol):
             distance: number, range [0.0, 25.0]
         """
         ...
-    # meta: site_count (type=integer, range=[1, 500])
+    # meta: site_count (type=integer, range=[12, 500])
     # meta: seed (type=integer, range=[0, 2147483647])
     def partition(self, *, site_count: int = ..., seed: int = ..., **_params: Any) -> _PipelineBuilder:
         """
         平面内の領域（偶奇規則）を Voronoi で分割し閉ループ群を返す（Shapely 必須）。
 
         引数:
-            site_count: integer, range [1, 500]
+            site_count: integer, range [12, 500]
             seed: integer, range [0, 2147483647]
         """
         ...

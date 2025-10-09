@@ -425,6 +425,6 @@ def partition(
 
 # UI RangeHint（量子化粒度は step を設定）
 cast(Any, partition).__param_meta__ = {
-    "site_count": {"type": "integer", "min": 1, "max": 500, "step": 1},
+    "site_count": {"type": "integer", "min": 12, "max": 500, "step": 1},
     "seed": {"type": "integer", "min": 0, "max": 2_147_483_647, "step": 1},
 }
