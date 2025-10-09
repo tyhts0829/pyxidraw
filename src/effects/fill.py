@@ -11,6 +11,7 @@ from __future__ import annotations
 
 
 from typing import Iterable
+import os
 
 import numpy as np
 from numba import njit  # type: ignore[attr-defined]
@@ -24,6 +25,16 @@ from .registry import effect
 MAX_FILL_LINES = 200
 NONPLANAR_EPS_ABS = 1e-5
 NONPLANAR_EPS_REL = 1e-4
+
+
+def _debug_enabled() -> bool:
+    v = os.environ.get("PXD_FILL_DEBUG", "0")
+    return v not in ("0", "", "false", "False", "FALSE")
+
+
+def _dbg(*args: object) -> None:
+    if _debug_enabled():
+        print("[fill.debug]", *args)
 
 
 def _generate_line_fill(
@@ -113,7 +124,7 @@ def _generate_line_fill(
 
 
 # ── 偶奇規則ベースの多輪郭塗り（平面XY向け） ─────────────────────────────────
-def _is_planar_xy(coords: np.ndarray, eps: float = 1e-6) -> bool:
+def _is_planar_xy(coords: np.ndarray, eps: float = 1e-3) -> bool:
     """全頂点の z が一定（XY 平面上）かの簡易判定。"""
     if coords.size == 0:
         return False
@@ -144,7 +155,11 @@ def _is_polygon_planar(
 
 
 def _generate_line_fill_evenodd_multi(
-    coords: np.ndarray, offsets: np.ndarray, density: float, angle: float = 0.0
+    coords: np.ndarray,
+    offsets: np.ndarray,
+    density: float,
+    angle: float = 0.0,
+    spacing_override: float | None = None,
 ) -> list[np.ndarray]:
     """複数輪郭を偶奇規則でまとめてハッチング（XY 平面前提）。"""
     if density <= 0 or offsets.size <= 1:
@@ -176,13 +191,16 @@ def _generate_line_fill_evenodd_multi(
     min_y = float(np.min(work_2d[:, 1]))
     max_y = float(np.max(work_2d[:, 1]))
 
-    num_lines = int(round(float(density)))
-    if num_lines < 2:
-        num_lines = 2
-    if num_lines > MAX_FILL_LINES:
-        num_lines = MAX_FILL_LINES
-    spacing = ref_height / float(num_lines)  # 角度に依らない一定間隔
-    if spacing <= 0:
+    if spacing_override is None:
+        num_lines = int(round(float(density)))
+        if num_lines < 2:
+            num_lines = 2
+        if num_lines > MAX_FILL_LINES:
+            num_lines = MAX_FILL_LINES
+        spacing = ref_height / float(num_lines)  # 角度に依らない一定間隔
+    else:
+        spacing = float(spacing_override)
+    if not np.isfinite(spacing) or spacing <= 0:
         return []
 
     y_values = np.arange(min_y, max_y, spacing, dtype=np.float32)
@@ -293,7 +311,19 @@ def fill(
     # angle_sets は図形（グループ）ごとに決定する（配列時はサイクル）
 
     # 平面XYなら複数輪郭を偶奇規則で一括処理（穴を保持）
-    if _is_planar_xy(coords):
+    planar_xy = _is_planar_xy(coords)
+    if _debug_enabled():
+        try:
+            z = coords[:, 2]
+            z_min = float(np.min(z)) if z.size else 0.0
+            z_max = float(np.max(z)) if z.size else 0.0
+            _dbg(
+                f"planar_xy={planar_xy} z_span={z_max - z_min:.6g} z_min={z_min:.6g} z_max={z_max:.6g} rings={len(offsets) - 1}"
+            )
+        except Exception as e:  # 安全側
+            _dbg(f"planar_xy_debug_failed: {e}")
+
+    if planar_xy:
         results: list[np.ndarray] = []
 
         # 1) 境界保持（必要時）
@@ -303,6 +333,28 @@ def fill(
 
         # 2) 外環＋穴のグループ化（入力順の外環ごとにグループを構成）
         groups = _build_evenodd_groups(coords, offsets)
+        # 全体の未回転高さ（共通間隔の基準）
+        ref_min_y_g = float(np.min(coords[:, 1]))
+        ref_max_y_g = float(np.max(coords[:, 1]))
+        ref_height_global = ref_max_y_g - ref_min_y_g
+        if ref_height_global <= 0:
+            return Geometry(coords.copy(), offsets.copy())
+        if _debug_enabled():
+            _dbg(f"ref_height_global={ref_height_global:.6g}")
+        if _debug_enabled():
+            _dbg(f"groups={len(groups)} (XY even-odd)")
+            for gi, ring_indices in enumerate(groups):
+                parts: list[str] = []
+                for idx in ring_indices:
+                    s, e = int(offsets[idx]), int(offsets[idx + 1])
+                    p2d = coords[s:e, :2]
+                    try:
+                        area = _polygon_area_signed_2d(p2d)
+                        cx, cy = _polygon_centroid_2d(p2d)
+                        parts.append(f"{idx}(area={area:.3g},c=({cx:.3g},{cy:.3g}))")
+                    except Exception:
+                        parts.append(f"{idx}")
+                _dbg(f" group[{gi}] rings: " + ", ".join(parts))
 
         # 3) グループ単位で density/angle/angle_sets を順番適用し、方向を合成
         for gi, ring_indices in enumerate(groups):
@@ -327,16 +379,44 @@ def fill(
             base_ang = angle_seq[gi % len(angle_seq)]
             k_i = angle_sets_seq[gi % len(angle_sets_seq)]
             k_i = int(k_i) if int(k_i) > 0 else 1
+            # 全体高さを基準に本数→間隔を決定（各グループで共通の“見かけ密度”）
+            num_lines = int(round(float(d)))
+            if num_lines < 2:
+                num_lines = 2
+            if num_lines > MAX_FILL_LINES:
+                num_lines = MAX_FILL_LINES
+            spacing_glob = ref_height_global / float(num_lines)
             for i in range(k_i):
                 ang_i = float(base_ang) + (np.pi / k_i) * i
-                results.extend(_generate_line_fill_evenodd_multi(g_coords, g_offsets, d, ang_i))
+                results.extend(
+                    _generate_line_fill_evenodd_multi(
+                        g_coords, g_offsets, d, ang_i, spacing_override=spacing_glob
+                    )
+                )
 
         return Geometry.from_lines(results)
 
     # 非平面は従来通りポリゴン個別に処理
+    if _debug_enabled():
+        _dbg("fallback_nonplanar=True (per-polygon processing)")
     filled_results: list[np.ndarray] = []
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
+        if _debug_enabled():
+            try:
+                v = np.asarray(vertices, dtype=np.float32)
+                v2d, _R, _z = transform_to_xy_plane(v)
+                z = v2d[:, 2]
+                z_span = float(np.max(np.abs(z))) if z.size else 0.0
+                mins = np.min(v, axis=0)
+                maxs = np.max(v, axis=0)
+                diag = float(np.sqrt(np.sum((maxs - mins) ** 2)))
+                thr = max(float(NONPLANAR_EPS_ABS), float(NONPLANAR_EPS_REL) * diag)
+                _dbg(
+                    f" poly[{i}] z_span={z_span:.6g} diag={diag:.6g} thr={thr:.6g} planar={(z_span <= thr)} n={len(v)}"
+                )
+            except Exception as e:  # 安全側
+                _dbg(f" poly[{i}] diag_failed: {e}")
         d = density_seq[i % len(density_seq)]
         if d <= 0.0:
             # 塗り線無し、境界だけ保持
@@ -489,24 +569,43 @@ def _build_evenodd_groups(coords: np.ndarray, offsets: np.ndarray) -> list[list[
     polys2d: list[np.ndarray] = []
     centroids: list[tuple[float, float]] = []
     areas: list[float] = []
+    reps: list[tuple[float, float]] = []  # 各リングの代表点（第1頂点）
+    if _debug_enabled():
+        _dbg(f"_build_evenodd_groups: rings={n}")
     for i in range(n):
         s, e = int(offsets[i]), int(offsets[i + 1])
         p2d = coords[s:e, :2].astype(np.float32, copy=False)
         polys2d.append(p2d)
         centroids.append(_polygon_centroid_2d(p2d))
         areas.append(abs(_polygon_area_signed_2d(p2d)))
+        # 代表点（第1頂点）— 内包判定のサンプルとして重心ではなく頂点を用いる
+        if p2d.shape[0] > 0:
+            reps.append((float(p2d[0, 0]), float(p2d[0, 1])))
+        else:
+            reps.append((float("nan"), float("nan")))
+        if _debug_enabled():
+            cx, cy = centroids[-1]
+            rx, ry = reps[-1]
+            _dbg(
+                f" poly[{i}] centroid=({cx:.3g},{cy:.3g}) rep=({rx:.3g},{ry:.3g}) area_abs={areas[-1]:.3g}"
+            )
 
     containers: list[list[int]] = [[] for _ in range(n)]
     for i in range(n):
-        cx, cy = centroids[i]
+        rx, ry = reps[i]
         for j in range(n):
             if i == j:
                 continue
-            if point_in_polygon_njit(polys2d[j], float(cx), float(cy)):
+            # リング i の代表点（頂点）がリング j に内包されるか
+            if point_in_polygon_njit(polys2d[j], float(rx), float(ry)):
                 containers[i].append(j)
+        if _debug_enabled():
+            _dbg(f" poly[{i}] containers={containers[i]}")
 
     is_outer = [(len(containers[i]) % 2) == 0 for i in range(n)]
     outer_indices = [i for i in range(n) if is_outer[i]]
+    if _debug_enabled():
+        _dbg(f" outer_indices={outer_indices}")
     groups: dict[int, list[int]] = {oi: [oi] for oi in outer_indices}
 
     for i in range(n):
@@ -530,6 +629,8 @@ def _build_evenodd_groups(coords: np.ndarray, offsets: np.ndarray) -> list[list[
     for k, v in groups.items():
         if k not in outer_indices:
             ordered.append(sorted(v))
+    if _debug_enabled():
+        _dbg(" groups_ordered=" + "; ".join(f"{gi}:{grp}" for gi, grp in enumerate(ordered)))
     return ordered
 
 
