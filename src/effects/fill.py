@@ -40,8 +40,8 @@ import numpy as np
 from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
-from util.geom3d_ops import transform_back, transform_to_xy_plane
 from util.geom3d_frame import choose_coplanar_frame
+from util.geom3d_ops import transform_back, transform_to_xy_plane
 from util.polygon_grouping import build_evenodd_groups
 
 from .registry import effect
@@ -167,6 +167,20 @@ def _spacing_from_height(height: float, density: float) -> float:
     return float(height) / float(num_lines)
 
 
+def _scan_span_for_angle_xy(coords_2d: np.ndarray, angle: float) -> float:
+    """XY 座標群に対し、角度 `angle` のスキャン方向（y'=x*sinθ + y*cosθ）のスパン長を返す。
+
+    - 入力は XY 整列済みの 2D 座標を想定。
+    - 戻り値は max(y')-min(y')。点数が不足するなどで無効な場合は 0.0。
+    """
+    if coords_2d.size == 0:
+        return 0.0
+    s = float(np.sin(angle))
+    c = float(np.cos(angle))
+    y_proj = coords_2d[:, 0] * s + coords_2d[:, 1] * c
+    return float(np.max(y_proj) - np.min(y_proj)) if y_proj.size else 0.0
+
+
 def _generate_line_fill_evenodd_multi(
     coords: np.ndarray,
     offsets: np.ndarray,
@@ -283,8 +297,8 @@ def fill(
 
     Notes
     -----
-    間隔は未回転の参照高さに基づき角度に依存せず一定だが、スキャン範囲は角度を考慮した
-    作業座標で決まるため、角度により実生成本数は多少変動する。
+    共平面入力では角度ごとのスキャン方向スパンから `spacing` を決定するため、affine の Z 回転に
+    対しても実生成本数は概ね一定（`round(density)`、端数の影響で ±1 程度の誤差あり）。
     非共平面の入力では輪郭ごとの個別処理を行い、このとき各ポリラインが十分に平面で
     ないと判定された場合は塗りをスキップして元の境界のみを返す。
     """
@@ -356,10 +370,14 @@ def fill(
             base_ang = angle_seq[gi % len(angle_seq)]
             k_i = angle_sets_seq[gi % len(angle_sets_seq)]
             k_i = int(k_i) if int(k_i) > 0 else 1
-            # 全体高さを基準に本数→間隔を決定（各グループで共通の“見かけ密度”）
-            spacing_glob = _spacing_from_height(ref_height_global, float(d))
+            # 角度ごとのスキャン方向スパンから本数→間隔を決定（各グループで共通の“見かけ密度”）
             for i in range(k_i):
                 ang_i = float(base_ang) + (np.pi / k_i) * i
+                # 全体（XY 整列済み）座標に基づくスキャンスパン
+                scan_h = _scan_span_for_angle_xy(v2d_all[:, :2], ang_i)
+                spacing_glob = _spacing_from_height(scan_h, float(d)) if scan_h > 0.0 else 0.0
+                if spacing_glob <= 0.0:
+                    continue
                 segs_xy = _generate_line_fill_evenodd_multi(
                     g_coords, g_offsets, d, ang_i, spacing_override=spacing_glob
                 )
