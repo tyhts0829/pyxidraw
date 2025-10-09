@@ -33,6 +33,7 @@ class LineRenderer(Tickable):
         projection_matrix: np.ndarray,
         double_buffer: SwapBuffer,
         line_thickness: float = 0.0006,
+        line_color: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0),
     ):
         """
         double_buffer: GPUへ送る前のデータを管理する仕組み
@@ -47,6 +48,21 @@ class LineRenderer(Tickable):
         self.line_program["projection"].write(projection_matrix.tobytes())
         # 線幅はクリップ空間（-1..1 基準）で設定する
         self.line_program["line_thickness"].value = float(line_thickness)
+        # 線色（RGBA, 0–1）
+        try:
+            r, g, b, a = line_color
+        except Exception:  # pragma: no cover - 防御的
+            r, g, b, a = 0.0, 0.0, 0.0, 1.0
+
+        def _clamp01(x: float) -> float:
+            return 0.0 if x < 0.0 else 1.0 if x > 1.0 else float(x)
+
+        self.line_program["color"].value = (
+            _clamp01(r),
+            _clamp01(g),
+            _clamp01(b),
+            _clamp01(a),
+        )
 
         # GPUBuffer を保持
         self.gpu = LineMesh(

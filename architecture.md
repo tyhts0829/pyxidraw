@@ -136,6 +136,8 @@ if __name__ == "__main__":
         use_midi=True,
         # クリップ空間基準の線幅（既定 0.0006）。mm 指定は将来拡張予定。
         line_thickness=0.0006,
+        # 線色（RGBA 0–1 またはヘックス文字列）。RGB 長さ3も許容（α=1.0 補完）。
+        line_color="#000000",
     )
 ```
 
@@ -150,6 +152,8 @@ Tips:
 ## MIDI と入力（要点）
 - `run(..., use_midi=True)` で可能なら実機 MIDI に接続。未接続時はフォールバック（`midi_strict=True` で失敗を致命扱い）。
 - 線の太さは `run(..., line_thickness=0.0006)` で指定可能（クリップ空間 -1..1 基準の半幅相当）。
+- 線の色は `run(..., line_color=(r,g,b,a) | "#RRGGBB[AA]")` で指定。RGB（3要素）の場合は α=1.0 を補完。
+- 背景色 `background` も RGBA タプルまたはヘックスで指定可能。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
 
 ## テストとの接点（要点）

@@ -6,10 +6,15 @@ from pathlib import Path
 # src/ レイアウトからシンプルに import できるよう、`python main.py` 実行時にパスを補助
 sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
 
+import os
+
 import numpy as np
 
 from api import E, G, cc, lfo, run  # type: ignore  # after sys.path tweak
 from engine.core.geometry import Geometry  # type: ignore
+
+PXD_FILL_DEBUG = 1
+os.environ["PXD_FILL_DEBUG"] = "1"
 
 CANVAS_SIZE = 400
 
@@ -20,9 +25,9 @@ def draw(t: float) -> Geometry:
     """デモ描画関数（MIDI は `api.cc` で制御）。"""
     base = (
         # G.polyhedron(polygon_index=int(cc[1] * 6))
-        G.text(em_size_mm=cc[1] * 200, text_align="center").translate(
-            CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0
-        )
+        # .scale(80 + cc[2] * 150)
+        # .translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+        G.text(em_size_mm=cc[1] * 200).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     )
     pipe = (
         E.pipeline.affine(angles_rad=(cc[3] * np.pi, cc[4] * np.pi, cc[5] * np.pi))
@@ -42,6 +47,8 @@ if __name__ == "__main__":
         render_scale=4.5,
         use_midi=True,
         use_parameter_gui=True,
-        workers=8,
+        workers=0,
         line_thickness=0.001,
+        background="222831",
+        line_color="EEEEEE",
     )

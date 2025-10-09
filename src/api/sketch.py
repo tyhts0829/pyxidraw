@@ -132,8 +132,14 @@ def run_sketch(
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: float = 4.0,
     line_thickness: float = 0.0006,
+    line_color: str | tuple[float, float, float] | tuple[float, float, float, float] = (
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ),
     fps: int | None = None,
-    background: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    background: str | tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     workers: int = 4,
     use_midi: bool = True,
     midi_strict: bool | None = None,
@@ -151,10 +157,15 @@ def run_sketch(
     line_thickness :
         線の太さ（クリップ空間 -1..1 基準の半幅相当）。既定は 0.0006。
         将来的に mm 指定のサポートを検討（`thickness_clip ≈ 2*mm/canvas_height`）。
+    line_color :
+        線の色。
+        - RGBA (0–1) タプル、またはヘックス文字列 `#RRGGBB` / `#RRGGBBAA`（`0x`/接頭辞なし可）。
+        - RGB（長さ3）の場合は α=1.0 を補完。
     fps :
         描画更新レート。
     background :
-        RGBA (0‑1)。Processing の ``background()`` と同義。
+        背景色。
+        - RGBA (0‑1) タプル、またはヘックス文字列 `#RRGGBB` / `#RRGGBBAA`（`0x`/接頭辞なし可）。
     workers :
         バックグラウンド計算プロセス数（パラメータ GUI 有効時は 0 固定でシングルスレッド実行）。
     use_midi :
@@ -342,7 +353,44 @@ def run_sketch(
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q, on_metrics=on_metrics_cb)
 
     # ---- ⑤ Window & ModernGL --------------------------------------
-    rendering_window = RenderWindow(window_width, window_height, bg_color=background)  # type: ignore[abstract]
+    # 色パラメータ正規化（背景/線色）
+    def _clamp01(x: float) -> float:
+        return 0.0 if x < 0.0 else 1.0 if x > 1.0 else float(x)
+
+    def _parse_hex_color_str(s: str) -> tuple[float, float, float, float]:
+        t = s.strip()
+        if t.startswith("#"):
+            t = t[1:]
+        elif t.lower().startswith("0x"):
+            t = t[2:]
+        if len(t) not in (6, 8):
+            raise ValueError(f"invalid hex color length: '{s}'")
+        try:
+            r = int(t[0:2], 16)
+            g = int(t[2:4], 16)
+            b = int(t[4:6], 16)
+            a = int(t[6:8], 16) if len(t) == 8 else 255
+        except ValueError as e:
+            raise ValueError(f"invalid hex color: '{s}'") from e
+        return (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+
+    def _normalize_color_param(
+        value: str | tuple[float, float, float] | tuple[float, float, float, float]
+    ) -> tuple[float, float, float, float]:
+        if isinstance(value, str):
+            r, g, b, a = _parse_hex_color_str(value)
+        else:
+            if len(value) == 3:
+                r, g, b = value  # type: ignore[misc]
+                a = 1.0
+            elif len(value) == 4:
+                r, g, b, a = value  # type: ignore[misc]
+            else:  # pragma: no cover - 防御的
+                raise ValueError("color tuple must be length 3 or 4")
+        return (_clamp01(r), _clamp01(g), _clamp01(b), _clamp01(a))
+
+    bg_rgba = _normalize_color_param(background)
+    rendering_window = RenderWindow(window_width, window_height, bg_color=bg_rgba)  # type: ignore[abstract]
     mgl_ctx: moderngl.Context = moderngl.create_context()
     mgl_ctx.enable(moderngl.BLEND)
     mgl_ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
@@ -368,11 +416,15 @@ def run_sketch(
         dtype="f4",
     ).T  # 転置を適用
 
+    # 線色を正規化（文字列/タプル → RGBA 0–1）
+    rgba = _normalize_color_param(line_color)
+
     line_renderer = LineRenderer(
         mgl_context=mgl_ctx,
         projection_matrix=proj,
         double_buffer=swap_buffer,
         line_thickness=line_thickness,
+        line_color=rgba,
     )  # type: ignore
 
     # ---- Draw callbacks ----------------------------------

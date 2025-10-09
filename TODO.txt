@@ -1,12 +1,6 @@
-SVG出力機能
-Gcode出力機能
-PNG出力機能
-GUIの見た目を整える。effectやshapeごとに色変えるとか。パラメータ増えたときの対応とか
-GUIのみ使ってMIDI機器を使わなかったときのパラメータ保存
 Numbaの環境変数統一
-頂点数、cpu, メモリをメーター化
 dashify線の重なり除去
-displaceのspacial_freqをVec3に変更
 textをguiでフリー入力する仕組み
 windowを閉じるときのエラー対策
 backgroundの色、線の色をrun関数の引数で指定できるようにする
+重なり描画を軽く、Gcode化のときは生データ処理
