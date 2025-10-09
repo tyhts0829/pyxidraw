@@ -1,23 +1,48 @@
 from __future__ import annotations
 
 """
-概要（アルゴリズム要約）
-- 各ポリラインを XY 平面へ射影（場合により回転を伴う）
-- 指定した本数の方向（角度）でハッチ線を生成
-- 生成要素を元の 3D 姿勢に戻して合成
+どこで: `effects.fill`（Geometry→Geometry の純関数エフェクト）
+何を: 閉領域のハッチ塗り（外環＋穴の偶奇規則、複数方向、共通間隔）
+なぜ: テキストや多輪郭形状で「穴」を正しく抜きつつ、回転やスケールの影響を受けにくい安定した塗り密度を得るため。
 
-密度は線の本数スケールとして扱い、最大で 200 本を生成します。
+処理の流れ（開発者向け）
+1) パラメータ正規化
+   - `density/angle_rad/angle_sets` はスカラまたは配列（図形グループごとにサイクル適用）。
+
+2) 共平面判定と XY 整列（重要）
+   - 各リングを試し、十分平面なリングから姿勢（回転 R と z オフセット）を推定。
+   - 見つからない場合は PCA（SVD）で全体の法線を推定（最小特異ベクトル）。
+   - 得られた姿勢で「全体」を XY に整列し、z 残差が絶対/相対閾値以内なら「共平面」とみなす。
+
+3) 共平面経路（穴の塗り分け）
+   - グルーピング: `util.polygon_grouping.build_evenodd_groups` で外環＋穴の集合へ分解。
+     - 内包判定は「重心」ではなく各リングの代表点（第1頂点）で行う。ドーナツや非凸外周で重心が穴側に落ちる破綻を避けるため。
+   - 共通間隔: 全体の未回転高さから 1 本あたりの `spacing` を算出し、全グループで共通に使用。
+     - 小さな島（例: 句読点/ドット）でも見かけ密度が過剰にならない（本数ではなく間隔基準）。
+   - 各グループに対し、`angle_sets` 本の方向で `_generate_line_fill_evenodd_multi` を実行（XY 空間でスキャンライン→偶奇規則で区間化）。
+   - 生成した 2D 線分を `transform_back` で元姿勢の 3D に戻す。
+   - `remove_boundary=False` なら元の輪郭線も先頭に残す。
+
+4) 非共平面フォールバック
+   - 各ポリゴンを個別に平面性チェックし、平面なら単一ポリゴン用のスキャンでハッチ、そうでなければ境界のみ返す（空出力回避）。
+   - この経路では穴の偶奇統合は行わない（グローバルに共平面でない場合のみ到達）。
+
+実装メモ
+- 線本数のスケール `density` は 2..MAX（200）にクランプして `spacing` を求める（`_spacing_from_height`）。
+- 平面性の閾値は絶対/相対の最大（`_planarity_threshold`）。
+- 方向本数 `angle_sets=k` のとき、`angle + i*(pi/k)`（i=0..k-1）で等間隔回転。
+- グループ順と各リングの順序は入力順を基準に安定化している。
 """
 
 
 from typing import Iterable
-import os
 
 import numpy as np
 from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
+from util.polygon_grouping import build_evenodd_groups
 
 from .registry import effect
 
@@ -25,16 +50,6 @@ from .registry import effect
 MAX_FILL_LINES = 200
 NONPLANAR_EPS_ABS = 1e-5
 NONPLANAR_EPS_REL = 1e-4
-
-
-def _debug_enabled() -> bool:
-    v = os.environ.get("PXD_FILL_DEBUG", "0")
-    return v not in ("0", "", "false", "False", "FALSE")
-
-
-def _dbg(*args: object) -> None:
-    if _debug_enabled():
-        print("[fill.debug]", *args)
 
 
 def _generate_line_fill(
@@ -81,13 +96,7 @@ def _generate_line_fill(
     # 間隔計算: 間隔が小さいほど線が多い
     # density=1.0 → バウンディングボックス内に MAX_FILL_LINES 本を想定
     # density=0.1 → より少ない本数
-    num_lines = int(round(density))
-    if num_lines < 2:
-        num_lines = 2
-    if num_lines > MAX_FILL_LINES:
-        num_lines = MAX_FILL_LINES
-    # 間隔は“未回転高さ/本数”で固定（角度に依らない）
-    spacing = ref_height / num_lines
+    spacing = _spacing_from_height(ref_height, float(density))
     if spacing <= 0:
         return []
 
@@ -154,6 +163,97 @@ def _is_polygon_planar(
     return z_span <= threshold
 
 
+def _planarity_threshold(diag: float) -> float:
+    """非平面閾値（絶対/相対の最大）。"""
+    return max(float(NONPLANAR_EPS_ABS), float(NONPLANAR_EPS_REL) * float(diag))
+
+
+def _spacing_from_height(height: float, density: float) -> float:
+    """高さと密度から一定間隔を算出（ライン本数は2..MAXでクランプ）。"""
+    num_lines = int(round(float(density)))
+    if num_lines < 2:
+        num_lines = 2
+    if num_lines > MAX_FILL_LINES:
+        num_lines = MAX_FILL_LINES
+    if height <= 0 or num_lines <= 0:
+        return 0.0
+    return float(height) / float(num_lines)
+
+
+def _choose_coplanar_frame(
+    coords: np.ndarray, offsets: np.ndarray
+) -> tuple[bool, np.ndarray, np.ndarray, float, float]:
+    """共平面フレームの選択と XY 整列。
+
+    返り値: `(planar, v2d_all, R_all, z_all, ref_height_global)`
+    - planar: 共平面とみなせるか
+    - v2d_all: XY 整列済み座標（z は 0 揃え）
+    - R_all, z_all: 逆変換用の姿勢
+    - ref_height_global: 未回転高さ（共通間隔の基準）
+    """
+    # 非退化リングから姿勢を選ぶ
+    R_all = np.eye(3)
+    z_all = 0.0
+    chosen = False
+    for i in range(len(offsets) - 1):
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        if e - s < 3:
+            continue
+        v2d_i, R_i, z_i = transform_to_xy_plane(coords[s:e])
+        z_span_i = float(np.max(np.abs(v2d_i[:, 2]))) if v2d_i.size else 0.0
+        mins_i = np.min(coords[s:e], axis=0)
+        maxs_i = np.max(coords[s:e], axis=0)
+        diag_i = float(np.sqrt(np.sum((maxs_i - mins_i) ** 2)))
+        if z_span_i <= _planarity_threshold(diag_i):
+            R_all = R_i
+            z_all = z_i
+            chosen = True
+            break
+
+    # PCA フォールバック
+    if not chosen and coords.shape[0] >= 3:
+        P = coords.astype(np.float64, copy=False)
+        C = P - np.mean(P, axis=0)
+        _u, _s, Vt = np.linalg.svd(C, full_matrices=False)
+        normal = Vt[-1, :]
+        nz = float(np.linalg.norm(normal))
+        if nz > 0.0:
+            normal = normal / nz
+            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+            rot_axis = np.cross(normal, z_axis)
+            na = float(np.linalg.norm(rot_axis))
+            if na > 0.0:
+                rot_axis = rot_axis / na
+                cos_t = float(np.dot(normal, z_axis))
+                cos_t = -1.0 if cos_t < -1.0 else (1.0 if cos_t > 1.0 else cos_t)
+                ang = float(np.arccos(cos_t))
+                K = np.zeros((3, 3), dtype=np.float64)
+                K[0, 1] = -rot_axis[2]
+                K[0, 2] = rot_axis[1]
+                K[1, 0] = rot_axis[2]
+                K[1, 2] = -rot_axis[0]
+                K[2, 0] = -rot_axis[1]
+                K[2, 1] = rot_axis[0]
+                R_all = np.eye(3) + np.sin(ang) * K + (1.0 - np.cos(ang)) * (K @ K)
+
+    # 全体整列と共平面判定
+    v2d_all = coords @ R_all.T
+    v2d_all = v2d_all.astype(np.float32, copy=False)
+    z_all = float(v2d_all[0, 2]) if v2d_all.size else 0.0
+    v2d_all[:, 2] -= z_all
+    z_span_all = float(np.max(np.abs(v2d_all[:, 2]))) if v2d_all.size else 0.0
+    mins_all = np.min(coords, axis=0)
+    maxs_all = np.max(coords, axis=0)
+    diag_all = float(np.sqrt(np.sum((maxs_all - mins_all) ** 2)))
+    planar = z_span_all <= _planarity_threshold(diag_all)
+
+    if v2d_all.size:
+        ref_height_global = float(np.max(v2d_all[:, 1]) - np.min(v2d_all[:, 1]))
+    else:
+        ref_height_global = 0.0
+    return planar, v2d_all, R_all, z_all, ref_height_global
+
+
 def _generate_line_fill_evenodd_multi(
     coords: np.ndarray,
     offsets: np.ndarray,
@@ -192,12 +292,7 @@ def _generate_line_fill_evenodd_multi(
     max_y = float(np.max(work_2d[:, 1]))
 
     if spacing_override is None:
-        num_lines = int(round(float(density)))
-        if num_lines < 2:
-            num_lines = 2
-        if num_lines > MAX_FILL_LINES:
-            num_lines = MAX_FILL_LINES
-        spacing = ref_height / float(num_lines)  # 角度に依らない一定間隔
+        spacing = _spacing_from_height(ref_height, float(density))
     else:
         spacing = float(spacing_override)
     if not np.isfinite(spacing) or spacing <= 0:
@@ -310,82 +405,9 @@ def fill(
 
     # angle_sets は図形（グループ）ごとに決定する（配列時はサイクル）
 
-    # 共平面（任意平面）なら、全体をXYへ整列→偶奇規則で一括処理（穴を保持）
-    # まずは安定な基準フレーム（非退化リングから推定）を得る
-    R_all = np.eye(3)
-    z_all = 0.0
-    chosen = -1
-    for i in range(len(offsets) - 1):
-        s, e = int(offsets[i]), int(offsets[i + 1])
-        if e - s < 3:
-            continue
-        v2d_i, R_i, z_i = transform_to_xy_plane(coords[s:e])
-        z_span_i = float(np.max(np.abs(v2d_i[:, 2]))) if v2d_i.size else 0.0
-        mins_i = np.min(coords[s:e], axis=0)
-        maxs_i = np.max(coords[s:e], axis=0)
-        diag_i = float(np.sqrt(np.sum((maxs_i - mins_i) ** 2)))
-        thr_i = max(float(NONPLANAR_EPS_ABS), float(NONPLANAR_EPS_REL) * diag_i)
-        if z_span_i <= thr_i:
-            R_all = R_i
-            z_all = z_i
-            chosen = i
-            break
-    # 基準が見つからなければ PCA で安定な法線を推定
-    if chosen == -1 and coords.shape[0] >= 3:
-        try:
-            P = coords.astype(np.float64, copy=False)
-            C = P - np.mean(P, axis=0)
-            # 最小特異値ベクトルを法線とみなす
-            _u, _s, Vt = np.linalg.svd(C, full_matrices=False)
-            normal = Vt[-1, :]
-            nz = float(np.linalg.norm(normal))
-            if nz > 0.0:
-                normal = normal / nz
-                z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-                rot_axis = np.cross(normal, z_axis)
-                na = float(np.linalg.norm(rot_axis))
-                if na > 0.0:
-                    rot_axis = rot_axis / na
-                    cos_t = float(np.dot(normal, z_axis))
-                    if cos_t < -1.0:
-                        cos_t = -1.0
-                    elif cos_t > 1.0:
-                        cos_t = 1.0
-                    ang = float(np.arccos(cos_t))
-                    K = np.zeros((3, 3), dtype=np.float64)
-                    K[0, 1] = -rot_axis[2]
-                    K[0, 2] = rot_axis[1]
-                    K[1, 0] = rot_axis[2]
-                    K[1, 2] = -rot_axis[0]
-                    K[2, 0] = -rot_axis[1]
-                    K[2, 1] = rot_axis[0]
-                    R_all = np.eye(3) + np.sin(ang) * K + (1.0 - np.cos(ang)) * (K @ K)
-                    z_all = 0.0  # 後段で再取得
-                    chosen = -2  # PCA ベース
-        except Exception:
-            pass
-
-    # 全体を同一フレームでXYへ整列
-    v2d_all = coords @ R_all.T
-    v2d_all = v2d_all.astype(np.float32, copy=False)
-    # z を 0 基準へ平行移動
-    z_all = float(v2d_all[0, 2]) if v2d_all.size else 0.0
-    v2d_all[:, 2] -= z_all
-    thr_all = 0.0
-    try:
-        z_span_all = float(np.max(np.abs(v2d_all[:, 2]))) if v2d_all.size else 0.0
-        mins_all = np.min(coords, axis=0)
-        maxs_all = np.max(coords, axis=0)
-        diag_all = float(np.sqrt(np.sum((maxs_all - mins_all) ** 2)))
-        thr_all = max(float(NONPLANAR_EPS_ABS), float(NONPLANAR_EPS_REL) * diag_all)
-        planar_global = z_span_all <= thr_all
-    except Exception:
-        planar_global = False
-
-    if _debug_enabled():
-        _dbg(
-            f"planar_coplane={planar_global} z_span={z_span_all:.6g} thr={thr_all:.6g} rings={len(offsets) - 1} chosen_frame={chosen}"
-        )
+    planar_global, v2d_all, R_all, z_all, ref_height_global = _choose_coplanar_frame(
+        coords, offsets
+    )
 
     if planar_global:
         results: list[np.ndarray] = []
@@ -396,29 +418,9 @@ def fill(
                 results.append(coords[offsets[i] : offsets[i + 1]].copy())
 
         # 2) 外環＋穴のグループ化（XYへ整列した座標で評価）
-        groups = _build_evenodd_groups(v2d_all, offsets)
-        # 全体の未回転高さ（共通間隔の基準）※XY空間
-        ref_min_y_g = float(np.min(v2d_all[:, 1]))
-        ref_max_y_g = float(np.max(v2d_all[:, 1]))
-        ref_height_global = ref_max_y_g - ref_min_y_g
+        groups = build_evenodd_groups(v2d_all, offsets)
         if ref_height_global <= 0:
             return Geometry(coords.copy(), offsets.copy())
-        if _debug_enabled():
-            _dbg(f"ref_height_global={ref_height_global:.6g}")
-        if _debug_enabled():
-            _dbg(f"groups={len(groups)} (coplanar even-odd)")
-            for gi, ring_indices in enumerate(groups):
-                parts: list[str] = []
-                for idx in ring_indices:
-                    s, e = int(offsets[idx]), int(offsets[idx + 1])
-                    p2d = v2d_all[s:e, :2]
-                    try:
-                        area = _polygon_area_signed_2d(p2d)
-                        cx, cy = _polygon_centroid_2d(p2d)
-                        parts.append(f"{idx}(area={area:.3g},c=({cx:.3g},{cy:.3g}))")
-                    except Exception:
-                        parts.append(f"{idx}")
-                _dbg(f" group[{gi}] rings: " + ", ".join(parts))
 
         # 3) 共通間隔で各グループにハッチを適用（XY空間で生成→元姿勢へ戻す）
         for gi, ring_indices in enumerate(groups):
@@ -444,12 +446,7 @@ def fill(
             k_i = angle_sets_seq[gi % len(angle_sets_seq)]
             k_i = int(k_i) if int(k_i) > 0 else 1
             # 全体高さを基準に本数→間隔を決定（各グループで共通の“見かけ密度”）
-            num_lines = int(round(float(d)))
-            if num_lines < 2:
-                num_lines = 2
-            if num_lines > MAX_FILL_LINES:
-                num_lines = MAX_FILL_LINES
-            spacing_glob = ref_height_global / float(num_lines)
+            spacing_glob = _spacing_from_height(ref_height_global, float(d))
             for i in range(k_i):
                 ang_i = float(base_ang) + (np.pi / k_i) * i
                 segs_xy = _generate_line_fill_evenodd_multi(
@@ -461,26 +458,11 @@ def fill(
         return Geometry.from_lines(results)
 
     # 非平面は従来通りポリゴン個別に処理
-    if _debug_enabled():
-        _dbg("fallback_nonplanar=True (per-polygon processing)")
+
     filled_results: list[np.ndarray] = []
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
-        if _debug_enabled():
-            try:
-                v = np.asarray(vertices, dtype=np.float32)
-                v2d, _R, _z = transform_to_xy_plane(v)
-                z = v2d[:, 2]
-                z_span = float(np.max(np.abs(z))) if z.size else 0.0
-                mins = np.min(v, axis=0)
-                maxs = np.max(v, axis=0)
-                diag = float(np.sqrt(np.sum((maxs - mins) ** 2)))
-                thr = max(float(NONPLANAR_EPS_ABS), float(NONPLANAR_EPS_REL) * diag)
-                _dbg(
-                    f" poly[{i}] z_span={z_span:.6g} diag={diag:.6g} thr={thr:.6g} planar={(z_span <= thr)} n={len(v)}"
-                )
-            except Exception as e:  # 安全側
-                _dbg(f" poly[{i}] diag_failed: {e}")
+
         d = density_seq[i % len(density_seq)]
         if d <= 0.0:
             # 塗り線無し、境界だけ保持
@@ -565,27 +547,6 @@ def find_line_intersections_njit(polygon: np.ndarray, y: float) -> np.ndarray:
 
 
 @njit(cache=True)
-def point_in_polygon_njit(polygon: np.ndarray, x: float, y: float) -> bool:
-    """レイキャスティングアルゴリズムを使用して点がポリゴン内部にあるかをチェックします（Numba最適化版）。"""
-    n = len(polygon)
-    inside = False
-
-    p1x, p1y = polygon[0, 0], polygon[0, 1]
-    for i in range(1, n + 1):
-        p2x, p2y = polygon[i % n, 0], polygon[i % n, 1]
-        if y > min(p1y, p2y):
-            if y <= max(p1y, p2y):
-                if x <= max(p1x, p2x):
-                    if p1y != p2y:
-                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                    if p1x == p2x or x <= xinters:
-                        inside = not inside
-        p1x, p1y = p2x, p2y
-
-    return inside
-
-
-@njit(cache=True)
 def generate_line_intersections_batch(polygon: np.ndarray, y_values: np.ndarray) -> list:
     """複数のy値に対して交点を一括計算（Numba最適化版）。"""
     results = []
@@ -596,106 +557,4 @@ def generate_line_intersections_batch(polygon: np.ndarray, y_values: np.ndarray)
     return results
 
 
-# ── グルーピング補助（XY 共平面、偶奇規則の外環＋穴をグループ化） ────────────────
-def _polygon_area_signed_2d(poly2d: np.ndarray) -> float:
-    x = poly2d[:, 0]
-    y = poly2d[:, 1]
-    # shoelace（閉路前提、最終辺は自動で %n ）
-    s = 0.0
-    n = poly2d.shape[0]
-    for i in range(n):
-        j = (i + 1) % n
-        s += float(x[i] * y[j] - x[j] * y[i])
-    return 0.5 * s
-
-
-def _polygon_centroid_2d(poly2d: np.ndarray) -> tuple[float, float]:
-    a = _polygon_area_signed_2d(poly2d)
-    if abs(a) < 1e-12:
-        c = np.mean(poly2d, axis=0)
-        return float(c[0]), float(c[1])
-    cx = 0.0
-    cy = 0.0
-    n = poly2d.shape[0]
-    for i in range(n):
-        j = (i + 1) % n
-        cross = float(poly2d[i, 0] * poly2d[j, 1] - poly2d[j, 0] * poly2d[i, 1])
-        cx += (poly2d[i, 0] + poly2d[j, 0]) * cross
-        cy += (poly2d[i, 1] + poly2d[j, 1]) * cross
-    f = 1.0 / (6.0 * a)
-    return float(cx * f), float(cy * f)
-
-
-def _build_evenodd_groups(coords: np.ndarray, offsets: np.ndarray) -> list[list[int]]:
-    n = len(offsets) - 1
-    if n <= 0:
-        return []
-    polys2d: list[np.ndarray] = []
-    centroids: list[tuple[float, float]] = []
-    areas: list[float] = []
-    reps: list[tuple[float, float]] = []  # 各リングの代表点（第1頂点）
-    if _debug_enabled():
-        _dbg(f"_build_evenodd_groups: rings={n}")
-    for i in range(n):
-        s, e = int(offsets[i]), int(offsets[i + 1])
-        p2d = coords[s:e, :2].astype(np.float32, copy=False)
-        polys2d.append(p2d)
-        centroids.append(_polygon_centroid_2d(p2d))
-        areas.append(abs(_polygon_area_signed_2d(p2d)))
-        # 代表点（第1頂点）— 内包判定のサンプルとして重心ではなく頂点を用いる
-        if p2d.shape[0] > 0:
-            reps.append((float(p2d[0, 0]), float(p2d[0, 1])))
-        else:
-            reps.append((float("nan"), float("nan")))
-        if _debug_enabled():
-            cx, cy = centroids[-1]
-            rx, ry = reps[-1]
-            _dbg(
-                f" poly[{i}] centroid=({cx:.3g},{cy:.3g}) rep=({rx:.3g},{ry:.3g}) area_abs={areas[-1]:.3g}"
-            )
-
-    containers: list[list[int]] = [[] for _ in range(n)]
-    for i in range(n):
-        rx, ry = reps[i]
-        for j in range(n):
-            if i == j:
-                continue
-            # リング i の代表点（頂点）がリング j に内包されるか
-            if point_in_polygon_njit(polys2d[j], float(rx), float(ry)):
-                containers[i].append(j)
-        if _debug_enabled():
-            _dbg(f" poly[{i}] containers={containers[i]}")
-
-    is_outer = [(len(containers[i]) % 2) == 0 for i in range(n)]
-    outer_indices = [i for i in range(n) if is_outer[i]]
-    if _debug_enabled():
-        _dbg(f" outer_indices={outer_indices}")
-    groups: dict[int, list[int]] = {oi: [oi] for oi in outer_indices}
-
-    for i in range(n):
-        if is_outer[i]:
-            continue
-        cands = [j for j in outer_indices if j in containers[i]]
-        if cands:
-            # 最も内側の外環（面積が最小）を親にする
-            j_best = min(cands, key=lambda j: areas[j])
-            groups.setdefault(j_best, []).append(i)
-        else:
-            # 外環が見つからない稀なケースは単独グループに
-            groups.setdefault(i, []).append(i)
-
-    # 入力順に外環を並べ、グループのリングも入力順に並べる
-    ordered: list[list[int]] = []
-    for oi in outer_indices:
-        ring_is = groups.get(oi, [oi])
-        ordered.append(sorted(ring_is))
-    # 孤立グループ（外環が穴扱いになった等）の救済
-    for k, v in groups.items():
-        if k not in outer_indices:
-            ordered.append(sorted(v))
-    if _debug_enabled():
-        _dbg(" groups_ordered=" + "; ".join(f"{gi}:{grp}" for gi, grp in enumerate(ordered)))
-    return ordered
-
-
-## 旧 dots 用の交点探索は削除
+## 旧 dots 用の交点探索は削除（グルーピング関連は util/polygon_grouping.py へ移設）
