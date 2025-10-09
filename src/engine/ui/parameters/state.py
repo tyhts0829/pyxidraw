@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Callable, Iterable, Literal
 
-ValueType = Literal["float", "int", "bool", "enum", "vector"]
+ValueType = Literal["float", "int", "bool", "enum", "vector", "string"]
 SourceType = Literal["shape", "effect"]
 OverrideSource = Literal["gui"]
 

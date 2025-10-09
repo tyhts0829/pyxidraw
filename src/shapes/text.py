@@ -394,8 +394,10 @@ setattr(
     text,
     "__param_meta__",
     {
+        "text": {"type": "string"},
         "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
-        "font": {"type": "string"},
+        # font は自由入力させない（GUI 非表示にするため choices を空に）
+        "font": {"choices": []},
         "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
         "text_align": {"choices": ["left", "center", "right"]},
         "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},

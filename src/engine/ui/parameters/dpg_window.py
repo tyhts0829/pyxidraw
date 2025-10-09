@@ -262,6 +262,18 @@ else:
                     callback=self._on_widget_change,
                     user_data=desc.id,
                 )
+            if vt == "string":
+                # 単一行の自由入力（multiline は採用しない）
+                txt_id = dpg.add_input_text(
+                    tag=desc.id,
+                    parent=parent,
+                    label="",
+                    default_value=str(value) if value is not None else "",
+                    callback=self._on_widget_change,
+                    user_data=desc.id,
+                )
+                dpg.set_item_width(txt_id, -1)
+                return txt_id
             if vt == "vector":
                 vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
                 dim = 4 if len(vec) >= 4 else 3

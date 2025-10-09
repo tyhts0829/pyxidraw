@@ -42,14 +42,14 @@
 
 実装手順（チェックリスト）
 
-- [ ] `state.py` の `ValueType` に `"string"` を追加する。
-- [ ] `value_resolver.py` の `_determine_value_type()` を以下に変更: - `meta.type == "string"` → `"string"` - `"choices" in meta` → `"enum"` - それ以外で `default_value` もしくは `raw_value` が `str` → `"string"`
-- [ ] `value_resolver.py` の `_resolve_passthrough()` を更新: - `supported` 判定に `"string"` を含める。 - `choices_list` が無い `string` でも `ParameterDescriptor` を登録する。
-- [ ] `dpg_window.py` の `_create_widget()` に `string` 用ウィジェットを追加: - `dpg.add_input_text(tag=desc.id, default_value=str(value) or "", callback=_on_widget_change, user_data=desc.id, multiline=<設定>)` - `multiline` の扱いは「確認事項」に従う。
-- [ ] `persistence.py` を更新: - `save_overrides()` は `string` をそのまま保存（JSON）。 - `load_overrides()` は `string` を `str(value)` として復元。
-- [ ] （任意）`src/shapes/text.py` の `__param_meta__` に `text` の型を明示。
-- [ ] 変更ファイルに対するローカル検証（ruff/mypy/pytest 一部）を実行。
-- [ ] `architecture.md` に小さな差分（ValueType に `string` 追加）を反映。
+- [x] `state.py` の `ValueType` に `"string"` を追加する。
+- [x] `value_resolver.py` の `_determine_value_type()` を以下に変更: - `meta.type == "string"` → `"string"` - `"choices" in meta` → `"enum"` - それ以外で `default_value` もしくは `raw_value` が `str` → `"string"`
+- [x] `value_resolver.py` の `_resolve_passthrough()` を更新: - `supported` 判定に `"string"` を含める。 - `choices_list` が無い `string` でも `ParameterDescriptor` を登録する。
+- [x] `dpg_window.py` の `_create_widget()` に `string` 用ウィジェットを追加: - `dpg.add_input_text(tag=desc.id, default_value=str(value) or "", callback=_on_widget_change, user_data=desc.id, multiline=<設定>)` - `multiline` の扱いは「確認事項」に従う。
+- [x] `persistence.py` を更新: - `save_overrides()` は `string` をそのまま保存（JSON）。 - `load_overrides()` は `string` を `str(value)` として復元。
+- [x] （任意）`src/shapes/text.py` の `__param_meta__` に `text` の型を明示（併せて font は GUI 非表示に設定）。
+- [x] 変更ファイルに対するローカル検証（ruff/mypy/pytest 一部）を実行。
+- [x] `architecture.md` に小さな差分（ValueType に `string` 追加）を反映。
 
 検証計画（編集ファイル優先）
 

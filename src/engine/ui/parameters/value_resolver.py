@@ -219,12 +219,13 @@ class ParameterValueResolver:
         default_value: Any,
         meta_entry: Mapping[str, Any] | None,
     ) -> Any:
-        # enum 判定は choices の有無を優先し、無い文字列は自由入力として非対応のままにする
-        value_type = self._value_type(default_value if default_value is not None else value)
+        # 判定は meta 優先（choices→enum / type:"string"→string）、無指定時は値から推定
+        meta_map: Mapping[str, Any] = meta_entry if isinstance(meta_entry, Mapping) else {}
+        value_type = self._determine_value_type(meta_map, default_value, value)
         # choices 抽出
         choices_list: list[str] | None = None
-        if isinstance(meta_entry, Mapping):
-            raw_choices = meta_entry.get("choices")
+        if isinstance(meta_map, Mapping):
+            raw_choices = meta_map.get("choices")
             try:
                 if isinstance(raw_choices, Sequence) and not isinstance(raw_choices, (str, bytes)):
                     cands = [str(x) for x in list(raw_choices)]
@@ -232,8 +233,8 @@ class ParameterValueResolver:
             except Exception:
                 choices_list = None
         # choices は上位 `resolve()` から渡されないため、ここで meta を使わずに判断する
-        # ただし value が str であっても、choices が不明な場合は GUI 非対応（supported=False）にする
-        supported = value_type in {"float", "int", "bool"} or (
+        # string は自由入力として GUI 対応、enum は choices が無ければ非対応
+        supported = value_type in {"float", "int", "bool", "string"} or (
             value_type == "enum" and bool(choices_list)
         )
         # choices は後で param_meta から渡すよう `_determine_value_type` と resolve 経路を拡張してもよい
@@ -313,6 +314,9 @@ class ParameterValueResolver:
         default_value: Any,
         raw_value: Any,
     ) -> ValueType:
+        # 列挙（choices）が与えられている場合は enum を優先
+        if "choices" in meta:
+            return "enum"
         meta_type = meta.get("type")
         if isinstance(meta_type, str):
             lowered = meta_type.lower()
@@ -323,9 +327,7 @@ class ParameterValueResolver:
             if lowered in {"bool", "boolean"}:
                 return "bool"
             if lowered == "string":
-                return "enum"
-        if "choices" in meta:
-            return "enum"
+                return "string"
         if default_value is not None:
             return self._value_type(default_value)
         return self._value_type(raw_value)
@@ -344,7 +346,7 @@ class ParameterValueResolver:
     @staticmethod
     def _value_type(value: Any) -> ValueType:
         if isinstance(value, str):
-            return "enum"
+            return "string"
         if isinstance(value, bool):
             return "bool"
         if isinstance(value, int) and not isinstance(value, bool):

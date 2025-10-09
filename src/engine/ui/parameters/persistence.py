@@ -197,6 +197,10 @@ def load_overrides(store: ParameterStore, *, script_path: str | None = None) -> 
                     store.set_override(pid, str(value))
                     applied += 1
                     continue
+                if desc.value_type == "string":
+                    store.set_override(pid, str(value))
+                    applied += 1
+                    continue
                 # 非対応型はスキップ
             except Exception:
                 continue
