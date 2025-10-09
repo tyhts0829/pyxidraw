@@ -28,7 +28,7 @@ from __future__ import annotations
 
 実装メモ
 - 線本数のスケール `density` は 2..MAX（200）にクランプして `spacing` を求める（`_spacing_from_height`）。
-- 平面性の閾値は絶対/相対の最大（`_planarity_threshold`）。
+- 平面性の閾値は絶対/相対の最大。
 - 方向本数 `angle_sets=k` のとき、`angle + i*(pi/k)`（i=0..k-1）で等間隔回転。
 - グループ順と各リングの順序は入力順を基準に安定化している。
 """
@@ -41,6 +41,7 @@ from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
+from util.geom3d_frame import choose_coplanar_frame
 from util.polygon_grouping import build_evenodd_groups
 
 from .registry import effect
@@ -132,14 +133,6 @@ def _generate_line_fill(
 
 
 # ── 偶奇規則ベースの多輪郭塗り（平面XY向け） ─────────────────────────────────
-def _is_planar_xy(coords: np.ndarray, eps: float = 1e-3) -> bool:
-    """全頂点の z が一定（XY 平面上）かの簡易判定。"""
-    if coords.size == 0:
-        return False
-    z = coords[:, 2]
-    return float(np.max(z) - np.min(z)) <= float(eps)
-
-
 def _is_polygon_planar(
     vertices: np.ndarray, *, eps_abs: float = NONPLANAR_EPS_ABS, eps_rel: float = NONPLANAR_EPS_REL
 ) -> bool:
@@ -162,11 +155,6 @@ def _is_polygon_planar(
     return z_span <= threshold
 
 
-def _planarity_threshold(diag: float) -> float:
-    """非平面閾値（絶対/相対の最大）。"""
-    return max(float(NONPLANAR_EPS_ABS), float(NONPLANAR_EPS_REL) * float(diag))
-
-
 def _spacing_from_height(height: float, density: float) -> float:
     """高さと密度から一定間隔を算出（ライン本数は2..MAXでクランプ）。"""
     num_lines = int(round(float(density)))
@@ -177,80 +165,6 @@ def _spacing_from_height(height: float, density: float) -> float:
     if height <= 0 or num_lines <= 0:
         return 0.0
     return float(height) / float(num_lines)
-
-
-def _choose_coplanar_frame(
-    coords: np.ndarray, offsets: np.ndarray
-) -> tuple[bool, np.ndarray, np.ndarray, float, float]:
-    """共平面フレームの選択と XY 整列。
-
-    返り値: `(planar, v2d_all, R_all, z_all, ref_height_global)`
-    - planar: 共平面とみなせるか
-    - v2d_all: XY 整列済み座標（z は 0 揃え）
-    - R_all, z_all: 逆変換用の姿勢
-    - ref_height_global: 未回転高さ（共通間隔の基準）
-    """
-    # 非退化リングから姿勢を選ぶ
-    R_all = np.eye(3)
-    z_all = 0.0
-    chosen = False
-    for i in range(len(offsets) - 1):
-        s, e = int(offsets[i]), int(offsets[i + 1])
-        if e - s < 3:
-            continue
-        v2d_i, R_i, z_i = transform_to_xy_plane(coords[s:e])
-        z_span_i = float(np.max(np.abs(v2d_i[:, 2]))) if v2d_i.size else 0.0
-        mins_i = np.min(coords[s:e], axis=0)
-        maxs_i = np.max(coords[s:e], axis=0)
-        diag_i = float(np.sqrt(np.sum((maxs_i - mins_i) ** 2)))
-        if z_span_i <= _planarity_threshold(diag_i):
-            R_all = R_i
-            z_all = z_i
-            chosen = True
-            break
-
-    # PCA フォールバック
-    if not chosen and coords.shape[0] >= 3:
-        P = coords.astype(np.float64, copy=False)
-        C = P - np.mean(P, axis=0)
-        _u, _s, Vt = np.linalg.svd(C, full_matrices=False)
-        normal = Vt[-1, :]
-        nz = float(np.linalg.norm(normal))
-        if nz > 0.0:
-            normal = normal / nz
-            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-            rot_axis = np.cross(normal, z_axis)
-            na = float(np.linalg.norm(rot_axis))
-            if na > 0.0:
-                rot_axis = rot_axis / na
-                cos_t = float(np.dot(normal, z_axis))
-                cos_t = -1.0 if cos_t < -1.0 else (1.0 if cos_t > 1.0 else cos_t)
-                ang = float(np.arccos(cos_t))
-                K = np.zeros((3, 3), dtype=np.float64)
-                K[0, 1] = -rot_axis[2]
-                K[0, 2] = rot_axis[1]
-                K[1, 0] = rot_axis[2]
-                K[1, 2] = -rot_axis[0]
-                K[2, 0] = -rot_axis[1]
-                K[2, 1] = rot_axis[0]
-                R_all = np.eye(3) + np.sin(ang) * K + (1.0 - np.cos(ang)) * (K @ K)
-
-    # 全体整列と共平面判定
-    v2d_all = coords @ R_all.T
-    v2d_all = v2d_all.astype(np.float32, copy=False)
-    z_all = float(v2d_all[0, 2]) if v2d_all.size else 0.0
-    v2d_all[:, 2] -= z_all
-    z_span_all = float(np.max(np.abs(v2d_all[:, 2]))) if v2d_all.size else 0.0
-    mins_all = np.min(coords, axis=0)
-    maxs_all = np.max(coords, axis=0)
-    diag_all = float(np.sqrt(np.sum((maxs_all - mins_all) ** 2)))
-    planar = z_span_all <= _planarity_threshold(diag_all)
-
-    if v2d_all.size:
-        ref_height_global = float(np.max(v2d_all[:, 1]) - np.min(v2d_all[:, 1]))
-    else:
-        ref_height_global = 0.0
-    return planar, v2d_all, R_all, z_all, ref_height_global
 
 
 def _generate_line_fill_evenodd_multi(
@@ -404,9 +318,7 @@ def fill(
 
     # angle_sets は図形（グループ）ごとに決定する（配列時はサイクル）
 
-    planar_global, v2d_all, R_all, z_all, ref_height_global = _choose_coplanar_frame(
-        coords, offsets
-    )
+    planar_global, v2d_all, R_all, z_all, ref_height_global = choose_coplanar_frame(coords, offsets)
 
     if planar_global:
         results: list[np.ndarray] = []

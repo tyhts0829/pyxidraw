@@ -50,6 +50,7 @@
 
 オプション（要相談）
 - [x] `_build_evenodd_groups` を `util/` へ移動（他エフェクトでも再利用可）。
+- [x] 共平面フレーム選択を util 化し、fill からも利用（`util/geom3d_frame.py`）。
 - [ ] PCA フォールバックを軽量 SVD に統一（現在の NumPy 実装で十分なら据え置き）。
 
 完了条件（DoD）

@@ -1,24 +1,32 @@
 from __future__ import annotations
 
 """
-平面パーティション（Voronoi, random のみ）
+どこで: `effects.partition`（Geometry→Geometry の純関数エフェクト）
+何を: 共平面な形状の偶奇領域（外環 XOR 穴）を Voronoi 図で分割し、閉ループを返す。
+なぜ: `affine` で傾けた入力でも、穴を尊重した安定なパーティション結果を得るため。
 
-目的:
-- 同一平面上の閉じた図形（外周＋内周）について、偶奇規則で定まる領域を Voronoi 図で分割し、各セル外周を閉ループで出力する。
-- 後段の `fill` と互換に、出力は常に閉じたポリライン群。
-
-仕様（簡素版）:
-- Voronoi のみを実装。サイトは `site_count` 個を一様乱数で領域内に生成（`seed` で再現性）。
-- 穴（holes）は偶奇規則で自然に尊重され、穴内部は対象外。
-- Shapely 未導入環境では処理を行わず、入力をそのまま返す（安全フォールバック）。
+処理の流れ（開発者向け）
+1) 共平面フレーム選択 → 全体 XY 整列
+   - 各リングに対する `transform_to_xy_plane` の z 残差で姿勢を推定。見つからなければ PCA(SVD) で法線推定。
+   - 絶対/相対閾値で共平面判定（XY 限定ではない）。
+2) 偶奇領域の構築（XY 空間）
+   - Shapely あり: 各リング Polygon を `symmetric_difference` で XOR 合成（穴を自然に除外）。
+   - Shapely なし: 耳切り三角化→重心の偶奇判定でセル選別（近似）。
+3) Voronoi 分割（Shapely あり）
+   - `site_count` 個の点を領域 bounds 内でサンプリングし、`voronoi_diagram(..., edges=False)` のセルを領域と交差。
+   - 各 Polygon の外周を抽出し、`transform_back` で 3D に戻す。
+4) フォールバック
+   - Shapely 無: 2) の三角セルを 3D に戻して返す。
+   - 非共平面: 安全側で入力をコピー。
 """
 
-from typing import Iterable, Any, cast
+from typing import Any, Iterable, cast
 
 import numpy as np
 
 from engine.core.geometry import Geometry
-from util.geom3d_ops import transform_to_xy_plane
+from util.geom3d_frame import choose_coplanar_frame
+from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
@@ -329,25 +337,25 @@ def partition(
 
     rng = np.random.default_rng(int(seed))
 
-    # XY 共平面の複数輪郭をまとめて扱う（偶奇規則で穴を尊重）
+    # 共平面なら全体を XY に整列して処理（傾き下でも有効）
+    planar, v2d_all, R_all, z_all, _ref_h = choose_coplanar_frame(coords, offsets)
     if (
-        _is_planar_xy_all(coords)
+        planar
         and _HAS_SHAPELY
         and Polygon is not None
         and _voronoi_diagram is not None
         and MultiPoint is not None
         and _SPoint is not None
     ):
-        z0 = float(coords[0, 2])
         rings_xy: list[np.ndarray] = []
         for i in range(len(offsets) - 1):
-            ring = coords[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
+            ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
             if ring.shape[0] < 3:
                 continue
             ring = _ensure_closed(ring)
             rings_xy.append(ring[:, :2])
 
-        # 偶奇規則の領域を構築（XOR）
+        # 偶奇規則の領域（XOR）
         region = None
         for ring2d in rings_xy:
             try:
@@ -372,7 +380,6 @@ def partition(
                 pts.append((rx, ry))
             trials -= 1
         if not pts:
-            # フォールバック（領域代表点）
             try:
                 c = region.representative_point()
                 pts = [(float(c.x), float(c.y))]
@@ -380,7 +387,7 @@ def partition(
                 return Geometry(coords.copy(), offsets.copy())
         pts2d = np.asarray(pts, dtype=np.float32)
 
-        # Voronoi セル取得→3D 復元
+        # Voronoi → 交差 → 外周抽出 → 3D 復元
         mp = MultiPoint(pts2d)
         vd = _voronoi_diagram(mp, envelope=region.envelope, edges=False)  # type: ignore[arg-type]
         out_lines: list[np.ndarray] = []
@@ -393,12 +400,27 @@ def partition(
                 continue
             loops = _collect_polygon_exteriors(inter)
             for loop in loops:
-                loop[:, 2] = z0
-                out_lines.append(loop.astype(np.float32))
+                # XY → 元姿勢へ戻す
+                out_lines.append(transform_back(loop.astype(np.float32), R_all, z_all))
         return _numpy_lines_to_geometry(out_lines)
 
-    # フォールバック（非平面 or Shapely 無）: 入力のコピーを返す
-    return Geometry(coords.copy(), offsets.copy())
+    # フォールバック（非平面 or Shapely 無）
+    if planar:
+        # Shapely 無時は偶奇三角分割で近似 → 3D 復元
+        rings_xy: list[np.ndarray] = []
+        for i in range(len(offsets) - 1):
+            ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
+            if ring.shape[0] < 3:
+                continue
+            ring = _ensure_closed(ring)
+            rings_xy.append(ring)
+        tris = _triangulate_evenodd_region_xy_without_shapely(rings_xy)
+        if not tris:
+            return Geometry(coords.copy(), offsets.copy())
+        out_lines = [transform_back(t.astype(np.float32), R_all, z_all) for t in tris]
+        return _numpy_lines_to_geometry(out_lines)
+    else:
+        return Geometry(coords.copy(), offsets.copy())
 
 
 # UI RangeHint（量子化粒度は step を設定）
