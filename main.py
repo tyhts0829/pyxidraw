@@ -31,7 +31,7 @@ def draw(t: float) -> Geometry:
     )
     pipe = (
         E.pipeline.affine(angles_rad=(cc[3] * np.pi, cc[4] * np.pi, cc[5] * np.pi))
-        .partition()
+        # .partition()
         .fill(density=(cc[6] * 200, cc[6] * 200), angle_rad=(np.pi / 3, 2 * np.pi / 3, np.pi / 2))
         .subdivide()
         .displace()
