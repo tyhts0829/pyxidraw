@@ -45,8 +45,11 @@ optional = [
 [tool.setuptools]
 package-dir = {"" = "src"}
 
+# src 配下の通常パッケージに加え、リポジトリ直下の `tools` パッケージも配布対象に含める
+# （CI の optional テストで `from tools.gen_g_stubs import ...` を解決するため）。
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["*", "tools*"]
 
 [tool.black]
 line-length = 100

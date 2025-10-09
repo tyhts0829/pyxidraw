@@ -53,8 +53,51 @@ def install() -> None:
 
             return deco
 
+        # numba.njit のダミー
         m.njit = _njit  # type: ignore[attr-defined]
+
+        # numba.types のダミー
+        types_mod = types.ModuleType("numba.types")
+
+        class _DummyType:  # pragma: no cover - dummy
+            """シグネチャ指定などで用いるダミー型。
+
+            `types.float64[:, :]` のような添字アクセスや、`ListType(T)(...)` のような
+            呼び出しチェーンを無害に通すため、`__getitem__`/`__call__` は自己を返す。
+            """
+
+            def __getitem__(self, _key):  # 支持 slice 等
+                return self
+
+            def __call__(self, *_a, **_k):
+                return self
+
+        # 代表的な属性を用意（必要最小限）
+        types_mod.float64 = _DummyType()  # type: ignore[attr-defined]
+        types_mod.int64 = _DummyType()  # type: ignore[attr-defined]
+
+        def _ListType(*_a, **_k):  # pragma: no cover - dummy
+            return _DummyType()
+
+        types_mod.ListType = _ListType  # type: ignore[attr-defined]
+
+        # numba.typed.List のダミー
+        typed_mod = types.ModuleType("numba.typed")
+
+        class _DummyTypedList:  # pragma: no cover - dummy
+            @staticmethod
+            def empty_list(*_a, **_k):
+                return []
+
+        typed_mod.List = _DummyTypedList  # type: ignore[attr-defined]
+
+        # モジュールツリーに登録
         sys.modules["numba"] = m
+        sys.modules["numba.types"] = types_mod
+        sys.modules["numba.typed"] = typed_mod
+        # 親モジュールからの参照も提供
+        m.types = types_mod  # type: ignore[attr-defined]
+        m.typed = typed_mod  # type: ignore[attr-defined]
 
     # fontTools のシム注入（pens/ttLib の必要最小のみ）
     try:  # pragma: no cover
