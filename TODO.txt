@@ -7,3 +7,6 @@ Numbaの環境変数統一
 頂点数、cpu, メモリをメーター化
 dashify線の重なり除去
 displaceのspacial_freqをVec3に変更
+textをguiでフリー入力する仕組み
+windowを閉じるときのエラー対策
+backgroundの色、線の色をrun関数の引数で指定できるようにする

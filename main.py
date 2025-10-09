@@ -20,7 +20,7 @@ def draw(t: float) -> Geometry:
     """デモ描画関数（MIDI は `api.cc` で制御）。"""
     base = (
         # G.polyhedron(polygon_index=int(cc[1] * 6))
-        G.text(text="O", em_size_mm=cc[1] * 200, text_align="center").translate(
+        G.text(em_size_mm=cc[1] * 200, text_align="center").translate(
             CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0
         )
     )
@@ -29,8 +29,8 @@ def draw(t: float) -> Geometry:
         .partition()
         .fill(density=(cc[6] * 200, cc[6] * 200), angle_rad=(np.pi / 3, 2 * np.pi / 3, np.pi / 2))
         .subdivide()
-        # .displace()
-        .displace(t_sec=osc(t * cc[7]) * 100 * cc[8])
+        .displace()
+        # .displace(t_sec=osc(t * cc[7]) * 100 * cc[8])
     )
     return pipe(base)
 
