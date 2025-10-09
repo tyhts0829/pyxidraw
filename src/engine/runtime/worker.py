@@ -66,12 +66,14 @@ class _WorkerProcess(mp.Process):
         result_q: mp.Queue,
         draw_callback: Callable[[float], Geometry],
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
+        apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None,
         metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None,
     ):
         super().__init__(daemon=True)
         self.task_q, self.result_q = task_q, result_q
         self.draw_callback = draw_callback
         self.apply_cc_snapshot = apply_cc_snapshot
+        self.apply_param_snapshot = apply_param_snapshot
         self.metrics_snapshot = metrics_snapshot
 
     def run(self) -> None:
@@ -85,6 +87,12 @@ class _WorkerProcess(mp.Process):
                         self.apply_cc_snapshot(task.cc_state)
                 except Exception:
                     pass
+                # Parameter スナップショットを適用（SnapshotRuntime を有効化）
+                try:
+                    if self.apply_param_snapshot is not None:
+                        self.apply_param_snapshot(getattr(task, "param_overrides", None), task.t)
+                except Exception:
+                    pass
                 # 直前のスナップショット
                 try:
                     before = self.metrics_snapshot() if self.metrics_snapshot is not None else None
@@ -92,6 +100,12 @@ class _WorkerProcess(mp.Process):
                     before = None
                 # t のみを渡す（cc は api.cc 側で参照）
                 geometry = self.draw_callback(task.t)
+                # Runtime をクリア（スナップショット無しを渡して明示的に無効化）
+                try:
+                    if self.apply_param_snapshot is not None:
+                        self.apply_param_snapshot(None, 0.0)
+                except Exception:
+                    pass
                 # 直後のスナップショット
                 try:
                     after = self.metrics_snapshot() if self.metrics_snapshot is not None else None
@@ -139,6 +153,8 @@ class WorkerPool(Tickable):
         cc_snapshot,
         num_workers: int = 4,
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None = None,
+        apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None = None,
+        param_snapshot: Callable[[], Mapping[str, object] | None] | None = None,
         metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None = None,
     ):
         self._fps = fps
@@ -147,8 +163,10 @@ class WorkerPool(Tickable):
         self._task_q: mp.Queue = mp.Queue(maxsize=2 * num_workers)
         self._result_q: Queue[RenderPacket | WorkerTaskError] | mp.Queue
         self._cc_snapshot = cc_snapshot
+        self._param_snapshot = param_snapshot or (lambda: None)
         self._draw_callback = draw_callback
         self._apply_cc_snapshot = apply_cc_snapshot
+        self._apply_param_snapshot = apply_param_snapshot
         self._metrics_snapshot = metrics_snapshot
         self._inline = num_workers < 1
         if self._inline:
@@ -159,7 +177,12 @@ class WorkerPool(Tickable):
             self._result_q = mp.Queue()
             self._workers = [
                 _WorkerProcess(
-                    self._task_q, self._result_q, draw_callback, apply_cc_snapshot, metrics_snapshot
+                    self._task_q,
+                    self._result_q,
+                    draw_callback,
+                    apply_cc_snapshot,
+                    apply_param_snapshot,
+                    metrics_snapshot,
                 )
                 for _ in range(num_workers)
             ]
@@ -176,13 +199,24 @@ class WorkerPool(Tickable):
         self._elapsed_time += dt
         try:
             frame_id = next(self._frame_iter)
-            task = RenderTask(frame_id=frame_id, t=self._elapsed_time, cc_state=self._cc_snapshot())
+            task = RenderTask(
+                frame_id=frame_id,
+                t=self._elapsed_time,
+                cc_state=self._cc_snapshot(),
+                param_overrides=self._param_snapshot(),
+            )
             if self._inline:
                 try:
                     # CC スナップショットを適用（インライン時）
                     try:
                         if self._apply_cc_snapshot is not None:
                             self._apply_cc_snapshot(task.cc_state)
+                    except Exception:
+                        pass
+                    # Parameter スナップショットを適用（インライン時）
+                    try:
+                        if self._apply_param_snapshot is not None:
+                            self._apply_param_snapshot(task.param_overrides, task.t)
                     except Exception:
                         pass
                     # 直前/直後で差分を取得
@@ -193,6 +227,12 @@ class WorkerPool(Tickable):
                     except Exception:
                         before = None
                     geometry = self._draw_callback(task.t)
+                    # Runtime をクリア
+                    try:
+                        if self._apply_param_snapshot is not None:
+                            self._apply_param_snapshot(None, 0.0)
+                    except Exception:
+                        pass
                     try:
                         after = (
                             self._metrics_snapshot() if self._metrics_snapshot is not None else None

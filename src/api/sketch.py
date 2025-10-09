@@ -84,7 +84,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Callable, Mapping, Optional, cast
+from typing import Callable, Mapping, Optional
 
 import numpy as np
 
@@ -252,8 +252,10 @@ def run_sketch(
     if use_parameter_gui and not init_only:
         parameter_manager = ParameterManager(user_draw)
         parameter_manager.initialize()
-        draw_callable = cast(Callable[[float], Geometry], parameter_manager.draw)
-        worker_count = 0
+        # 並列併用のため、ワーカへは生の user_draw を渡し、
+        # GUI 値はスナップショットで適用する
+        draw_callable = user_draw
+        worker_count = workers
     else:
         draw_callable = user_draw
         worker_count = workers
@@ -277,6 +279,9 @@ def run_sketch(
     from engine.ui.hud.overlay import OverlayHUD
     from engine.ui.hud.sampler import MetricSampler
 
+    # Parameter スナップショット適用（spawn 互換のトップレベル関数）
+    from engine.ui.parameters.snapshot import apply_param_snapshot, extract_overrides
+
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
     hud_conf: HUDConfig = hud_config or HUDConfig()
     swap_buffer = SwapBuffer()
@@ -293,12 +298,28 @@ def run_sketch(
         _hud_metrics_snapshot if (hud_conf.enabled and hud_conf.show_cache_status) else None
     )
 
+    # GUI の override のみを抽出するスナップショット関数
+    if parameter_manager is not None:
+
+        def _param_snapshot_fn():  # type: ignore[no-redef]
+            try:
+                return extract_overrides(parameter_manager.store)
+            except Exception:
+                return None
+
+    else:
+
+        def _param_snapshot_fn():  # type: ignore[no-redef]
+            return None
+
     worker_pool = WorkerPool(
         fps=fps,
         draw_callback=draw_callable,
         cc_snapshot=cc_snapshot_fn,
         apply_cc_snapshot=_apply_cc_snapshot,
         num_workers=worker_count,
+        apply_param_snapshot=apply_param_snapshot,
+        param_snapshot=_param_snapshot_fn,
         metrics_snapshot=metrics_snapshot_fn,
     )
 

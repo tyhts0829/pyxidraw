@@ -13,7 +13,7 @@ from __future__ import annotations
 - Shapely 未導入環境では処理を行わず、入力をそのまま返す（安全フォールバック）。
 """
 
-from typing import Iterable
+from typing import Iterable, Any, cast
 
 import numpy as np
 
@@ -37,6 +37,7 @@ except Exception:  # shapely 未導入
     _HAS_SHAPELY = False
     Polygon = None  # type: ignore
     MultiPoint = None  # type: ignore
+    _SPoint = None  # type: ignore
     _triangulate = None  # type: ignore
     _voronoi_diagram = None  # type: ignore
 
@@ -334,6 +335,8 @@ def partition(
         and _HAS_SHAPELY
         and Polygon is not None
         and _voronoi_diagram is not None
+        and MultiPoint is not None
+        and _SPoint is not None
     ):
         z0 = float(coords[0, 2])
         rings_xy: list[np.ndarray] = []
@@ -399,7 +402,7 @@ def partition(
 
 
 # UI RangeHint（量子化粒度は step を設定）
-partition.__param_meta__ = {
+cast(Any, partition).__param_meta__ = {
     "site_count": {"type": "integer", "min": 1, "max": 500, "step": 1},
     "seed": {"type": "integer", "min": 0, "max": 2_147_483_647, "step": 1},
 }

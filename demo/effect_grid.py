@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from math import ceil
+from math import ceil  # type: ignore
 from pathlib import Path
 from typing import Any
 

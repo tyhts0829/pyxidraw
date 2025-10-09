@@ -5,7 +5,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Mapping
 
 
 @dataclass(slots=True, frozen=True)
@@ -15,3 +15,6 @@ class RenderTask:
     frame_id: int
     t: float
     cc_state: Mapping[int, float]  # {CC#: normalized value 0.0-1.0}
+    # Parameter GUI の override スナップショット（省略時 None）。
+    # 形式は "{scope}.{name}#{index}.{param}" → 実値。
+    param_overrides: Mapping[str, Any] | None = None
