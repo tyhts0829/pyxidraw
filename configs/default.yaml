@@ -8,6 +8,8 @@ test_marker: true
 # 画面/描画の既定
 canvas:
   background_color: [1.0, 1.0, 1.0, 1.0]
+  # 線色の既定（API 未指定時のフォールバック）。Hex/0–1/0–255 いずれも可。
+  line_color: "#000000"
 
 canvas_controller:
   fps: 30
@@ -150,6 +152,8 @@ midi_devices:
 
 # HUD（横棒メータ）の既定
 hud:
+  # HUD テキスト色（Hex/0–1/0–255）
+  text_color: "#0000009B"
   meters:
     # メモリ正規化スケール（system_total/process_peak/custom）
     mem_scale: custom

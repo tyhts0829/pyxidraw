@@ -27,8 +27,8 @@ from shapes.registry import (
 )  # 公開唯一経路（api.shape）。shape_registry では再輸出しない。
 
 from .cc import cc
-from .lfo import lfo as lfo
 from .effects import E
+from .lfo import lfo as lfo
 
 # 主要API
 from .shapes import G, ShapesAPI

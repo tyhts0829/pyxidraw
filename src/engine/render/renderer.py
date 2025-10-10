@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 # 注意: optional 依存（moderngl）が未導入の環境でもモジュール import 自体が通るよう、
 # 直接の import は行わない。型は future annotations により遅延評価される。
@@ -51,8 +51,8 @@ class LineRenderer(Tickable):
         self._logger = logging.getLogger(__name__)
 
         # 遅延 import（optional 依存のない環境でも import 可能にするため）
-        from .shader import Shader  # local import
         from .line_mesh import LineMesh  # local import
+        from .shader import Shader  # local import
 
         # シェーダ初期化
         self.line_program = Shader.create_shader(mgl_context)
@@ -115,6 +115,29 @@ class LineRenderer(Tickable):
     def release(self) -> None:
         """GPU リソースを解放。"""
         self.gpu.release()
+
+    def set_line_color(self, rgba: Sequence[float]) -> None:
+        """線色（RGBA 0–1）を即時更新する。
+
+        実行時に GUI からの変更を反映する用途を想定。"""
+        try:
+            r, g, b, a = rgba
+        except Exception:  # pragma: no cover - 防御的
+            r, g, b, a = 0.0, 0.0, 0.0, 1.0
+
+        def _clamp01(x: float) -> float:
+            return 0.0 if x < 0.0 else 1.0 if x > 1.0 else float(x)
+
+        try:
+            self.line_program["color"].value = (
+                _clamp01(float(r)),
+                _clamp01(float(g)),
+                _clamp01(float(b)),
+                _clamp01(float(a)),
+            )
+        except Exception:
+            # mgl 非存在などの環境では黙って無視
+            pass
 
     # --------------------------------------------------------------------- #
     # Internal helpers                                                      #

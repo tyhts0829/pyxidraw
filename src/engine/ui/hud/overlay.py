@@ -62,6 +62,16 @@ class OverlayHUD(Tickable):
             cfg = _load_config() or {}
             hud_cfg = cfg.get("hud", {})
             if isinstance(hud_cfg, dict):
+                # テキスト色（任意）: hud.text_color を許容（Hex / 0..1 / 0..255）
+                try:
+                    text_col = hud_cfg.get("text_color")
+                    if text_col is not None:
+                        from util.color import to_u8_rgba as _to_u8_rgba
+
+                        r, g, b, a = _to_u8_rgba(text_col)
+                        self._color = (int(r), int(g), int(b), int(a))
+                except Exception:
+                    pass
                 meters = hud_cfg.get("meters", {})
                 if isinstance(meters, dict):
                     self._meter_width_px = int(meters.get("meter_width_px", self._meter_width_px))
@@ -72,12 +82,21 @@ class OverlayHUD(Tickable):
                     self._meter_alpha_fg = int(meters.get("meter_alpha_fg", self._meter_alpha_fg))
                     self._meter_alpha_bg = int(meters.get("meter_alpha_bg", self._meter_alpha_bg))
                     col = meters.get("meter_color_fg")
-                    if isinstance(col, (list, tuple)) and len(col) >= 3:
+                    if col is not None:
                         try:
-                            r, g, b = int(col[0]), int(col[1]), int(col[2])
-                            self._meter_color_fg = (r, g, b)
+                            # Hex / 0..1 / 0..255 のいずれも許容
+                            from util.color import to_u8_rgb as _to_u8_rgb
+
+                            r, g, b = _to_u8_rgb(col)
+                            self._meter_color_fg = (int(r), int(g), int(b))
                         except Exception:
-                            pass
+                            # 互換: 既存の配列形式を最後に試す
+                            try:
+                                if isinstance(col, (list, tuple)) and len(col) >= 3:
+                                    r, g, b = int(col[0]), int(col[1]), int(col[2])
+                                    self._meter_color_fg = (r, g, b)
+                            except Exception:
+                                pass
                     self._smoothing_alpha = float(
                         meters.get("smoothing_alpha", self._smoothing_alpha)
                     )

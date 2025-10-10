@@ -132,14 +132,9 @@ def run_sketch(
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: float = 4.0,
     line_thickness: float = 0.0006,
-    line_color: str | tuple[float, float, float] | tuple[float, float, float, float] = (
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-    ),
+    line_color: str | tuple[float, float, float] | tuple[float, float, float, float] | None = None,
     fps: int | None = None,
-    background: str | tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    background: str | tuple[float, float, float, float] | None = None,
     workers: int = 4,
     use_midi: bool = True,
     midi_strict: bool | None = None,
@@ -158,13 +153,13 @@ def run_sketch(
         線の太さ（クリップ空間 -1..1 基準の半幅相当）。既定は 0.0006。
         将来的に mm 指定のサポートを検討（`thickness_clip ≈ 2*mm/canvas_height`）。
     line_color :
-        線の色。
+        線の色（未指定時は設定の `canvas.line_color` → 既定黒）。
         - RGBA (0–1) タプル、またはヘックス文字列 `#RRGGBB` / `#RRGGBBAA`（`0x`/接頭辞なし可）。
         - RGB（長さ3）の場合は α=1.0 を補完。
     fps :
         描画更新レート。
     background :
-        背景色。
+        背景色（未指定時は設定の `canvas.background_color` → 既定白）。
         - RGBA (0‑1) タプル、またはヘックス文字列 `#RRGGBB` / `#RRGGBBAA`（`0x`/接頭辞なし可）。
     workers :
         バックグラウンド計算プロセス数（パラメータ GUI 有効時は 0 固定でシングルスレッド実行）。
@@ -353,43 +348,24 @@ def run_sketch(
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q, on_metrics=on_metrics_cb)
 
     # ---- ⑤ Window & ModernGL --------------------------------------
-    # 色パラメータ正規化（背景/線色）
-    def _clamp01(x: float) -> float:
-        return 0.0 if x < 0.0 else 1.0 if x > 1.0 else float(x)
+    # 色パラメータ正規化（背景/線色）と設定フォールバック
+    from util.color import normalize_color as _normalize_color
 
-    def _parse_hex_color_str(s: str) -> tuple[float, float, float, float]:
-        t = s.strip()
-        if t.startswith("#"):
-            t = t[1:]
-        elif t.lower().startswith("0x"):
-            t = t[2:]
-        if len(t) not in (6, 8):
-            raise ValueError(f"invalid hex color length: '{s}'")
-        try:
-            r = int(t[0:2], 16)
-            g = int(t[2:4], 16)
-            b = int(t[4:6], 16)
-            a = int(t[6:8], 16) if len(t) == 8 else 255
-        except ValueError as e:
-            raise ValueError(f"invalid hex color: '{s}'") from e
-        return (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+    try:
+        from util.utils import load_config as _load_cfg_colors
+    except Exception:  # pragma: no cover - フォールバック
+        _load_cfg_colors = lambda: {}  # type: ignore[assignment]
 
-    def _normalize_color_param(
-        value: str | tuple[float, float, float] | tuple[float, float, float, float]
-    ) -> tuple[float, float, float, float]:
-        if isinstance(value, str):
-            r, g, b, a = _parse_hex_color_str(value)
-        else:
-            if len(value) == 3:
-                r, g, b = value  # type: ignore[misc]
-                a = 1.0
-            elif len(value) == 4:
-                r, g, b, a = value  # type: ignore[misc]
-            else:  # pragma: no cover - 防御的
-                raise ValueError("color tuple must be length 3 or 4")
-        return (_clamp01(r), _clamp01(g), _clamp01(b), _clamp01(a))
+    cfg_all = _load_cfg_colors() or {}
+    canvas_cfg = cfg_all.get("canvas", {}) if isinstance(cfg_all, dict) else {}
+    cfg_bg = canvas_cfg.get("background_color") if isinstance(canvas_cfg, dict) else None
+    cfg_line = canvas_cfg.get("line_color") if isinstance(canvas_cfg, dict) else None
 
-    bg_rgba = _normalize_color_param(background)
+    if background is None:
+        bg_src = cfg_bg if cfg_bg is not None else (1.0, 1.0, 1.0, 1.0)
+    else:
+        bg_src = background
+    bg_rgba = _normalize_color(bg_src)
     rendering_window = RenderWindow(window_width, window_height, bg_color=bg_rgba)  # type: ignore[abstract]
     mgl_ctx: moderngl.Context = moderngl.create_context()
     mgl_ctx.enable(moderngl.BLEND)
@@ -417,7 +393,20 @@ def run_sketch(
     ).T  # 転置を適用
 
     # 線色を正規化（文字列/タプル → RGBA 0–1）
-    rgba = _normalize_color_param(line_color)
+    if line_color is None:
+        if cfg_line is not None:
+            lc_src = cfg_line
+        else:
+            # 背景の輝度に基づいて黒/白を自動選択
+            try:
+                br, bg_, bb, _ = bg_rgba
+                luminance = 0.2126 * float(br) + 0.7152 * float(bg_) + 0.0722 * float(bb)
+                lc_src = (0.0, 0.0, 0.0, 1.0) if luminance >= 0.5 else (1.0, 1.0, 1.0, 1.0)
+            except Exception:
+                lc_src = (0.0, 0.0, 0.0, 1.0)
+    else:
+        lc_src = line_color
+    rgba = _normalize_color(lc_src)
 
     line_renderer = LineRenderer(
         mgl_context=mgl_ctx,
@@ -440,6 +429,73 @@ def run_sketch(
         tickables.append(overlay)
     frame_clock = FrameClock(tickables)
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
+
+    # ---- ⑨ Parameter GUI からの色変更を監視 --------------------------
+    if parameter_manager is not None:
+
+        def _apply_bg_color(_dt: float, raw_val) -> None:  # noqa: ANN001
+            try:
+                from util.color import normalize_color as _norm
+
+                rendering_window.set_background_color(_norm(raw_val))
+            except Exception:
+                pass
+
+        def _apply_line_color(_dt: float, raw_val) -> None:  # noqa: ANN001
+            try:
+                from util.color import normalize_color as _norm
+
+                line_renderer.set_line_color(_norm(raw_val))
+            except Exception:
+                pass
+
+        def _on_param_store_change(ids: Mapping[str, object] | list[str] | tuple[str, ...]):
+            try:
+                # 受け取る ID 集合へ正規化
+                id_list = list(ids.keys()) if isinstance(ids, Mapping) else list(ids)
+            except Exception:
+                id_list = []
+            # 背景
+            if "runner.background" in id_list:
+                try:
+                    val = parameter_manager.store.current_value("runner.background")
+                    if val is None:
+                        val = parameter_manager.store.original_value("runner.background")
+                    if val is not None:
+                        # GL 操作は pyglet のスケジューラでメインループ側に委譲
+                        pyglet.clock.schedule_once(lambda dt, v=val: _apply_bg_color(dt, v), 0.0)
+                        # line_color が未指定（override 無し）の場合は自動選択も委譲
+                        lc_cur = parameter_manager.store.current_value("runner.line_color")
+                        if lc_cur is None:
+                            from util.color import normalize_color as _norm
+
+                            br, bg_, bb, _ = _norm(val)
+                            luminance = (
+                                0.2126 * float(br) + 0.7152 * float(bg_) + 0.0722 * float(bb)
+                            )
+                            auto = (
+                                (0.0, 0.0, 0.0, 1.0) if luminance >= 0.5 else (1.0, 1.0, 1.0, 1.0)
+                            )
+                            pyglet.clock.schedule_once(
+                                lambda dt, v=auto: _apply_line_color(dt, v), 0.0
+                            )
+                except Exception:
+                    pass
+            # 線色
+            if "runner.line_color" in id_list:
+                try:
+                    val = parameter_manager.store.current_value("runner.line_color")
+                    if val is None:
+                        val = parameter_manager.store.original_value("runner.line_color")
+                    if val is not None:
+                        pyglet.clock.schedule_once(lambda dt, v=val: _apply_line_color(dt, v), 0.0)
+                except Exception:
+                    pass
+
+        try:
+            parameter_manager.store.subscribe(_on_param_store_change)
+        except Exception:
+            pass
 
     # ---- ⑧ pyglet イベント -----------------------------------------
     @rendering_window.event

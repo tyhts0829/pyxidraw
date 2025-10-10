@@ -244,6 +244,11 @@ else:
             with dpg.window(
                 tag=ROOT_TAG, label=self._title, no_resize=False, no_collapse=True
             ) as root:
+                # 上部に Display セクション、下部にスクロール領域（通常のパラメータ）
+                try:
+                    self._build_runner_controls(parent=root)
+                except Exception:
+                    logger.exception("failed to build runner controls")
                 dpg.add_child_window(tag=SCROLL_TAG, autosize_x=True, autosize_y=True, border=False)
             dpg.set_primary_window(root, True)
 
@@ -263,7 +268,11 @@ else:
             -------
             None
             """
-            sorted_desc = sorted(descriptors, key=lambda d: (d.category, d.id))
+            # Runner 専用の Display コントロール（runner.*）は上部に別枠を作っているため
+            # 通常テーブルからは除外して二重表示を防ぐ。
+            excluded_ids = {"runner.background", "runner.line_color"}
+            filtered = [d for d in descriptors if d.id not in excluded_ids]
+            sorted_desc = sorted(filtered, key=lambda d: (d.category, d.id))
             current_cat: str | None = None
             group_items: list[ParameterDescriptor] = []
 
@@ -295,6 +304,8 @@ else:
                 else:
                     group_items.append(desc)
             flush_group(current_cat, group_items)
+
+        # Runner controls は個別に上部で生成済み
 
         def _label_value_ratio(self) -> tuple[float, float]:
             """ラベル列と値列の比率（0.1..0.9）を返す。
@@ -338,6 +349,106 @@ else:
                 dpg.add_text(default_value=label, parent=row)
                 self._create_widget(row, desc)
             # ツールチップは非採用（ポップアップは表示しない）
+
+        # ---- Runner controls (Display) ----
+        def _build_runner_controls(self, parent: int | str) -> None:
+            from util.color import normalize_color as _norm
+
+            try:
+                from util.utils import load_config as _load_cfg
+            except Exception:
+                _load_cfg = lambda: {}
+
+            cfg = _load_cfg() or {}
+            canvas = cfg.get("canvas", {}) if isinstance(cfg, dict) else {}
+            bg_raw = canvas.get("background_color", (1.0, 1.0, 1.0, 1.0))
+            ln_raw = canvas.get("line_color", (0.0, 0.0, 0.0, 1.0))
+            try:
+                bgf = _norm(bg_raw)
+            except Exception:
+                bgf = (1.0, 1.0, 1.0, 1.0)
+            try:
+                lnf = _norm(ln_raw)
+            except Exception:
+                lnf = (0.0, 0.0, 0.0, 1.0)
+
+            with dpg.collapsing_header(label="Display", default_open=True, parent=parent):
+                # 背景
+                dpg.add_text("Background")
+                # ColorEdit: 小プレビューを保持し、クリック時のみピッカーを表示
+                bg_picker = dpg.add_color_edit(
+                    tag="runner.background",
+                    default_value=[float(bgf[0]), float(bgf[1]), float(bgf[2]), float(bgf[3])],
+                    no_label=True,
+                    no_picker=False,
+                    no_small_preview=False,
+                    no_options=False,
+                    alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+                    display_type=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                    input_mode=getattr(dpg, "mvColorEdit_InputFloat", 0),
+                    alpha_bar=True,
+                )
+
+                def _on_bg_picker(_s, app_data, _u):
+                    try:
+                        from util.color import normalize_color as _norm
+
+                        self._store.set_override("runner.background", _norm(app_data))
+                    except Exception:
+                        logger.exception("invalid BG color from picker: %s", app_data)
+
+                dpg.configure_item(bg_picker, callback=_on_bg_picker)
+
+                dpg.add_spacer(height=6)
+                # 線色
+                dpg.add_text("Line Color")
+                ln_picker = dpg.add_color_edit(
+                    tag="runner.line_color",
+                    default_value=[float(lnf[0]), float(lnf[1]), float(lnf[2]), float(lnf[3])],
+                    no_label=True,
+                    no_picker=False,
+                    no_small_preview=False,
+                    no_options=False,
+                    alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+                    display_type=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                    input_mode=getattr(dpg, "mvColorEdit_InputFloat", 0),
+                    alpha_bar=True,
+                )
+
+                def _on_ln_picker(_s, app_data, _u):
+                    try:
+                        from util.color import normalize_color as _norm
+
+                        self._store.set_override("runner.line_color", _norm(app_data))
+                    except Exception:
+                        logger.exception("invalid LINE color from picker: %s", app_data)
+
+                dpg.configure_item(ln_picker, callback=_on_ln_picker)
+
+                # ParameterStore に runner.* を Descriptor 登録（保存対象/通知の整合性確保）
+                try:
+                    from .state import ParameterDescriptor as _PD
+
+                    bg_desc = _PD(
+                        id="runner.background",
+                        label="Background",
+                        source="effect",
+                        category="Display",
+                        value_type="string",
+                        default_value=(float(bgf[0]), float(bgf[1]), float(bgf[2]), float(bgf[3])),
+                    )
+                    ln_desc = _PD(
+                        id="runner.line_color",
+                        label="Line Color",
+                        source="effect",
+                        category="Display",
+                        value_type="string",
+                        default_value=(float(lnf[0]), float(lnf[1]), float(lnf[2]), float(lnf[3])),
+                    )
+                    self._store.register(bg_desc, bg_desc.default_value)
+                    self._store.register(ln_desc, ln_desc.default_value)
+                except Exception:
+                    logger.exception("failed to register runner.* descriptors")
 
         def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int:
             """Descriptor に応じたウィジェットを生成し、値変更コールバックを設定する。
@@ -553,7 +664,13 @@ else:
                         if value is None:
                             value = self._store.original_value(pid)
                         try:
-                            dpg.set_value(pid, value)
+                            if pid in ("runner.background", "runner.line_color"):
+                                from util.color import normalize_color as _norm
+
+                                r, g, b, a = _norm(value)
+                                dpg.set_value(pid, [float(r), float(g), float(b), float(a)])
+                            else:
+                                dpg.set_value(pid, value)
                         except Exception:
                             logger.exception("set_value failed: id=%s", pid)
                         continue
@@ -689,22 +806,32 @@ else:
                     logger.exception("add_theme_color failed: key=%s val=%s", key, col)
 
         def _to_dpg_color(self, value: Any) -> Any:
-            """RGBA 値を Dear PyGui の 0..255 RGBA 配列へ正規化する。"""
+            """RGBA 値を Dear PyGui の 0..255 RGBA 配列へ正規化する。
+
+            - 受理: Hex 文字列 / (r,g,b[,a]) 0..1 / 0..255 配列
+            - 返値: [r,g,b,a] 0..255
+            """
             try:
-                if isinstance(value, (list, tuple)) and len(value) >= 4:
-                    vals = [
-                        float(value[0]),
-                        float(value[1]),
-                        float(value[2]),
-                        float(value[3]),
-                    ]
-                    # 0..1 の場合は 0..255 へ拡大
-                    if all(0.0 <= v <= 1.0 for v in vals):
-                        return [int(round(v * 255)) for v in vals]
-                    return [int(round(v)) for v in vals]
+                from util.color import to_u8_rgba as _to_u8_rgba
+
+                r, g, b, a = _to_u8_rgba(value)
+                return [int(r), int(g), int(b), int(a)]
             except Exception:
+                # 旧形式（配列）の最小互換
+                try:
+                    if isinstance(value, (list, tuple)) and len(value) >= 4:
+                        vals = [
+                            float(value[0]),
+                            float(value[1]),
+                            float(value[2]),
+                            float(value[3]),
+                        ]
+                        if all(0.0 <= v <= 1.0 for v in vals):
+                            return [int(round(v * 255)) for v in vals]
+                        return [int(round(v)) for v in vals]
+                except Exception:
+                    return None
                 return None
-            return None
 
 
 __all__ = ["ParameterWindow"]

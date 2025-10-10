@@ -31,7 +31,7 @@ parameter_gui:
   theme:
     colors:
       text: [0.95, 0.95, 0.95, 1.0]
-      window_bg: "#212121"       # 共通パーサ導入後に Hex 受理予定
+      window_bg: "#212121"       # Hex も受理
 
 hud:
   meters:
@@ -59,10 +59,10 @@ hud:
   - 備考: `canvas.line_color` は新設。`canvas.background_color` は既存をフォールバックに昇格。
   - 実装予定: `src/api/sketch.py` の色解決で設定を参照（明示引数が優先）。
 - Parameter GUI（Dear PyGui）テーマ色
-  - 入口: `parameter_gui.theme.colors.{key}`（RGBA 配列）。
+  - 入口: `parameter_gui.theme.colors.{key}`（RGBA 配列 または Hex 文字列）。
   - 主なキー: `text`, `window_bg`, `frame_bg`, `frame_bg_hovered`, `frame_bg_active`, `header`, `header_hovered`, `header_active`, `accent`, `accent_active`。
-  - 値の型: `[r,g,b,a]`（0–255 または 0.0–1.0）。現状は配列のみ受理。Hex 入力は今後、共通パーサ導入後に対応予定。
-  - 推奨: 0.0–1.0 配列を推奨（0–255 は互換/非推奨）。
+  - 値の型: `[r,g,b,a]`（0–255 または 0.0–1.0） もしくは `#RRGGBB[AA]`。
+  - 推奨: 0.0–1.0 配列または Hex。0–255 配列は互換/非推奨。
   - 実装参照: `configs/default.yaml:200` 以降の例、`src/engine/ui/parameters/manager.py:64-81`, `src/engine/ui/parameters/dpg_window.py:662-689`。
 
 - HUD（オーバーレイ）メータの色/不透明度
@@ -146,11 +146,12 @@ hud:
 - 設定キーの現状（利用/非利用）と方針の明記。
 
 実装タスク（チェックリスト・ドラフト）
-- [ ] 共通パーサ `util.color.parse_color` の新設（Hex/0–1/0–255 対応）
-- [ ] API/GUI/HUD 呼び出し箇所を共通パーサに置換
+- [x] 共通パーサ `util.color.parse_color` の新設（Hex/0–1/0–255 対応）
+- [x] API/GUI/HUD 呼び出し箇所を共通パーサに置換
 - [ ] Parameter GUI に色ピッカーとプレビュー追加
-- [ ] `line_color` 自動既定（背景輝度から黒/白選択）
-- [ ] `canvas.line_color` を追加し、`canvas.background_color` と合わせて API 未指定時の解決に使用
-- [ ] HUD テキスト色 `hud.text_color` を導入し、OverlayHUD で参照
-- [ ] 本ドキュメントのクイックリファレンス/Do&Don’t 追記
-- [ ] パーサ/境界/異常系のテスト追加
+- [x] Parameter GUI に色ピッカーとプレビュー追加
+- [x] `line_color` 自動既定（背景輝度から黒/白選択）
+- [x] `canvas.line_color` を追加し、`canvas.background_color` と合わせて API 未指定時の解決に使用
+- [x] HUD テキスト色 `hud.text_color` を導入し、OverlayHUD で参照
+- [x] 本ドキュメントのクイックリファレンス/Do&Don’t 追記
+- [x] パーサ/境界/異常系のテスト追加

@@ -76,3 +76,13 @@ class RenderWindow(pyglet.window.Window):
         self.clear()
         for cb in self._draw_callbacks:
             cb()
+
+    # ---- helpers ----
+    def set_background_color(self, rgba: tuple[float, float, float, float]) -> None:
+        """背景色 RGBA(0–1) を更新する。次フレームから反映。"""
+        try:
+            r, g, b, a = rgba
+            self._bg_color = (float(r), float(g), float(b), float(a))
+        except Exception:
+            # 不正入力は無視
+            pass

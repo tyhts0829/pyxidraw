@@ -154,6 +154,8 @@ Tips:
 - 線の太さは `run(..., line_thickness=0.0006)` で指定可能（クリップ空間 -1..1 基準の半幅相当）。
 - 線の色は `run(..., line_color=(r,g,b,a) | "#RRGGBB[AA]")` で指定。RGB（3要素）の場合は α=1.0 を補完。
 - 背景色 `background` も RGBA タプルまたはヘックスで指定可能。
+- `background` / `line_color` を未指定の場合は、`configs/default.yaml` の
+  `canvas.background_color` / `canvas.line_color` をフォールバックとして使用。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
 
 ## テストとの接点（要点）
