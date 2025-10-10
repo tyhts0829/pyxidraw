@@ -156,6 +156,8 @@ Tips:
 - 背景色 `background` も RGBA タプルまたはヘックスで指定可能。
 - `background` / `line_color` を未指定の場合は、`configs/default.yaml` の
   `canvas.background_color` / `canvas.line_color` をフォールバックとして使用。
+ - Parameter GUI の保存値がある場合は、起動直後に Store→描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。
+   優先順位は「引数 > 保存値 > config」。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
 
 ## テストとの接点（要点）

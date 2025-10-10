@@ -417,7 +417,9 @@ def run_sketch(
     )  # type: ignore
 
     # ---- 初期色の復帰（Parameter GUI の保存値があれば優先） ---------
-    if parameter_manager is not None:
+    def _apply_initial_colors() -> None:
+        if parameter_manager is None:
+            return
         try:
             from util.color import normalize_color as _norm
 
@@ -426,31 +428,26 @@ def run_sketch(
             if bg_val is None:
                 bg_val = parameter_manager.store.original_value("runner.background")
             if bg_val is not None:
-                bg_rgba_init = _norm(bg_val)
-                print("RUNDBG init BG from store=", tuple(round(float(x), 6) for x in bg_rgba_init))
-                rendering_window.set_background_color(bg_rgba_init)
+                rendering_window.set_background_color(_norm(bg_val))
 
             # 線色（store → renderer）。無ければ背景輝度で自動決定
             ln_val = parameter_manager.store.current_value("runner.line_color")
             if ln_val is None:
                 ln_val = parameter_manager.store.original_value("runner.line_color")
             if ln_val is not None:
-                ln_rgba_init = _norm(ln_val)
-                print(
-                    "RUNDBG init LINE from store=", tuple(round(float(x), 6) for x in ln_rgba_init)
-                )
-                line_renderer.set_line_color(ln_rgba_init)
+                line_renderer.set_line_color(_norm(ln_val))
             else:
                 try:
                     br, bg_, bb, _ = rendering_window._bg_color  # type: ignore[attr-defined]
                     luminance = 0.2126 * float(br) + 0.7152 * float(bg_) + 0.0722 * float(bb)
                     auto = (0.0, 0.0, 0.0, 1.0) if luminance >= 0.5 else (1.0, 1.0, 1.0, 1.0)
-                    print("RUNDBG init LINE auto from BG luminance=", round(luminance, 6), auto)
                     line_renderer.set_line_color(auto)
                 except Exception:
                     pass
         except Exception:
             pass
+
+    _apply_initial_colors()
 
     # ---- Draw callbacks ----------------------------------
     rendering_window.add_draw_callback(line_renderer.draw)

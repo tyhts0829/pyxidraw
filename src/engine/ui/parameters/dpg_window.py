@@ -185,8 +185,16 @@ else:
             # 初期マウント
             self.mount(sorted(self._store.descriptors(), key=lambda d: d.id))
 
-            # 購読
-            self._store.subscribe(self._on_store_change)
+            # 購読（変更時にランナー色を再同期）
+            def _on_store_change_wrapper(ids: Iterable[str]) -> None:
+                try:
+                    self._on_store_change(ids)
+                    # ランナー色を強制再同期（冪等）
+                    self.sync_display_from_store(self._store)
+                except Exception:
+                    logger.exception("store change handling failed")
+
+            self._store.subscribe(_on_store_change_wrapper)
 
             # 表示 + 駆動
             dpg.show_viewport()
@@ -246,7 +254,7 @@ else:
             ) as root:
                 # 上部に Display セクション、下部にスクロール領域（通常のパラメータ）
                 try:
-                    self._build_runner_controls(parent=root)
+                    self.build_display_controls(parent=root, store=self._store)
                 except Exception:
                     logger.exception("failed to build runner controls")
                 dpg.add_child_window(tag=SCROLL_TAG, autosize_x=True, autosize_y=True, border=False)
@@ -351,7 +359,27 @@ else:
             # ツールチップは非採用（ポップアップは表示しない）
 
         # ---- Runner controls (Display) ----
-        def _build_runner_controls(self, parent: int | str) -> None:
+        def force_set_rgb_u8(self, tag: int | str, rgb_u8: Sequence[int]) -> None:
+            """ColorEdit に 0..255 の RGB 整数を強制反映する。"""
+            try:
+                r = int(rgb_u8[0])
+                g = int(rgb_u8[1])
+                b = int(rgb_u8[2])
+                dpg.set_value(tag, [r, g, b])
+            except Exception:
+                logger.exception("force_set_rgb_u8 failed: tag=%s val=%s", tag, rgb_u8)
+
+        def store_rgb01(self, pid: str, app_data: Any) -> None:
+            """ColorEdit の値を 0..1 RGBA に正規化して Store に保存する。"""
+            try:
+                from util.color import normalize_color as _norm
+
+                rgba = _norm(app_data)
+                self._store.set_override(pid, rgba)
+            except Exception:
+                logger.exception("store_rgb01 failed: pid=%s val=%s", pid, app_data)
+
+        def build_display_controls(self, parent: int | str, store: ParameterStore) -> None:
             from util.color import normalize_color as _norm
 
             try:
@@ -374,17 +402,17 @@ else:
 
             # Store に override があればそれを初期値に反映
             try:
-                val = self._store.current_value("runner.background")
+                val = store.current_value("runner.background")
                 if val is None:
-                    val = self._store.original_value("runner.background")
+                    val = store.original_value("runner.background")
                 if val is not None:
                     bgf = _norm(val)
             except Exception:
                 pass
             try:
-                val = self._store.current_value("runner.line_color")
+                val = store.current_value("runner.line_color")
                 if val is None:
-                    val = self._store.original_value("runner.line_color")
+                    val = store.original_value("runner.line_color")
                 if val is not None:
                     lnf = _norm(val)
             except Exception:
@@ -415,21 +443,14 @@ else:
                 # 既存の Store 値を 0..255 の RGB 整数で明示反映
                 try:
                     r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
-                    dpg.set_value(
-                        bg_picker,
-                        [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                    self.force_set_rgb_u8(
+                        bg_picker, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
                     )
                 except Exception:
                     pass
 
                 def _on_bg_picker(_s, app_data, _u):
-                    try:
-                        from util.color import normalize_color as _norm
-
-                        print("DPGDBG BG on_change app_data=", app_data, type(app_data))
-                        self._store.set_override("runner.background", _norm(app_data))
-                    except Exception:
-                        logger.exception("invalid BG color from picker: %s", app_data)
+                    self.store_rgb01("runner.background", app_data)
 
                 dpg.configure_item(bg_picker, callback=_on_bg_picker)
 
@@ -456,31 +477,29 @@ else:
                 )
                 try:
                     r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
-                    dpg.set_value(
-                        ln_picker,
-                        [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                    self.force_set_rgb_u8(
+                        ln_picker, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
                     )
                 except Exception:
                     pass
 
                 def _on_ln_picker(_s, app_data, _u):
-                    try:
-                        from util.color import normalize_color as _norm
-
-                        print("DPGDBG LN on_change app_data=", app_data, type(app_data))
-                        self._store.set_override("runner.line_color", _norm(app_data))
-                    except Exception:
-                        logger.exception("invalid LINE color from picker: %s", app_data)
+                    self.store_rgb01("runner.line_color", app_data)
 
                 dpg.configure_item(ln_picker, callback=_on_ln_picker)
 
                 # 初期同期（store→GUI）を明示呼び出し（ロード復帰が subscribe 前に済むため）
                 try:
-                    self._on_store_change(["runner.background", "runner.line_color"])
+                    self.sync_display_from_store(store)
                 except Exception:
                     logger.exception("initial store->gui sync failed")
 
-                # Descriptor の登録は ParameterManager.initialize() 側で行う
+        def sync_display_from_store(self, store: ParameterStore) -> None:
+            """runner.* の色を Store から GUI に同期（0..255 RGB 強制）。"""
+            ids = ["runner.background", "runner.line_color"]
+            self._on_store_change(ids)
+
+            # Descriptor の登録は ParameterManager.initialize() 側で行う
 
         def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int:
             """Descriptor に応じたウィジェットを生成し、値変更コールバックを設定する。
@@ -700,29 +719,13 @@ else:
                                 from util.color import normalize_color as _norm
 
                                 r, g, b, a = _norm(value)
-                                # ウィジェットの現行値の型/スケールに合わせて設定
-                                try:
-                                    cur = dpg.get_value(pid)
-                                except Exception:
-                                    cur = None
-                                print(
-                                    f"DPGDBG STORE->GUI {pid} store=",
-                                    (
-                                        round(float(r), 6),
-                                        round(float(g), 6),
-                                        round(float(b), 6),
-                                        round(float(a), 6),
-                                    ),
-                                    "cur=",
-                                    cur,
-                                )
+                                # ウィジェットへ整数RGBで強制反映
                                 set_val_i = [
                                     int(round(r * 255)),
                                     int(round(g * 255)),
                                     int(round(b * 255)),
                                 ]
                                 dpg.set_value(pid, set_val_i)
-                                print(f"DPGDBG STORE->GUI {pid} force set(int)=", set_val_i)
                             else:
                                 dpg.set_value(pid, value)
                         except Exception:

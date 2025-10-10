@@ -15,11 +15,11 @@ from .controller import ParameterWindowController
 from .persistence import load_overrides, save_overrides
 from .runtime import ParameterRuntime, activate_runtime, deactivate_runtime
 from .state import (
+    ParameterDescriptor,
     ParameterLayoutConfig,
     ParameterStore,
     ParameterThemeConfig,
     ParameterWindowConfig,
-    ParameterDescriptor,
 )
 
 
@@ -96,8 +96,8 @@ class ParameterManager:
             deactivate_runtime()
         # 追加のランナー系パラメータ（色）を登録してから override を復元
         try:
-            from util.utils import load_config as _load_cfg
             from util.color import normalize_color as _norm
+            from util.utils import load_config as _load_cfg
 
             cfg = _load_cfg() or {}
             canvas = cfg.get("canvas", {}) if isinstance(cfg, dict) else {}

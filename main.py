@@ -47,8 +47,6 @@ if __name__ == "__main__":
         render_scale=4.5,
         use_midi=True,
         use_parameter_gui=True,
-        workers=0,
+        workers=6,
         line_thickness=0.001,
-        # background="222831",
-        # line_color="EEEEEE",
     )
