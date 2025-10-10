@@ -84,3 +84,13 @@
 
 > 注: 本ファイルはレビュー結果の要約であり、修正は未実施です。必要ならチェックリスト化して段階的に対応します。
 
+### 追記（2025-10-11）: SwapBuffer 識別子リネーム影響箇所（概要）
+
+- 目的: 用語統一に合わせ、`double_buffer` 系識別子を `swap_buffer` へ改名。
+- 影響箇所（主要）:
+  - `src/engine/render/renderer.py:41, 46, 50, 84, 85`
+  - `src/engine/runtime/receiver.py:21, 32`
+  - `src/api/sketch.py:414`
+- 除外（OpenGL 設定）:
+  - `src/engine/core/render_window.py:38` の `Config(double_buffer=True)` は別概念。
+- 詳細チェックリスト: `reports/plan_swapbuffer_identifier_rename.md`

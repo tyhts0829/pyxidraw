@@ -411,7 +411,7 @@ def run_sketch(
     line_renderer = LineRenderer(
         mgl_context=mgl_ctx,
         projection_matrix=proj,
-        double_buffer=swap_buffer,
+        swap_buffer=swap_buffer,
         line_thickness=line_thickness,
         line_color=rgba,
     )  # type: ignore

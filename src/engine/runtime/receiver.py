@@ -18,18 +18,18 @@ class StreamReceiver(Tickable):
 
     def __init__(
         self,
-        double_buffer: SwapBuffer,
+        swap_buffer: SwapBuffer,
         result_q,
         max_packets_per_tick: int = 2,
         on_metrics: Callable[[Mapping[str, str]], None] | None = None,
     ):
         """
-        _buffer:データを流し込む先のSwapBuffer
+        _swap_buffer: データを流し込む先の SwapBuffer
         _q (Queue): ワーカープロセスが作成したデータ（RenderPacket）が入るキュー
         _max: 1回の更新(tick)で処理するパケットの最大数
         _latest_frame: 最新のフレーム番号（古いデータを無視するため）
         """
-        self._buffer = double_buffer
+        self._swap_buffer = swap_buffer
         self._q = result_q
         self._max = max_packets_per_tick
         self._latest_frame: int | None = None
@@ -52,7 +52,7 @@ class StreamReceiver(Tickable):
 
             # 最新のフレームならバッファに追加
             if (self._latest_frame is None) or (packet.frame_id > self._latest_frame):
-                self._buffer.push(packet.geometry)
+                self._swap_buffer.push(packet.geometry)
                 self._latest_frame = packet.frame_id
                 # HUD 用メトリクス（任意）
                 try:

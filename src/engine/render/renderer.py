@@ -38,16 +38,16 @@ class LineRenderer(Tickable):
         self,
         mgl_context: "mgl.Context",
         projection_matrix: np.ndarray,
-        double_buffer: SwapBuffer,
+        swap_buffer: SwapBuffer,
         line_thickness: float = 0.0006,
         line_color: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0),
     ):
         """
-        double_buffer: GPUへ送る前のデータを管理する仕組み
+        swap_buffer: GPUへ送る前のデータを管理する仕組み
         gpu: 上記のGPUBufferクラスのインスタンス。データのアップロードを任せる
         """
         self.ctx = mgl_context
-        self.double_buffer = double_buffer
+        self.swap_buffer = swap_buffer
         self._logger = logging.getLogger(__name__)
 
         # 遅延 import（optional 依存のない環境でも import 可能にするため）
@@ -81,8 +81,8 @@ class LineRenderer(Tickable):
         """
         毎フレーム呼ばれ、SwapBufferに新データがあればGPUへ転送。
         """
-        if self.double_buffer.try_swap():
-            geometry = self.double_buffer.get_front()
+        if self.swap_buffer.try_swap():
+            geometry = self.swap_buffer.get_front()
             self._upload_geometry(geometry)
 
     # --------------------------------------------------------------------- #
