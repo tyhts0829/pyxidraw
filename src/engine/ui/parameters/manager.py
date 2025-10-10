@@ -19,6 +19,7 @@ from .state import (
     ParameterStore,
     ParameterThemeConfig,
     ParameterWindowConfig,
+    ParameterDescriptor,
 )
 
 
@@ -93,6 +94,35 @@ class ParameterManager:
             self._user_draw(0.0)
         finally:
             deactivate_runtime()
+        # 追加のランナー系パラメータ（色）を登録してから override を復元
+        try:
+            from util.utils import load_config as _load_cfg
+            from util.color import normalize_color as _norm
+
+            cfg = _load_cfg() or {}
+            canvas = cfg.get("canvas", {}) if isinstance(cfg, dict) else {}
+            bg = _norm(canvas.get("background_color", (1.0, 1.0, 1.0, 1.0)))
+            ln = _norm(canvas.get("line_color", (0.0, 0.0, 0.0, 1.0)))
+            bg_desc = ParameterDescriptor(
+                id="runner.background",
+                label="Background",
+                source="effect",
+                category="Display",
+                value_type="vector",
+                default_value=(float(bg[0]), float(bg[1]), float(bg[2]), float(bg[3])),
+            )
+            ln_desc = ParameterDescriptor(
+                id="runner.line_color",
+                label="Line Color",
+                source="effect",
+                category="Display",
+                value_type="vector",
+                default_value=(float(ln[0]), float(ln[1]), float(ln[2]), float(ln[3])),
+            )
+            self.store.register(bg_desc, bg_desc.default_value)
+            self.store.register(ln_desc, ln_desc.default_value)
+        except Exception:
+            pass
         # ここで Descriptor が確定しているため、GUI マウント前に override を復元
         try:
             load_overrides(self.store)

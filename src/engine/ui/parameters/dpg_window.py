@@ -372,27 +372,61 @@ else:
             except Exception:
                 lnf = (0.0, 0.0, 0.0, 1.0)
 
+            # Store に override があればそれを初期値に反映
+            try:
+                val = self._store.current_value("runner.background")
+                if val is None:
+                    val = self._store.original_value("runner.background")
+                if val is not None:
+                    bgf = _norm(val)
+            except Exception:
+                pass
+            try:
+                val = self._store.current_value("runner.line_color")
+                if val is None:
+                    val = self._store.original_value("runner.line_color")
+                if val is not None:
+                    lnf = _norm(val)
+            except Exception:
+                pass
+
             with dpg.collapsing_header(label="Display", default_open=True, parent=parent):
                 # 背景
                 dpg.add_text("Background")
                 # ColorEdit: 小プレビューを保持し、クリック時のみピッカーを表示
                 bg_picker = dpg.add_color_edit(
                     tag="runner.background",
-                    default_value=[float(bgf[0]), float(bgf[1]), float(bgf[2]), float(bgf[3])],
+                    default_value=[
+                        int(round(float(bgf[0]) * 255)),
+                        int(round(float(bgf[1]) * 255)),
+                        int(round(float(bgf[2]) * 255)),
+                    ],
                     no_label=True,
                     no_picker=False,
                     no_small_preview=False,
                     no_options=False,
+                    no_alpha=True,
                     alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
-                    display_type=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
-                    input_mode=getattr(dpg, "mvColorEdit_InputFloat", 0),
-                    alpha_bar=True,
+                    display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                    display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                    input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                    alpha_bar=False,
                 )
+                # 既存の Store 値を 0..255 の RGB 整数で明示反映
+                try:
+                    r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
+                    dpg.set_value(
+                        bg_picker,
+                        [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                    )
+                except Exception:
+                    pass
 
                 def _on_bg_picker(_s, app_data, _u):
                     try:
                         from util.color import normalize_color as _norm
 
+                        print("DPGDBG BG on_change app_data=", app_data, type(app_data))
                         self._store.set_override("runner.background", _norm(app_data))
                     except Exception:
                         logger.exception("invalid BG color from picker: %s", app_data)
@@ -404,51 +438,49 @@ else:
                 dpg.add_text("Line Color")
                 ln_picker = dpg.add_color_edit(
                     tag="runner.line_color",
-                    default_value=[float(lnf[0]), float(lnf[1]), float(lnf[2]), float(lnf[3])],
+                    default_value=[
+                        int(round(float(lnf[0]) * 255)),
+                        int(round(float(lnf[1]) * 255)),
+                        int(round(float(lnf[2]) * 255)),
+                    ],
                     no_label=True,
                     no_picker=False,
                     no_small_preview=False,
                     no_options=False,
+                    no_alpha=True,
                     alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
-                    display_type=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
-                    input_mode=getattr(dpg, "mvColorEdit_InputFloat", 0),
-                    alpha_bar=True,
+                    display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                    display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                    input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                    alpha_bar=False,
                 )
+                try:
+                    r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
+                    dpg.set_value(
+                        ln_picker,
+                        [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                    )
+                except Exception:
+                    pass
 
                 def _on_ln_picker(_s, app_data, _u):
                     try:
                         from util.color import normalize_color as _norm
 
+                        print("DPGDBG LN on_change app_data=", app_data, type(app_data))
                         self._store.set_override("runner.line_color", _norm(app_data))
                     except Exception:
                         logger.exception("invalid LINE color from picker: %s", app_data)
 
                 dpg.configure_item(ln_picker, callback=_on_ln_picker)
 
-                # ParameterStore に runner.* を Descriptor 登録（保存対象/通知の整合性確保）
+                # 初期同期（store→GUI）を明示呼び出し（ロード復帰が subscribe 前に済むため）
                 try:
-                    from .state import ParameterDescriptor as _PD
-
-                    bg_desc = _PD(
-                        id="runner.background",
-                        label="Background",
-                        source="effect",
-                        category="Display",
-                        value_type="string",
-                        default_value=(float(bgf[0]), float(bgf[1]), float(bgf[2]), float(bgf[3])),
-                    )
-                    ln_desc = _PD(
-                        id="runner.line_color",
-                        label="Line Color",
-                        source="effect",
-                        category="Display",
-                        value_type="string",
-                        default_value=(float(lnf[0]), float(lnf[1]), float(lnf[2]), float(lnf[3])),
-                    )
-                    self._store.register(bg_desc, bg_desc.default_value)
-                    self._store.register(ln_desc, ln_desc.default_value)
+                    self._on_store_change(["runner.background", "runner.line_color"])
                 except Exception:
-                    logger.exception("failed to register runner.* descriptors")
+                    logger.exception("initial store->gui sync failed")
+
+                # Descriptor の登録は ParameterManager.initialize() 側で行う
 
         def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int:
             """Descriptor に応じたウィジェットを生成し、値変更コールバックを設定する。
@@ -668,7 +700,29 @@ else:
                                 from util.color import normalize_color as _norm
 
                                 r, g, b, a = _norm(value)
-                                dpg.set_value(pid, [float(r), float(g), float(b), float(a)])
+                                # ウィジェットの現行値の型/スケールに合わせて設定
+                                try:
+                                    cur = dpg.get_value(pid)
+                                except Exception:
+                                    cur = None
+                                print(
+                                    f"DPGDBG STORE->GUI {pid} store=",
+                                    (
+                                        round(float(r), 6),
+                                        round(float(g), 6),
+                                        round(float(b), 6),
+                                        round(float(a), 6),
+                                    ),
+                                    "cur=",
+                                    cur,
+                                )
+                                set_val_i = [
+                                    int(round(r * 255)),
+                                    int(round(g * 255)),
+                                    int(round(b * 255)),
+                                ]
+                                dpg.set_value(pid, set_val_i)
+                                print(f"DPGDBG STORE->GUI {pid} force set(int)=", set_val_i)
                             else:
                                 dpg.set_value(pid, value)
                         except Exception:

@@ -49,6 +49,6 @@ if __name__ == "__main__":
         use_parameter_gui=True,
         workers=0,
         line_thickness=0.001,
-        background="222831",
-        line_color="EEEEEE",
+        # background="222831",
+        # line_color="EEEEEE",
     )
