@@ -30,8 +30,8 @@ if TYPE_CHECKING:  # 型チェック時のみ参照（実行時 import は遅延
 
 class LineRenderer(Tickable):
     """
-    DoubleBufferからデータを取得し、毎フレームGPUに送り込む作業を管理。
-    DoubleBuffer（CPU側）からGPUへのデータ転送を明確に管理して、描画の一貫性を保つために必要。
+    SwapBufferからデータを取得し、毎フレームGPUに送り込む作業を管理。
+    SwapBuffer（CPU側）からGPUへのデータ転送を明確に管理して、描画の一貫性を保つために必要。
     """
 
     def __init__(
@@ -60,20 +60,12 @@ class LineRenderer(Tickable):
         # 線幅はクリップ空間（-1..1 基準）で設定する
         self.line_program["line_thickness"].value = float(line_thickness)
         # 線色（RGBA, 0–1）
+        from util.color import normalize_color as _normalize_color  # 局所参照（依存を明示）
+
         try:
-            r, g, b, a = line_color
-        except Exception:  # pragma: no cover - 防御的
-            r, g, b, a = 0.0, 0.0, 0.0, 1.0
-
-        def _clamp01(x: float) -> float:
-            return 0.0 if x < 0.0 else 1.0 if x > 1.0 else float(x)
-
-        self.line_program["color"].value = (
-            _clamp01(r),
-            _clamp01(g),
-            _clamp01(b),
-            _clamp01(a),
-        )
+            self.line_program["color"].value = _normalize_color(line_color)
+        except Exception:  # pragma: no cover - 防御的フォールバック
+            self.line_program["color"].value = (0.0, 0.0, 0.0, 1.0)
 
         # GPUBuffer を保持
         self.gpu = LineMesh(
@@ -87,7 +79,7 @@ class LineRenderer(Tickable):
     # --------------------------------------------------------------------- #
     def tick(self, dt: float) -> None:
         """
-        毎フレーム呼ばれ、DoubleBufferに新データがあればGPUへ転送。
+        毎フレーム呼ばれ、SwapBufferに新データがあればGPUへ転送。
         """
         if self.double_buffer.try_swap():
             geometry = self.double_buffer.get_front()
@@ -120,21 +112,10 @@ class LineRenderer(Tickable):
         """線色（RGBA 0–1）を即時更新する。
 
         実行時に GUI からの変更を反映する用途を想定。"""
-        try:
-            r, g, b, a = rgba
-        except Exception:  # pragma: no cover - 防御的
-            r, g, b, a = 0.0, 0.0, 0.0, 1.0
-
-        def _clamp01(x: float) -> float:
-            return 0.0 if x < 0.0 else 1.0 if x > 1.0 else float(x)
+        from util.color import normalize_color as _normalize_color
 
         try:
-            self.line_program["color"].value = (
-                _clamp01(float(r)),
-                _clamp01(float(g)),
-                _clamp01(float(b)),
-                _clamp01(float(a)),
-            )
+            self.line_program["color"].value = _normalize_color(rgba)
         except Exception:
             # mgl 非存在などの環境では黙って無視
             pass

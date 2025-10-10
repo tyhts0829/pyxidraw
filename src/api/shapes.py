@@ -56,7 +56,6 @@ import shapes  # noqa: F401  (登録目的の副作用)
 from common.param_utils import params_signature as _params_signature
 from engine.core.geometry import Geometry, LineLike
 from engine.ui.parameters import get_active_runtime
-from engine.ui.parameters.runtime import resolve_without_runtime
 from shapes.registry import get_shape as get_shape_generator
 from shapes.registry import is_shape_registered  # ガード付きメモ化用（登録状態の即時反映）
 from shapes.registry import list_shapes as list_registered_shapes
@@ -122,47 +121,7 @@ class ShapesAPI:
 
     # 量子化ユーティリティは common.param_utils.signature_tuple を使用
 
-    @staticmethod
-    def _generate_shape(shape_name: str, params_dict: dict[str, Any]) -> Geometry:
-        """形状生成関数を解決して実行し、`Geometry` を返す。
-
-        Parameters
-        ----------
-        shape_name : str
-            形状名（レジストリ登録済みキー）。
-        params_dict : dict[str, Any]
-            形状関数へ渡す実レンジのパラメータ（正規化値ではない）。
-
-        Returns
-        -------
-        Geometry
-            生成結果。戻り値が `Geometry` 以外（ポリライン列）の場合は
-            `Geometry.from_lines(...)` で包んで返す。
-
-        Notes
-        -----
-        - ランタイムが有効な場合は `engine.ui.parameters` による事前解決を行う。
-        - 例外は各シェイプ実装からそのまま伝播。
-        """
-        runtime = get_active_runtime()
-        fn = get_shape_generator(shape_name)
-        if runtime is not None:
-            params_dict = dict(runtime.before_shape_call(shape_name, fn, params_dict))
-        else:
-            params_dict = dict(
-                resolve_without_runtime(
-                    scope="shape",
-                    name=shape_name,
-                    fn=fn,
-                    params=params_dict,
-                    index=0,
-                )
-            )
-
-        data = fn(**params_dict)
-        if isinstance(data, Geometry):
-            return data
-        return Geometry.from_lines(data)
+    # 形状生成ヘルパは `_generate_shape_resolved` に集約
 
     # _params_to_tuple は廃止（署名は params_signature で統一）
 

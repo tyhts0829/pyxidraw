@@ -14,7 +14,7 @@ from .buffer import SwapBuffer
 
 
 class StreamReceiver(Tickable):
-    """結果キューを監視して DoubleBuffer に流し込むだけの責務。"""
+    """結果キューを監視して SwapBuffer に流し込むだけの責務。"""
 
     def __init__(
         self,
@@ -24,7 +24,7 @@ class StreamReceiver(Tickable):
         on_metrics: Callable[[Mapping[str, str]], None] | None = None,
     ):
         """
-        _buffer:データを流し込む先のDoubleBuffer
+        _buffer:データを流し込む先のSwapBuffer
         _q (Queue): ワーカープロセスが作成したデータ（RenderPacket）が入るキュー
         _max: 1回の更新(tick)で処理するパケットの最大数
         _latest_frame: 最新のフレーム番号（古いデータを無視するため）
