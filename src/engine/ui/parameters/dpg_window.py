@@ -419,74 +419,97 @@ else:
                 pass
 
             with dpg.collapsing_header(label="Display", default_open=True, parent=parent):
-                # 背景
-                dpg.add_text("Background")
-                # ColorEdit: 小プレビューを保持し、クリック時のみピッカーを表示
-                bg_picker = dpg.add_color_edit(
-                    tag="runner.background",
-                    default_value=[
-                        int(round(float(bgf[0]) * 255)),
-                        int(round(float(bgf[1]) * 255)),
-                        int(round(float(bgf[2]) * 255)),
-                    ],
-                    no_label=True,
-                    no_picker=False,
-                    no_small_preview=False,
-                    no_options=False,
-                    no_alpha=True,
-                    alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
-                    display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
-                    display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
-                    input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
-                    alpha_bar=False,
+                # 2カラムのテーブルでラベル/ピッカーを1行に配置
+                table_policy = getattr(dpg, "mvTable_SizingStretchProp", None) or getattr(
+                    dpg, "mvTable_SizingStretchSame", None
                 )
-                # 既存の Store 値を 0..255 の RGB 整数で明示反映
-                try:
-                    r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
-                    self.force_set_rgb_u8(
-                        bg_picker, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
-                    )
-                except Exception:
-                    pass
+                with dpg.table(header_row=False, policy=table_policy) as _disp_tbl:
+                    left, right = self._label_value_ratio()
+                    self._add_two_columns(left, right)
+                    # 背景行
+                    with dpg.table_row():
+                        dpg.add_text("Background")
+                        try:
+                            dpg.table_next_column()
+                        except Exception:
+                            pass
+                        bg_picker = dpg.add_color_edit(
+                            tag="runner.background",
+                            default_value=[
+                                int(round(float(bgf[0]) * 255)),
+                                int(round(float(bgf[1]) * 255)),
+                                int(round(float(bgf[2]) * 255)),
+                            ],
+                            no_label=True,
+                            no_picker=False,
+                            no_small_preview=False,
+                            no_options=False,
+                            no_alpha=True,
+                            alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+                            display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                            display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                            input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                            alpha_bar=False,
+                        )
+                        try:
+                            dpg.set_item_width(bg_picker, -1)
+                        except Exception:
+                            pass
+                        # 初期反映
+                        try:
+                            r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
+                            self.force_set_rgb_u8(
+                                bg_picker,
+                                [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                            )
+                        except Exception:
+                            pass
+                        dpg.configure_item(
+                            bg_picker,
+                            callback=lambda s, a, u: self.store_rgb01("runner.background", a),
+                        )
 
-                def _on_bg_picker(_s, app_data, _u):
-                    self.store_rgb01("runner.background", app_data)
-
-                dpg.configure_item(bg_picker, callback=_on_bg_picker)
-
-                dpg.add_spacer(height=6)
-                # 線色
-                dpg.add_text("Line Color")
-                ln_picker = dpg.add_color_edit(
-                    tag="runner.line_color",
-                    default_value=[
-                        int(round(float(lnf[0]) * 255)),
-                        int(round(float(lnf[1]) * 255)),
-                        int(round(float(lnf[2]) * 255)),
-                    ],
-                    no_label=True,
-                    no_picker=False,
-                    no_small_preview=False,
-                    no_options=False,
-                    no_alpha=True,
-                    alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
-                    display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
-                    display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
-                    input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
-                    alpha_bar=False,
-                )
-                try:
-                    r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
-                    self.force_set_rgb_u8(
-                        ln_picker, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
-                    )
-                except Exception:
-                    pass
-
-                def _on_ln_picker(_s, app_data, _u):
-                    self.store_rgb01("runner.line_color", app_data)
-
-                dpg.configure_item(ln_picker, callback=_on_ln_picker)
+                    # 線色行
+                    with dpg.table_row():
+                        dpg.add_text("Line Color")
+                        try:
+                            dpg.table_next_column()
+                        except Exception:
+                            pass
+                        ln_picker = dpg.add_color_edit(
+                            tag="runner.line_color",
+                            default_value=[
+                                int(round(float(lnf[0]) * 255)),
+                                int(round(float(lnf[1]) * 255)),
+                                int(round(float(lnf[2]) * 255)),
+                            ],
+                            no_label=True,
+                            no_picker=False,
+                            no_small_preview=False,
+                            no_options=False,
+                            no_alpha=True,
+                            alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+                            display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                            display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                            input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                            alpha_bar=False,
+                        )
+                        try:
+                            dpg.set_item_width(ln_picker, -1)
+                        except Exception:
+                            pass
+                        try:
+                            r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
+                            self.force_set_rgb_u8(
+                                ln_picker,
+                                [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                            )
+                        except Exception:
+                            pass
+                        dpg.configure_item(
+                            ln_picker,
+                            callback=lambda s, a, u: self.store_rgb01("runner.line_color", a),
+                        )
 
                 # 初期同期（store→GUI）を明示呼び出し（ロード復帰が subscribe 前に済むため）
                 try:
