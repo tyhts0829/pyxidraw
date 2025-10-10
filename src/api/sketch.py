@@ -448,6 +448,28 @@ def run_sketch(
             pass
 
     _apply_initial_colors()
+    # HUD 初期適用（存在時）
+    if parameter_manager is not None and overlay is not None:
+        try:
+            from util.color import normalize_color as _norm
+
+            tx = parameter_manager.store.current_value(
+                "runner.hud_text_color"
+            ) or parameter_manager.store.original_value("runner.hud_text_color")
+            if tx is not None:
+                overlay.set_text_color(_norm(tx))
+            mt = parameter_manager.store.current_value(
+                "runner.hud_meter_color"
+            ) or parameter_manager.store.original_value("runner.hud_meter_color")
+            if mt is not None:
+                overlay.set_meter_color(_norm(mt))
+            mb = parameter_manager.store.current_value(
+                "runner.hud_meter_bg_color"
+            ) or parameter_manager.store.original_value("runner.hud_meter_bg_color")
+            if mb is not None:
+                overlay.set_meter_bg_color(_norm(mb))
+        except Exception:
+            pass
 
     # ---- Draw callbacks ----------------------------------
     rendering_window.add_draw_callback(line_renderer.draw)
@@ -522,6 +544,54 @@ def run_sketch(
                         val = parameter_manager.store.original_value("runner.line_color")
                     if val is not None:
                         pyglet.clock.schedule_once(lambda dt, v=val: _apply_line_color(dt, v), 0.0)
+                except Exception:
+                    pass
+
+            # HUD テキスト色
+            if "runner.hud_text_color" in id_list and overlay is not None:
+                try:
+                    val = parameter_manager.store.current_value("runner.hud_text_color")
+                    if val is None:
+                        val = parameter_manager.store.original_value("runner.hud_text_color")
+                    if val is not None:
+                        from util.color import normalize_color as _norm
+
+                        rgba = _norm(val)
+                        pyglet.clock.schedule_once(
+                            lambda dt, v=rgba: overlay.set_text_color(v), 0.0
+                        )
+                except Exception:
+                    pass
+
+            # HUD メータ色
+            if "runner.hud_meter_color" in id_list and overlay is not None:
+                try:
+                    val = parameter_manager.store.current_value("runner.hud_meter_color")
+                    if val is None:
+                        val = parameter_manager.store.original_value("runner.hud_meter_color")
+                    if val is not None:
+                        from util.color import normalize_color as _norm
+
+                        rgba = _norm(val)
+                        pyglet.clock.schedule_once(
+                            lambda dt, v=rgba: overlay.set_meter_color(v), 0.0
+                        )
+                except Exception:
+                    pass
+
+            # HUD メータ背景色
+            if "runner.hud_meter_bg_color" in id_list and overlay is not None:
+                try:
+                    val = parameter_manager.store.current_value("runner.hud_meter_bg_color")
+                    if val is None:
+                        val = parameter_manager.store.original_value("runner.hud_meter_bg_color")
+                    if val is not None:
+                        from util.color import normalize_color as _norm
+
+                        rgba = _norm(val)
+                        pyglet.clock.schedule_once(
+                            lambda dt, v=rgba: overlay.set_meter_bg_color(v), 0.0
+                        )
                 except Exception:
                     pass
 

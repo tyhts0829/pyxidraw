@@ -4,3 +4,4 @@ windowを閉じるときのエラー対策
 重なり描画を軽く、Gcode化のときは生データ処理
 textでひらがなを打てるように
 render scaleとかもguiから動かしたい
+partitionのランダム性解除

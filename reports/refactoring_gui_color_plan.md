@@ -28,9 +28,9 @@
   - [x] ランナー色（runner.\*）のみ整数 RGB で強制反映（他の型は既存経路）
 - [x] sketch.py の初期適用の関数化
   - [x] `apply_initial_colors(parameter_manager, window, renderer)` を導入（BG/LINE + 自動線色）
-- [ ] ドキュメント差分
-  - [ ] docs/user_color_inputs.md に「GUI は 0–255 RGB 表示・内部は 0–1 RGBA」を明記
-  - [ ] architecture.md に初期適用（store→renderer/window）の記述を追記
+- [x] ドキュメント差分
+  - [x] docs/user_color_inputs.md に「GUI は 0–255 RGB 表示・内部は 0–1 RGBA」を明記
+  - [x] architecture.md に初期適用（store→renderer/window/overlay）の記述を追記
 
 完了扱い（実施済み）
 

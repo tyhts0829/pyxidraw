@@ -121,6 +121,51 @@ class ParameterManager:
             )
             self.store.register(bg_desc, bg_desc.default_value)
             self.store.register(ln_desc, ln_desc.default_value)
+
+            # HUD colors (text/meter) defaults from config
+            hud_cfg = cfg.get("hud", {}) if isinstance(cfg, dict) else {}
+            # text color may be RGBA or hex
+            hud_text = _norm(hud_cfg.get("text_color", (0, 0, 0, 155)))
+            meters = hud_cfg.get("meters", {}) if isinstance(hud_cfg, dict) else {}
+            mfg = meters.get("meter_color_fg", (50, 50, 50))
+            try:
+                mr = float(mfg[0]) / 255.0
+                mg = float(mfg[1]) / 255.0
+                mb = float(mfg[2]) / 255.0
+            except Exception:
+                mr, mg, mb = 0.2, 0.2, 0.2
+            hud_text_desc = ParameterDescriptor(
+                id="runner.hud_text_color",
+                label="HUD Text",
+                source="effect",
+                category="HUD",
+                value_type="vector",
+                default_value=(
+                    float(hud_text[0]),
+                    float(hud_text[1]),
+                    float(hud_text[2]),
+                    float(hud_text[3]),
+                ),
+            )
+            hud_meter_desc = ParameterDescriptor(
+                id="runner.hud_meter_color",
+                label="HUD Meter",
+                source="effect",
+                category="HUD",
+                value_type="vector",
+                default_value=(float(mr), float(mg), float(mb), 1.0),
+            )
+            hud_meter_bg_desc = ParameterDescriptor(
+                id="runner.hud_meter_bg_color",
+                label="HUD Meter BG",
+                source="effect",
+                category="HUD",
+                value_type="vector",
+                default_value=(0.196, 0.196, 0.196, 1.0),
+            )
+            self.store.register(hud_text_desc, hud_text_desc.default_value)
+            self.store.register(hud_meter_desc, hud_meter_desc.default_value)
+            self.store.register(hud_meter_bg_desc, hud_meter_bg_desc.default_value)
         except Exception:
             pass
         # ここで Descriptor が確定しているため、GUI マウント前に override を復元

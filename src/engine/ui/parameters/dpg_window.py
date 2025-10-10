@@ -276,9 +276,15 @@ else:
             -------
             None
             """
-            # Runner 専用の Display コントロール（runner.*）は上部に別枠を作っているため
+            # Runner 専用の Display/HUD コントロール（runner.*）は上部に別枠を作っているため
             # 通常テーブルからは除外して二重表示を防ぐ。
-            excluded_ids = {"runner.background", "runner.line_color"}
+            excluded_ids = {
+                "runner.background",
+                "runner.line_color",
+                "runner.hud_text_color",
+                "runner.hud_meter_color",
+                "runner.hud_meter_bg_color",
+            }
             filtered = [d for d in descriptors if d.id not in excluded_ids]
             sorted_desc = sorted(filtered, key=lambda d: (d.category, d.id))
             current_cat: str | None = None
@@ -468,6 +474,16 @@ else:
                             bg_picker,
                             callback=lambda s, a, u: self.store_rgb01("runner.background", a),
                         )
+                        # 念のため表示モードを再設定
+                        try:
+                            dpg.configure_item(
+                                bg_picker,
+                                display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                            )
+                        except Exception:
+                            pass
 
                     # 線色行
                     with dpg.table_row():
@@ -510,6 +526,195 @@ else:
                             ln_picker,
                             callback=lambda s, a, u: self.store_rgb01("runner.line_color", a),
                         )
+                        try:
+                            dpg.configure_item(
+                                ln_picker,
+                                display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                            )
+                        except Exception:
+                            pass
+
+                # HUD セクション（テキスト/メータの色、alpha 不要・ColorEdit 方式）
+                with dpg.collapsing_header(label="HUD", default_open=True, parent=parent):
+                    hud_tbl_policy = getattr(dpg, "mvTable_SizingStretchProp", None) or getattr(
+                        dpg, "mvTable_SizingStretchSame", None
+                    )
+                    with dpg.table(header_row=False, policy=hud_tbl_policy):
+                        left, right = self._label_value_ratio()
+                        self._add_two_columns(left, right)
+
+                        # テキスト色
+                        with dpg.table_row():
+                            dpg.add_text("Text Color")
+                            try:
+                                dpg.table_next_column()
+                            except Exception:
+                                pass
+                            # 既定値（store → 0..255 RGB）
+                            try:
+                                from util.color import normalize_color as _norm
+
+                                tx_val = store.current_value(
+                                    "runner.hud_text_color"
+                                ) or store.original_value("runner.hud_text_color")
+                                tr, tg, tb, _ = (
+                                    _norm(tx_val) if tx_val is not None else (0.0, 0.0, 0.0, 1.0)
+                                )
+                            except Exception:
+                                tr, tg, tb, _ = 0.0, 0.0, 0.0, 1.0
+                            tx_picker = dpg.add_color_edit(
+                                tag="runner.hud_text_color",
+                                default_value=[
+                                    int(round(tr * 255)),
+                                    int(round(tg * 255)),
+                                    int(round(tb * 255)),
+                                ],
+                                no_label=True,
+                                no_picker=False,
+                                no_small_preview=False,
+                                no_options=False,
+                                no_alpha=True,
+                                alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+                                display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                                alpha_bar=False,
+                            )
+                            try:
+                                dpg.set_item_width(tx_picker, -1)
+                            except Exception:
+                                pass
+                            dpg.configure_item(
+                                tx_picker,
+                                callback=lambda s, a, u: self.store_rgb01(
+                                    "runner.hud_text_color", a
+                                ),
+                            )
+                            try:
+                                dpg.configure_item(
+                                    tx_picker,
+                                    display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                    display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                    input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                                )
+                            except Exception:
+                                pass
+
+                        # メータ色
+                        with dpg.table_row():
+                            dpg.add_text("Meter Color")
+                            try:
+                                dpg.table_next_column()
+                            except Exception:
+                                pass
+                            try:
+                                from util.color import normalize_color as _norm
+
+                                mt_val = store.current_value(
+                                    "runner.hud_meter_color"
+                                ) or store.original_value("runner.hud_meter_color")
+                                mr, mg, mb, _ = (
+                                    _norm(mt_val) if mt_val is not None else (0.2, 0.2, 0.2, 1.0)
+                                )
+                            except Exception:
+                                mr, mg, mb, _ = 0.2, 0.2, 0.2, 1.0
+                            mt_picker = dpg.add_color_edit(
+                                tag="runner.hud_meter_color",
+                                default_value=[
+                                    int(round(mr * 255)),
+                                    int(round(mg * 255)),
+                                    int(round(mb * 255)),
+                                ],
+                                no_label=True,
+                                no_picker=False,
+                                no_small_preview=False,
+                                no_options=False,
+                                no_alpha=True,
+                                alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+                                display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                                alpha_bar=False,
+                            )
+                            try:
+                                dpg.set_item_width(mt_picker, -1)
+                            except Exception:
+                                pass
+                            dpg.configure_item(
+                                mt_picker,
+                                callback=lambda s, a, u: self.store_rgb01(
+                                    "runner.hud_meter_color", a
+                                ),
+                            )
+                            try:
+                                dpg.configure_item(
+                                    mt_picker,
+                                    display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                    display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                    input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                                )
+                            except Exception:
+                                pass
+
+                        # メータ背景色
+                        with dpg.table_row():
+                            dpg.add_text("Meter BG")
+                            try:
+                                dpg.table_next_column()
+                            except Exception:
+                                pass
+                            try:
+                                from util.color import normalize_color as _norm
+
+                                mb_val = store.current_value(
+                                    "runner.hud_meter_bg_color"
+                                ) or store.original_value("runner.hud_meter_bg_color")
+                                br, bg, bb, _ = (
+                                    _norm(mb_val)
+                                    if mb_val is not None
+                                    else (0.196, 0.196, 0.196, 1.0)
+                                )
+                            except Exception:
+                                br, bg, bb, _ = 0.196, 0.196, 0.196, 1.0
+                            mb_picker = dpg.add_color_edit(
+                                tag="runner.hud_meter_bg_color",
+                                default_value=[
+                                    int(round(br * 255)),
+                                    int(round(bg * 255)),
+                                    int(round(bb * 255)),
+                                ],
+                                no_label=True,
+                                no_picker=False,
+                                no_small_preview=False,
+                                no_options=False,
+                                no_alpha=True,
+                                alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+                                display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                                alpha_bar=False,
+                            )
+                            try:
+                                dpg.set_item_width(mb_picker, -1)
+                            except Exception:
+                                pass
+
+                            def _on_mb_picker(_s, app_data, _u):
+                                self.store_rgb01("runner.hud_meter_bg_color", app_data)
+
+                            dpg.configure_item(mb_picker, callback=_on_mb_picker)
+                            try:
+                                dpg.configure_item(
+                                    mb_picker,
+                                    display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                    display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                    input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                                )
+                            except Exception:
+                                pass
+                            # 初期状態の設定は上記で反映済み（ログは出さない）
 
                 # 初期同期（store→GUI）を明示呼び出し（ロード復帰が subscribe 前に済むため）
                 try:
@@ -519,7 +724,13 @@ else:
 
         def sync_display_from_store(self, store: ParameterStore) -> None:
             """runner.* の色を Store から GUI に同期（0..255 RGB 強制）。"""
-            ids = ["runner.background", "runner.line_color"]
+            ids = [
+                "runner.background",
+                "runner.line_color",
+                "runner.hud_text_color",
+                "runner.hud_meter_color",
+                "runner.hud_meter_bg_color",
+            ]
             self._on_store_change(ids)
 
             # Descriptor の登録は ParameterManager.initialize() 側で行う
@@ -738,7 +949,13 @@ else:
                         if value is None:
                             value = self._store.original_value(pid)
                         try:
-                            if pid in ("runner.background", "runner.line_color"):
+                            if pid in (
+                                "runner.background",
+                                "runner.line_color",
+                                "runner.hud_text_color",
+                                "runner.hud_meter_color",
+                                "runner.hud_meter_bg_color",
+                            ):
                                 from util.color import normalize_color as _norm
 
                                 r, g, b, a = _norm(value)

@@ -154,10 +154,12 @@ Tips:
 - 線の太さは `run(..., line_thickness=0.0006)` で指定可能（クリップ空間 -1..1 基準の半幅相当）。
 - 線の色は `run(..., line_color=(r,g,b,a) | "#RRGGBB[AA]")` で指定。RGB（3要素）の場合は α=1.0 を補完。
 - 背景色 `background` も RGBA タプルまたはヘックスで指定可能。
-- `background` / `line_color` を未指定の場合は、`configs/default.yaml` の
-  `canvas.background_color` / `canvas.line_color` をフォールバックとして使用。
+ - `background` / `line_color` を未指定の場合は、`configs/default.yaml` の
+   `canvas.background_color` / `canvas.line_color` をフォールバックとして使用。
  - Parameter GUI の保存値がある場合は、起動直後に Store→描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。
    優先順位は「引数 > 保存値 > config」。
+ - HUD の色（`runner.hud_text_color`、`runner.hud_meter_color`、`runner.hud_meter_bg_color`）も起動直後に Store→Overlay へ初期適用する（`OverlayHUD.set_text_color` / `set_meter_color` / `set_meter_bg_color`）。
+   優先順位は「保存値 > config」（HUD は引数指定の導線なし）。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
 
 ## テストとの接点（要点）

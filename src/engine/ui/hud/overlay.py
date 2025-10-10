@@ -56,6 +56,7 @@ class OverlayHUD(Tickable):
         self._meter_alpha_fg: int = int(self._config.meter_alpha_fg)
         self._meter_alpha_bg: int = int(self._config.meter_alpha_bg)
         self._meter_color_fg: tuple[int, int, int] = self._config.meter_color_fg
+        self._meter_color_bg: tuple[int, int, int] = (50, 50, 50)
         self._smoothing_alpha: float = float(self._config.smoothing_alpha)
         self._meter_left_margin_px: int = 10
         try:
@@ -95,6 +96,20 @@ class OverlayHUD(Tickable):
                                 if isinstance(col, (list, tuple)) and len(col) >= 3:
                                     r, g, b = int(col[0]), int(col[1]), int(col[2])
                                     self._meter_color_fg = (r, g, b)
+                            except Exception:
+                                pass
+                    colbg = meters.get("meter_color_bg")
+                    if colbg is not None:
+                        try:
+                            from util.color import to_u8_rgb as _to_u8_rgb
+
+                            r, g, b = _to_u8_rgb(colbg)
+                            self._meter_color_bg = (int(r), int(g), int(b))
+                        except Exception:
+                            try:
+                                if isinstance(colbg, (list, tuple)) and len(colbg) >= 3:
+                                    r, g, b = int(colbg[0]), int(colbg[1]), int(colbg[2])
+                                    self._meter_color_bg = (r, g, b)
                             except Exception:
                                 pass
                     self._smoothing_alpha = float(
@@ -200,11 +215,26 @@ class OverlayHUD(Tickable):
                 bg = self._bars_bg.get(key)
                 fg = self._bars_fg.get(key)
                 if bg is not None:
+                    try:
+                        bg.color = self._meter_color_bg
+                        bg.opacity = int(self._meter_alpha_bg)
+                    except Exception:
+                        pass
                     bg.draw()
                 if fg is not None:
+                    # メータ色の更新を反映
+                    try:
+                        fg.color = self._meter_color_fg
+                    except Exception:
+                        pass
                     fg.draw()
         # テキストメトリクス
         for lab in self._labels.values():
+            # テキスト色の更新を反映
+            try:
+                lab.color = self._color
+            except Exception:
+                pass
             lab.draw()
         # 進捗 (%表示)
         y = 10 + len(self._labels) * 18 + 8
@@ -283,3 +313,37 @@ class OverlayHUD(Tickable):
 
     def clear_progress(self, key: str) -> None:
         self._progress.pop(key, None)
+
+    # --- color setters (runtime) ---
+    def set_text_color(self, rgba01: tuple[float, float, float, float]) -> None:
+        """HUD テキスト色（0–1 RGBA）を 0–255 に変換して適用する。"""
+        try:
+            r, g, b, a = rgba01
+            self._color = (
+                int(round(float(r) * 255)),
+                int(round(float(g) * 255)),
+                int(round(float(b) * 255)),
+                int(round(float(a) * 255)),
+            )
+        except Exception:
+            return
+
+    def set_meter_color(
+        self, rgb01: tuple[float, float, float] | tuple[float, float, float, float]
+    ) -> None:
+        """HUD メータ前景色（0–1 RGB/A）。Alpha は無視。"""
+        try:
+            r, g, b = float(rgb01[0]), float(rgb01[1]), float(rgb01[2])
+            self._meter_color_fg = (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
+        except Exception:
+            return
+
+    def set_meter_bg_color(
+        self, rgb01: tuple[float, float, float] | tuple[float, float, float, float]
+    ) -> None:
+        """HUD メータ背景色（0–1 RGB/A）。Alpha は無視。"""
+        try:
+            r, g, b = float(rgb01[0]), float(rgb01[1]), float(rgb01[2])
+            self._meter_color_bg = (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
+        except Exception:
+            return
