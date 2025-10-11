@@ -76,10 +76,10 @@
 
 - 目的: try-import/例外ラップの撤去。必要箇所で `import mido` に一本化。
 - タスク:
-  - [ ] `src/engine/io/manager.py` — 関数内の try-import/例外ラップ撤去、ローカル `import mido` へ。
-  - [ ] `src/engine/io/controller.py` — トップレベル `import mido` を必要箇所でのローカル import に移動。型は文字列注釈へ。
+  - [x] `src/engine/io/manager.py` — 関数内の try-import/例外ラップ撤去、ローカル `import mido` へ。
+  - [x] `src/engine/io/controller.py` — トップレベル `import mido` を必要箇所でのローカル import に移動。型は簡素化（`Any`）へ。
 - 完了条件:
-  - [ ] 変更ファイル限定のチェック合格＋該当機能の最小スモーク。
+  - [x] 変更ファイル限定のチェック合格＋該当機能の最小スモーク。
 
 ### フェーズ5: shapely（幾何エフェクト）整理
 

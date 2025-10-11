@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 MIDI コントローラ入出力（IO モジュール）
 
@@ -36,12 +38,14 @@ import logging
 import os
 import sys
 from pathlib import Path
-
-import mido
+from typing import Any
 
 from util.utils import load_config
 
 from .helpers import DualKeyDict
+
+# mido はローカル import 方針（使用箇所で import）
+
 
 _SNAPSHOT_KEY = "by_name"
 
@@ -160,6 +164,8 @@ class MidiController:
 
     @staticmethod
     def validate_and_open_port(port_name):
+        import mido  # type: ignore
+
         if port_name in mido.get_input_names():  # type: ignore
             return mido.open_input(port_name)  # type: ignore
         else:
@@ -168,12 +174,14 @@ class MidiController:
     @staticmethod
     def handle_invalid_port_name(port_name: str) -> None:
         logger = logging.getLogger(__name__)
+        import mido  # type: ignore
+
         available = mido.get_input_names()  # type: ignore
         logger.error("Invalid port name: %s", port_name)
         logger.info("Available input ports: %s", available)
         raise InvalidPortError(f"Invalid port name: {port_name}. Available: {available}")
 
-    def process_midi_message(self, msg: mido.Message) -> dict | None:
+    def process_midi_message(self, msg: Any) -> dict | None:
         if msg.type == "control_change":  # type: ignore
             return self.handle_control_change(msg)
         elif msg.type in ["note_on", "note_off"]:  # type: ignore
@@ -187,7 +195,7 @@ class MidiController:
         elif self.mode == "7bit":
             return self.process_7bit_control_change(msg)
 
-    def process_14bit_control_change(self, msg: mido.Message) -> dict | None:
+    def process_14bit_control_change(self, msg: Any) -> dict | None:
         control_change_number = msg.control  # type: ignore
 
         if control_change_number < self.MSB_THRESHOLD:  # MSB
@@ -197,7 +205,7 @@ class MidiController:
         else:  # LSB
             return self.calc_combined_value(control_change_number, msg.value)  # type: ignore
 
-    def process_7bit_control_change(self, msg: mido.Message) -> dict:
+    def process_7bit_control_change(self, msg: Any) -> dict:
         return {"type": "CC(7bit)", "CC number": msg.control, "value": msg.value}  # type: ignore
 
     def calc_combined_value(self, control_change_number: int, value: int) -> dict | None:
@@ -225,6 +233,8 @@ class MidiController:
         self.debug_enabled = debug
 
     def sync_grid_knob_values(self):
+        import mido  # type: ignore
+
         names = [name for name in mido.get_output_names() if "Intech Grid MIDI device" in name]  # type: ignore
         if not names:
             return
@@ -238,11 +248,13 @@ class MidiController:
     @staticmethod
     def show_available_ports() -> None:
         logger = logging.getLogger(__name__)
+        import mido  # type: ignore
+
         logger.info("Available ports:")
         logger.info("  input: %s", mido.get_input_names())  # type: ignore
         logger.info("  output: %s", mido.get_output_names())  # type: ignore
 
-    def iter_pending(self) -> mido.Message:
+    def iter_pending(self) -> Any:
         """MIDIメッセージをイテレータとして返す。"""
         return self.inport.iter_pending()  # type: ignore
 

@@ -48,12 +48,9 @@ def connect_midi_controllers() -> MidiControllerManager:
     """
     PCに接続されているMIDIデバイスを検出し、MidiControllerオブジェクトにしてMidiControllerManagerに格納して返す。
     """
-    # 遅延 import（環境に mido が無い場合でも本モジュールの import 自体は成功させる）
-    try:
-        import mido  # type: ignore
-    except Exception as e:  # ImportError 含む
-        # ランタイムで呼び出されたときのみ失敗として扱う
-        raise RuntimeError("MIDI 機能を使用するには 'mido' が必要です") from e
+    # ローカル import（未導入時は ImportError がそのまま伝搬）
+    import mido  # type: ignore
+
     cfg = load_config() or {}
     devices = cfg.get("midi_devices", []) if isinstance(cfg, dict) else []
 

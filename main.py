@@ -32,9 +32,9 @@ def draw(t: float) -> Geometry:
     pipe = (
         E.pipeline.affine(angles_rad=(cc[3] * np.pi, cc[4] * np.pi, cc[5] * np.pi))
         .partition()
-        .fill()
+        .fill(density=cc[6] * 200)
         .subdivide()
-        .displace()
+        .displace(t_sec=cc[5] * 10)
         # .displace(t_sec=osc(t * cc[7]) * 100 * cc[8])
     )
     return pipe(base)
