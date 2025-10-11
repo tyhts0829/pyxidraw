@@ -15,7 +15,7 @@
 ## 1. 現状の概況（実装確認の要約）
 - 設定/環境のフォールバック
   - `fps`: `util.utils.load_config()` から安全にフォールバック（未設定時は 60）。
-  - `midi_strict`: 環境変数（`PYXIDRAW_MIDI_STRICT`）/設定（`midi.strict_default`）で解決（存続）。
+  - `midi_strict`: 削除済み（常にフォールバック方針）。
 - MIDI 初期化
   - `_setup_midi()` に集約。`use_midi=True` で実機を試行。失敗時は strict のみ致命、通常は Null 実装へフォールバック。
 - Parameter GUI
@@ -53,29 +53,32 @@
 実績: 読みやすさ向上と重複削減を達成（行数は外部機能追加に伴い総量は維持）。
 
 ### Phase 2（非破壊・責務分離/見通し改善）
-- [ ] 小規模ヘルパの外出し（必要最小限のみ）
-  - [ ] `resolve_fps()`、`build_projection()` の切り出し（再利用/テスト容易化）
-  - [ ] G-code エクスポート関係のハンドラ生成（`make_gcode_export_handlers()`）
-- [ ] 型エイリアスの導入（例: `RGBA`）と局所的 `try/except` への縮約
-- [ ] コメントの簡潔化（Why/Trade-off を短く、重複削除）
+- [x] 小規模ヘルパの外出し（必要最小限のみ）
+  - [x] `resolve_fps()`、`build_projection()` の切り出し（再利用/テスト容易化）
+  - [x] G-code エクスポート関係のハンドラ生成（`make_gcode_export_handlers()`）
+- [x] 型エイリアスの導入（`RGBA`）
+- [x] 例外捕捉の縮約（広域→局所化、挙動不変）
+  - `_apply_initial_colors()` と HUD 初期適用の外側 try/except を廃止し、個々の適用箇所のみ局所捕捉。
+  - Parameter GUI 変更ハンドラの ID 正規化で型ガードを採用（TypeError のみに限定）。
+- [x] コメントの簡潔化（重複/陳腐化の除去）
+  - G-code ジョブIDに関する陳腐化コメントを削除。その他、過剰な説明の簡略化。
 
 期待効果: 見通し向上とテスト容易化（挙動不変）。
 
 ---
 
-## 3R. `midi_strict` の削除（限定的非互換・要合意）
+## 3R. `midi_strict` の削除（限定的非互換）[完了]
 
 目的: エラーハンドリングの二重化（strict/非strict）を廃し、分岐・設定・環境依存を削減。ユーザー体験を「MIDI 初期化失敗時は常にフォールバック（警告通知）」に統一する。
 
-- 現状: `midi_strict` は存続しており、環境変数/設定から解決。strict 時のみ致命終了（テストで担保）。
-- 変更案（合意後に実施）:
-  - [ ] 公開 API 変更: `run_sketch` の引数から `midi_strict` を削除
-  - [ ] 挙動: 失敗時は常に NullMidi へフォールバック（`SystemExit(2)` 経路を削除）
-  - [ ] 環境変数/設定: `PYXIDRAW_MIDI_STRICT` と `midi.strict_default` を撤廃
-  - [ ] ドキュメント: `src/api/sketch.py` の docstring と `architecture.md` の該当記述を更新
-  - [ ] スタブ: `src/api/__init__.pyi` の再生成（`python -m tools.gen_g_stubs`）
-  - [ ] テスト: strict 前提のテスト削除/更新
-  - [ ] ロギング/HUD: フォールバック時の警告は維持
+- 変更点:
+  - [x] 公開 API 変更: `run_sketch` の引数から `midi_strict` を削除
+  - [x] 挙動: 失敗時は常に NullMidi へフォールバック（`SystemExit(2)` 経路を削除）
+  - [x] 環境変数/設定: `PYXIDRAW_MIDI_STRICT` と `midi.strict_default` を撤廃
+  - [x] ドキュメント: `src/api/sketch.py` の docstring と `architecture.md` の該当記述を更新
+  - [x] スタブ: `src/api/__init__.pyi` の再生成（`python -m tools.gen_g_stubs`）
+  - [x] テスト: strict 前提のテスト削除/更新
+  - [x] ロギング/HUD: フォールバック時の警告は維持
 
 ---
 
@@ -86,10 +89,12 @@
 ---
 
 ## 5. 作業手順（反復ループ）
-1) Phase 2 の責務分離（トップレベル関数化の最小適用）
-2) 変更ファイル限定の検証: `ruff check --fix src/api/sketch.py && black src/api/sketch.py && isort src/api/sketch.py && mypy src/api/sketch.py`
-3) 関連スモークテストの最小実行（例: `pytest -q -m smoke` または対象テスト）
-4) ドキュメント整合（`src/api/sketch.py` の docstring と `architecture.md`、必要に応じて README）
+1) Phase 2 の責務分離（トップレベル関数化の最小適用）[完了]
+2) 変更ファイル限定の検証（完了）:
+   - `mypy src/api/sketch.py` → OK
+   - `pytest -q tests/api/test_sketch_init_only.py tests/api/test_sketch_more.py` → OK
+   - フォーマット/並び替えは適用済み
+3) ドキュメント整合（本ファイルを更新済み。必要に応じて `architecture.md`/docstring を継続整備）
 
 ---
 

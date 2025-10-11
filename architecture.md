@@ -150,7 +150,7 @@ Tips:
 - 互換性維持よりもシンプルさと純関数性を優先（Deprecated API は段階的廃止）。
 
 ## MIDI と入力（要点）
-- `run(..., use_midi=True)` で可能なら実機 MIDI に接続。未接続時はフォールバック（`midi_strict=True` で失敗を致命扱い）。
+- `run(..., use_midi=True)` で可能なら実機 MIDI に接続。未接続時は警告の上でフォールバック。
 - 線の太さは `run(..., line_thickness=0.0006)` で指定可能（クリップ空間 -1..1 基準の半幅相当）。
 - 線の色は `run(..., line_color=(r,g,b,a) | "#RRGGBB[AA]")` で指定。RGB（3要素）の場合は α=1.0 を補完。
 - 背景色 `background` も RGBA タプルまたはヘックスで指定可能。

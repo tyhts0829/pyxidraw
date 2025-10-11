@@ -22,8 +22,7 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 1) FPS/設定解決: `fps is None` の場合は `util.utils.load_config()` から既定値を取得（なければ 60）。
 2) キャンバス設定: `util.constants.CANVAS_SIZES` のキーまたは `(width,height)` [mm] から
    論理サイズを確定し、`render_scale` 倍でピクセルサイズのウィンドウを作成。
-3) MIDI 初期化: `use_midi` 有効時、デバイス検出・サービス生成。厳格モード（後述）では
-   初期化失敗で `SystemExit(2)`。通常は Null 実装へフォールバックして継続。
+3) MIDI 初期化: `use_midi` 有効時、デバイス検出・サービス生成。失敗時は Null 実装へフォールバックして継続。
 4) パイプライン基盤: `SwapBuffer`・`WorkerPool`・`StreamReceiver` を結線し、
    ワーカーが生成した `Geometry` を非同期に受け取る。
 5) ウィンドウ/GL: `RenderWindow` を生成し、`ModernGL` のブレンドを有効化。
@@ -40,13 +39,10 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 - `background`: RGBA (0–1)。ウィンドウの背景色。
 - `workers`: バックグラウンド計算の並列度（CPU コア/負荷に応じて調整）。
 - `use_midi`: True で実機 MIDI を試行。未接続/未導入時は警告とともに Null 実装へ。
-- `midi_strict`: True で初期化失敗時に即終了。None なら環境変数を参照（下記）。
 - `init_only`: True で重い依存の初期化をスキップし、作成フェーズの検証だけを行って終了。
 
 環境変数・設定:
-- `PYXIDRAW_MIDI_STRICT`: `"1"/"true"/"on"/"yes"` で厳格モードを有効化。
-- 設定ファイル（`util.utils.load_config()` が読み取る YAML）から `fps` と
-  `midi.strict_default` を補完可能（読み込み失敗時は安全側の既定にフォールバック）。
+- 設定ファイル（`util.utils.load_config()` が読み取る YAML）から `fps` を補完可能（読み込み失敗時は安全側の既定にフォールバック）。
 
 スレッド/プロセス・安全性:
 - 本モジュールは UI イベントループ（`pyglet`）を主スレッドで回し、
@@ -72,7 +68,7 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 注意/制限:
 - 3D ではなく 2D 線の正射影描画を前提としている。Z は重なり順の補助程度。
 - ヘッドレス/仮想環境では `pyglet`/`ModernGL` の初期化に失敗する場合がある。
-- 厳格 MIDI モードではデバイス未検出等で即時終了する（非厳格時は警告ログのみ）。
+  
 
 ロギング:
 - 初期化エラーやフォールバックは `logging` で通知。必要に応じてハンドラを設定すること。
@@ -81,10 +77,9 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Callable, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional
 
 import numpy as np
 
@@ -97,6 +92,9 @@ from util.constants import CANVAS_SIZES
 
 from .effects import global_cache_counters as _effects_counters
 from .shapes import ShapesAPI as _ShapesAPI
+
+# 型エイリアス（RGBA 0..1）
+RGBA = tuple[float, float, float, float]
 
 
 def _hud_metrics_snapshot() -> dict[str, dict[str, int]]:
@@ -126,6 +124,124 @@ def _hud_metrics_snapshot() -> dict[str, dict[str, int]]:
     }
 
 
+# -----------------------------
+# 小規模ヘルパ（Phase 2）
+# -----------------------------
+def resolve_fps(requested_fps: int | None) -> int:
+    """指定がなければ設定から FPS を解決し、失敗時は 60 を返す。"""
+    if requested_fps is not None:
+        try:
+            return int(requested_fps)
+        except Exception:
+            return 60
+    try:
+        from util.utils import load_config
+
+        cfg = load_config() or {}
+        ccfg = cfg.get("canvas_controller", {}) if isinstance(cfg, dict) else {}
+        return int(ccfg.get("fps", 60))
+    except Exception:
+        return 60
+
+
+def build_projection(canvas_width: float, canvas_height: float) -> "np.ndarray":
+    """キャンバス mm を基準とする正射影行列（ModernGL 用の転置済み）を返す。"""
+    proj = np.array(
+        [
+            [2 / canvas_width, 0, 0, -1],
+            [0, -2 / canvas_height, 0, 1],
+            [0, 0, -1, 0],
+            [0, 0, 0, 1],
+        ],
+        dtype="f4",
+    ).T
+    return proj
+
+
+def make_gcode_export_handlers(
+    *,
+    export_service: "ExportService",
+    swap_buffer: "SwapBuffer",
+    canvas_width: float,
+    canvas_height: float,
+    overlay: "OverlayHUD | None",
+    pyglet_mod: Any,
+) -> tuple[Callable[[], None], Callable[[], None]]:
+    """G-code エクスポートの開始/キャンセル関数を生成して返す。"""
+
+    _current_g_job: str | None = None
+
+    def _start() -> None:
+        nonlocal _current_g_job
+        if _current_g_job is not None:
+            if overlay is not None:
+                overlay.show_message("G-code エクスポート実行中", level="warn")
+            return
+        front = swap_buffer.get_front()
+        if front is None or front.is_empty:
+            if overlay is not None:
+                overlay.show_message(
+                    "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
+                )
+            return
+        coords, offsets = front.as_arrays(copy=True)
+        try:
+            gparams = GCodeParams(
+                y_down=True,
+                canvas_height_mm=float(canvas_height),
+                canvas_width_mm=float(canvas_width),
+            )
+            _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
+            job_id = export_service.submit_gcode_job(
+                (coords, offsets), params=gparams, simulate=False, name_prefix=_name_prefix
+            )
+        except RuntimeError:
+            if overlay is not None:
+                overlay.show_message("G-code エクスポート実行中", level="warn")
+            return
+        _current_g_job = job_id
+
+        def _poll_progress(_dt: float) -> None:  # noqa: ARG001
+            nonlocal _current_g_job
+            assert _current_g_job is not None
+            prog = export_service.progress(_current_g_job)
+            if overlay is not None:
+                overlay.set_progress("gcode", prog.done_vertices, prog.total_vertices)
+            if prog.state in ("completed", "failed", "cancelled"):
+                if overlay is not None:
+                    overlay.clear_progress("gcode")
+                if prog.state == "completed" and prog.path is not None:
+                    if overlay is not None:
+                        overlay.show_message(f"Saved G-code: {prog.path}")
+                elif prog.state == "failed":
+                    if overlay is not None:
+                        overlay.show_message(f"G-code 失敗: {prog.error}", level="error")
+                elif prog.state == "cancelled":
+                    if overlay is not None:
+                        overlay.show_message(
+                            "G-code エクスポートをキャンセルしました", level="warn"
+                        )
+                pyglet_mod.clock.unschedule(_poll_progress)
+                _current_g_job = None
+
+        pyglet_mod.clock.schedule_interval(_poll_progress, 0.1)
+
+    def _cancel() -> None:
+        nonlocal _current_g_job
+        if _current_g_job is not None:
+            export_service.cancel(_current_g_job)
+            if overlay is not None:
+                overlay.show_message("G-code エクスポートをキャンセルします", level="warn")
+
+    return _start, _cancel
+
+
+if TYPE_CHECKING:  # 型チェック専用の軽量 import（実行時は読み込まない）
+    from engine.export.service import ExportService
+    from engine.runtime.buffer import SwapBuffer
+    from engine.ui.hud.overlay import OverlayHUD
+
+
 def run_sketch(
     user_draw: Callable[[float], Geometry],
     *,
@@ -137,7 +253,6 @@ def run_sketch(
     background: str | tuple[float, float, float, float] | None = None,
     workers: int = 4,
     use_midi: bool = True,
-    midi_strict: bool | None = None,
     init_only: bool = False,
     use_parameter_gui: bool = False,
     hud_config: HUDConfig | None = None,
@@ -165,26 +280,13 @@ def run_sketch(
         バックグラウンド計算プロセス数。Parameter GUI 併用時もワーカ併用可能（GUI 値はスナップショットで注入）。
     use_midi :
         True の場合は可能なら実機 MIDI を使用。未接続/未導入時は既定でフォールバック。
-    midi_strict :
-        True で厳格モード（初期化失敗時に SystemExit(2)）。None の場合は
-        環境変数 ``PYXIDRAW_MIDI_STRICT`` を参照（未設定は False）。
     use_parameter_gui :
         True で描画パラメータ編集ウィンドウを有効化し、`user_draw` の呼び出しをラップする。
     hud_config :
         HUD の表示設定。None の場合は既定（FPS/VERTEX/CPU/MEM を表示、CACHE は OFF）。
     """
     # ---- ① 設定からFPSを解決 --------------------------------------
-    # 引数fpsがNoneのときだけ、設定 (configs/default.yaml 等) を参照
-    if fps is None:
-        try:
-            from util.utils import load_config
-
-            cfg = load_config() or {}
-            ccfg = cfg.get("canvas_controller", {}) if isinstance(cfg, dict) else {}
-            # 不正値/未設定に備えつつ int へ
-            fps = int(ccfg.get("fps", 60))
-        except Exception:
-            fps = 60
+    fps = resolve_fps(fps)
 
     # ---- ② キャンバスサイズ決定 ------------------------------------
     if isinstance(canvas_size, str):
@@ -196,22 +298,7 @@ def run_sketch(
     )
 
     # ---- ③ MIDI ---------------------------------------------------
-    def _setup_midi(_use_midi: bool, _midi_strict: Optional[bool]):
-        # 環境変数から厳格モードを補完（未指定時）。
-        if _midi_strict is None:
-            env = os.environ.get("PYXIDRAW_MIDI_STRICT")
-            if env is not None:
-                _midi_strict = env == "1" or env.lower() in ("true", "on", "yes")
-            else:
-                # 設定から既定を参照（なければ False）
-                try:
-                    from util.utils import load_config
-
-                    cfg = load_config() or {}
-                    midi_cfg = cfg.get("midi", {}) if isinstance(cfg, dict) else {}
-                    _midi_strict = bool(midi_cfg.get("strict_default", False))
-                except Exception:
-                    _midi_strict = False
+    def _setup_midi(_use_midi: bool):
 
         class _NullMidi:
             def snapshot(self) -> Mapping[int, float]:
@@ -236,15 +323,12 @@ def run_sketch(
             return midi_manager_local, midi_service_local, midi_service_local.snapshot
         except Exception as e:  # ImportError / InvalidPortError / RuntimeError など
             logger = logging.getLogger(__name__)
-            if _midi_strict:
-                logger.exception("MIDI initialization failed (strict): %s", e)
-                raise SystemExit(2)
             logger.warning("MIDI unavailable; falling back to NullMidi: %s", e)
             nm = None
             ns = _NullMidi()
             return nm, ns, ns.snapshot
 
-    midi_manager, midi_service, cc_snapshot_fn = _setup_midi(use_midi, midi_strict)
+    midi_manager, midi_service, cc_snapshot_fn = _setup_midi(use_midi)
 
     # init_only の場合は重い依存を読み込まずに早期リターン
     parameter_manager: ParameterManager | None = None
@@ -369,18 +453,9 @@ def run_sketch(
         overlay = OverlayHUD(rendering_window, sampler, config=hud_conf)
     # G-code エクスポート: 実 writer を接続
     export_service = ExportService(writer=GCodeWriter())
-    # G-code ジョブIDは外側スコープで管理
 
     # ---- ⑥ 投影行列（正射影） --------------------------------------
-    proj = np.array(
-        [
-            [2 / canvas_width, 0, 0, -1],
-            [0, -2 / canvas_height, 0, 1],
-            [0, 0, -1, 0],
-            [0, 0, 0, 1],
-        ],
-        dtype="f4",
-    ).T  # 転置を適用
+    proj = build_projection(float(canvas_width), float(canvas_height))
 
     # 線色を正規化（文字列/タプル → RGBA 0–1）
     if line_color is None:
@@ -410,56 +485,65 @@ def run_sketch(
     def _apply_initial_colors() -> None:
         if parameter_manager is None:
             return
-        try:
-            from util.color import normalize_color as _norm
+        from util.color import normalize_color as _norm
 
-            # 背景（store → window）
-            bg_val = parameter_manager.store.current_value("runner.background")
-            if bg_val is None:
-                bg_val = parameter_manager.store.original_value("runner.background")
-            if bg_val is not None:
+        # 背景（store → window）
+        bg_val = parameter_manager.store.current_value("runner.background")
+        if bg_val is None:
+            bg_val = parameter_manager.store.original_value("runner.background")
+        if bg_val is not None:
+            try:
                 rendering_window.set_background_color(_norm(bg_val))
+            except Exception:
+                pass
 
-            # 線色（store → renderer）。無ければ背景輝度で自動決定
-            ln_val = parameter_manager.store.current_value("runner.line_color")
-            if ln_val is None:
-                ln_val = parameter_manager.store.original_value("runner.line_color")
-            if ln_val is not None:
+        # 線色（store → renderer）。無ければ背景輝度で自動決定
+        ln_val = parameter_manager.store.current_value("runner.line_color")
+        if ln_val is None:
+            ln_val = parameter_manager.store.original_value("runner.line_color")
+        if ln_val is not None:
+            try:
                 line_renderer.set_line_color(_norm(ln_val))
-            else:
-                try:
-                    br, bg_, bb, _ = rendering_window._bg_color  # type: ignore[attr-defined]
-                    luminance = 0.2126 * float(br) + 0.7152 * float(bg_) + 0.0722 * float(bb)
-                    auto = (0.0, 0.0, 0.0, 1.0) if luminance >= 0.5 else (1.0, 1.0, 1.0, 1.0)
-                    line_renderer.set_line_color(auto)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+            except Exception:
+                pass
+        else:
+            try:
+                br, bg_, bb, _ = rendering_window._bg_color  # type: ignore[attr-defined]
+                luminance = 0.2126 * float(br) + 0.7152 * float(bg_) + 0.0722 * float(bb)
+                auto = (0.0, 0.0, 0.0, 1.0) if luminance >= 0.5 else (1.0, 1.0, 1.0, 1.0)
+                line_renderer.set_line_color(auto)
+            except Exception:
+                pass
 
     _apply_initial_colors()
     # HUD 初期適用（存在時）
     if parameter_manager is not None and overlay is not None:
-        try:
-            from util.color import normalize_color as _norm
+        from util.color import normalize_color as _norm
 
-            tx = parameter_manager.store.current_value(
-                "runner.hud_text_color"
-            ) or parameter_manager.store.original_value("runner.hud_text_color")
-            if tx is not None:
+        tx = parameter_manager.store.current_value(
+            "runner.hud_text_color"
+        ) or parameter_manager.store.original_value("runner.hud_text_color")
+        if tx is not None:
+            try:
                 overlay.set_text_color(_norm(tx))
-            mt = parameter_manager.store.current_value(
-                "runner.hud_meter_color"
-            ) or parameter_manager.store.original_value("runner.hud_meter_color")
-            if mt is not None:
+            except Exception:
+                pass
+        mt = parameter_manager.store.current_value(
+            "runner.hud_meter_color"
+        ) or parameter_manager.store.original_value("runner.hud_meter_color")
+        if mt is not None:
+            try:
                 overlay.set_meter_color(_norm(mt))
-            mb = parameter_manager.store.current_value(
-                "runner.hud_meter_bg_color"
-            ) or parameter_manager.store.original_value("runner.hud_meter_bg_color")
-            if mb is not None:
+            except Exception:
+                pass
+        mb = parameter_manager.store.current_value(
+            "runner.hud_meter_bg_color"
+        ) or parameter_manager.store.original_value("runner.hud_meter_bg_color")
+        if mb is not None:
+            try:
                 overlay.set_meter_bg_color(_norm(mb))
-        except Exception:
-            pass
+            except Exception:
+                pass
 
     # ---- Draw callbacks ----------------------------------
     rendering_window.add_draw_callback(line_renderer.draw)
@@ -497,11 +581,14 @@ def run_sketch(
         from typing import Iterable as _Iterable  # local alias to avoid top clutter
 
         def _on_param_store_change(ids: Mapping[str, object] | _Iterable[str]) -> None:
-            try:
-                # 受け取る ID 集合へ正規化
-                id_list = list(ids.keys()) if isinstance(ids, Mapping) else list(ids)
-            except Exception:
-                id_list = []
+            # 受け取る ID 集合へ正規化（想定型に限定して例外を避ける）
+            if isinstance(ids, Mapping):
+                id_list = list(ids.keys())
+            else:
+                try:
+                    id_list = list(ids)  # type: ignore[list-item]
+                except TypeError:
+                    id_list = []
             # 背景
             if "runner.background" in id_list:
                 try:
@@ -627,69 +714,15 @@ def run_sketch(
             if overlay is not None:
                 overlay.show_message(f"PNG 保存失敗: {e}", level="error")
 
-    _current_g_job: str | None = None
-
-    def _start_gcode_export() -> None:
-        nonlocal _current_g_job
-        if _current_g_job is not None:
-            if overlay is not None:
-                overlay.show_message("G-code エクスポート実行中", level="warn")
-            return
-        front = swap_buffer.get_front()
-        if front is None or front.is_empty:
-            if overlay is not None:
-                overlay.show_message(
-                    "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
-                )
-            return
-        coords, offsets = front.as_arrays(copy=True)
-        try:
-            gparams = GCodeParams(
-                y_down=True,
-                canvas_height_mm=float(canvas_height),
-                canvas_width_mm=float(canvas_width),
-            )
-            _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
-            job_id = export_service.submit_gcode_job(
-                (coords, offsets), params=gparams, simulate=False, name_prefix=_name_prefix
-            )
-        except RuntimeError:
-            if overlay is not None:
-                overlay.show_message("G-code エクスポート実行中", level="warn")
-            return
-        _current_g_job = job_id
-
-        def _poll_progress(_dt: float) -> None:  # noqa: ARG001
-            nonlocal _current_g_job
-            assert _current_g_job is not None
-            prog = export_service.progress(_current_g_job)
-            if overlay is not None:
-                overlay.set_progress("gcode", prog.done_vertices, prog.total_vertices)
-            if prog.state in ("completed", "failed", "cancelled"):
-                if overlay is not None:
-                    overlay.clear_progress("gcode")
-                if prog.state == "completed" and prog.path is not None:
-                    if overlay is not None:
-                        overlay.show_message(f"Saved G-code: {prog.path}")
-                elif prog.state == "failed":
-                    if overlay is not None:
-                        overlay.show_message(f"G-code 失敗: {prog.error}", level="error")
-                elif prog.state == "cancelled":
-                    if overlay is not None:
-                        overlay.show_message(
-                            "G-code エクスポートをキャンセルしました", level="warn"
-                        )
-                pyglet.clock.unschedule(_poll_progress)
-                _current_g_job = None
-
-        pyglet.clock.schedule_interval(_poll_progress, 0.1)
-
-    def _cancel_gcode_export() -> None:
-        nonlocal _current_g_job
-        if _current_g_job is not None:
-            export_service.cancel(_current_g_job)
-            if overlay is not None:
-                overlay.show_message("G-code エクスポートをキャンセルします", level="warn")
+    # G-code エクスポートの開始/キャンセルハンドラ（Phase 2: ヘルパへ切り出し）
+    _start_gcode_export, _cancel_gcode_export = make_gcode_export_handlers(
+        export_service=export_service,
+        swap_buffer=swap_buffer,
+        canvas_width=float(canvas_width),
+        canvas_height=float(canvas_height),
+        overlay=overlay,
+        pyglet_mod=pyglet,
+    )
 
     @rendering_window.event
     def on_key_press(sym, mods):  # noqa: ANN001
@@ -702,7 +735,7 @@ def run_sketch(
         if sym == key.G and not (mods & key.MOD_SHIFT):
             _start_gcode_export()
         # Shift+G → キャンセル
-        if sym == key.G and (mods & key.MOD_SHIFT) and _current_g_job is not None:
+        if sym == key.G and (mods & key.MOD_SHIFT):
             _cancel_gcode_export()
 
     @rendering_window.event
