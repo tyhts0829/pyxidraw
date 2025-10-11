@@ -162,7 +162,7 @@ def run_sketch(
         背景色（未指定時は設定の `canvas.background_color` → 既定白）。
         - RGBA (0‑1) タプル、またはヘックス文字列 `#RRGGBB` / `#RRGGBBAA`（`0x`/接頭辞なし可）。
     workers :
-        バックグラウンド計算プロセス数（パラメータ GUI 有効時は 0 固定でシングルスレッド実行）。
+        バックグラウンド計算プロセス数。Parameter GUI 併用時もワーカ併用可能（GUI 値はスナップショットで注入）。
     use_midi :
         True の場合は可能なら実機 MIDI を使用。未接続/未導入時は既定でフォールバック。
     midi_strict :
@@ -196,75 +196,65 @@ def run_sketch(
     )
 
     # ---- ③ MIDI ---------------------------------------------------
-    # 環境変数から厳格モードを補完（未指定時）。
-    if midi_strict is None:
-        env = os.environ.get("PYXIDRAW_MIDI_STRICT")
-        if env is not None:
-            midi_strict = env == "1" or env.lower() in ("true", "on", "yes")
-        else:
-            # 設定から既定を参照（なければ False）
-            try:
-                from util.utils import load_config
+    def _setup_midi(_use_midi: bool, _midi_strict: Optional[bool]):
+        # 環境変数から厳格モードを補完（未指定時）。
+        if _midi_strict is None:
+            env = os.environ.get("PYXIDRAW_MIDI_STRICT")
+            if env is not None:
+                _midi_strict = env == "1" or env.lower() in ("true", "on", "yes")
+            else:
+                # 設定から既定を参照（なければ False）
+                try:
+                    from util.utils import load_config
 
-                cfg = load_config() or {}
-                midi_cfg = cfg.get("midi", {}) if isinstance(cfg, dict) else {}
-                midi_strict = bool(midi_cfg.get("strict_default", False))
-            except Exception:
-                midi_strict = False
+                    cfg = load_config() or {}
+                    midi_cfg = cfg.get("midi", {}) if isinstance(cfg, dict) else {}
+                    _midi_strict = bool(midi_cfg.get("strict_default", False))
+                except Exception:
+                    _midi_strict = False
 
-    # ローカルな Null 実装（型安定のため 1 箇所に定義）
-    class _NullMidi:
-        def snapshot(self) -> Mapping[int, float]:  # CC は int→float の正規化値
-            return {}
+        class _NullMidi:
+            def snapshot(self) -> Mapping[int, float]:
+                return {}
 
-        def tick(self, dt: float) -> None:
-            return None
+            def tick(self, dt: float) -> None:  # noqa: ARG002
+                return None
 
-    midi_service: Tickable
-    cc_snapshot_fn: Callable[[], Mapping[int, float]]
+        if not _use_midi:
+            return None, _NullMidi(), _NullMidi().snapshot
 
-    if use_midi:
         try:
             # 遅延インポート（依存未導入環境でもフォールバック可能に）
             from engine.io.manager import connect_midi_controllers
             from engine.io.service import MidiService
 
-            midi_manager = connect_midi_controllers()
+            midi_manager_local = connect_midi_controllers()
             # 0台接続もエラー扱いにするかは strict で切替
-            if not getattr(midi_manager, "controllers", {}):
+            if not getattr(midi_manager_local, "controllers", {}):
                 raise RuntimeError("MIDI デバイスが接続されていません")
-            midi_service = MidiService(midi_manager)
-            # MidiService は Tickable を実装し、snapshot() を提供する。
-            # 型に合わせて渡す。
-            cc_snapshot_fn = midi_service.snapshot
+            midi_service_local = MidiService(midi_manager_local)
+            return midi_manager_local, midi_service_local, midi_service_local.snapshot
         except Exception as e:  # ImportError / InvalidPortError / RuntimeError など
             logger = logging.getLogger(__name__)
-            if midi_strict:
+            if _midi_strict:
                 logger.exception("MIDI initialization failed (strict): %s", e)
                 raise SystemExit(2)
-            else:
-                logger.warning("MIDI unavailable; falling back to NullMidi: %s", e)
-                midi_manager = None
-                midi_service = _NullMidi()
-                cc_snapshot_fn = midi_service.snapshot
-    else:
-        midi_manager = None
-        # ダミーのスナップショット（常に空のCC）
-        midi_service = _NullMidi()
-        cc_snapshot_fn = midi_service.snapshot
+            logger.warning("MIDI unavailable; falling back to NullMidi: %s", e)
+            nm = None
+            ns = _NullMidi()
+            return nm, ns, ns.snapshot
+
+    midi_manager, midi_service, cc_snapshot_fn = _setup_midi(use_midi, midi_strict)
 
     # init_only の場合は重い依存を読み込まずに早期リターン
     parameter_manager: ParameterManager | None = None
+    # ---- ③.5 Parameter GUI 準備 -----------------------------------
+    draw_callable = user_draw
+    worker_count = workers
     if use_parameter_gui and not init_only:
         parameter_manager = ParameterManager(user_draw)
         parameter_manager.initialize()
-        # 並列併用のため、ワーカへは生の user_draw を渡し、
-        # GUI 値はスナップショットで適用する
-        draw_callable = user_draw
-        worker_count = workers
-    else:
-        draw_callable = user_draw
-        worker_count = workers
+        # ワーカへは生の user_draw を渡し、GUI 値はスナップショットで適用する
 
     if init_only:
         return None
@@ -379,7 +369,7 @@ def run_sketch(
         overlay = OverlayHUD(rendering_window, sampler, config=hud_conf)
     # G-code エクスポート: 実 writer を接続
     export_service = ExportService(writer=GCodeWriter())
-    _current_g_job: str | None = None
+    # G-code ジョブIDは外側スコープで管理
 
     # ---- ⑥ 投影行列（正射影） --------------------------------------
     proj = np.array(
@@ -504,7 +494,9 @@ def run_sketch(
             except Exception:
                 pass
 
-        def _on_param_store_change(ids: Mapping[str, object] | list[str] | tuple[str, ...]):
+        from typing import Iterable as _Iterable  # local alias to avoid top clutter
+
+        def _on_param_store_change(ids: Mapping[str, object] | _Iterable[str]) -> None:
             try:
                 # 受け取る ID 集合へ正規化
                 id_list = list(ids.keys()) if isinstance(ids, Mapping) else list(ids)
@@ -601,115 +593,143 @@ def run_sketch(
             pass
 
     # ---- ⑧ pyglet イベント -----------------------------------------
+
+    def _handle_save_png(mods: int) -> None:
+        try:
+            # ファイル名のプレフィックス（エントリスクリプト名）とキャンバス寸法 [mm]
+            _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
+            if mods & key.MOD_SHIFT:
+                # 高解像度（overlayなし）: オフスクリーン描画でラインのみ保存
+                p = save_png(
+                    rendering_window,
+                    scale=2.0,
+                    include_overlay=False,
+                    transparent=False,
+                    mgl_context=mgl_ctx,
+                    draw=line_renderer.draw,
+                    name_prefix=_name_prefix,
+                    width_mm=float(canvas_width),
+                    height_mm=float(canvas_height),
+                )
+            else:
+                # 低コスト（overlayあり）: 画面バッファをそのまま保存
+                p = save_png(
+                    rendering_window,
+                    scale=1.0,
+                    include_overlay=True,
+                    name_prefix=_name_prefix,
+                    width_mm=float(canvas_width),
+                    height_mm=float(canvas_height),
+                )
+            if overlay is not None:
+                overlay.show_message(f"Saved PNG: {p}")
+        except Exception as e:  # 失敗時のHUD表示
+            if overlay is not None:
+                overlay.show_message(f"PNG 保存失敗: {e}", level="error")
+
+    _current_g_job: str | None = None
+
+    def _start_gcode_export() -> None:
+        nonlocal _current_g_job
+        if _current_g_job is not None:
+            if overlay is not None:
+                overlay.show_message("G-code エクスポート実行中", level="warn")
+            return
+        front = swap_buffer.get_front()
+        if front is None or front.is_empty:
+            if overlay is not None:
+                overlay.show_message(
+                    "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
+                )
+            return
+        coords, offsets = front.as_arrays(copy=True)
+        try:
+            gparams = GCodeParams(
+                y_down=True,
+                canvas_height_mm=float(canvas_height),
+                canvas_width_mm=float(canvas_width),
+            )
+            _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
+            job_id = export_service.submit_gcode_job(
+                (coords, offsets), params=gparams, simulate=False, name_prefix=_name_prefix
+            )
+        except RuntimeError:
+            if overlay is not None:
+                overlay.show_message("G-code エクスポート実行中", level="warn")
+            return
+        _current_g_job = job_id
+
+        def _poll_progress(_dt: float) -> None:  # noqa: ARG001
+            nonlocal _current_g_job
+            assert _current_g_job is not None
+            prog = export_service.progress(_current_g_job)
+            if overlay is not None:
+                overlay.set_progress("gcode", prog.done_vertices, prog.total_vertices)
+            if prog.state in ("completed", "failed", "cancelled"):
+                if overlay is not None:
+                    overlay.clear_progress("gcode")
+                if prog.state == "completed" and prog.path is not None:
+                    if overlay is not None:
+                        overlay.show_message(f"Saved G-code: {prog.path}")
+                elif prog.state == "failed":
+                    if overlay is not None:
+                        overlay.show_message(f"G-code 失敗: {prog.error}", level="error")
+                elif prog.state == "cancelled":
+                    if overlay is not None:
+                        overlay.show_message(
+                            "G-code エクスポートをキャンセルしました", level="warn"
+                        )
+                pyglet.clock.unschedule(_poll_progress)
+                _current_g_job = None
+
+        pyglet.clock.schedule_interval(_poll_progress, 0.1)
+
+    def _cancel_gcode_export() -> None:
+        nonlocal _current_g_job
+        if _current_g_job is not None:
+            export_service.cancel(_current_g_job)
+            if overlay is not None:
+                overlay.show_message("G-code エクスポートをキャンセルします", level="warn")
+
     @rendering_window.event
     def on_key_press(sym, mods):  # noqa: ANN001
         if sym == key.ESCAPE:
             rendering_window.close()
         # PNG 保存（P / Shift+P）
         if sym == key.P:
-            try:
-                # ファイル名のプレフィックス（エントリスクリプト名）とキャンバス寸法 [mm]
-                _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
-                if mods & key.MOD_SHIFT:
-                    # 高解像度（overlayなし）: オフスクリーン描画でラインのみ保存
-                    p = save_png(
-                        rendering_window,
-                        scale=2.0,
-                        include_overlay=False,
-                        transparent=False,
-                        mgl_context=mgl_ctx,
-                        draw=line_renderer.draw,
-                        name_prefix=_name_prefix,
-                        width_mm=float(canvas_width),
-                        height_mm=float(canvas_height),
-                    )
-                else:
-                    # 低コスト（overlayあり）: 画面バッファをそのまま保存
-                    p = save_png(
-                        rendering_window,
-                        scale=1.0,
-                        include_overlay=True,
-                        name_prefix=_name_prefix,
-                        width_mm=float(canvas_width),
-                        height_mm=float(canvas_height),
-                    )
-                if overlay is not None:
-                    overlay.show_message(f"Saved PNG: {p}")
-            except Exception as e:  # 失敗時のHUD表示
-                if overlay is not None:
-                    overlay.show_message(f"PNG 保存失敗: {e}", level="error")
+            _handle_save_png(mods)
         # G-code 保存（G / Shift+G）
         if sym == key.G and not (mods & key.MOD_SHIFT):
-            nonlocal _current_g_job
-            if _current_g_job is not None:
-                if overlay is not None:
-                    overlay.show_message("G-code エクスポート実行中", level="warn")
-                return
-            front = swap_buffer.get_front()
-            if front is None or front.is_empty:
-                if overlay is not None:
-                    overlay.show_message(
-                        "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
-                    )
-                return
-            coords, offsets = front.as_arrays(copy=True)
-            try:
-                # ピクセル=mm 前提。キャンバス高さ [mm] を渡して厳密 Y 反転を使用。
-                gparams = GCodeParams(
-                    y_down=True,
-                    canvas_height_mm=float(canvas_height),
-                    canvas_width_mm=float(canvas_width),
-                )
-                _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
-                job_id = export_service.submit_gcode_job(
-                    (coords, offsets), params=gparams, simulate=False, name_prefix=_name_prefix
-                )
-            except RuntimeError:
-                if overlay is not None:
-                    overlay.show_message("G-code エクスポート実行中", level="warn")
-                return
-            _current_g_job = job_id
-
-            # 進捗ポーリング
-            def _poll_progress(_dt: float) -> None:
-                nonlocal _current_g_job
-                assert _current_g_job is not None
-                prog = export_service.progress(_current_g_job)
-                if overlay is not None:
-                    overlay.set_progress("gcode", prog.done_vertices, prog.total_vertices)
-                if prog.state in ("completed", "failed", "cancelled"):
-                    # 終了処理
-                    if overlay is not None:
-                        overlay.clear_progress("gcode")
-                    if prog.state == "completed" and prog.path is not None:
-                        if overlay is not None:
-                            overlay.show_message(f"Saved G-code: {prog.path}")
-                    elif prog.state == "failed":
-                        if overlay is not None:
-                            overlay.show_message(f"G-code 失敗: {prog.error}", level="error")
-                    elif prog.state == "cancelled":
-                        if overlay is not None:
-                            overlay.show_message(
-                                "G-code エクスポートをキャンセルしました", level="warn"
-                            )
-                    pyglet.clock.unschedule(_poll_progress)
-                    _current_g_job = None
-
-            pyglet.clock.schedule_interval(_poll_progress, 0.1)
+            _start_gcode_export()
         # Shift+G → キャンセル
         if sym == key.G and (mods & key.MOD_SHIFT) and _current_g_job is not None:
-            export_service.cancel(_current_g_job)
-            if overlay is not None:
-                overlay.show_message("G-code エクスポートをキャンセルします", level="warn")
+            _cancel_gcode_export()
 
     @rendering_window.event
     def on_close():  # noqa: ANN001
-        worker_pool.close()
-        if use_midi and midi_manager is not None:
-            midi_manager.save_cc()
-        line_renderer.release()
-        if parameter_manager is not None:
-            parameter_manager.shutdown()
+        # 冪等なクリーンアップ
+        _closed = getattr(on_close, "_closed", False)
+        if _closed:  # type: ignore[truthy-bool]
+            return
+        try:
+            worker_pool.close()
+        except Exception:
+            pass
+        try:
+            if use_midi and midi_manager is not None:
+                midi_manager.save_cc()
+        except Exception:
+            pass
+        try:
+            line_renderer.release()
+        except Exception:
+            pass
+        try:
+            if parameter_manager is not None:
+                parameter_manager.shutdown()
+        except Exception:
+            pass
+        setattr(on_close, "_closed", True)
         pyglet.app.exit()
 
     pyglet.app.run()

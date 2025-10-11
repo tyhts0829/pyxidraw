@@ -79,7 +79,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
 
 ### 実行ループと並行性（Frame/Tick モデル）
 - `FrameClock` が登録された Tickable を固定順序で毎フレーム実行。
-- `WorkerPool`（既定は multiprocessing。パラメータ GUI 有効時は Inline モード）が `draw(t)` を実行して `Geometry` を生成。
+- `WorkerPool`（既定は multiprocessing。Parameter GUI 有効時もスナップショット注入により並列実行が可能）が `draw(t)` を実行して `Geometry` を生成。
 - `StreamReceiver` は結果キューを読み、最新フレームのみを `SwapBuffer` に反映（古いフレームは棄却）。
 - `LineRenderer` は `SwapBuffer` の front を検知して GPU に頂点群を一括転送し、`LINE_STRIP + primitive restart` で描画。
 - 例外はワーカ側で `WorkerTaskError` に包んでメインスレッドに再送出（デバッグ容易性と失敗の早期顕在化）。
@@ -211,6 +211,23 @@ Tips:
 - ウィンドウ/GL
   - `engine.core.render_window.RenderWindow` が MSAA 有効（`samples=4`）で生成、初回描画時に画面中央へ配置。
   - `moderngl` にてブレンド有効化（`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`）。
+
+## Optional Dependencies（現状）
+- 方針（現状の実装と整合）
+  - 未導入環境でも「トップレベルの主要モジュール import」は基本的に失敗しないようガードや遅延 import を併用する。
+  - 実利用の瞬間（関数呼び出し時）に ImportError/RuntimeError へ委ねる箇所がある（フォールバックやスタブの有無はモジュールごとに異なる）。
+- 代表的な依存と実装例
+  - ModernGL（描画）: `engine.render.renderer` は try-import と `mgl is None` ガードで描画スキップを許容（src/engine/render/renderer.py:12）。一方、`engine.render.line_mesh` はトップレベル import（src/engine/render/line_mesh.py:9）。
+  - pyglet（ウィンドウ/スケジューラ）: `engine.export.image` と `engine.ui.parameters.dpg_window` は sentinel を用いたガードで未導入でも import 可能（src/engine/export/image.py:16, src/engine/ui/parameters/dpg_window.py:19）。
+  - mido（MIDI）: `engine.io.manager.connect_midi_controllers()` は関数内で遅延 import＋例外メッセージ（src/engine/io/manager.py:51）。`engine.io.controller` はトップレベル import（src/engine/io/controller.py:40）。
+  - shapely（幾何）: `effects.partition` は try-import とフォールバック実装を持つ（src/effects/partition.py:33）。`effects.offset` はトップレベル import（src/effects/offset.py:26）。
+  - numba（JIT）: 多くのモジュールがトップレベル import。`effects.dash` は `_HAVE_NUMBA` 分岐あり（src/effects/dash.py:34）。
+  - fontTools/fontPens（フォント）: `shapes.text` でトップレベル import（src/shapes/text.py:19）。
+- 開発/CI 向けのダミー
+  - 生成ツールや軽量環境では `tools.dummy_deps.install()` により `numba/fontTools/shapely` の最小シムを注入し ImportError を回避（tools/dummy_deps.py:40, tools/gen_g_stubs.py:474）。
+- 備考
+  - UI 統合は可能なら `pyglet.clock.schedule_interval` を用いるが、未導入/ヘッドレスではスタブ/スレッド駆動にフォールバック（上記ファイル参照）。
+  - 今後の簡素化計画は `reports/plan_lazy_import_simplification.md` を参照（性能目的の遅延のみへ移行予定）。
 
 ## 並行処理（WorkerPool / StreamReceiver / SwapBuffer）
 - 登場要素

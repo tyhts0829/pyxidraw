@@ -7,14 +7,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Sequence
+from typing import Any, Sequence
 
-# 注意: optional 依存（moderngl）が未導入の環境でもモジュール import 自体が通るよう、
-# 直接の import は行わない。型は future annotations により遅延評価される。
-try:  # pragma: no cover - 実行環境で moderngl がある場合のみ使用
-    import moderngl as mgl  # type: ignore
-except Exception:  # pragma: no cover - optional dep 未導入環境
-    mgl = None  # type: ignore
 import numpy as np
 
 from engine.core.geometry import Geometry
@@ -23,9 +17,7 @@ from util.constants import PRIMITIVE_RESTART_INDEX
 from ..core.tickable import Tickable
 from ..runtime.buffer import SwapBuffer
 
-if TYPE_CHECKING:  # 型チェック時のみ参照（実行時 import は遅延）
-    from .line_mesh import LineMesh  # noqa: F401
-    from .shader import Shader  # noqa: F401
+# 型参照は文字列注釈で行うため、実行時 import は不要。
 
 
 class LineRenderer(Tickable):
@@ -36,7 +28,7 @@ class LineRenderer(Tickable):
 
     def __init__(
         self,
-        mgl_context: "mgl.Context",
+        mgl_context: Any,
         projection_matrix: np.ndarray,
         swap_buffer: SwapBuffer,
         line_thickness: float = 0.0006,
@@ -91,8 +83,10 @@ class LineRenderer(Tickable):
     def draw(self) -> None:
         """GPUに送ったデータを画面に描画"""
         if self.gpu.index_count > 0:
-            # mgl は optional 依存。存在しない場合は描画をスキップ。
-            if mgl is None:  # pragma: no cover - 非描画環境
+            # optional 依存（moderngl）はローカル import。未導入環境では描画をスキップ。
+            try:  # pragma: no cover - 実行環境依存
+                import moderngl as mgl  # type: ignore
+            except Exception:
                 return
             self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
         else:

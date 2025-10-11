@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-import moderngl as mgl
+from typing import Any
+
 import numpy as np
 
 
@@ -17,8 +18,8 @@ class LineMesh:
 
     def __init__(
         self,
-        ctx: mgl.Context,
-        program: mgl.Program,
+        ctx: Any,
+        program: Any,
         # 初期GPUメモリ確保量を抑制（既定: 8MB）。必要に応じて自動拡張。
         initial_reserve: int = 8 * 1024 * 1024,
         primitive_restart_index: int = 0xFFFFFFFF,

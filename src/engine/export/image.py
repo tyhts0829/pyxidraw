@@ -13,13 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-# pyglet は任意依存のため、解析時に欠如しても問題にならないようガード
-try:  # pragma: no cover - 環境依存
-    import pyglet as _pyglet  # type: ignore
-except Exception:  # pragma: no cover - 未導入/ヘッドレス
-    _pyglet = None  # type: ignore[assignment]
-pyglet: Any = _pyglet
-
 from util.paths import ensure_screenshots_dir
 
 
@@ -59,6 +52,11 @@ def save_png(
         保存先のファイルパス。
     """
     if include_overlay:
+        # 画面バッファをそのまま保存するパス。pyglet が必要。
+        try:
+            import pyglet  # type: ignore
+        except Exception as e:  # pragma: no cover - 実行時依存
+            raise RuntimeError(f"pyglet の利用に失敗: {e}") from e
         if scale != 1.0:
             raise NotImplementedError("scale != 1.0 は未対応（将来 FBO にて対応予定）")
         if transparent:
@@ -98,11 +96,9 @@ def save_png(
         return path
     else:
         # FBO 経由で高解像度（overlay なし）を描画
-        # importlib 経由で動的に取得（pyright の missing import を回避）
+        # moderngl を直接 import（未導入時は実行時エラーに委ねる）
         try:
-            import importlib
-
-            importlib.import_module("moderngl")
+            import moderngl  # noqa: F401
         except Exception as e:  # pragma: no cover - 実行時依存
             raise RuntimeError(f"ModernGL の利用に失敗: {e}") from e
 
@@ -154,6 +150,8 @@ def save_png(
                 pass
 
         try:
+            import pyglet  # type: ignore
+
             img = pyglet.image.ImageData(width, height, "RGBA", data, pitch=width * 4)
             img.save(str(path))
         except Exception as e:
