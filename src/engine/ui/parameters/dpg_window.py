@@ -129,7 +129,13 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     self.build_display_controls(parent=root, store=self._store)
                 except Exception:
                     logger.exception("failed to build runner controls")
-                dpg.add_child_window(tag=SCROLL_TAG, autosize_x=True, autosize_y=True, border=False)
+                dpg.add_child_window(
+                    tag=SCROLL_TAG,
+                    autosize_x=True,
+                    autosize_y=True,
+                    border=False,
+                    no_scrollbar=True,
+                )
             dpg.set_primary_window(root, True)
         except Exception:
             logger.exception("build_root_window failed")

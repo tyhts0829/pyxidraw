@@ -132,7 +132,7 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: angle_sets (type=integer, range=[1, 6])
     # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
-    # meta: density (type=number, range=[0.0, 200])
+    # meta: density (type=number, range=[0.0, 400])
     # meta: remove_boundary (type=boolean)
     def fill(self, *, angle_sets: int | list[int] | tuple[int, ...] = ..., angle_rad: float | list[float] | tuple[float, ...] = ..., density: float | list[float] | tuple[float, ...] = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
@@ -141,7 +141,7 @@ class _PipelineBuilder(Protocol):
         引数:
             angle_sets: integer, range [1, 6]
             angle_rad: number, range [0.0, 6.283185307179586]
-            density: number, range [0.0, 200]
+            density: number, range [0.0, 400]
             remove_boundary: boolean
         """
         ...

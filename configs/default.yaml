@@ -182,7 +182,7 @@ io:
 # Parameter GUI の外観既定
 parameter_gui:
   window:
-    width: 720
+    width: 600
     height: 920
     title: "Parameters"
   layout:

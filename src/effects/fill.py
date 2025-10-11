@@ -47,7 +47,7 @@ from util.polygon_grouping import build_evenodd_groups
 from .registry import effect
 
 # 塗りつぶし線の最大密度（最大本数）
-MAX_FILL_LINES = 200
+MAX_FILL_LINES = 400
 NONPLANAR_EPS_ABS = 1e-5
 NONPLANAR_EPS_REL = 1e-4
 
