@@ -172,6 +172,12 @@ Tips:
 - Parameter GUI の保存値がある場合は、起動直後に Store→ 描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。
   優先順位は「引数 > 保存値 > config」。
 - HUD の色（`runner.hud_text_color`、`runner.hud_meter_color`、`runner.hud_meter_bg_color`）も起動直後に Store→Overlay へ初期適用する（`OverlayHUD.set_text_color` / `set_meter_color` / `set_meter_bg_color`）。
+
+フォント探索/適用:
+
+- 設定（`configs/default.yaml` → `config.yaml` 上書き）で `fonts.search_dirs` を指定すると、Text シェイプ（`src/shapes/text.py:108`）のフォント探索リストに最優先で追加される。拡張子は `.ttf/.otf/.ttc`。
+- HUD（`src/engine/ui/hud/overlay.py:26`）は起動時に `fonts.search_dirs` 配下のフォントを `pyglet.font.add_file()` で登録し、`hud.font_name`/`hud.font_size`（互換として `status_manager.font`/`status_manager.font_size`）を用いて描画フォントを決定する。
+ - Parameter GUI（`src/engine/ui/parameters/dpg_window.py`）は Dear PyGui 起動時に `fonts.search_dirs` から `.ttf/.otf/.ttc` を `dpg.add_font_registry()` で登録し、`parameter_gui.layout.font_name` → `hud.font_name` → `status_manager.font` の優先順でフォント名を選択、`ParameterLayoutConfig.font_size` を用いて `dpg.bind_font()` で適用する（失敗時は既定フォント）。
   優先順位は「保存値 > config」（HUD は引数指定の導線なし）。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
   - Engine/UI 側は `util.cc_provider.get_cc_snapshot()` を経由して CC スナップショットを参照し、`engine/* -> api/*` の依存を避ける（登録は `api.cc` が `set_cc_snapshot_provider` で行う）。
@@ -234,7 +240,7 @@ Tips:
 ## Optional Dependencies（方針）
 
 - 実行ポリシー
-  - 性能目的の遅延のみ採用。依存は「使う関数/メソッド内」でローカル import する。
+  - 性能目的の遅延のみ採用。重たい依存は「使う関数/メソッド内」でローカル import する。
   - トップレベルの try-import/sentinel/専用例外は用いない（ImportError はそのまま上げる）。
   - 依存未導入時の挙動は各レイヤの責務で扱う（例: API 層で Null フォールバック、または機能をスキップ）。
 - 代表モジュールの現状
@@ -244,8 +250,6 @@ Tips:
   - shapely: `effects.offset/partition` は処理関数内でローカル import。未導入時は `partition` が耳切り三角分割にフォールバック。
   - numba: デコレータ `njit` は未導入時 no-op で吸収（例: `effects.dash`）。
   - fontTools/fontPens: `shapes.text` は `get_font`/`get_glyph_commands` 内のローカル import。
-- 備考
-  - 詳細は `reports/plan_lazy_import_simplification.md` を参照（各フェーズでの適用履歴）。
 
 ## 並行処理（WorkerPool / StreamReceiver / SwapBuffer）
 

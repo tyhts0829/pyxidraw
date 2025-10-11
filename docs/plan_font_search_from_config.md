@@ -45,22 +45,29 @@
 ---
 
 ## 実装タスク（チェックリスト）
-- [ ] 設定スキーマの追加: `configs/default.yaml` に `fonts.search_dirs` と HUD 用 `hud.font_name`/`hud.font_size` を追記（コメントで意味と例を併記）。
-- [ ] Text シェイプの探索強化: `src/shapes/text.py`
-  - [ ] `get_font_path_list()` を拡張し、`load_config()` から `fonts.search_dirs` を読み込む。
-  - [ ] 検出ディレクトリを（OS 既定より）前に結合。`~`/env/相対パス解決と再帰グロブを実装。
-  - [ ] 既存の拡張子フィルタ（`.ttf/.otf/.ttc`）を再利用。
-  - [ ] 例外時は安全にスキップしてOS探索へフォールバック。
-- [ ] HUD 側のフォント登録: `src/engine/ui/hud/overlay.py`
-  - [ ] 初期化時に `fonts.search_dirs` を読み取り、該当パス配下のフォントを `pyglet.font.add_file()` で登録（失敗は握りつぶし）。
-  - [ ] `hud.font_name`/`hud.font_size`（→ 無ければ `status_manager.*` → 既定）で `self._font`/`self.font_size` を上書き。
-  - [ ] 既存の色/メータ設定ロジックと併存させる。
-- [ ] ドキュメント整備
-  - [ ] `architecture.md` に「フォント探索の優先順位」「設定キー」「HUD 登録の流れ」を追記し、該当コード参照（`src/shapes/text.py`, `src/engine/ui/hud/overlay.py`）を明記。
-- [ ] 最小テスト
-  - [ ] 単体: Text シェイプの `get_font_path_list()` が設定ディレクトリを優先に含むことを検証（ダミー拡張子ファイル名の列挙レベルで可。実フォント読み込みは不要）。
-  - [ ] 既存テストのスモーク: `pytest -q -m smoke` で影響の有無を確認。
-  - [ ] 変更ファイルに限定して `ruff/mypy` を実行。
+- [x] 設定スキーマの追加: `configs/default.yaml` に `fonts.search_dirs` と HUD 用 `hud.font_name`/`hud.font_size` を追記（コメントで意味と例を併記）。
+- [x] Text シェイプの探索強化: `src/shapes/text.py`
+  - [x] `get_font_path_list()` を拡張し、`load_config()` から `fonts.search_dirs` を読み込む。
+  - [x] 検出ディレクトリを（OS 既定より）前に結合。`~`/env/相対パス解決と再帰グロブを実装。
+  - [x] 既存の拡張子フィルタ（`.ttf/.otf/.ttc`）を再利用。
+  - [x] 例外時は安全にスキップしてOS探索へフォールバック。
+- [x] HUD 側のフォント登録: `src/engine/ui/hud/overlay.py`
+  - [x] 初期化時に `fonts.search_dirs` を読み取り、該当パス配下のフォントを `pyglet.font.add_file()` で登録（失敗は握りつぶし）。
+  - [x] `hud.font_name`/`hud.font_size`（→ 無ければ `status_manager.*` → 既定）で `self._font`/`self.font_size` を上書き。
+  - [x] 既存の色/メータ設定ロジックと併存させる。
+- [x] ドキュメント整備
+  - [x] `architecture.md` に「フォント探索の優先順位」「設定キー」「HUD 登録の流れ」を追記し、該当コード参照（`src/shapes/text.py`, `src/engine/ui/hud/overlay.py`）を明記。
+- [x] 最小テスト
+  - [x] 単体: Text シェイプの `get_font_path_list()` が設定ディレクトリを優先に含むことを検証（ダミー拡張子ファイル名の列挙レベルで可。実フォント読み込みは不要）。
+  - [x] 既存テストのスモーク: `pytest -q -m smoke` で影響の有無を確認。
+  - [ ] 変更ファイルに限定して `mypy` を実行（ローカル環境の sandbox 制約により未実施）。
+
+### 追加タスク（Dear PyGui 側フォント適用）
+- [x] DPG: 設定 `fonts.search_dirs` 配下を再帰探索し、`.ttf/.otf/.ttc` を `dpg.add_font_registry` 経由で登録。
+- [x] DPG: フォント名の決定順（`parameter_gui.layout.font_name` > `hud.font_name` > `status_manager.font`）。
+- [x] DPG: `ParameterLayoutConfig.font_size` をサイズに使用し、`dpg.bind_font()` で適用。
+- [x] 例外時は握りつぶし（テスト/ヘッドレス環境でも安全）。
+- [ ] UI パラメータ系のテスト実行（環境で Dear PyGui の実行がタイムアウトするため未実施）。
 
 ---
 
@@ -106,4 +113,3 @@
 ---
 
 以上の計画でよろしければ、実装に着手します。修正途中の論点や改善提案は本ファイルに追記して進捗共有します。
-

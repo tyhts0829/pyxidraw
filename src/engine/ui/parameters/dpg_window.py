@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from threading import Thread
 from typing import Any, Iterable, Sequence, cast
 
@@ -69,6 +71,13 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         )
         dpg.setup_dearpygui()
 
+        # フォント登録（設定に基づき、fonts.search_dirs から優先的に探す）
+        try:
+            self._setup_fonts()
+        except Exception:
+            # フェイルソフト: フォントは既定のまま
+            logger.debug("DPG font setup skipped due to error", exc_info=True)
+
         # ルート構築とテーマ適用
         self._build_root_window()
         self._setup_theme()
@@ -110,6 +119,94 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         with dpg.stage(tag=STAGE_TAG):
             self._build_grouped_table(ROOT_TAG, descriptors)
         dpg.unstage(STAGE_TAG)
+
+    # ---- フォント ----
+    def _setup_fonts(self) -> None:
+        try:
+            from util.utils import _find_project_root as _root
+            from util.utils import load_config as _load_cfg
+        except Exception:
+            return
+        cfg = _load_cfg() or {}
+        # フォント名の決定: parameter_gui.layout.font_name > hud.font_name > status_manager.font
+        font_name: str | None = None
+        try:
+            pg = cfg.get("parameter_gui", {}) if isinstance(cfg, dict) else {}
+            lcfg = pg.get("layout", {}) if isinstance(pg, dict) else {}
+            fn = lcfg.get("font_name") if isinstance(lcfg, dict) else None
+            if isinstance(fn, str) and fn.strip():
+                font_name = fn.strip()
+        except Exception:
+            pass
+        if not font_name:
+            try:
+                hud = cfg.get("hud", {}) if isinstance(cfg, dict) else {}
+                fn = hud.get("font_name") if isinstance(hud, dict) else None
+                if isinstance(fn, str) and fn.strip():
+                    font_name = fn.strip()
+            except Exception:
+                pass
+        if not font_name:
+            try:
+                sm = cfg.get("status_manager", {}) if isinstance(cfg, dict) else {}
+                fn = sm.get("font") if isinstance(sm, dict) else None
+                if isinstance(fn, str) and fn.strip():
+                    font_name = fn.strip()
+            except Exception:
+                pass
+
+        # 検索ディレクトリ
+        fonts = cfg.get("fonts", {}) if isinstance(cfg, dict) else {}
+        sdirs = fonts.get("search_dirs", []) if isinstance(fonts, dict) else []
+        if isinstance(sdirs, (str, int, Path)):
+            sdirs = [str(sdirs)]
+        root = _root(Path(__file__).parent)
+        exts = (".ttf", ".otf", ".ttc")
+
+        files: list[Path] = []
+        for s in sdirs:
+            try:
+                p = Path(os.path.expandvars(os.path.expanduser(str(s))))
+                if not p.is_absolute():
+                    p = (root / p).resolve()
+                if not p.exists() or not p.is_dir():
+                    continue
+                for ext in exts:
+                    files.extend(p.glob(f"**/*{ext}"))
+            except Exception:
+                continue
+        if not files:
+            return
+
+        chosen: Path | None = None
+        if font_name:
+            for fp in files:
+                if font_name.lower() in fp.name.lower():
+                    chosen = fp
+                    break
+        if chosen is None:
+            chosen = files[0]
+
+        # フォント登録（`.ttc` など失敗時は握りつぶす）
+        try:
+            self._font_registry = dpg.add_font_registry()
+            try:
+                default_font = dpg.add_font(str(chosen), int(self._layout.font_size))
+            except Exception:
+                # `.ttc` で失敗する可能性 → `.ttf/.otf` のみ再トライ
+                default_font = None
+                if chosen.suffix.lower() == ".ttc":
+                    alt = next((f for f in files if f.suffix.lower() in (".ttf", ".otf")), None)
+                    if alt is not None:
+                        try:
+                            default_font = dpg.add_font(str(alt), int(self._layout.font_size))
+                        except Exception:
+                            default_font = None
+            if default_font is not None:
+                dpg.bind_font(default_font)
+        except Exception:
+            # 失敗しても GUI 自体は続行
+            pass
 
     # ---- ルート/Display/HUD ----
     def _build_root_window(self) -> None:

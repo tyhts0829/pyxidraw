@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import os
 import time
+from pathlib import Path
 from typing import Literal
 
 import pyglet
@@ -63,6 +65,19 @@ class OverlayHUD(Tickable):
             cfg = _load_config() or {}
             hud_cfg = cfg.get("hud", {})
             if isinstance(hud_cfg, dict):
+                # フォント（任意）: hud.font_name / hud.font_size を優先。互換として status_manager.* を参照。
+                try:
+                    fn = hud_cfg.get("font_name")
+                    if isinstance(fn, str) and fn.strip():
+                        self._font = fn.strip()
+                except Exception:
+                    pass
+                try:
+                    fs = hud_cfg.get("font_size")
+                    if fs is not None:
+                        self.font_size = int(fs)
+                except Exception:
+                    pass
                 # テキスト色（任意）: hud.text_color を許容（Hex / 0..1 / 0..255）
                 try:
                     text_col = hud_cfg.get("text_color")
@@ -118,6 +133,53 @@ class OverlayHUD(Tickable):
                     self._meter_left_margin_px = int(
                         meters.get("meter_left_margin_px", self._meter_left_margin_px)
                     )
+            # 互換フォールバック: status_manager.font / status_manager.font_size
+            sm = cfg.get("status_manager", {})
+            if isinstance(sm, dict):
+                try:
+                    if (not self._font) or self._font == "HackGenConsoleNF-Regular":
+                        fn = sm.get("font")
+                        if isinstance(fn, str) and fn.strip():
+                            self._font = fn.strip()
+                except Exception:
+                    pass
+                try:
+                    if self.font_size == font_size:  # 未上書きの場合だけ
+                        fs = sm.get("font_size")
+                        if fs is not None:
+                            self.font_size = int(fs)
+                except Exception:
+                    pass
+            # 設定ディレクトリ配下のフォントを pyglet に登録（ベストエフォート）
+            try:
+                from util.utils import _find_project_root as _root
+                from util.utils import load_config as _lc
+
+                ccfg = _lc() or {}
+                fcfg = ccfg.get("fonts", {}) if isinstance(ccfg, dict) else {}
+                sdirs = fcfg.get("search_dirs", []) if isinstance(fcfg, dict) else []
+                if isinstance(sdirs, (str, int)):
+                    sdirs = [str(sdirs)]
+                root = _root(Path(__file__).parent)
+                font_exts = (".ttf", ".otf", ".ttc")
+                for s in sdirs:
+                    try:
+                        p = Path(os.path.expandvars(os.path.expanduser(str(s))))
+                        if not p.is_absolute():
+                            p = (root / p).resolve()
+                        if not p.exists() or not p.is_dir():
+                            continue
+                        for ext in font_exts:
+                            for fp in p.glob(f"**/*{ext}"):
+                                try:
+                                    pyglet.font.add_file(str(fp))
+                                except Exception:
+                                    # `.ttc` など非対応の場合もあるため握りつぶし
+                                    pass
+                    except Exception:
+                        continue
+            except Exception:
+                pass
         except Exception:
             # コンフィグ読み込み失敗時は既定を維持
             pass

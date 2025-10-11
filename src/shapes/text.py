@@ -109,6 +109,40 @@ class TextRenderer:
         """利用可能なフォントファイルのパス一覧を取得する。"""
         if cls._font_paths is None:
             paths: list[Path] = []
+
+            # 1) 設定で与えられたディレクトリ（優先）
+            try:
+                from util.utils import _find_project_root, load_config  # type: ignore
+
+                cfg = load_config() or {}
+                fonts_cfg = cfg.get("fonts", {}) if isinstance(cfg, dict) else {}
+                search_dirs = (
+                    fonts_cfg.get("search_dirs", []) if isinstance(fonts_cfg, dict) else []
+                )
+                if isinstance(search_dirs, (str, Path)):
+                    search_dirs = [str(search_dirs)]
+                root = _find_project_root(Path(__file__).parent)
+                norm_dirs: list[Path] = []
+                for s in search_dirs:
+                    try:
+                        p = Path(os.path.expandvars(os.path.expanduser(str(s))))
+                        if not p.is_absolute():
+                            p = (root / p).resolve()
+                        if p.exists() and p.is_dir():
+                            norm_dirs.append(p)
+                    except Exception:
+                        continue
+                for d in norm_dirs:
+                    for ext in cls.EXTENSIONS:
+                        try:
+                            paths.extend(d.glob(f"**/*{ext}"))
+                        except Exception:
+                            continue
+            except Exception:
+                # 設定読取に失敗しても OS 既定探索へフォールバック
+                pass
+
+            # 2) OS 既定のフォントディレクトリ（従来どおり）
             for d in cls._os_font_dirs():
                 for ext in cls.EXTENSIONS:
                     try:
@@ -410,7 +444,7 @@ setattr(
         "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
         # font は自由入力させない（GUI 非表示にするため choices を空に）
         "font": {"choices": []},
-        "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
+        "font_index": {"type": "integer", "min": 0, "max": 8, "step": 1},
         "text_align": {"choices": ["left", "center", "right"]},
         "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},
         "line_height": {"type": "number", "min": 0.8, "max": 3.0, "step": 0.1},
