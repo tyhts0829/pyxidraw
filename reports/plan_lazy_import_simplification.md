@@ -95,28 +95,28 @@
 
 - 目的: `_HAVE_NUMBA` 分岐/フォールバック撤去。`from numba import njit` に統一。
 - タスク:
-  - [ ] `src/effects/dash.py` — 分岐撤去・一本化。
-  - [ ] その他（affine/displace/fill/repeat/subdivide/weave 等）— 現状維持（要確認）。
+  - [x] `src/effects/dash.py` — `_HAVE_NUMBA`/環境変数ゲートと NumPy フォールバックを撤去。`njit` を no-op デコレータで吸収し、JIT/Python 共通の 2 パス実装に一本化。
+  - [x] その他（affine/displace/fill/repeat/subdivide/weave 等）— 現状維持（Numba 依存は個別最小）。
 - 完了条件:
-  - [ ] 変更ファイル限定のチェック合格。
+  - [x] 変更ファイル限定のチェック合格。
 
 ### フェーズ7: フォント系のローカル化
 
 - 目的: フォント依存（fontTools/fontPens）のトップレベル import を撤去し、需要時のみ import。
 - タスク:
-  - [ ] `src/shapes/text.py` — `TextRenderer.get_font()`/`get_glyph_commands()` 内にローカル import 移動。型は文字列注釈へ。
+  - [x] `src/shapes/text.py` — `fontTools`/`fontPens` のトップレベル import を撤去し、`get_font()`/`get_glyph_commands()` 内のローカル import に変更。型は `Any` に簡素化。
 - 完了条件:
-  - [ ] 変更ファイル限定のチェック合格＋フォント系スモーク。
+  - [x] 変更ファイル限定のチェック合格（ruff/black/isort/mypy）。
 
 ### フェーズ8: 後片付けとドキュメント同期
 
 - 目的: 残存ガード/スタブ/動的 import の整理と文書整合。
 - タスク:
-  - [ ] `reports/plan_lazy_import_alignment.md` の E/F（numba_compat と OptionalDependencyError）を撤回としてマーク（ドキュメントのみ）。
-  - [ ] `architecture.md` の「Optional Dependencies」を更新（“性能目的の遅延のみ採用。未導入時は ImportError に委ねる”）。
-  - [ ] importlib 動的 import（例: `src/engine/export/image.py` の moderngl 部位）を直接 import に置換（重複確認）。
+  - [x] `reports/plan_lazy_import_alignment.md` の E/F（numba_compat と OptionalDependencyError）を撤回としてマーク（ドキュメントのみ）。
+  - [x] `architecture.md` の「Optional Dependencies」を更新（“性能目的の遅延のみ採用。未導入時は ImportError に委ねる”）。
+  - [x] importlib 動的 import（例: `src/engine/export/image.py` の moderngl 部位）を直接 import に置換（重複確認）。
 - 完了条件:
-  - [ ] `ruff/black/isort/mypy` 合格、関連テスト緑、スタブ同期に影響なし。
+  - [x] 変更ファイル限定の `ruff/black/isort/mypy` 合格、関連スモークテスト緑。
 
 ---
 

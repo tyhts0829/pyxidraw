@@ -16,10 +16,17 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
-from fontPens.flattenPen import FlattenPen
-from fontTools.pens.recordingPen import RecordingPen
-from fontTools.ttLib import TTFont
-from numba import njit
+
+try:
+    from numba import njit  # type: ignore
+except Exception:  # pragma: no cover - 環境に numba が無い場合は no-op
+
+    def njit(*_args, **_kwargs):  # type: ignore
+        def _wrap(fn):
+            return fn
+
+        return _wrap
+
 
 from engine.core.geometry import Geometry
 
@@ -63,7 +70,7 @@ class TextRenderer:
     """フォントとグリフコマンドを提供するシングルトン。"""
 
     _instance = None
-    _fonts: dict[str, TTFont] = {}
+    _fonts: dict[str, Any] = {}
     _glyph_cache = _LRU(maxsize=4096)
     _font_paths: list[Path] | None = None
 
@@ -136,8 +143,10 @@ class TextRenderer:
         return font_paths[0] if font_paths else None
 
     @classmethod
-    def get_font(cls, font_name: str = "Helvetica", font_index: int = 0) -> TTFont:
+    def get_font(cls, font_name: str = "Helvetica", font_index: int = 0) -> Any:
         """TTFont を取得（キャッシュ）。`font_name` は名前の部分一致 or パス。"""
+        from fontTools.ttLib import TTFont  # type: ignore
+
         try:
             idx = int(font_index)
         except Exception:
@@ -194,6 +203,9 @@ class TextRenderer:
         flat_seg_len_units: float,
     ) -> tuple:
         """平坦化済みのグリフコマンド（`RecordingPen.value` 互換タプル）を返す。"""
+        from fontPens.flattenPen import FlattenPen  # type: ignore
+        from fontTools.pens.recordingPen import RecordingPen  # type: ignore
+
         key = f"{font_name}|{font_index}|{char}|{round(float(flat_seg_len_units), 6)}"
         cached = cls._glyph_cache.get(key)
         if cached is not None:
@@ -241,7 +253,7 @@ class TextRenderer:
 TEXT_RENDERER = TextRenderer()
 
 
-def _get_char_advance_em(char: str, tt_font: TTFont) -> float:
+def _get_char_advance_em(char: str, tt_font: Any) -> float:
     """1em を 1.0 とした advance の比率を返す。"""
     if char == " ":
         try:

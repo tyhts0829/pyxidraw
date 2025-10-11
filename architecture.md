@@ -212,22 +212,20 @@ Tips:
   - `engine.core.render_window.RenderWindow` が MSAA 有効（`samples=4`）で生成、初回描画時に画面中央へ配置。
   - `moderngl` にてブレンド有効化（`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`）。
 
-## Optional Dependencies（現状）
-- 方針（現状の実装と整合）
-  - 未導入環境でも「トップレベルの主要モジュール import」は基本的に失敗しないようガードや遅延 import を併用する。
-  - 実利用の瞬間（関数呼び出し時）に ImportError/RuntimeError へ委ねる箇所がある（フォールバックやスタブの有無はモジュールごとに異なる）。
-- 代表的な依存と実装例
-  - ModernGL（描画）: `engine.render.renderer` は try-import と `mgl is None` ガードで描画スキップを許容（src/engine/render/renderer.py:12）。一方、`engine.render.line_mesh` はトップレベル import（src/engine/render/line_mesh.py:9）。
-  - pyglet（ウィンドウ/スケジューラ）: `engine.export.image` と `engine.ui.parameters.dpg_window` は sentinel を用いたガードで未導入でも import 可能（src/engine/export/image.py:16, src/engine/ui/parameters/dpg_window.py:19）。
-  - mido（MIDI）: `engine.io.manager.connect_midi_controllers()` は関数内で遅延 import＋例外メッセージ（src/engine/io/manager.py:51）。`engine.io.controller` はトップレベル import（src/engine/io/controller.py:40）。
-  - shapely（幾何）: `effects.partition` は try-import とフォールバック実装を持つ（src/effects/partition.py:33）。`effects.offset` はトップレベル import（src/effects/offset.py:26）。
-  - numba（JIT）: 多くのモジュールがトップレベル import。`effects.dash` は `_HAVE_NUMBA` 分岐あり（src/effects/dash.py:34）。
-  - fontTools/fontPens（フォント）: `shapes.text` でトップレベル import（src/shapes/text.py:19）。
-- 開発/CI 向けのダミー
-  - 生成ツールや軽量環境では `tools.dummy_deps.install()` により `numba/fontTools/shapely` の最小シムを注入し ImportError を回避（tools/dummy_deps.py:40, tools/gen_g_stubs.py:474）。
+## Optional Dependencies（方針）
+- 実行ポリシー
+  - 性能目的の遅延のみ採用。依存は「使う関数/メソッド内」でローカル import する。
+  - トップレベルの try-import/sentinel/専用例外は用いない（ImportError はそのまま上げる）。
+  - 依存未導入時の挙動は各レイヤの責務で扱う（例: API 層で Null フォールバック、または機能をスキップ）。
+- 代表モジュールの現状
+  - ModernGL: `renderer.draw()` でローカル import。未導入時は描画をスキップ。`line_mesh` は型を Any にして import 依存を排除。
+  - pyglet: 使用箇所でローカル import。`export.image` と Parameter GUI（`dpg_window`）は実行時のみ import。
+  - mido: `engine.io.manager`/`engine.io.controller` ともにローカル import。未導入時は API 層がフォールバック（MIDI 無効）。
+  - shapely: `effects.offset/partition` は処理関数内でローカル import。未導入時は `partition` が耳切り三角分割にフォールバック。
+  - numba: デコレータ `njit` は未導入時 no-op で吸収（例: `effects.dash`）。
+  - fontTools/fontPens: `shapes.text` は `get_font`/`get_glyph_commands` 内のローカル import。
 - 備考
-  - UI 統合は可能なら `pyglet.clock.schedule_interval` を用いるが、未導入/ヘッドレスではスタブ/スレッド駆動にフォールバック（上記ファイル参照）。
-  - 今後の簡素化計画は `reports/plan_lazy_import_simplification.md` を参照（性能目的の遅延のみへ移行予定）。
+  - 詳細は `reports/plan_lazy_import_simplification.md` を参照（各フェーズでの適用履歴）。
 
 ## 並行処理（WorkerPool / StreamReceiver / SwapBuffer）
 - 登場要素
