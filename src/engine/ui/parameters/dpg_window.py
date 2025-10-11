@@ -92,75 +92,78 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             self._start_driver()
 
     def set_visible(self, visible: bool) -> None:
-        try:
-            if visible and not self._visible:
-                dpg.show_viewport()
-                self._visible = True
-                self._start_driver()
-            elif not visible and self._visible:
-                dpg.hide_viewport()
-                self._visible = False
-                self._stop_driver()
-        except Exception:
-            logger.exception("set_visible failed (visible=%s)", visible)
+        if visible and not self._visible:
+            dpg.show_viewport()
+            self._visible = True
+            self._start_driver()
+        elif not visible and self._visible:
+            dpg.hide_viewport()
+            self._visible = False
+            self._stop_driver()
 
     def close(self) -> None:
-        try:
-            self._stop_driver()
-            dpg.destroy_context()
-        except Exception:
-            logger.exception("destroy_context failed")
+        self._stop_driver()
+        dpg.destroy_context()
 
     def mount(self, descriptors: list[ParameterDescriptor]) -> None:
-        try:
-            with dpg.stage(tag=STAGE_TAG):
-                self._build_grouped_table(SCROLL_TAG, descriptors)
-            dpg.unstage(STAGE_TAG)
-        except Exception:
-            logger.exception("mount failed")
+        with dpg.stage(tag=STAGE_TAG):
+            self._build_grouped_table(SCROLL_TAG, descriptors)
+        dpg.unstage(STAGE_TAG)
 
     # ---- ルート/Display/HUD ----
     def _build_root_window(self) -> None:
-        try:
-            with dpg.window(
-                tag=ROOT_TAG, label=self._title, no_resize=False, no_collapse=True
-            ) as root:
-                try:
-                    self.build_display_controls(parent=root, store=self._store)
-                except Exception:
-                    logger.exception("failed to build runner controls")
-                dpg.add_child_window(
-                    tag=SCROLL_TAG,
-                    autosize_x=True,
-                    autosize_y=True,
-                    border=False,
-                    no_scrollbar=True,
-                )
-            dpg.set_primary_window(root, True)
-        except Exception:
-            logger.exception("build_root_window failed")
+        with dpg.window(tag=ROOT_TAG, label=self._title, no_resize=False, no_collapse=True) as root:
+            try:
+                self.build_display_controls(parent=root, store=self._store)
+            except Exception:
+                logger.warning("failed to build runner controls; continue without Display/HUD")
+            dpg.add_child_window(
+                tag=SCROLL_TAG,
+                autosize_x=True,
+                autosize_y=True,
+                border=False,
+                no_scrollbar=True,
+            )
+        dpg.set_primary_window(root, True)
 
     def force_set_rgb_u8(self, tag: int | str, rgb_u8: Sequence[int]) -> None:
-        try:
-            r = int(rgb_u8[0])
-            g = int(rgb_u8[1])
-            b = int(rgb_u8[2])
-            dpg.set_value(tag, [r, g, b])
-        except Exception:
-            logger.exception("force_set_rgb_u8 failed: tag=%s val=%s", tag, rgb_u8)
+        if not isinstance(rgb_u8, Sequence) or len(rgb_u8) < 3:
+            raise ValueError("rgb_u8 must be a sequence of length >= 3")
+        r = int(rgb_u8[0])
+        g = int(rgb_u8[1])
+        b = int(rgb_u8[2])
+        dpg.set_value(tag, [r, g, b])
 
     def store_rgb01(self, pid: str, app_data: Any) -> None:
         try:
             from util.color import normalize_color as _norm
 
             rgba = _norm(app_data)
-            self._store.set_override(pid, rgba)
         except Exception:
-            logger.exception("store_rgb01 failed: pid=%s val=%s", pid, app_data)
+            logger.exception("store_rgb01 failed to normalize: pid=%s val=%s", pid, app_data)
+            return
+        self._store.set_override(pid, rgba)
+
+    # ---- ヘルパ ----
+    def _safe_norm(
+        self, value: Any, default: tuple[float, float, float, float]
+    ) -> tuple[float, float, float, float]:
+        try:
+            from util.color import normalize_color as _norm
+
+            r, g, b, a = _norm(value)
+            return float(r), float(g), float(b), float(a)
+        except Exception:
+            return default
+
+    def _dpg_policy(self, names: Sequence[str]) -> Any | None:
+        for n in names:
+            var = getattr(dpg, n, None)
+            if var is not None:
+                return var
+        return None
 
     def build_display_controls(self, parent: int | str, store: ParameterStore) -> None:
-        from util.color import normalize_color as _norm
-
         try:
             from util.utils import load_config as _load_cfg
         except Exception:
@@ -170,35 +173,19 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         canvas = cfg.get("canvas", {}) if isinstance(cfg, dict) else {}
         bg_raw = canvas.get("background_color", (1.0, 1.0, 1.0, 1.0))
         ln_raw = canvas.get("line_color", (0.0, 0.0, 0.0, 1.0))
-        try:
-            bgf = _norm(bg_raw)
-        except Exception:
-            bgf = (1.0, 1.0, 1.0, 1.0)
-        try:
-            lnf = _norm(ln_raw)
-        except Exception:
-            lnf = (0.0, 0.0, 0.0, 1.0)
+        bgf = self._safe_norm(bg_raw, (1.0, 1.0, 1.0, 1.0))
+        lnf = self._safe_norm(ln_raw, (0.0, 0.0, 0.0, 1.0))
 
-        try:
-            val = store.current_value("runner.background") or store.original_value(
-                "runner.background"
-            )
-            if val is not None:
-                bgf = _norm(val)
-        except Exception:
-            pass
-        try:
-            val = store.current_value("runner.line_color") or store.original_value(
-                "runner.line_color"
-            )
-            if val is not None:
-                lnf = _norm(val)
-        except Exception:
-            pass
+        val = store.current_value("runner.background") or store.original_value("runner.background")
+        if val is not None:
+            bgf = self._safe_norm(val, bgf)
+        val = store.current_value("runner.line_color") or store.original_value("runner.line_color")
+        if val is not None:
+            lnf = self._safe_norm(val, lnf)
 
         with dpg.collapsing_header(label="Display", default_open=True, parent=parent):
-            table_policy = getattr(dpg, "mvTable_SizingStretchProp", None) or getattr(
-                dpg, "mvTable_SizingStretchSame", None
+            table_policy = self._dpg_policy(
+                ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
             with dpg.table(header_row=False, policy=table_policy):
                 left, right = self._label_value_ratio()
@@ -223,14 +210,11 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                             alpha_bar=False,
                         )
                     # HUD と揃えるため、幅は既定値のままにする（set_item_width は適用しない）
-                    try:
-                        r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
-                        self.force_set_rgb_u8(
-                            bg_picker,
-                            [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
-                        )
-                    except Exception:
-                        pass
+                    r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
+                    self.force_set_rgb_u8(
+                        bg_picker,
+                        [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                    )
                     dpg.configure_item(
                         bg_picker, callback=lambda s, a, u: self.store_rgb01("runner.background", a)
                     )
@@ -254,21 +238,18 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                             alpha_bar=False,
                         )
                     # HUD と揃えるため、幅は既定値のままにする（set_item_width は適用しない）
-                    try:
-                        r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
-                        self.force_set_rgb_u8(
-                            ln_picker,
-                            [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
-                        )
-                    except Exception:
-                        pass
+                    r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
+                    self.force_set_rgb_u8(
+                        ln_picker,
+                        [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+                    )
                     dpg.configure_item(
                         ln_picker, callback=lambda s, a, u: self.store_rgb01("runner.line_color", a)
                     )
 
         with dpg.collapsing_header(label="HUD", default_open=True, parent=parent):
-            hud_tbl_policy = getattr(dpg, "mvTable_SizingStretchProp", None) or getattr(
-                dpg, "mvTable_SizingStretchSame", None
+            hud_tbl_policy = self._dpg_policy(
+                ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
             with dpg.table(header_row=False, policy=hud_tbl_policy):
                 left, right = self._label_value_ratio()
@@ -278,17 +259,19 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     with dpg.table_cell():
                         dpg.add_text("Text Color")
                     with dpg.table_cell():
-                        try:
-                            from util.color import normalize_color as _norm
-
-                            tx_val = store.current_value(
-                                "runner.hud_text_color"
-                            ) or store.original_value("runner.hud_text_color")
-                            tr, tg, tb, _ = (
-                                _norm(tx_val) if tx_val is not None else (0.0, 0.0, 0.0, 1.0)
+                        tx_val = store.current_value(
+                            "runner.hud_text_color"
+                        ) or store.original_value("runner.hud_text_color")
+                        tr, tg, tb, _ = (
+                            self._safe_norm(tx_val, (0.0, 0.0, 0.0, 1.0))
+                            if tx_val is not None
+                            else (
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0,
                             )
-                        except Exception:
-                            tr, tg, tb, _ = 0.0, 0.0, 0.0, 1.0
+                        )
                         tx_picker = dpg.add_color_edit(
                             tag="runner.hud_text_color",
                             default_value=[
@@ -313,17 +296,19 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     with dpg.table_cell():
                         dpg.add_text("Meter Color")
                     with dpg.table_cell():
-                        try:
-                            from util.color import normalize_color as _norm
-
-                            mt_val = store.current_value(
-                                "runner.hud_meter_color"
-                            ) or store.original_value("runner.hud_meter_color")
-                            mr, mg, mb, _ = (
-                                _norm(mt_val) if mt_val is not None else (0.2, 0.2, 0.2, 1.0)
+                        mt_val = store.current_value(
+                            "runner.hud_meter_color"
+                        ) or store.original_value("runner.hud_meter_color")
+                        mr, mg, mb, _ = (
+                            self._safe_norm(mt_val, (0.2, 0.2, 0.2, 1.0))
+                            if mt_val is not None
+                            else (
+                                0.2,
+                                0.2,
+                                0.2,
+                                1.0,
                             )
-                        except Exception:
-                            mr, mg, mb, _ = 0.2, 0.2, 0.2, 1.0
+                        )
                         mt_picker = dpg.add_color_edit(
                             tag="runner.hud_meter_color",
                             default_value=[
@@ -348,17 +333,19 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     with dpg.table_cell():
                         dpg.add_text("Meter BG")
                     with dpg.table_cell():
-                        try:
-                            from util.color import normalize_color as _norm
-
-                            mb_val = store.current_value(
-                                "runner.hud_meter_bg_color"
-                            ) or store.original_value("runner.hud_meter_bg_color")
-                            br, bg, bb, _ = (
-                                _norm(mb_val) if mb_val is not None else (0.196, 0.196, 0.196, 1.0)
+                        mb_val = store.current_value(
+                            "runner.hud_meter_bg_color"
+                        ) or store.original_value("runner.hud_meter_bg_color")
+                        br, bg, bb, _ = (
+                            self._safe_norm(mb_val, (0.196, 0.196, 0.196, 1.0))
+                            if mb_val is not None
+                            else (
+                                0.196,
+                                0.196,
+                                0.196,
+                                1.0,
                             )
-                        except Exception:
-                            br, bg, bb, _ = 0.196, 0.196, 0.196, 1.0
+                        )
                         mb_picker = dpg.add_color_edit(
                             tag="runner.hud_meter_bg_color",
                             default_value=[
@@ -381,10 +368,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                             ),
                         )
 
-        try:
-            self.sync_display_from_store(store)
-        except Exception:
-            logger.exception("initial store->gui sync failed")
+        self.sync_display_from_store(store)
 
     def sync_display_from_store(self, store: ParameterStore) -> None:
         ids = [
@@ -417,8 +401,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                 return
             label = cat if cat else "General"
             with dpg.collapsing_header(label=label, parent=parent, default_open=True):
-                table_policy = getattr(dpg, "mvTable_SizingStretchProp", None) or getattr(
-                    dpg, "mvTable_SizingStretchSame", None
+                table_policy = self._dpg_policy(
+                    ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
                 )
                 with dpg.table(header_row=False, policy=table_policy) as table:
                     left, right = self._label_value_ratio()
@@ -443,10 +427,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
 
     def _label_value_ratio(self) -> tuple[float, float]:
         left = 0.5
-        try:
-            left = float(self._layout.label_column_ratio)
-        except Exception:
-            logger.debug("invalid label_column_ratio; fallback to 0.5")
+        left = float(self._layout.label_column_ratio)
         left = 0.1 if left < 0.1 else (0.9 if left > 0.9 else left)
         right = max(0.1, 1.0 - left)
         return left, right
@@ -455,7 +436,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         try:
             dpg.add_table_column(label="Parameter", width_stretch=True, init_width_or_weight=left)
             dpg.add_table_column(label="Value", width_stretch=True, init_width_or_weight=right)
-        except Exception:
+        except TypeError:
             dpg.add_table_column(label="Parameter")
             dpg.add_table_column(label="Value")
 
@@ -549,15 +530,16 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             vmin = list(vh.min_values)
             vmax = list(vh.max_values)
         with dpg.table(
-            parent=parent, header_row=False, policy=getattr(dpg, "mvTable_SizingStretchSame", 0)
+            parent=parent,
+            header_row=False,
+            policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
         ) as vec_table:
-            try:
+            var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+            if var_cell_padding is not None:
                 with dpg.theme() as _vec_theme:
                     with dpg.theme_component(dpg.mvAll):
-                        dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 1, 0)
+                        dpg.add_theme_style(var_cell_padding, 1, 0)
                 dpg.bind_item_theme(vec_table, _vec_theme)
-            except Exception:
-                logger.debug("vector cell padding theme not supported")
             for _ in range(dim):
                 dpg.add_table_column(width_stretch=True)
             with dpg.table_row():
@@ -632,7 +614,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                 base[idx] = float(app_data)
                 self._store.set_override(parent_id, tuple(base))
                 return
-            except Exception:
+            except (TypeError, ValueError):
                 logger.exception("vector override failed: id=%s idx=%s", parent_id, idx)
                 return
         pid = str(user_data)
@@ -647,28 +629,23 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     value = self._store.current_value(pid)
                     if value is None:
                         value = self._store.original_value(pid)
-                    try:
-                        if pid in (
-                            "runner.background",
-                            "runner.line_color",
-                            "runner.hud_text_color",
-                            "runner.hud_meter_color",
-                            "runner.hud_meter_bg_color",
-                        ):
-                            from util.color import normalize_color as _norm
-
-                            r, g, b, a = _norm(value)
-                            dpg.set_value(
-                                pid, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
-                            )
-                        else:
-                            dpg.set_value(pid, value)
-                    except Exception:
-                        logger.exception("set_value failed: id=%s", pid)
+                    if pid in (
+                        "runner.background",
+                        "runner.line_color",
+                        "runner.hud_text_color",
+                        "runner.hud_meter_color",
+                        "runner.hud_meter_bg_color",
+                    ):
+                        r, g, b, _ = self._safe_norm(value, (1.0, 1.0, 1.0, 1.0))
+                        dpg.set_value(
+                            pid, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
+                        )
+                    else:
+                        dpg.set_value(pid, value)
                     continue
                 try:
                     desc = self._store.get_descriptor(pid)
-                except Exception:
+                except KeyError:
                     desc = None
                 if desc is None or desc.value_type != "vector":
                     continue
@@ -682,10 +659,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     tag = f"{pid}::{suffix}"
                     if not dpg.does_item_exist(tag):
                         continue
-                    try:
-                        dpg.set_value(tag, float(vec[i]))
-                    except Exception:
-                        logger.exception("set_value failed: id=%s", tag)
+                    dpg.set_value(tag, float(vec[i]))
         finally:
             self._syncing = False
 
@@ -703,14 +677,16 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
 
     def _apply_default_styles(self) -> bool:
         pad = int(self._layout.padding)
-        try:
-            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, pad, pad)
-            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, pad, max(1, pad // 2))
-            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, pad, max(1, pad // 2))
-            return True
-        except Exception:
-            logger.debug("default styles not supported")
-            return False
+        var_window_padding = getattr(dpg, "mvStyleVar_WindowPadding", None)
+        var_frame_padding = getattr(dpg, "mvStyleVar_FramePadding", None)
+        var_item_spacing = getattr(dpg, "mvStyleVar_ItemSpacing", None)
+        if var_window_padding:
+            dpg.add_theme_style(var_window_padding, pad, pad)
+        if var_frame_padding:
+            dpg.add_theme_style(var_frame_padding, pad, max(1, pad // 2))
+        if var_item_spacing:
+            dpg.add_theme_style(var_item_spacing, pad, max(1, pad // 2))
+        return True
 
     def _apply_styles_from_config(self) -> bool:
         if self._theme is None or not isinstance(self._theme.style, dict):
@@ -740,8 +716,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                         return
                     return
                 dpg.add_theme_style(var, float(cast(float | int, value)))
-            except Exception:
-                logger.exception("add_theme_style failed: key=%s val=%s", key, value)
+            except (TypeError, ValueError):
+                logger.warning("add_theme_style failed: key=%s val=%s", key, value)
 
         for key, var in smap.items():
             if key in self._theme.style:
@@ -771,8 +747,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                 continue
             try:
                 dpg.add_theme_color(var, col)
-            except Exception:
-                logger.exception("add_theme_color failed: key=%s val=%s", key, col)
+            except (TypeError, ValueError):
+                logger.warning("add_theme_color failed: key=%s val=%s", key, col)
 
     def _to_dpg_color(self, value: Any) -> Any:
         try:
@@ -809,7 +785,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             pyglet.clock.schedule_interval(self._tick, interval)
             self._driver = ("pyglet", self._tick)
             logger.debug("ParameterWindow: pyglet driver started")
-        except Exception:
+        except ImportError:
             try:
                 t = Thread(target=dpg.start_dearpygui, name="DPGLoop", daemon=True)
                 t.start()

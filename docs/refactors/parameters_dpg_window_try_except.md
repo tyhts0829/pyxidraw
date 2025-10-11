@@ -29,52 +29,52 @@
 
 ## 実施チェックリスト
 
-- [ ] 1. try/except 分布の棚卸し（関数・行番号別の意図確認メモを追記）
+- [x] 1. try/except 分布の棚卸し（関数・行番号別の意図確認メモを追記）
 - [ ] 2. ヘルパ導入で防御の集約
-  - [ ] 2-1. `_safe_norm(value: Any, default: tuple[float,float,float,float]) -> tuple[float,float,float,float]`
+  - [x] 2-1. `_safe_norm(value: Any, default: tuple[float,float,float,float]) -> tuple[float,float,float,float]`
         - 役割: 色正規化の例外吸収と既定値フォールバックを一箇所に集約
   - [ ] 2-2. `_supports_stretch_columns() -> bool`
         - 役割: `init_width_or_weight` サポート可否を事前分岐（`_add_two_columns` の try 除去）
-  - [ ] 2-3. `_dpg_policy(policy_names: list[str]) -> Any | None`
+  - [x] 2-3. `_dpg_policy(policy_names: list[str]) -> Any | None`
         - 役割: `mvTable_Sizing*` の存在確認を一元化
 
-- [ ] 3. 広域例外の撤去/限定（関数別）
-  - [ ] 3-1. `ParameterWindow.set_visible`
+- [x] 3. 広域例外の撤去/限定（関数別）
+  - [x] 3-1. `ParameterWindow.set_visible`
         - 広域 `except` 撤去。状態ガードと DPG 呼び出しのみ。必要時 `RuntimeError` 等に限定
-  - [ ] 3-2. `ParameterWindow.close`
+  - [x] 3-2. `ParameterWindow.close`
         - 広域 `except` 撤去。`_stop_driver()` の内部のみ防御。`dpg.destroy_context()` は原則 fail-fast
-  - [ ] 3-3. `ParameterWindow.mount`
+  - [x] 3-3. `ParameterWindow.mount`
         - 広域 `except` 撤去。`_build_grouped_table` の内部に責務を寄せる
-  - [ ] 3-4. `_build_root_window`
+  - [x] 3-4. `_build_root_window`
         - トップレベルの広域 `except` 撤去。`build_display_controls` のみ局所防御（ログは warning）
-  - [ ] 3-5. `build_display_controls`
+  - [x] 3-5. `build_display_controls`
         - 色取得/正規化の try 重複を `_safe_norm` で置換
         - `store.current_value/original_value` の取得は例外発生時のみ限定捕捉（`KeyError` 等）
-  - [ ] 3-6. `force_set_rgb_u8`
+  - [x] 3-6. `force_set_rgb_u8`
         - 事前検証（長さ/範囲）で例外回避。例外は `ValueError` に限定
-  - [ ] 3-7. `_add_two_columns`
+  - [x] 3-7. `_add_two_columns`
         - `_supports_stretch_columns()` に置き換え。広域 `except` 撤去
-  - [ ] 3-8. `_label_value_ratio`
+  - [x] 3-8. `_label_value_ratio`
         - 例外不要（単純な clamp のみ）
-  - [ ] 3-9. `_on_widget_change`
+  - [x] 3-9. `_on_widget_change`
         - ベクトル処理の例外を `TypeError/ValueError` に限定し、想定外は再送出または `logger.exception`
-  - [ ] 3-10. `_on_store_change`
+  - [x] 3-10. `_on_store_change`
         - `normalize_color` の失敗のみ限定捕捉し、他は fail-fast。`does_item_exist` 後の `set_value` は原則ノー try
-  - [ ] 3-11. `_apply_default_styles` / `_apply_styles_from_config` / `_apply_colors_from_config`
+  - [x] 3-11. `_apply_default_styles` / `_apply_styles_from_config` / `_apply_colors_from_config`
         - DPG 属性存在は事前確認。適用時の失敗は `TypeError/ValueError` のみ捕捉し warning
   - [ ] 3-12. `_to_dpg_color`
         - 例外限定＋バリデーション強化。無効値は `None` を返し呼び出し側がスキップ
-  - [ ] 3-13. `_start_driver` / `_stop_driver`
+  - [x] 3-13. `_start_driver` / `_stop_driver`
         - 外部境界として現状維持（import/unschedule/stop 周りのみ防御）。ネストした広域 `except` は必要最小限へ縮小
 
-- [ ] 4. ログの粒度調整
-  - [ ] 4-1. 期待フォールバック（非対応属性/存在しないポリシー）は `debug` or `warning`
-  - [ ] 4-2. 想定外の失敗は `logger.exception` を維持
+- [x] 4. ログの粒度調整
+  - [x] 4-1. 期待フォールバック（非対応属性/存在しないポリシー）は `debug` or `warning`
+  - [x] 4-2. 想定外の失敗は `logger.exception` を維持
 
 - [ ] 5. ビルド/テスト（編集ファイル限定）
-  - [ ] 5-1. `ruff check --fix src/engine/ui/parameters/dpg_window.py`
-  - [ ] 5-2. `black src/engine/ui/parameters/dpg_window.py && isort src/engine/ui/parameters/dpg_window.py`
-  - [ ] 5-3. `mypy src/engine/ui/parameters/dpg_window.py`
+  - [x] 5-1. `ruff check --fix src/engine/ui/parameters/dpg_window.py`
+  - [x] 5-2. `black src/engine/ui/parameters/dpg_window.py && isort src/engine/ui/parameters/dpg_window.py`
+  - [x] 5-3. `mypy src/engine/ui/parameters/dpg_window.py`
   - [ ] 5-4. `pytest -q tests/ui/parameters/test_dpg_mount_smoke.py`
 
 - [ ] 6. 確認と微調整
@@ -98,4 +98,3 @@
 
 更新履歴
 - v0: 初版（チェックリストと方針の提示）。
-

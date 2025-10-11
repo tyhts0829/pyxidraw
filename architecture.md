@@ -1,6 +1,7 @@
 # アーキテクチャ概要（Purpose & Architecture）
 
 ## アーキテクチャキャンバス（1-pager）
+
 - 層（数値は内外の序数。小さいほど内側）
   - L0 Core/Base: `common/`, `util/`, `engine/core/`
   - L1 Domain/Transforms: `shapes/`, `effects/`（純関数 `Geometry -> Geometry`）
@@ -15,7 +16,8 @@
   - `common/` と `util/` は上位層（`api/`, `engine/*`, `effects/`, `shapes/`）に依存しない。
 
 ### 個別禁止エッジ（本リポ特化の契約）
-- `engine/*` → `api/*` を禁止（エンジン層は公開APIを知らない）。
+
+- `engine/*` → `api/*` を禁止（エンジン層は公開 API を知らない）。
 - `engine/*` → `effects/*`, `shapes/*` を禁止（設計の一方向性維持）。
 - `effects/*`, `shapes/*` → `engine/render/*`, `engine/runtime/*`, `engine/ui/*`, `engine/io/*` を禁止。
 - `engine/runtime/*` が `effects/*` の関数を直接呼ぶことを禁止（パイプライン適用は `api` の責務）。
@@ -24,17 +26,20 @@
 - 例外が必要な場合は ADR を追加し、ここ（キャンバス）にも例外行を追記すること。
 
 ## 目的（What & Why）
+
 - プロシージャルな線描（ラインベース）の幾何を生成・加工・描画するための軽量フレームワーク。
 - 形状（Shapes）→ エフェクト（Effects）→ レンダリング（Engine）の責務分離により、再利用性とテスト容易性を確保。
 - ライブ操作（MIDI/時間`t`）でパラメータを変調し、リアルタイムに結果を確認できる。
 
 ## まず押さえる前提（Units/座標系）
+
 - 単位はミリメートル[mm]が既定。`util.constants.CANVAS_SIZES` の定義を基にキャンバスの実寸を決める。
 - ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`。つまり 1mm は `render_scale` ピクセルに相当。
 - 座標系はスクリーン座標: 原点はキャンバス左上、+X 右、+Y 下、Z は奥行き（深度テストは既定で未使用）。
   - ライン描画は正射影。`api.sketch` で ModernGL の射影行列を設定しており、mm→NDC 変換を一意に定義。
 
 ## 中核コンセプト
+
 - Geometry（統一表現）
   - `coords: float32 (N,3)` と `offsets: int32 (M+1,)` によるポリライン集合の正規化表現。
   - すべての変換は純関数（新しい Geometry を返す）。`digest: bytes` により内容指紋を保持（キャッシュ鍵）。
@@ -61,12 +66,13 @@
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する（実体は `engine.ui.parameters.dpg_window`）。
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と Descriptor 登録を行い、GUI override を適用してから元の関数へ委譲（変換レイヤは廃止し、実値を扱う）。
   - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
-  - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン→`ParameterWindowController` を起動。
+  - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン →`ParameterWindowController` を起動。
   - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
   - パラメータ GUI はメインスレッドで維持しつつ、ワーカ側へは GUI 値のスナップショットを渡して適用する（SnapshotRuntime）。このため GUI 有効時でも `WorkerPool` は並列実行できる。
   - 駆動方式は内部ドライバで抽象化。可能なら `pyglet.clock.schedule_interval` に統合（メインスレッドから `render_dearpygui_frame()` を実行）、未導入時はバックグラウンドスレッドで `start_dearpygui()` を実行。ヘッドレス/未導入環境ではスタブ実装が自動で選択され、インポートは失敗しない。
 
 ## データフロー（概略）
+
 ```
 G.<shape>() --> Geometry --(E.pipeline.*.build())--> Pipeline(Geometry->Geometry)
        \
@@ -78,6 +84,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
 ```
 
 ### 実行ループと並行性（Frame/Tick モデル）
+
 - `FrameClock` が登録された Tickable を固定順序で毎フレーム実行。
 - `WorkerPool`（既定は multiprocessing。Parameter GUI 有効時もスナップショット注入により並列実行が可能）が `draw(t)` を実行して `Geometry` を生成。
 - `StreamReceiver` は結果キューを読み、最新フレームのみを `SwapBuffer` に反映（古いフレームは棄却）。
@@ -85,6 +92,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
 - 例外はワーカ側で `WorkerTaskError` に包んでメインスレッドに再送出（デバッグ容易性と失敗の早期顕在化）。
 
 ## 主なモジュール
+
 - `api/`
   - `__init__.py`: 公開面（`G`, `E`, `run`/`run_sketch`, `Geometry`）。
 - `effects.py`: `Pipeline`, `PipelineBuilder`。
@@ -94,7 +102,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
   - `core/geometry.py`: 統一 `Geometry`、基本変換、`digest`。
   - `core/frame_clock.py`, `core/tickable.py`: フレーム調停と更新インターフェース。
   - `runtime/`: `WorkerPool`, `StreamReceiver`, `buffer` 等の並行処理。
-  - `render/renderer.py`: ライン描画（正射影行列、倍精度→GPU転送）。
+  - `render/renderer.py`: ライン描画（正射影行列、倍精度 →GPU 転送）。
   - `ui/hud/overlay.py`, `ui/hud/sampler.py`: HUD とメトリクス。
   - `ui/hud/`: `HUDConfig` とフィールド定義（HUD 表示/計測のオプション制御）。
   - キャッシュ累計スナップショット取得は `api.sketch` 内のトップレベル関数で実装し、Worker へ関数注入する（engine は api を参照しない）。
@@ -106,11 +114,13 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
 - `common/`, `util/`: ロギング、型、幾何ユーティリティ、定数、設定ロード。
 
 ## API 境界と依存方向
+
 - 外部利用者は `from api import G, E, run, Geometry` のみを前提にする。
 - 依存は下向き（api → engine/common/util/effects/shapes）。`engine` は `api` を参照しない。
 - 外部保存/復元/仕様検証の API は提供しない（縮減方針）。
 
 ## 実行と拡張の最小例
+
 ```python
 # 形状生成 → パイプライン → 実行（main.py の簡略版）
 from api import E, G, run
@@ -142,31 +152,36 @@ if __name__ == "__main__":
 ```
 
 Tips:
+
 - パラメータが不変の Pipeline は 1 度だけ構築して再利用すると高速（`.cache()` も有効活用）。
 - 逆に、`t` や CC に依存する Pipeline は毎フレーム再構築でも OK（インスタンス内キャッシュは使われないためメモリ増は抑制される）。
 
 ## 非目標（Out of Scope）
-- 高機能なDCC/ノードエディタUIや重厚な3Dレンダラは対象外（軽量リアルタイム線描に特化）。
+
+- 高機能な DCC/ノードエディタ UI や重厚な 3D レンダラは対象外（軽量リアルタイム線描に特化）。
 - 互換性維持よりもシンプルさと純関数性を優先（Deprecated API は段階的廃止）。
 
 ## MIDI と入力（要点）
+
 - `run(..., use_midi=True)` で可能なら実機 MIDI に接続。未接続時は警告の上でフォールバック。
 - 線の太さは `run(..., line_thickness=0.0006)` で指定可能（クリップ空間 -1..1 基準の半幅相当）。
-- 線の色は `run(..., line_color=(r,g,b,a) | "#RRGGBB[AA]")` で指定。RGB（3要素）の場合は α=1.0 を補完。
+- 線の色は `run(..., line_color=(r,g,b,a) | "#RRGGBB[AA]")` で指定。RGB（3 要素）の場合は α=1.0 を補完。
 - 背景色 `background` も RGBA タプルまたはヘックスで指定可能。
- - `background` / `line_color` を未指定の場合は、`configs/default.yaml` の
-   `canvas.background_color` / `canvas.line_color` をフォールバックとして使用。
- - Parameter GUI の保存値がある場合は、起動直後に Store→描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。
-   優先順位は「引数 > 保存値 > config」。
- - HUD の色（`runner.hud_text_color`、`runner.hud_meter_color`、`runner.hud_meter_bg_color`）も起動直後に Store→Overlay へ初期適用する（`OverlayHUD.set_text_color` / `set_meter_color` / `set_meter_bg_color`）。
-   優先順位は「保存値 > config」（HUD は引数指定の導線なし）。
+- `background` / `line_color` を未指定の場合は、`configs/default.yaml` の
+  `canvas.background_color` / `canvas.line_color` をフォールバックとして使用。
+- Parameter GUI の保存値がある場合は、起動直後に Store→ 描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。
+  優先順位は「引数 > 保存値 > config」。
+- HUD の色（`runner.hud_text_color`、`runner.hud_meter_color`、`runner.hud_meter_bg_color`）も起動直後に Store→Overlay へ初期適用する（`OverlayHUD.set_text_color` / `set_meter_color` / `set_meter_bg_color`）。
+  優先順位は「保存値 > config」（HUD は引数指定の導線なし）。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
 
 ## テストとの接点（要点）
+
 - `Geometry` はスナップショット（`digest`）で回帰検知しやすい。
 - パイプラインは build 時検証を行わず、実行時に自然に検出される。キャッシュは `cache(maxsize=...)` で制御可能。
 
 ## 拡張のガイド（最短ルート）
+
 - Shape の追加: `shapes/` に実装し `@shape` で登録。`generate(**params) -> Geometry` を返す。
 - Effect の追加: `effects/` に `def effect_name(g: Geometry, *, ...) -> Geometry` を実装し `@effect` を付与。
   - 可能なら `__param_meta__ = {"param": {"type": "number", "min": 0, ...}}` を添えて、UI 表示のヒント（RangeHint 構築）を提供。
@@ -176,6 +191,7 @@ Tips:
 ---
 
 ## 座標変換と投影（詳細）
+
 - 物理単位は mm。ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`（render_scale は float 可）。
 - 投影は正射影（擬似 2D）。Y 軸はスクリーン座標に合わせて上が負になる変換を適用。
   - `api.sketch.run_sketch()` が ModernGL 用の 4x4 行列を構築し、`engine.render.renderer.LineRenderer` に渡す。
@@ -189,6 +205,7 @@ Tips:
 - Z はレイヤ表現（重なりの補助）。深度テストは使わず、`LINE_STRIP + primitive restart` で一括描画。
 
 ## Geometry（詳細仕様）
+
 - メモリレイアウト
   - `coords: float32 (N,3)` 連続配列。`offsets: int32 (M+1,)` で M 本のポリライン境界を表す。
   - i 本目の線: `coords[offsets[i]:offsets[i+1]]`。
@@ -197,10 +214,11 @@ Tips:
   - 変換は純関数（`translate/scale/rotate/concat`）。常に新インスタンスを返す。
   - コンストラクタで dtype/形状を検証し、`coords` は float32 C-contig、`offsets` は int32 C-contig へ強制正規化。
 - ダイジェスト（キャッシュ協調）
-  - `digest: bytes` は `blake2b(digest_size=16)` による内容指紋。初回遅延計算→以後再利用。
+  - `digest: bytes` は `blake2b(digest_size=16)` による内容指紋。初回遅延計算 → 以後再利用。
   - 無効化: `PXD_DISABLE_GEOMETRY_DIGEST=1`。この場合 `g.digest` アクセスは例外、ただしパイプライン側が配列から都度ハッシュでフォールバック。
 
 ## レンダリング（ModernGL / 1 ドローの設計）
+
 - 1 フレームの流れ
   - `LineRenderer.tick()` で新規フレームがあれば CPU 側で `coords/offsets` → `VBO/IBO` へ整形し GPU へアップロード。
   - `LineRenderer.draw()` で `mgl.LINE_STRIP` + プリミティブリスタートにより一括描画。
@@ -213,6 +231,7 @@ Tips:
   - `moderngl` にてブレンド有効化（`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`）。
 
 ## Optional Dependencies（方針）
+
 - 実行ポリシー
   - 性能目的の遅延のみ採用。依存は「使う関数/メソッド内」でローカル import する。
   - トップレベルの try-import/sentinel/専用例外は用いない（ImportError はそのまま上げる）。
@@ -228,23 +247,25 @@ Tips:
   - 詳細は `reports/plan_lazy_import_simplification.md` を参照（各フェーズでの適用履歴）。
 
 ## 並行処理（WorkerPool / StreamReceiver / SwapBuffer）
+
 - 登場要素
   - `WorkerPool`: `multiprocessing.Process` を N 個起動し、`draw(t)` をバックグラウンド実行。
   - `StreamReceiver`: 結果キューをポーリングし、最新フレームのみを `SwapBuffer` に保存。
   - `SwapBuffer`: front/back のダブルバッファと `version` カウンタ、イベントで構成。
 - データの流れ
-  1) `FrameClock.tick()` ごとに `WorkerPool.tick()` が `RenderTask(frame_id, t, cc_state)` を `task_q` へ投入。
-  2) 各ワーカは API 層から注入された関数で `api.cc.set_snapshot(cc_state)` を呼び、ついでに `draw(t)` を実行→`RenderPacket(geometry, frame_id)` を `result_q` へ。
-  3) `StreamReceiver.tick()` が `result_q` を非ブロッキングで最大 K 件（既定 2）処理し、最新 `frame_id` のみを `SwapBuffer.push()`。
-  4) `LineRenderer.tick()` が `SwapBuffer.try_swap()` を呼び、準備済みなら front/back を交換。
+  1. `FrameClock.tick()` ごとに `WorkerPool.tick()` が `RenderTask(frame_id, t, cc_state)` を `task_q` へ投入。
+  2. 各ワーカは API 層から注入された関数で `api.cc.set_snapshot(cc_state)` を呼び、ついでに `draw(t)` を実行 →`RenderPacket(geometry, frame_id)` を `result_q` へ。
+  3. `StreamReceiver.tick()` が `result_q` を非ブロッキングで最大 K 件（既定 2）処理し、最新 `frame_id` のみを `SwapBuffer.push()`。
+  4. `LineRenderer.tick()` が `SwapBuffer.try_swap()` を呼び、準備済みなら front/back を交換。
 - バックプレッシャ/スキップ
   - `WorkerPool` は `task_q` の `maxsize=2*num_workers` で自然な抑制。詰まれば新タスク投入をスキップ。
   - `StreamReceiver` は「最新フレーム以外を捨てる」戦略で遅延伝播を防止。
 - 終了処理
-  - `WorkerPool.close()` は `None` センチネルを投入→`join(timeout)`→生存時 `terminate()`。
+  - `WorkerPool.close()` は `None` センチネルを投入 →`join(timeout)`→ 生存時 `terminate()`。
   - 例外はワーカ側で `WorkerTaskError(frame_id, original)` に包んでメインへ再送出。
 
 ## パイプライン（キャッシュ/厳格検証の詳細）
+
 - キャッシュ鍵
   - 入力 `geometry_hash` × `pipeline_key`。
   - `geometry_hash`: 通常は `Geometry.digest`（無効時は配列から都度 blake2b-128）。
@@ -255,9 +276,10 @@ Tips:
   - 実装は `OrderedDict` による LRU 風（ヒットで末尾へ、上限超過で先頭を追い出し）。
 - 厳格検証
   - build 時に未知キーは検証しない（厳格モードは廃止）。
-（削除）
+    （削除）
 
 ## レジストリと公開 API
+
 - Shapes（`shapes/registry.py`）
   - `@shape`/`@shape()`/`@shape("name")` で登録。キーは Camel→snake 小文字化で正規化。
   - 形状は関数として `@shape` で登録し、戻り値は `Geometry` または `Geometry.from_lines()` 可能な
@@ -284,10 +306,11 @@ Tips:
   - Runtime は `set_inputs(t)` のみ受け取り、cc は関与しない（cc は `api.cc` でフレーム毎に更新される）。
 - 公開面
 - 利用者は `from api import G, E, run, Geometry` のみに依存。
-  - 上位（api）→下位（engine/common/util/effects/shapes）と一方向の依存。`engine` は `api` を知らない。
+  - 上位（api）→ 下位（engine/common/util/effects/shapes）と一方向の依存。`engine` は `api` を知らない。
   - 破壊的変更はスタブ同期テストが検出する。意図的な場合はスタブ再生成手順に従う。
 
 ## スタブ生成と CI（型の同期）
+
 - 目的
   - `api/__init__.pyi` に「利用者が見る API 形状」を自動生成し、実装と同期を保つ。
 - 更新手順
@@ -296,30 +319,33 @@ Tips:
   - `.github/workflows/verify-stubs.yml` が `tests/test_g_stub_sync.py`, `tests/test_pipeline_stub_sync.py` を実行し、スタブ・実装の不整合を検知。
 
 ## 設計ガードレール（検証）
+
 - アーキテクチャテスト
-  - `tests/test_architecture.py`（導入時）で import グラフを静的解析し、数値レイヤ規則（外側→内側のみ）と上記「個別禁止エッジ」を検証する。
-  - 本リポはトップレベルで `api|engine|effects|shapes|common|util` の6種ディレクトリを起点に層付けする。
+  - `tests/test_architecture.py`（導入時）で import グラフを静的解析し、数値レイヤ規則（外側 → 内側のみ）と上記「個別禁止エッジ」を検証する。
+  - 本リポはトップレベルで `api|engine|effects|shapes|common|util` の 6 種ディレクトリを起点に層付けする。
 - スタブ同期
   - 公開 API の形状はスタブ生成＋同期テストで検証（破壊的変更の早期検知）。
 - ヘルスチェック（ローカル運用の目安）
   - 変更後に `ruff`/`mypy`/`pytest` の最小セットを回す。死蔵コードの検知には `vulture` を随時使用。
 
 ## 設定と環境変数
+
 - 設定ファイル
   - `util.utils.load_config()` が `configs/default.yaml` → ルート `config.yaml` を順に読み込み（トップレベルのみ上書き）。
   - `runner.run_sketch()` で `fps` や MIDI 既定（`midi.strict_default`）の補完に利用。
 - 主な環境変数
   - `PXD_DISABLE_GEOMETRY_DIGEST=1` … Geometry のダイジェスト計算を無効化（ベンチ比較等）。
   - `PXD_PIPELINE_CACHE_MAXSIZE=<int>` … パイプライン単層キャッシュの上限。`0` で無効、未設定は無制限。
-  - `PYXIDRAW_MIDI_STRICT=1|true|on|yes` … MIDI 厳格モード。初期化失敗を致命扱い（`SystemExit(2)`）。
 
 ## エラーハンドリング/ロギング
+
 - ワーカ例外は `WorkerTaskError(frame_id, original)` に包んでメインへ伝搬。`StreamReceiver.tick()` で受領次第再送出（早期顕在化）。
 - MIDI 初期化エラー
   - 厳格モード時は例外ログ後に終了。非厳格時は警告ログを出し Null 実装にフォールバック。
 - ログは標準 `logging`。必要に応じてハンドラ/レベルを上位アプリで設定。
 
 ## パフォーマンス指針
+
 - 形状
   - 変換は `Geometry` 側でまとめて適用（多段の numpy コピーを最小化）。
   - 形状生成は `G` の LRU（maxsize=128）でヒットさせる。パラメータをハッシュ可能に正規化しているため安定。
@@ -333,7 +359,9 @@ Tips:
   - `workers` を CPU コア/処理負荷に合わせて調整。重いエフェクト（オフセット/塗り）ほどワーカ側で時間を使う。
 
 ## 拡張レシピ（スニペット）
+
 - Effect を追加
+
   ```python
   # src/effects/wave.py
   from common.types import Vec3
@@ -359,7 +387,9 @@ Tips:
       "t_sec": {"type": "number", "min": 0.0},
   }
   ```
+
 - Shape を追加
+
   ```python
   # src/shapes/star.py
   import numpy as np
@@ -374,12 +404,14 @@ Tips:
       xy = np.c_[rr * np.cos(th), rr * np.sin(th)]
       return Geometry.from_lines([xy])
   ```
+
 - 追加後の手順
   - `effects/registry.py`/`shapes/registry.py` は自動登録済み（デコレータ）。
 - スタブ更新: `python -m tools.gen_g_stubs`。
-  - テスト: `pytest -q -m smoke` で簡易確認→ `pytest -q`。
+  - テスト: `pytest -q -m smoke` で簡易確認 → `pytest -q`。
 
 ## シリアライズ仕様（詳細）
+
 - 形式
   - `PipelineSpec = list[ {"name": str, "params": dict[str, JSONLike]} ]`
   - `JSONLike = int|float|str|bool|None|list[JSONLike]|dict[str,JSONLike]`
@@ -390,16 +422,19 @@ Tips:
   - numpy 配列は不可（リストに変換して渡す）。
 
 ## スレッド/プロセス安全性
+
 - `Pipeline` の内部キャッシュはインスタンスローカル。複数スレッドから共有する場合は外部ロックで保護するか、スレッドごとに別インスタンスを使う。
 - `ShapesAPI` の LRU は CPython 実装のロックで基本安全。`generate()` は純関数であること。
 - `SwapBuffer` はロック/イベントでスレッドセーフ。`try_swap()` は非ブロッキング。
 
 ## 既知の制限/非目標（補足）
+
 - 3D の隠面消去や奥行バッファは非対応。線描に特化。
 - ハイ DPI の正確な mm→px 換算は OS/ディスプレイ設定に依存（`render_scale` で実用上の見た目を調整）。
 - ワーカは Python マルチプロセスのため、起動コストや共有メモリの制約がある。短時間のスケッチでは `workers=1` も検討。
 
 ## 参考: 主要モジュールの対応表
+
 - API: `src/api/__init__.py`, `effects.py`, `sketch.py`, `shapes.py`, `lfo.py`
 - Engine/Core: `core/geometry.py`, `core/frame_clock.py`, `core/render_window.py`, `core/tickable.py`
 - Engine/Runtime: `runtime/worker.py`, `runtime/receiver.py`, `runtime/buffer.py`
@@ -412,8 +447,9 @@ Tips:
 ---
 
 ## ADR（設計決定メモ）
+
 - 例外やルール変更は `docs/adr/` にミニ ADR（10 行程度）を追加し、背景/決定/代替/影響を残す。
-- 例外追加時は「アーキテクチャキャンバス」の個別禁止エッジにも例外を1行追記して整合を保つ。
+- 例外追加時は「アーキテクチャキャンバス」の個別禁止エッジにも例外を 1 行追記して整合を保つ。
 
 ---
 
