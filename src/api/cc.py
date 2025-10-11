@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from util.cc_provider import set_cc_snapshot_provider  # 依存反転フック（api→util のみ）
 
 
 class CCAPI:
@@ -68,3 +69,9 @@ def raw() -> dict[int, float]:  # noqa: D401 - 簡潔
 
 
 __all__ = ["cc"]
+
+# util 層へスナップショットプロバイダを公開し、engine 側が間接参照できるようにする。
+try:  # フェイルソフト（テスト/実行環境での循環を避ける）
+    set_cc_snapshot_provider(raw)
+except Exception:
+    pass

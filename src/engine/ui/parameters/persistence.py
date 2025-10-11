@@ -136,11 +136,18 @@ def save_overrides(store: ParameterStore, *, script_path: str | None = None) -> 
                 to_save = list(to_save)
             overrides[pid] = to_save
 
+        # CC バインディング（セッション永続化: 要件対応）
+        try:
+            cc_bindings = store.all_cc_bindings()
+        except Exception:
+            cc_bindings = {}
+
         data = {
             "version": 1,
             "script": str(script_path or sys.argv[0]),
             "saved_at": datetime.now(timezone.utc).isoformat(),
             "overrides": overrides,
+            "cc_bindings": cc_bindings,
         }
         with path.open("w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -207,6 +214,35 @@ def load_overrides(store: ParameterStore, *, script_path: str | None = None) -> 
         return applied
     except Exception:
         return 0
+
+    finally:
+        # CC バインディングの復元（存在時）
+        try:
+            with open(_state_path_for_script(script_path), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            cc_map = data.get("cc_bindings", {})
+            if isinstance(cc_map, dict):
+                valid_ids = {d.id for d in store.descriptors()}
+                for pid, idx in cc_map.items():
+                    accept = False
+                    if pid in valid_ids:
+                        accept = True
+                    else:
+                        # ベクトル成分（pid like "{desc.id}::x"）も許可
+                        try:
+                            base_id = str(pid).split("::", 1)[0]
+                            if base_id in valid_ids:
+                                accept = True
+                        except Exception:
+                            accept = False
+                    if not accept:
+                        continue
+                    try:
+                        store.bind_cc(str(pid), int(idx))
+                    except Exception:
+                        continue
+        except Exception:
+            pass
 
 
 __all__ = ["save_overrides", "load_overrides"]

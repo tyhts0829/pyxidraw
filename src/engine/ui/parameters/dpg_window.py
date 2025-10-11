@@ -405,12 +405,43 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
                 )
                 with dpg.table(header_row=False, policy=table_policy) as table:
-                    left, right = self._label_value_ratio()
-                    self._add_two_columns(left, right)
+                    var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                    if var_cell_padding is not None:
+                        cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
+                        cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
+                        with dpg.theme() as _outer_tbl_theme:
+                            with dpg.theme_component(dpg.mvAll):
+                                dpg.add_theme_style(var_cell_padding, cx, cy)
+                        dpg.bind_item_theme(table, _outer_tbl_theme)
+                    # 3 列（Label | Bars | CC）
+                    label_ratio = float(self._layout.label_column_ratio)
+                    label_ratio = (
+                        0.1 if label_ratio < 0.1 else (0.9 if label_ratio > 0.9 else label_ratio)
+                    )
+                    # 残りを Bars:CC = bars_cc_ratio : (1 - bars_cc_ratio) に配分
+                    rest = max(0.1, 1.0 - label_ratio)
+                    bcc = float(getattr(self._layout, "bars_cc_ratio", 0.7))
+                    bcc = 0.05 if bcc < 0.05 else (0.95 if bcc > 0.95 else bcc)
+                    bars_ratio = rest * bcc
+                    cc_ratio = rest - bars_ratio
+                    try:
+                        dpg.add_table_column(
+                            label="Parameter", width_stretch=True, init_width_or_weight=label_ratio
+                        )
+                        dpg.add_table_column(
+                            label="Bars", width_stretch=True, init_width_or_weight=bars_ratio
+                        )
+                        dpg.add_table_column(
+                            label="CC", width_stretch=True, init_width_or_weight=cc_ratio
+                        )
+                    except TypeError:
+                        dpg.add_table_column(label="Parameter")
+                        dpg.add_table_column(label="Bars")
+                        dpg.add_table_column(label="CC")
                     for it in items:
                         if not it.supported:
                             continue
-                        self._create_row(table, it)
+                        self._create_row_3cols(table, it)
 
         for desc in sorted_desc:
             if current_cat is None:
@@ -440,13 +471,209 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             dpg.add_table_column(label="Parameter")
             dpg.add_table_column(label="Value")
 
-    def _create_row(self, table: int | str, desc: ParameterDescriptor) -> None:
+    def _create_row_3cols(self, table: int | str, desc: ParameterDescriptor) -> None:
         with dpg.table_row(parent=table):
+            # 1) Label（セル上端揃え）
             with dpg.table_cell():
                 dpg.add_text(default_value=desc.label or desc.id)
+            # 2) Bars
             with dpg.table_cell():
-                cell = dpg.add_group()
-                self._create_widget(parent=cell, desc=desc)
+                self._create_bars(parent=dpg.last_item() or table, desc=desc)
+            # 3) CC (numeric only)
+            with dpg.table_cell():
+                self._create_cc_inputs(parent=dpg.last_item() or table, desc=desc)
+
+    def _create_bars(self, parent: int | str, desc: ParameterDescriptor) -> None:
+        vt = desc.value_type
+        value = self._current_or_default(desc)
+        if vt == "vector":
+            vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
+            dim = 4 if len(vec) >= 4 else 3
+            vh = desc.vector_hint
+            if vh is None:
+                default_vh = self._layout.derive_vector_range(dim=dim)
+                vmin = list(default_vh.min_values)
+                vmax = list(default_vh.max_values)
+            else:
+                vmin = list(vh.min_values)
+                vmax = list(vh.max_values)
+            with dpg.table(
+                parent=parent,
+                header_row=False,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+            ) as bars_tbl:
+                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                if var_cell_padding is not None:
+                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
+                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
+                    with dpg.theme() as _bars_theme:
+                        with dpg.theme_component(dpg.mvAll):
+                            dpg.add_theme_style(var_cell_padding, cx, cy)
+                    dpg.bind_item_theme(bars_tbl, _bars_theme)
+                for _ in range(dim):
+                    try:
+                        dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+                    except TypeError:
+                        dpg.add_table_column(width_stretch=True)
+                with dpg.table_row():
+                    for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
+                        with dpg.table_cell():
+                            tag = f"{desc.id}::{suffix}"
+                            default_component = float(vec[i]) if i < len(vec) else 0.0
+                            slider_id = dpg.add_slider_float(
+                                tag=tag,
+                                label="",
+                                default_value=default_component,
+                                min_value=float(vmin[i]) if i < len(vmin) else 0.0,
+                                max_value=float(vmax[i]) if i < len(vmax) else 1.0,
+                                format=f"%.{self._layout.value_precision}f",
+                                callback=self._on_widget_change,
+                                user_data=(desc.id, i),
+                            )
+                            dpg.set_item_width(slider_id, -1)
+            return
+        # scalar/bool/enum/string → 内側1列テーブルで幅扱いを vector と揃える
+        hint = desc.range_hint or self._layout.derive_range(
+            name=desc.id, value_type=desc.value_type, default_value=desc.default_value
+        )
+        if vt in {"int", "float"}:
+            with dpg.table(
+                parent=parent,
+                header_row=False,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+            ) as bars_tbl:
+                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                if var_cell_padding is not None:
+                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
+                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
+                    with dpg.theme() as _bars_theme:
+                        with dpg.theme_component(dpg.mvAll):
+                            dpg.add_theme_style(var_cell_padding, cx, cy)
+                    dpg.bind_item_theme(bars_tbl, _bars_theme)
+                try:
+                    dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+                except TypeError:
+                    dpg.add_table_column(width_stretch=True)
+                with dpg.table_row():
+                    with dpg.table_cell():
+                        if vt == "int":
+                            slider_id = dpg.add_slider_int(
+                                tag=desc.id,
+                                label="",
+                                default_value=int(value) if value is not None else 0,
+                                min_value=int(hint.min_value),
+                                max_value=int(hint.max_value),
+                                callback=self._on_widget_change,
+                                user_data=desc.id,
+                            )
+                        else:
+                            slider_id = dpg.add_slider_float(
+                                tag=desc.id,
+                                label="",
+                                default_value=float(value) if value is not None else 0.0,
+                                min_value=float(hint.min_value),
+                                max_value=float(hint.max_value),
+                                format=f"%.{self._layout.value_precision}f",
+                                callback=self._on_widget_change,
+                                user_data=desc.id,
+                            )
+                        dpg.set_item_width(slider_id, -1)
+            return
+        if vt == "bool":
+            dpg.add_checkbox(
+                tag=desc.id,
+                label="",
+                default_value=bool(value),
+                callback=self._on_widget_change,
+                user_data=desc.id,
+            )
+            return
+        if vt == "enum":
+            items = list(desc.choices or [])
+            default = str(value) if value is not None else (items[0] if items else "")
+            if len(items) <= 5:
+                dpg.add_radio_button(
+                    tag=desc.id,
+                    items=items,
+                    default_value=default,
+                    horizontal=True,
+                    callback=self._on_widget_change,
+                    user_data=desc.id,
+                )
+            else:
+                dpg.add_combo(
+                    tag=desc.id,
+                    items=items,
+                    default_value=default,
+                    callback=self._on_widget_change,
+                    user_data=desc.id,
+                )
+            return
+        if vt == "string":
+            txt_id = dpg.add_input_text(
+                tag=desc.id,
+                default_value=str(value) if value is not None else "",
+                callback=self._on_widget_change,
+                user_data=desc.id,
+            )
+            dpg.set_item_width(txt_id, -1)
+            return
+
+    def _create_cc_inputs(self, parent: int | str, desc: ParameterDescriptor) -> None:
+        vt = desc.value_type
+        if vt == "vector":
+            vec = (
+                desc.default_value
+                if isinstance(desc.default_value, (list, tuple))
+                else (0.0, 0.0, 0.0)
+            )
+            dim = 4 if len(vec) >= 4 else 3
+            with dpg.table(
+                parent=parent,
+                header_row=False,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+            ) as cc_tbl:
+                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                if var_cell_padding is not None:
+                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
+                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
+                    with dpg.theme() as _cc_theme:
+                        with dpg.theme_component(dpg.mvAll):
+                            dpg.add_theme_style(var_cell_padding, cx, cy)
+                dpg.bind_item_theme(cc_tbl, _cc_theme)
+                for _ in range(dim):
+                    try:
+                        dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+                    except TypeError:
+                        dpg.add_table_column(width_stretch=True)
+                with dpg.table_row():
+                    for i in range(dim):
+                        with dpg.table_cell():
+                            self._add_cc_binding_input_component(None, desc, i)
+            return
+        if vt in {"float", "int"}:
+            with dpg.table(
+                parent=parent,
+                header_row=False,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+            ) as cc_tbl:
+                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                if var_cell_padding is not None:
+                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
+                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
+                    with dpg.theme() as _cc_theme:
+                        with dpg.theme_component(dpg.mvAll):
+                            dpg.add_theme_style(var_cell_padding, cx, cy)
+                dpg.bind_item_theme(cc_tbl, _cc_theme)
+                try:
+                    dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+                except TypeError:
+                    dpg.add_table_column(width_stretch=True)
+                with dpg.table_row():
+                    with dpg.table_cell():
+                        self._add_cc_binding_input(None, desc)
+            return
+        # 非数値は CC 入力なし
 
     # ---- 型別ウィジェット ----
     def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int:
@@ -536,61 +763,140 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         ) as vec_table:
             var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
             if var_cell_padding is not None:
+                pad = int(self._layout.padding)
                 with dpg.theme() as _vec_theme:
                     with dpg.theme_component(dpg.mvAll):
-                        dpg.add_theme_style(var_cell_padding, 1, 0)
+                        dpg.add_theme_style(var_cell_padding, pad, pad)
                 dpg.bind_item_theme(vec_table, _vec_theme)
-            for _ in range(dim):
+            # レイアウト: [バー群] | [CC群]
+            try:
+                # 左（バー群）を広く、右（CC群）をコンパクトに
+                dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+                dpg.add_table_column(width_stretch=True, init_width_or_weight=0.25)
+            except TypeError:
+                dpg.add_table_column(width_stretch=True)
                 dpg.add_table_column(width_stretch=True)
             with dpg.table_row():
-                for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
-                    with dpg.table_cell():
-                        tag = f"{desc.id}::{suffix}"
-                        default_component = float(vec[i]) if i < len(vec) else 0.0
-                        slider_id = dpg.add_slider_float(
-                            tag=tag,
-                            label="",
-                            default_value=default_component,
-                            min_value=float(vmin[i]) if i < len(vmin) else 0.0,
-                            max_value=float(vmax[i]) if i < len(vmax) else 1.0,
-                            format=f"%.{self._layout.value_precision}f",
-                            callback=self._on_widget_change,
-                            user_data=(desc.id, i),
-                        )
-                        dpg.set_item_width(slider_id, -1)
+                # 1) バー群（テーブルで3/4列に分割し、均等に広げる）
+                with dpg.table_cell():
+                    with dpg.table(
+                        header_row=False,
+                        policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+                    ) as bars_tbl:
+                        var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                        if var_cell_padding is not None:
+                            pad = int(self._layout.padding)
+                            with dpg.theme() as _bars_theme:
+                                with dpg.theme_component(dpg.mvAll):
+                                    dpg.add_theme_style(var_cell_padding, pad, pad)
+                            dpg.bind_item_theme(bars_tbl, _bars_theme)
+                        for _ in range(dim):
+                            try:
+                                dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+                            except TypeError:
+                                dpg.add_table_column(width_stretch=True)
+                        with dpg.table_row():
+                            for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
+                                with dpg.table_cell():
+                                    tag = f"{desc.id}::{suffix}"
+                                    default_component = float(vec[i]) if i < len(vec) else 0.0
+                                    slider_id = dpg.add_slider_float(
+                                        tag=tag,
+                                        label="",
+                                        default_value=default_component,
+                                        min_value=float(vmin[i]) if i < len(vmin) else 0.0,
+                                        max_value=float(vmax[i]) if i < len(vmax) else 1.0,
+                                        format=f"%.{self._layout.value_precision}f",
+                                        callback=self._on_widget_change,
+                                        user_data=(desc.id, i),
+                                    )
+                                    dpg.set_item_width(slider_id, -1)
+                # 2) CC 群（水平グループ + item_spacing を個別設定）
+                with dpg.table_cell():
+                    # CC群にのみ item spacing を適用（vector_cc_spacing）
+                    cc_group = dpg.add_group(horizontal=True)
+                    try:
+                        var_item_spacing = getattr(dpg, "mvStyleVar_ItemSpacing", None)
+                        if var_item_spacing is not None:
+                            with dpg.theme() as _cc_theme:
+                                with dpg.theme_component(dpg.mvAll):
+                                    s = int(getattr(self._layout, "vector_cc_spacing", 2))
+                                    dpg.add_theme_style(var_item_spacing, s, s)
+                            dpg.bind_item_theme(cc_group, _cc_theme)
+                    except Exception:
+                        pass
+                    with dpg.group(horizontal=True, parent=cc_group):
+                        for i in range(dim):
+                            self._add_cc_binding_input_component(None, desc, i)
         return vec_table
 
     def _create_int(
         self, parent: int | str, desc: ParameterDescriptor, value: Any, hint: Any
     ) -> int:
-        slider_id = dpg.add_slider_int(
-            tag=desc.id,
+        # スライダー（左）と CC 入力（右）をテーブルで配置し、右側の確保を保証する
+        with dpg.table(
             parent=parent,
-            label="",
-            default_value=int(value) if value is not None else 0,
-            min_value=int(hint.min_value),
-            max_value=int(hint.max_value),
-            callback=self._on_widget_change,
-            user_data=desc.id,
-        )
-        dpg.set_item_width(slider_id, -1)
+            header_row=False,
+            policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+        ) as tbl:
+            var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+            if var_cell_padding is not None:
+                pad = int(self._layout.padding)
+                with dpg.theme() as _int_tbl_theme:
+                    with dpg.theme_component(dpg.mvAll):
+                        dpg.add_theme_style(var_cell_padding, pad, pad)
+                dpg.bind_item_theme(tbl, _int_tbl_theme)
+            dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+            dpg.add_table_column(width_stretch=True, init_width_or_weight=0.35)
+            with dpg.table_row():
+                with dpg.table_cell():
+                    slider_id = dpg.add_slider_int(
+                        tag=desc.id,
+                        label="",
+                        default_value=int(value) if value is not None else 0,
+                        min_value=int(hint.min_value),
+                        max_value=int(hint.max_value),
+                        callback=self._on_widget_change,
+                        user_data=desc.id,
+                    )
+                    dpg.set_item_width(slider_id, -1)
+                with dpg.table_cell():
+                    self._add_cc_binding_input(None, desc)
         return slider_id
 
     def _create_float(
         self, parent: int | str, desc: ParameterDescriptor, value: Any, hint: Any
     ) -> int:
-        slider_id = dpg.add_slider_float(
-            tag=desc.id,
+        # スライダー（左）と CC 入力（右）をテーブルで配置し、右側の確保を保証する
+        with dpg.table(
             parent=parent,
-            label="",
-            default_value=float(value) if value is not None else 0.0,
-            min_value=float(hint.min_value),
-            max_value=float(hint.max_value),
-            format=f"%.{self._layout.value_precision}f",
-            callback=self._on_widget_change,
-            user_data=desc.id,
-        )
-        dpg.set_item_width(slider_id, -1)
+            header_row=False,
+            policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+        ) as tbl:
+            var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+            if var_cell_padding is not None:
+                pad = int(self._layout.padding)
+                with dpg.theme() as _flt_tbl_theme:
+                    with dpg.theme_component(dpg.mvAll):
+                        dpg.add_theme_style(var_cell_padding, pad, pad)
+                dpg.bind_item_theme(tbl, _flt_tbl_theme)
+            dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
+            dpg.add_table_column(width_stretch=True, init_width_or_weight=0.35)
+            with dpg.table_row():
+                with dpg.table_cell():
+                    slider_id = dpg.add_slider_float(
+                        tag=desc.id,
+                        label="",
+                        default_value=float(value) if value is not None else 0.0,
+                        min_value=float(hint.min_value),
+                        max_value=float(hint.max_value),
+                        format=f"%.{self._layout.value_precision}f",
+                        callback=self._on_widget_change,
+                        user_data=desc.id,
+                    )
+                    dpg.set_item_width(slider_id, -1)
+                with dpg.table_cell():
+                    self._add_cc_binding_input(None, desc)
         return slider_id
 
     # ---- 値連携 ----
@@ -620,6 +926,90 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         pid = str(user_data)
         value = app_data
         self._store.set_override(pid, value)
+
+    def _on_cc_binding_change(self, sender: int, app_data: Any, user_data: Any) -> None:
+        """CC 番号入力の変更を Store へ反映（空で解除）。"""
+        try:
+            pid = str(user_data)
+            text = str(app_data).strip()
+        except Exception:
+            return
+        if not text:
+            self._store.bind_cc(pid, None)
+            return
+        try:
+            i = int(float(text))  # 入力が浮動小数でも整数化
+        except Exception:
+            # 無効入力は解除扱い
+            self._store.bind_cc(pid, None)
+            dpg.set_value(f"{pid}::cc", "")
+            return
+        # 軽いクランプ 0..127
+        if i < 0:
+            i = 0
+        if i > 127:
+            i = 127
+        self._store.bind_cc(pid, i)
+        # 正規化表示
+        try:
+            dpg.set_value(f"{pid}::cc", str(i))
+        except Exception:
+            pass
+
+    def _add_cc_binding_input(self, parent: int | str | None, desc: ParameterDescriptor):
+        """スライダー右に CC 番号入力を追加する（最小 UI）。"""
+        try:
+            current = self._store.cc_binding(desc.id)
+        except Exception:
+            current = None
+        default_text = "" if current is None else str(int(current))
+        kwargs: dict[str, Any] = {
+            "tag": f"{desc.id}::cc",
+            "default_value": default_text,
+            "hint": "cc",
+            "no_spaces": True,
+            "callback": self._on_cc_binding_change,
+            "user_data": desc.id,
+        }
+        if parent is not None:
+            kwargs["parent"] = parent
+        kwargs["height"] = int(getattr(self._layout, "row_height", 28))
+        box = dpg.add_input_text(**kwargs)
+        try:
+            w = int(getattr(self._layout, "cc_box_width", 24))
+            dpg.set_item_width(box, w if w > 0 else 24)
+        except Exception:
+            pass
+        return box
+
+    def _add_cc_binding_input_component(
+        self, parent: int | str | None, desc: ParameterDescriptor, idx: int
+    ):
+        suffix = ("x", "y", "z", "w")[idx]
+        pid_comp = f"{desc.id}::{suffix}"
+        try:
+            current = self._store.cc_binding(pid_comp)
+        except Exception:
+            current = None
+        default_text = "" if current is None else str(int(current))
+        kwargs: dict[str, Any] = {
+            "tag": f"{pid_comp}::cc",
+            "default_value": default_text,
+            "hint": "cc",
+            "no_spaces": True,
+            "callback": self._on_cc_binding_change,
+            "user_data": pid_comp,
+        }
+        if parent is not None:
+            kwargs["parent"] = parent
+        kwargs["height"] = int(getattr(self._layout, "row_height", 28))
+        box = dpg.add_input_text(**kwargs)
+        try:
+            w = int(getattr(self._layout, "cc_box_width", 24))
+            dpg.set_item_width(box, w if w > 0 else 24)
+        except Exception:
+            pass
+        return box
 
     def _on_store_change(self, ids: Iterable[str]) -> None:
         self._syncing = True
@@ -676,6 +1066,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             logger.exception("setup_theme failed; continue with defaults")
 
     def _apply_default_styles(self) -> bool:
+        # デフォルト適用（config が無い場合のフェイルセーフ）。詳細余白が無いときは padding
         pad = int(self._layout.padding)
         var_window_padding = getattr(dpg, "mvStyleVar_WindowPadding", None)
         var_frame_padding = getattr(dpg, "mvStyleVar_FramePadding", None)
@@ -719,8 +1110,30 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             except (TypeError, ValueError):
                 logger.warning("add_theme_style failed: key=%s val=%s", key, value)
 
-        for key, var in smap.items():
-            if key in self._theme.style:
+        # padding/spacing 系は layout.* から適用（テーマ指定は無視して統一）
+        if smap["window_padding"]:
+            dpg.add_theme_style(
+                smap["window_padding"],
+                int(getattr(self._layout, "window_padding_x", self._layout.padding)),
+                int(getattr(self._layout, "window_padding_y", self._layout.padding)),
+            )
+        if smap["frame_padding"]:
+            dpg.add_theme_style(
+                smap["frame_padding"],
+                int(getattr(self._layout, "frame_padding_x", self._layout.padding)),
+                int(getattr(self._layout, "frame_padding_y", max(1, self._layout.padding // 2))),
+            )
+        if smap["item_spacing"]:
+            dpg.add_theme_style(
+                smap["item_spacing"],
+                int(getattr(self._layout, "item_spacing_x", self._layout.padding)),
+                int(getattr(self._layout, "item_spacing_y", max(1, self._layout.padding // 2))),
+            )
+
+        # その他（丸み/サイズ等）は config の値を適用
+        for key in ("frame_rounding", "grab_rounding", "grab_min_size"):
+            var = smap.get(key)
+            if var and key in self._theme.style:
                 _add_style_value(var, key, self._theme.style[key])
         return True
 

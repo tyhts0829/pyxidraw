@@ -35,6 +35,13 @@ class ParameterManager:
     ) -> None:
         self._user_draw = user_draw
         self.store = ParameterStore()
+        # CC プロバイダを util 層のフック経由で注入（engine→api の依存を避ける）。
+        try:
+            from util.cc_provider import get_cc_snapshot as _get_cc_snapshot
+
+            self.store.set_cc_provider(_get_cc_snapshot)
+        except Exception:
+            pass
 
         # 設定ファイルから Parameter GUI 見た目設定を読み込み（未指定時は既定）
         cfg = load_config() or {}
@@ -49,12 +56,50 @@ class ParameterManager:
             except Exception:
                 ratio_val = 0.5
             ratio_val = max(0.1, min(0.9, ratio_val))
+            try:
+                bars_cc = float(lcfg.get("bars_cc_ratio", 0.7))
+            except Exception:
+                bars_cc = 0.7
+            bars_cc = 0.05 if bars_cc < 0.05 else (0.95 if bars_cc > 0.95 else bars_cc)
+            try:
+                ccw = int(lcfg.get("cc_box_width", 24))
+            except Exception:
+                ccw = 24
+            ccw = 8 if ccw < 8 else ccw
+
+            # 詳細余白（配列 [x, y]）は未指定時 padding にフォールバック
+            def _pair(key: str, default_x: int, default_y: int) -> tuple[int, int]:
+                raw = lcfg.get(key)
+                if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+                    try:
+                        x = int(raw[0])
+                        y = int(raw[1])
+                        return x, y
+                    except Exception:
+                        return default_x, default_y
+                return default_x, default_y
+
+            pad = int(lcfg.get("padding", 8))
+            win_x, win_y = _pair("window_padding", pad, pad)
+            frm_x, frm_y = _pair("frame_padding", pad, max(1, pad // 2))
+            itm_x, itm_y = _pair("item_spacing", pad, max(1, pad // 2))
+            cel_x, cel_y = _pair("cell_padding", pad, pad)
             layout = ParameterLayoutConfig(
                 row_height=int(lcfg.get("row_height", 28)),
-                padding=int(lcfg.get("padding", 8)),
+                padding=pad,
                 font_size=int(lcfg.get("font_size", 12)),
                 value_precision=int(lcfg.get("value_precision", 6)),
                 label_column_ratio=ratio_val,
+                bars_cc_ratio=bars_cc,
+                cc_box_width=ccw,
+                window_padding_x=win_x,
+                window_padding_y=win_y,
+                frame_padding_x=frm_x,
+                frame_padding_y=frm_y,
+                item_spacing_x=itm_x,
+                item_spacing_y=itm_y,
+                cell_padding_x=cel_x,
+                cell_padding_y=cel_y,
             )
 
         # window config

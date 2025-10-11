@@ -383,7 +383,9 @@ def run_sketch(
 
         def _param_snapshot_fn():  # type: ignore[no-redef]
             try:
-                return extract_overrides(parameter_manager.store)
+                # CC はフレーム固有のスナップショットを優先して適用
+                cc_map = cc_snapshot_fn() if callable(cc_snapshot_fn) else None
+                return extract_overrides(parameter_manager.store, cc_map)
             except Exception:
                 return None
 

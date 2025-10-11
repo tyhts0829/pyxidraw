@@ -8,7 +8,6 @@ sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
 
 import os
 
-import numpy as np
 
 from api import E, G, cc, lfo, run  # type: ignore  # after sys.path tweak
 from engine.core.geometry import Geometry  # type: ignore
@@ -29,14 +28,7 @@ def draw(t: float) -> Geometry:
         # .translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
         G.text(em_size_mm=cc[1] * 200).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     )
-    pipe = (
-        E.pipeline.affine(angles_rad=(cc[3] * np.pi, cc[4] * np.pi, cc[5] * np.pi))
-        .partition()
-        .fill(density=cc[6] * 200)
-        .subdivide()
-        .displace(t_sec=cc[5] * 10)
-        # .displace(t_sec=osc(t * cc[7]) * 100 * cc[8])
-    )
+    pipe = E.pipeline.affine().partition().fill().subdivide().displace()
     return pipe(base)
 
 

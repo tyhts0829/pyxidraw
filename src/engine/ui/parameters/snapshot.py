@@ -15,28 +15,134 @@ from __future__ import annotations
 import inspect
 from collections import defaultdict
 from typing import Any, Mapping
+import os
 
 from .runtime import activate_runtime, deactivate_runtime
 from .state import ParameterStore
 
 
-def extract_overrides(store: ParameterStore) -> dict[str, Any]:
+def extract_overrides(
+    store: ParameterStore, cc_mapping: Mapping[int, float] | None = None
+) -> dict[str, Any]:
     """ParameterStore から override のみを取り出して返す。
 
     - 量子化は行わない（実値）。
     - キーは `"{scope}.{name}#{index}.{param}"`。
     """
     overrides: dict[str, Any] = {}
+    # 1) GUI override（original と異なる current のみ）
     for desc in store.descriptors():
         pid = desc.id
-        cur = store.current_value(pid)
-        org = store.original_value(pid)
+        try:
+            cur = store.current_value(pid)
+            org = store.original_value(pid)
+        except Exception:
+            continue
         if cur is None:
             continue
         if cur == org:
             continue
         # JSON保存互換で tuple はそのまま運ぶ（呼び出し側で解釈）
         overrides[pid] = cur
+
+    # 2) CC バインドの適用（数値スカラ）。GUI 値があっても CC を優先。
+    for desc in store.descriptors():
+        if desc.value_type not in {"float", "int"}:
+            continue
+        pid = desc.id
+        cc_idx = None
+        try:
+            cc_idx = store.cc_binding(pid)
+        except Exception:
+            cc_idx = None
+        if cc_idx is None:
+            continue
+        try:
+            # 優先: 呼び出し元から渡された cc_mapping（フレーム固有）
+            if cc_mapping is not None and isinstance(cc_mapping, Mapping):
+                cc_val = float(cc_mapping.get(int(cc_idx), 0.0))
+            else:
+                cc_val = float(store.cc_value(cc_idx))  # 0..1（プロバイダ）
+            if desc.range_hint is not None:
+                lo = float(desc.range_hint.min_value)
+                hi = float(desc.range_hint.max_value)
+            else:
+                lo, hi = 0.0, 1.0
+            scaled = lo + (hi - lo) * cc_val
+            if os.getenv("PXD_DEBUG_CC"):
+                try:
+                    print(
+                        f"[CC] pid={pid} cc={cc_idx} val={cc_val:.3f} scaled={scaled:.3f} range=({lo},{hi})"
+                    )
+                except Exception:
+                    pass
+            if desc.value_type == "int":
+                overrides[pid] = int(round(scaled))
+            else:
+                overrides[pid] = float(scaled)
+        except Exception:
+            # CC の適用に失敗しても無視（GUI override のみ適用）
+            continue
+
+    # 3) CC バインドの適用（ベクトル）。成分ごとに CC があれば置換し、タプルで渡す。
+    for desc in store.descriptors():
+        if desc.value_type != "vector":
+            continue
+        pid = desc.id
+        # 成分 ID と CC バインディングの有無
+        suffixes = ("x", "y", "z", "w")
+        try:
+            comp_cc: list[int | None] = [store.cc_binding(f"{pid}::{s}") for s in suffixes]
+        except Exception:
+            comp_cc = [None, None, None, None]
+        if not any(x is not None for x in comp_cc):
+            continue
+        # ベースベクトル（current→original→default の順で取得）
+        try:
+            base = store.current_value(pid)
+            if base is None:
+                base = store.original_value(pid)
+        except Exception:
+            base = None
+        if not isinstance(base, (list, tuple)):
+            base = (
+                desc.default_value
+                if isinstance(desc.default_value, (list, tuple))
+                else (0.0, 0.0, 0.0)
+            )
+        vec = list(base)
+        dim = min(max(3, len(vec)), 4)
+        vec = (vec + [0.0] * dim)[:dim]
+        # レンジ（ヒント優先、なければ 0..1）
+        try:
+            vh = desc.vector_hint
+            mins = list(getattr(vh, "min_values", (0.0, 0.0, 0.0, 0.0)))
+            maxs = list(getattr(vh, "max_values", (1.0, 1.0, 1.0, 1.0)))
+        except Exception:
+            mins = [0.0, 0.0, 0.0, 0.0]
+            maxs = [1.0, 1.0, 1.0, 1.0]
+        changed = False
+        for i in range(dim):
+            idx = comp_cc[i]
+            if idx is None:
+                continue
+            try:
+                if cc_mapping is not None and isinstance(cc_mapping, Mapping):
+                    cc_val = float(cc_mapping.get(int(idx), 0.0))
+                else:
+                    cc_val = float(store.cc_value(int(idx)))
+                lo = float(mins[i]) if i < len(mins) else 0.0
+                hi = float(maxs[i]) if i < len(maxs) else 1.0
+                vec[i] = lo + (hi - lo) * cc_val
+                changed = True
+            except Exception:
+                continue
+        if changed:
+            try:
+                overrides[pid] = tuple(vec)
+            except Exception:
+                overrides[pid] = vec
+
     return overrides
 
 

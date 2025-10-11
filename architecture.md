@@ -174,6 +174,7 @@ Tips:
 - HUD の色（`runner.hud_text_color`、`runner.hud_meter_color`、`runner.hud_meter_bg_color`）も起動直後に Store→Overlay へ初期適用する（`OverlayHUD.set_text_color` / `set_meter_color` / `set_meter_bg_color`）。
   優先順位は「保存値 > config」（HUD は引数指定の導線なし）。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
+  - Engine/UI 側は `util.cc_provider.get_cc_snapshot()` を経由して CC スナップショットを参照し、`engine/* -> api/*` の依存を避ける（登録は `api.cc` が `set_cc_snapshot_provider` で行う）。
 
 ## テストとの接点（要点）
 

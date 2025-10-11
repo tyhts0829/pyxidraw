@@ -14,7 +14,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Any, Callable, Iterable, Literal
+from typing import Any, Callable, Iterable, Literal, Mapping
 
 ValueType = Literal["float", "int", "bool", "enum", "vector", "string"]
 SourceType = Literal["shape", "effect"]
@@ -99,6 +99,9 @@ class ParameterStore:
         self._values: dict[str, ParameterValue] = {}
         self._listeners: list[Subscriber] = []
         self._lock = RLock()
+        # CC 関連（プロバイダとバインディング）
+        self._cc_provider: Callable[[], Mapping[int, float]] | None = None
+        self._cc_bindings: dict[str, int] = {}
 
     # --- 登録 / 問合せ ---
     def register(self, descriptor: ParameterDescriptor, value: Any) -> None:
@@ -206,17 +209,86 @@ class ParameterStore:
                 }
             return result
 
+    # --- CC 連携（最小実装） ---
+    def set_cc_provider(self, provider: Callable[[], Mapping[int, float]] | None) -> None:
+        """現在フレームの CC スナップショットを返す関数を設定する。"""
+        self._cc_provider = provider
+
+    def cc_value(self, index: int) -> float:
+        """指定 CC 番号の 0..1 値を返す（未定義は 0.0）。"""
+        try:
+            i = int(index)
+        except Exception:
+            i = 0
+        provider = self._cc_provider
+        try:
+            mapping = provider() if callable(provider) else {}
+            v = float(mapping.get(i, 0.0))
+            if v < 0.0:
+                return 0.0
+            if v > 1.0:
+                return 1.0
+            return v
+        except Exception:
+            return 0.0
+
+    def bind_cc(self, param_id: str, index: int | None) -> None:
+        """パラメータに CC 番号をバインド/解除する（None で解除）。"""
+        with self._lock:
+            if index is None:
+                self._cc_bindings.pop(param_id, None)
+            else:
+                try:
+                    i = int(index)
+                except Exception:
+                    i = 0
+                # 範囲は軽くクランプ（0..127 想定）
+                if i < 0:
+                    i = 0
+                if i > 127:
+                    i = 127
+                self._cc_bindings[param_id] = i
+
+    def cc_binding(self, param_id: str) -> int | None:
+        """バインド済み CC 番号を返す（未バインドは None）。"""
+        with self._lock:
+            return self._cc_bindings.get(param_id)
+
+    def all_cc_bindings(self) -> dict[str, int]:
+        """すべての CC バインディングを返す（保存/デバッグ用）。"""
+        with self._lock:
+            return dict(self._cc_bindings)
+
 
 @dataclass(frozen=True)
 class ParameterLayoutConfig:
     """GUI 表示用レイアウト設定。"""
 
     row_height: int = 28
+    # 後方互換のための単一パディング（未指定時のフォールバック）。
     padding: int = 8
     font_size: int = 12
     value_precision: int = 6
     # ラベル:値（スライダー）列の比率（0.1..0.9）。既定は等分（0.5）。
     label_column_ratio: float = 0.5
+    # 残り領域に対する Bars:CC の比率（Bars 側の割合、0.05..0.95）
+    bars_cc_ratio: float = 0.7
+    # CC 入力ボックスの固定幅（px）
+    cc_box_width: int = 24
+
+    # ---- 詳細余白（X, Y）: YAML から配列で受け取り、未指定は padding をフォールバック ----
+    # 表全体のセル余白（行間・列間）。Vector/Scalar のバー用内側テーブルにも適用。
+    cell_padding_x: int = 8
+    cell_padding_y: int = 8
+    # 同一グループ内のウィジェット間間隔。CC 入力の横並びに適用。
+    item_spacing_x: int = 8
+    item_spacing_y: int = 8
+    # ウィジェット枠内（InputText/Checkbox/Slider 等）の内側余白。
+    frame_padding_x: int = 8
+    frame_padding_y: int = 4
+    # ウィンドウの内側余白（ビューポートの端からの余白）。
+    window_padding_x: int = 8
+    window_padding_y: int = 8
 
     def derive_range(self, *, name: str, value_type: ValueType, default_value: Any) -> RangeHint:
         """最小構成の既定レンジ: 数値は 0..1、bool は 0/1。"""

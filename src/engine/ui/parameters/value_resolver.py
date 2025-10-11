@@ -201,6 +201,41 @@ class ParameterValueResolver:
         )
         self._store.register(descriptor, default_tuple)
         resolved = self._store.resolve(descriptor_id, default_tuple)
+        # CC バインド（成分別）があれば、resolved をベースに置換
+        try:
+            # ベースベクトル
+            vec = list(resolved) if isinstance(resolved, (list, tuple)) else list(default_tuple)
+            dim_out = min(len(vec), 4)
+            # ヒント（成分別レンジ）
+            try:
+                desc_obj = self._store.get_descriptor(descriptor_id)
+                vh = getattr(desc_obj, "vector_hint", None)
+            except Exception:
+                vh = None
+            mins = list(getattr(vh, "min_values", (0.0, 0.0, 0.0, 0.0)))
+            maxs = list(getattr(vh, "max_values", (1.0, 1.0, 1.0, 1.0)))
+            suffixes = ("x", "y", "z", "w")
+            changed = False
+            for i in range(dim_out):
+                comp_id = f"{descriptor_id}::{suffixes[i]}"
+                try:
+                    cc_idx = self._store.cc_binding(comp_id)
+                except Exception:
+                    cc_idx = None
+                if cc_idx is None:
+                    continue
+                try:
+                    cc_val = float(self._store.cc_value(cc_idx))
+                    lo = float(mins[i]) if i < len(mins) else 0.0
+                    hi = float(maxs[i]) if i < len(maxs) else 1.0
+                    vec[i] = lo + (hi - lo) * cc_val
+                    changed = True
+                except Exception:
+                    continue
+            if changed:
+                return tuple(vec)  # type: ignore[return-value]
+        except Exception:
+            pass
         # store は Any を返すため、tuple を保証
         try:
             return tuple(resolved)  # type: ignore[return-value]
@@ -273,7 +308,30 @@ class ParameterValueResolver:
         return value
 
     def _register_scalar(self, descriptor: ParameterDescriptor, value: Any) -> Any:
+        # Descriptor を登録（GUI 表示用）
         self._store.register(descriptor, value)
+        # CC バインドがあれば、GUI 表示は変えず、実行値のみ CC による値へ置換
+        try:
+            cc_idx = self._store.cc_binding(descriptor.id)
+        except Exception:
+            cc_idx = None
+        if cc_idx is not None and descriptor.value_type in {"float", "int"}:
+            try:
+                cc_val = float(self._store.cc_value(cc_idx))  # 0..1
+                # レンジヒントがあればそれにスケール、無ければ 0..1
+                if descriptor.range_hint is not None:
+                    lo = float(descriptor.range_hint.min_value)
+                    hi = float(descriptor.range_hint.max_value)
+                else:
+                    lo, hi = 0.0, 1.0
+                scaled = lo + (hi - lo) * cc_val
+                if descriptor.value_type == "int":
+                    return int(round(scaled))
+                return float(scaled)
+            except Exception:
+                # フェイルソフト: CC 適用に失敗したら通常経路
+                pass
+        # 通常経路（override があればそれを適用）
         return self._store.resolve(descriptor.id, value)
 
     # _register_vector は親 Descriptor 化に伴い廃止
