@@ -976,8 +976,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
         try:
-            w = int(getattr(self._layout, "cc_box_width", 24))
-            dpg.set_item_width(box, w if w > 0 else 24)
+            # 案A: CC 入力はセル幅いっぱいに伸ばす（固定幅は使わない）
+            dpg.set_item_width(box, -1)
         except Exception:
             pass
         return box
@@ -1005,8 +1005,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
         try:
-            w = int(getattr(self._layout, "cc_box_width", 24))
-            dpg.set_item_width(box, w if w > 0 else 24)
+            # 案A: CC 入力はセル幅いっぱいに伸ばす（固定幅は使わない）
+            dpg.set_item_width(box, -1)
         except Exception:
             pass
         return box
