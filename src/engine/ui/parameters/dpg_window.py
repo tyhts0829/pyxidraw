@@ -106,8 +106,9 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         dpg.destroy_context()
 
     def mount(self, descriptors: list[ParameterDescriptor]) -> None:
+        # ルート直下にセクション（Shapes/Effects）を配置し、Display/HUD と同レベルにする
         with dpg.stage(tag=STAGE_TAG):
-            self._build_grouped_table(SCROLL_TAG, descriptors)
+            self._build_grouped_table(ROOT_TAG, descriptors)
         dpg.unstage(STAGE_TAG)
 
     # ---- ルート/Display/HUD ----
@@ -117,13 +118,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                 self.build_display_controls(parent=root, store=self._store)
             except Exception:
                 logger.warning("failed to build runner controls; continue without Display/HUD")
-            dpg.add_child_window(
-                tag=SCROLL_TAG,
-                autosize_x=True,
-                autosize_y=True,
-                border=False,
-                no_scrollbar=True,
-            )
+            # ここでは子ウィンドウを使わず、Shapes/Effects も ROOT 直下に並べる
         dpg.set_primary_window(root, True)
 
     def force_set_rgb_u8(self, tag: int | str, rgb_u8: Sequence[int]) -> None:
