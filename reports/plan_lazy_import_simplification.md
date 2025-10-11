@@ -85,10 +85,11 @@
 
 - 目的: try-import と API 差分ガードを撤去。使用関数内で直接 import に統一。
 - タスク:
-  - [ ] `src/effects/offset.py` — トップレベル import を削除、実処理関数内ローカル import へ。
-  - [ ] `src/effects/partition.py` — try-import/API 差分ガード撤去、直接 import に整理。
+  - [x] `src/effects/offset.py` — トップレベルの shapely import を撤去、実処理関数内のローカル import に変更。
+  - [x] `src/effects/partition.py` — 先頭の巨大な try-import/sentinel を撤去。各処理関数内でローカル import し、未導入時は耳切り三角分割にフォールバック（API 互換を維持）。
 - 完了条件:
-  - [ ] 変更ファイル限定のチェック合格＋該当エフェクトの最小スモーク。
+  - [x] 変更ファイル限定のチェック合格（ruff/black/isort/mypy）。
+  - [x] 該当エフェクトの最小スモーク（offset/partition のテスト一部、全体 smoke）。
 
 ### フェーズ6: numba の一本化
 

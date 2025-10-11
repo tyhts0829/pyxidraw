@@ -23,8 +23,6 @@ offset エフェクト（バッファ/輪郭オフセット）
 from __future__ import annotations
 
 import numpy as np
-from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon
-from shapely.geometry.base import BaseGeometry
 
 from engine.core.geometry import Geometry
 from util.geom3d_ops import transform_back, transform_to_xy_plane
@@ -113,6 +111,9 @@ def _buffer(
 
     new_vertices_list: list[np.ndarray] = []
 
+    # ローカル import（実利用時のみ依存）
+    from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon  # type: ignore
+
     for vertices in vertices_list:
         vertices = _close_curve(vertices, 1e-3)
         vertices_on_xy, rotation_matrix, z_offset = transform_to_xy_plane(vertices)
@@ -138,7 +139,7 @@ def _buffer(
 
 def _extract_vertices_from_polygon(
     new_vertices_list: list,
-    buffered_line: BaseGeometry,
+    buffered_line,
     rotation_matrix: np.ndarray,
     z_offset: float,
 ) -> list:
@@ -164,11 +165,12 @@ def _extract_vertices_from_polygon(
     -----
     内環（holes）は現在無視し、外環（exterior）のみ抽出。
     """
+    # ローカル import（可読性のため再取得）
+    from shapely.geometry import MultiPolygon, Polygon  # type: ignore
+
     if isinstance(buffered_line, Polygon):
         polygons = [buffered_line]
     else:
-        from shapely.geometry import MultiPolygon
-
         polygons = buffered_line.geoms if isinstance(buffered_line, MultiPolygon) else []
 
     for poly in polygons:
@@ -182,7 +184,7 @@ def _extract_vertices_from_polygon(
 
 def _extract_vertices_from_line(
     new_vertices_list: list,
-    buffered_line: BaseGeometry,
+    buffered_line,
     rotation_matrix: np.ndarray,
     z_offset: float,
 ) -> list:
@@ -204,11 +206,11 @@ def _extract_vertices_from_line(
     list
         3D 復元後の頂点配列を追記した `new_vertices_list`。
     """
+    from shapely.geometry import LineString, MultiLineString  # type: ignore
+
     if isinstance(buffered_line, LineString):
         lines = [buffered_line]
     else:
-        from shapely.geometry import MultiLineString
-
         lines = buffered_line.geoms if isinstance(buffered_line, MultiLineString) else []
 
     for line in lines:

@@ -30,24 +30,7 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
-try:  # shapely は任意依存
-    from shapely.geometry import MultiPoint
-    from shapely.geometry import Point as _SPoint  # type: ignore
-    from shapely.geometry import Polygon
-    from shapely.ops import triangulate as _triangulate  # type: ignore
-
-    try:
-        from shapely.ops import voronoi_diagram as _voronoi_diagram  # type: ignore
-    except Exception:  # 互換 API 不在時
-        _voronoi_diagram = None  # type: ignore
-    _HAS_SHAPELY = True
-except Exception:  # shapely 未導入
-    _HAS_SHAPELY = False
-    Polygon = None  # type: ignore
-    MultiPoint = None  # type: ignore
-    _SPoint = None  # type: ignore
-    _triangulate = None  # type: ignore
-    _voronoi_diagram = None  # type: ignore
+_HAS_SHAPELY = None  # 遅延判定（局所 import に統一）
 
 
 # ── 幾何ヘルパ ──────────────────────────────────────────────────────────────
@@ -192,20 +175,22 @@ def _numpy_lines_to_geometry(lines: Iterable[np.ndarray]) -> Geometry:
 
 def _triangulate_polygon_xy(poly2d_closed: np.ndarray) -> list[np.ndarray]:
     """ポリゴン（XY, 閉路）を三角形群に分割し、各三角を閉路で返す。"""
-    if _HAS_SHAPELY and _triangulate is not None and Polygon is not None:
-        try:
-            pg = Polygon(poly2d_closed[:, :2])
-            tris = _triangulate(pg)
-            out: list[np.ndarray] = []
-            for t in tris:
-                if t.is_empty:
-                    continue
-                coords = np.array(t.exterior.coords, dtype=np.float32)
-                out.append(np.hstack([coords, np.zeros((coords.shape[0], 1), dtype=np.float32)]))
-            return out
-        except Exception:
-            # フォールバック（耳切り）
-            pass
+    try:
+        from shapely.geometry import Polygon  # type: ignore
+        from shapely.ops import triangulate as _triangulate  # type: ignore
+
+        pg = Polygon(poly2d_closed[:, :2])
+        tris = _triangulate(pg)
+        out: list[np.ndarray] = []
+        for t in tris:
+            if t.is_empty:
+                continue
+            coords = np.array(t.exterior.coords, dtype=np.float32)
+            out.append(np.hstack([coords, np.zeros((coords.shape[0], 1), dtype=np.float32)]))
+        return out
+    except Exception:
+        # フォールバック（耳切り）
+        pass
     # 耳切り
     tris2d = _earclip_triangulate_2d(poly2d_closed[:, :2].astype(np.float32))
     out = [np.hstack([t, np.zeros((t.shape[0], 1), dtype=np.float32)]) for t in tris2d]
@@ -214,19 +199,12 @@ def _triangulate_polygon_xy(poly2d_closed: np.ndarray) -> list[np.ndarray]:
 
 def _voronoi_cells_xy(poly2d_closed: np.ndarray, points2d: np.ndarray) -> list[np.ndarray]:
     """Voronoi セルを生成し多角形と交差を取り、閉路で返す（Shapely 必須）。"""
-    if not (
-        _HAS_SHAPELY
-        and _voronoi_diagram is not None
-        and Polygon is not None
-        and MultiPoint is not None
-    ):
-        # フォールバック: Delaunay 相当（三角分割）
-        return _triangulate_polygon_xy(poly2d_closed)
     try:
+        from shapely.geometry import MultiPoint, Polygon  # type: ignore
+        from shapely.ops import voronoi_diagram as _voronoi_diagram  # type: ignore
+
         pg = Polygon(poly2d_closed[:, :2])
         mp = MultiPoint(points2d[:, :2])
-        # shapely 2.x: voronoi_diagram(geom, envelope=pg)
-        # 古い版の互換は考慮済み（None の場合上でフォールバック）
         vd = _voronoi_diagram(mp, envelope=pg, edges=False)  # type: ignore[arg-type]
         cells: list[np.ndarray] = []
         for geom in getattr(vd, "geoms", []):  # type: ignore[attr-defined]
@@ -234,7 +212,6 @@ def _voronoi_cells_xy(poly2d_closed: np.ndarray, points2d: np.ndarray) -> list[n
                 inter = geom.intersection(pg)
                 if inter.is_empty:
                     continue
-                # Polygon のみ採用
                 if inter.geom_type == "Polygon":
                     coords = np.array(inter.exterior.coords, dtype=np.float32)
                     cells.append(
@@ -243,7 +220,6 @@ def _voronoi_cells_xy(poly2d_closed: np.ndarray, points2d: np.ndarray) -> list[n
             except Exception:
                 continue
         if not cells:
-            # セルが取れなければ三角分割へフォールバック
             return _triangulate_polygon_xy(poly2d_closed)
         return cells
     except Exception:
@@ -339,14 +315,20 @@ def partition(
 
     # 共平面なら全体を XY に整列して処理（傾き下でも有効）
     planar, v2d_all, R_all, z_all, _ref_h = choose_coplanar_frame(coords, offsets)
-    if (
-        planar
-        and _HAS_SHAPELY
-        and Polygon is not None
-        and _voronoi_diagram is not None
-        and MultiPoint is not None
-        and _SPoint is not None
-    ):
+    shapely_ok = False
+    if planar:
+        # Shapely があれば Voronoi ベース、無ければ偶奇三角分割でフォールバック
+        try:
+            from shapely.geometry import MultiPoint  # type: ignore
+            from shapely.geometry import Polygon  # type: ignore
+            from shapely.geometry import Point as _SPoint  # type: ignore
+            from shapely.ops import voronoi_diagram as _voronoi_diagram  # type: ignore
+
+            shapely_ok = True
+        except Exception:
+            shapely_ok = False
+
+    if planar and shapely_ok:
         rings_xy: list[np.ndarray] = []
         for i in range(len(offsets) - 1):
             ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
@@ -405,22 +387,24 @@ def partition(
         return _numpy_lines_to_geometry(out_lines)
 
     # フォールバック（非平面 or Shapely 無）
-    if planar:
+    if planar and not shapely_ok:
         # Shapely 無時は偶奇三角分割で近似 → 3D 復元
-        rings_xy: list[np.ndarray] = []
+        rings_fallback_xy: list[np.ndarray] = []
         for i in range(len(offsets) - 1):
             ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
             if ring.shape[0] < 3:
                 continue
             ring = _ensure_closed(ring)
-            rings_xy.append(ring)
-        tris = _triangulate_evenodd_region_xy_without_shapely(rings_xy)
+            rings_fallback_xy.append(ring)
+        tris = _triangulate_evenodd_region_xy_without_shapely(rings_fallback_xy)
         if not tris:
             return Geometry(coords.copy(), offsets.copy())
         out_lines = [transform_back(t.astype(np.float32), R_all, z_all) for t in tris]
         return _numpy_lines_to_geometry(out_lines)
-    else:
+    if not planar:
         return Geometry(coords.copy(), offsets.copy())
+    # 冪等フォールバック（到達しない想定）
+    return Geometry(coords.copy(), offsets.copy())
 
 
 # UI RangeHint（量子化粒度は step を設定）
