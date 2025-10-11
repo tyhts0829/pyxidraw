@@ -610,13 +610,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                 )
             return
         if vt == "string":
-            txt_id = dpg.add_input_text(
-                tag=desc.id,
-                default_value=str(value) if value is not None else "",
-                callback=self._on_widget_change,
-                user_data=desc.id,
-            )
-            dpg.set_item_width(txt_id, -1)
+            self._create_string(parent=parent, desc=desc, value=value)
             return
 
     def _create_cc_inputs(self, parent: int | str, desc: ParameterDescriptor) -> None:
