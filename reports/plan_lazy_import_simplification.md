@@ -62,7 +62,9 @@
 - 目的: sentinel/スタブ/分岐の撤去と単一ドライバ化。必要時のみローカル import。
 - タスク:
   - [x] `src/engine/export/image.py` — トップレベル sentinel（`pyglet: Any = _pyglet`）を撤去し、使用スコープでローカル import。
-  - [ ] `src/engine/ui/parameters/dpg_window.py` — dearpygui/pyglet の sentinel/スタブ/分岐を撤去し、直接 import＋単一ドライバへ。
+  - [x] `src/engine/ui/parameters/dpg_window.py` — pyglet の sentinel を撤去し、使用スコープでローカル import。
+  - [x] `src/engine/ui/parameters/dpg_window.py` — Dear PyGui のスタブを撤去し、依存を実利用時に必須化（`ParameterWindow` のみ）。
+  - [x] `tests/ui/parameters/test_dpg_mount_smoke.py` — Dear PyGui 未導入環境では `importorskip` でスキップ、導入環境では `auto_show=False` で窓を開かずにスモーク。
   - [ ] `src/engine/core/render_window.py`, `src/engine/ui/hud/overlay.py` — 現状維持で確認。必要なら後続でローカル化検討。
 - 検証:
   - [x] `pytest -q tests/ui/parameters`（パラメータ GUI の高速チェック）。

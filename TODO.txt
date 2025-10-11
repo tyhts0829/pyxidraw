@@ -6,3 +6,4 @@ textでひらがなを打てるように
 render scaleとかもguiから動かしたい
 partitionのランダム性解除
 font indexエラー
+GUIにCCボタン

@@ -183,7 +183,7 @@ io:
 parameter_gui:
   window:
     width: 720
-    height: 640
+    height: 920
     title: "Parameters"
   layout:
     padding: 8

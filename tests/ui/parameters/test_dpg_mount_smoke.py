@@ -1,5 +1,7 @@
 import pytest
 
+pytest.importorskip("dearpygui.dearpygui")
+
 from engine.ui.parameters.dpg_window import ParameterWindow
 from engine.ui.parameters.state import (
     ParameterDescriptor,
@@ -8,14 +10,7 @@ from engine.ui.parameters.state import (
     RangeHint,
 )
 
-try:
 
-    _DPG_AVAILABLE = True
-except Exception:  # pragma: no cover - headless/未導入
-    _DPG_AVAILABLE = False
-
-
-@pytest.mark.skipif(_DPG_AVAILABLE, reason="Skip when Dear PyGui is installed (opens window)")
 def test_dpg_parameter_window_mounts_and_closes():
     store = ParameterStore()
     layout = ParameterLayoutConfig()
@@ -32,7 +27,7 @@ def test_dpg_parameter_window_mounts_and_closes():
     store.register(desc, 0.5)
 
     # Dear PyGui 未導入環境ではスタブが使われるため、いずれでも例外なく生成できることを確認
-    win = ParameterWindow(store=store, layout=layout)
+    win = ParameterWindow(store=store, layout=layout, auto_show=False)
     # 可視状態の切り替えが例外なく動作すること
     win.set_visible(True)
     win.set_visible(False)

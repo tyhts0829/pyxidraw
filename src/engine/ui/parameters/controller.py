@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from .dpg_window import ParameterWindow
 from .state import (
     ParameterLayoutConfig,
     ParameterStore,
@@ -37,6 +36,9 @@ class ParameterWindowController:
 
     def start(self) -> None:
         if self._window is None and self._visible:
+            # 遅延 import（Dear PyGui 依存を実行時に限定）
+            from .dpg_window import ParameterWindow
+
             self._window = ParameterWindow(  # type: ignore[abstract]
                 store=self._store,
                 layout=self._layout,
