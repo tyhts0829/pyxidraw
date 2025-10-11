@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import math
 import os
-from typing import Any, Tuple
+from typing import Tuple
 
 import numpy as np
 
 from engine.core.geometry import Geometry
 
 from .registry import effect
+from numba import njit  # type: ignore[attr-defined]
 
 EPS = 1e-12
 
@@ -143,21 +144,6 @@ def _collapse_numpy_v2(
     if oc < out_offsets.shape[0]:
         out_offsets[oc:] = vc
     return out_coords, out_offsets
-
-
-# --- Numba optional acceleration -------------------------------------------------
-try:  # オプショナル依存（未導入時はフォールバック）
-    from numba import njit  # type: ignore
-
-    NUMBA_AVAILABLE = True
-except Exception:  # pragma: no cover - 未導入環境
-    NUMBA_AVAILABLE = False
-
-    def njit(*args: Any, **kwargs: Any):  # type: ignore[misc]
-        def _deco(fn: Any) -> Any:
-            return fn
-
-        return _deco
 
 
 def _collapse_count(
@@ -334,10 +320,6 @@ def _collapse_numba(
     divisions: int,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Numba 経路で collapse を実行（フォールバック呼び出し元とは独立）。"""
-    if not NUMBA_AVAILABLE:
-        # セーフガード（理論上は呼ばれない）
-        return _collapse_numpy_v2(coords, offsets, intensity, divisions)
-
     if coords.shape[0] == 0 or intensity == 0.0 or divisions <= 0:
         return coords.copy(), offsets.copy()
 
@@ -404,9 +386,9 @@ def collapse(
         return Geometry(coords.copy(), offsets.copy())
     divisions = max(1, int(subdivisions))
 
-    # Numba の使用可否（存在時は既定で使用、環境変数で無効化可能）
+    # Numba の使用可否（環境変数で無効化可能）
     use_numba_env = os.environ.get("PYX_USE_NUMBA", "1")
-    use_numba = NUMBA_AVAILABLE and use_numba_env not in {"0", "false", "False"}
+    use_numba = use_numba_env not in {"0", "false", "False"}
 
     if use_numba:
         new_coords, new_offsets = _collapse_numba(coords, offsets, float(intensity), divisions)

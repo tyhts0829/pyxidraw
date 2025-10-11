@@ -26,14 +26,14 @@
 
 ## 修正アクション（本ルールに限定した最小チェックリスト）
 
-- [ ] A. トップレベル try-import を撤去して ImportError をそのまま上げる
-  - [ ] src/effects/dash.py:30 の `try: from numba import njit ... except ...` を削除
-  - [ ] src/effects/collapse.py:149 の `try: from numba import njit ... except ...` を削除
-  - [ ] src/shapes/text.py:20 の `try: from numba import njit ... except ...` を削除
+- [x] A. トップレベル try-import を撤去して ImportError をそのまま上げる
+  - [x] src/effects/dash.py:30 の `try: from numba import njit ... except ...` を削除
+  - [x] src/effects/collapse.py:149 の `try: from numba import njit ... except ...` を削除
+  - [x] src/shapes/text.py:20 の `try: from numba import njit ... except ...` を削除
 
-- [ ] B. トップレベル sentinel を撤去
-  - [ ] src/effects/collapse.py:152,154 の `NUMBA_AVAILABLE` 定義を削除
-  - [ ] src/effects/partition.py:33 の `_HAS_SHAPELY = None` を削除
+- [x] B. トップレベル sentinel を撤去
+  - [x] src/effects/collapse.py:152,154 の `NUMBA_AVAILABLE` 定義を削除
+  - [x] src/effects/partition.py:33 の `_HAS_SHAPELY = None` を削除
 
 ---
 
@@ -41,4 +41,3 @@
 
 - 削除後に必要な分岐やフォールバックを維持する場合でも、トップレベルではなく関数内で扱うこと（ただし本チェックリストのスコープ外）。
 - 本変更は ImportError を起動時ではなく呼び出し時に発生させる可能性があり、ユースケースによってはテストの調整が必要です。
-

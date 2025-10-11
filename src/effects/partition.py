@@ -30,8 +30,6 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
-_HAS_SHAPELY = None  # 遅延判定（局所 import に統一）
-
 
 # ── 幾何ヘルパ ──────────────────────────────────────────────────────────────
 

@@ -27,15 +27,7 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
-try:
-    from numba import njit  # type: ignore
-except Exception:  # pragma: no cover - 環境に numba が無い場合は no-op デコレータ
-
-    def njit(*_args, **_kwargs):  # type: ignore
-        def _wrap(fn):
-            return fn
-
-        return _wrap
+from numba import njit  # type: ignore[attr-defined]
 
 
 # ── Kernels（numba があれば JIT、無ければそのまま Python 実行）──────────────

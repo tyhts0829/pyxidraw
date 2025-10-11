@@ -16,16 +16,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
-
-try:
-    from numba import njit  # type: ignore
-except Exception:  # pragma: no cover - 環境に numba が無い場合は no-op
-
-    def njit(*_args, **_kwargs):  # type: ignore
-        def _wrap(fn):
-            return fn
-
-        return _wrap
+from numba import njit  # type: ignore[attr-defined]
 
 
 from engine.core.geometry import Geometry

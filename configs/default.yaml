@@ -176,7 +176,7 @@ hud:
     # 左端からの余白（inline_below 固定時のバー X 開始位置）
     meter_left_margin_px: 130
     # 値の平滑化（EMA）
-  smoothing_alpha: 0.5
+    smoothing_alpha: 0.5
 
 # フォント探索ディレクトリ（任意）
 # - ここで指定したディレクトリ（複数可）を再帰的に探索し、`.ttf/.otf/.ttc` を検出して
@@ -184,7 +184,7 @@ hud:
 # - 相対パスはプロジェクトルート基準。`~` と環境変数は展開される。
 fonts:
   search_dirs:
-    - /Users/tyhts0829/Library/Fonts
+    - data/fonts
 
 # IO 関連の既定
 # - `io.cc_dir`: CC スナップショットの保存先。相対パスは実行CWD基準。
@@ -201,6 +201,8 @@ parameter_gui:
     # セル余白/アイテム間隔/フレーム内余白/ウィンドウ内余白の基本単位（未指定時のフォールバック）
     padding: 2
     row_height: 28
+    # Dear PyGui のフォント名（fonts.search_dirs から登録済みのものを推奨）
+    font_name: HackGenConsoleNF-Regular
     font_size: 12
     value_precision: 3
     # ラベル列の比率（0.1..0.9）。残りは Bars:CC で配分
