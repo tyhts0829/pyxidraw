@@ -27,7 +27,8 @@ def draw(t: float) -> Geometry:
         # .translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
         G.text(em_size_mm=cc[1] * 200).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     )
-    pipe = E.pipeline.affine().partition().fill().subdivide().displace()
+    # pipe = E.pipeline.affine().partition().fill().subdivide().displace()
+    pipe = E.pipeline.affine().mirror()
     return pipe(base)
 
 

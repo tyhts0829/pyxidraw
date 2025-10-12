@@ -145,6 +145,19 @@ class _PipelineBuilder(Protocol):
             remove_boundary: boolean
         """
         ...
+    # meta: n_mirror (range=[1, 8])
+    # meta: cx (range=[0, 1000.0])
+    # meta: cy (range=[0, 1000.0])
+    def mirror(self, *, n_mirror: int = ..., cx: float = ..., cy: float = ..., source_side: int | Sequence[int] = ..., include_boundary: bool = ..., eps: float = ..., **_params: Any) -> _PipelineBuilder:
+        """
+        対象面ミラーリング（n=1/2）。
+
+        引数:
+            n_mirror: range [1, 8]
+            cx: range [0, 1000.0]
+            cy: range [0, 1000.0]
+        """
+        ...
     # choices: join in ['mitre', 'round', 'bevel']
     # meta: segments_per_circle (type=integer, range=[1, 100])
     # meta: distance (type=number, range=[0.0, 25.0])

@@ -13,6 +13,7 @@ from . import displace  # noqa: F401
 from . import explode  # noqa: F401
 from . import extrude  # noqa: F401
 from . import fill  # noqa: F401
+from . import mirror  # noqa: F401
 from . import offset  # noqa: F401
 from . import partition  # noqa: F401
 from . import repeat  # noqa: F401
