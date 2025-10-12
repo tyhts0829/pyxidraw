@@ -165,6 +165,7 @@ def mirror(
     cx: float = 0.0,
     cy: float = 0.0,
     source_side: bool | Sequence[bool] = True,
+    show_planes: bool = False,
 ) -> Geometry:
     """対象面ミラーリング（n=1/2）。
 
@@ -180,6 +181,10 @@ def mirror(
         半空間/象限のソース側を指定。True=正側（x>=cx / y>=cy）、False=負側。
         長さ不足は循環、bool 単体は全平面に適用。
         n=1: [sx]、n=2: [sx, sy] の順で解釈。
+    show_planes : bool, default False
+        可視化用に対象面（x=cx, y=cy など）を線として出力へ含める。
+        n=1 では x=cx の鉛直線、n=2 では x=cx と y=cy の直交線を追加する。
+        n>=3 では中心 (cx,cy) を通る 2n 本の放射状の線（セクタ境界）を追加する。
 
     Notes
     -----
@@ -330,6 +335,74 @@ def mirror(
 
     # 重複除去
     uniq = _dedup_lines(out_lines)
+
+    # 対象面の可視化（必要に応じて末尾に追加）
+    if show_planes:
+        # 既存ラインのバウンディング（出力想定範囲）。出力が空の場合は入力から推定。
+        if uniq:
+            all_pts = np.vstack(uniq).astype(np.float32)
+        else:
+            all_pts = coords.astype(np.float32, copy=True)
+
+        if all_pts.size == 0:
+            # 最小スパン（見やすさ確保）。
+            x_min, x_max = float(cx - 1.0), float(cx + 1.0)
+            y_min, y_max = float(cy - 1.0), float(cy + 1.0)
+        else:
+            x_min0 = float(np.min(all_pts[:, 0]))
+            x_max0 = float(np.max(all_pts[:, 0]))
+            y_min0 = float(np.min(all_pts[:, 1]))
+            y_max0 = float(np.max(all_pts[:, 1]))
+            # 反射後の広がりも含めた保守的レンジ
+            if n_mirror >= 1:
+                x_min = min(x_min0, 2.0 * float(cx) - x_max0)
+                x_max = max(x_max0, 2.0 * float(cx) - x_min0)
+            else:
+                x_min, x_max = x_min0, x_max0
+            if n_mirror >= 2:
+                y_min = min(y_min0, 2.0 * float(cy) - y_max0)
+                y_max = max(y_max0, 2.0 * float(cy) - y_min0)
+            else:
+                y_min, y_max = y_min0, y_max0
+
+        plane_lines: list[np.ndarray] = []
+
+        if n_mirror == 1:
+            # 垂直線 x=cx（全高さにわたり表示）。
+            vline = np.array([[cx, y_min, 0.0], [cx, y_max, 0.0]], dtype=np.float32)
+            plane_lines.append(vline)
+        elif n_mirror == 2:
+            vline = np.array([[cx, y_min, 0.0], [cx, y_max, 0.0]], dtype=np.float32)
+            hline = np.array([[x_min, cy, 0.0], [x_max, cy, 0.0]], dtype=np.float32)
+            plane_lines.extend([vline, hline])
+        else:
+            # 放射状の 2n 本（セクタ境界）。
+            n = int(n_mirror)
+            if n < 1:
+                n = 1
+            delta = np.pi / n
+            step = 2.0 * np.pi / n
+            # 半径: バウンディングから推定（中心からの最大距離）。
+            if all_pts.size == 0:
+                r = 1.0
+            else:
+                dx = all_pts[:, 0] - float(cx)
+                dy = all_pts[:, 1] - float(cy)
+                r = float(np.sqrt(np.max(dx * dx + dy * dy)))
+                if not np.isfinite(r) or r <= 0.0:
+                    r = 1.0
+            r *= 1.05  # 端が重ならない程度に少し余白
+            for k in range(n):
+                for ang in (k * step, k * step + delta):
+                    cth = float(np.cos(ang))
+                    sth = float(np.sin(ang))
+                    p0 = np.array([cx - r * cth, cy - r * sth, 0.0], dtype=np.float32)
+                    p1 = np.array([cx + r * cth, cy + r * sth, 0.0], dtype=np.float32)
+                    plane_lines.append(np.vstack([p0, p1]).astype(np.float32))
+
+        if plane_lines:
+            uniq.extend(plane_lines)
+
     if not uniq:
         return Geometry(coords.copy(), offsets.copy())
 
@@ -350,4 +423,5 @@ mirror.__param_meta__ = {
     "n_mirror": {"min": 1, "max": 8, "step": 1},
     "cx": {"min": 0, "max": 1000.0, "step": 0.1},
     "cy": {"min": 0, "max": 1000.0, "step": 0.1},
+    "show_planes": {"type": "bool"},
 }
