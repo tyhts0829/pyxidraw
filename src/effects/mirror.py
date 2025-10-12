@@ -25,26 +25,27 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+# 固定許容誤差と境界ポリシー
+EPS: float = 1e-6
+INCLUDE_BOUNDARY: bool = True
 
-def _normalize_source_side(n_mirror: int, source_side: int | Sequence[int]) -> list[int]:
-    if isinstance(source_side, (int, np.integer)):
-        base = int(source_side)
-        if base == 0:
-            base = 1
-        return [1 if base > 0 else -1 for _ in range(n_mirror)]
+
+def _normalize_source_side(n_mirror: int, source_side: bool | Sequence[bool]) -> list[int]:
+    """bool/シーケンスを ±1 に正規化（True→+1, False→-1）。"""
+    if isinstance(source_side, (bool, np.bool_)):
+        sign = 1 if bool(source_side) else -1
+        return [sign for _ in range(n_mirror)]
     seq = list(source_side)
     out: list[int] = []
     for i in range(n_mirror):
-        v = int(seq[i % len(seq)])
-        if v == 0:
-            v = 1
-        out.append(1 if v > 0 else -1)
+        v = bool(seq[i % len(seq)])
+        out.append(1 if v else -1)
     return out
 
 
-def _is_inside(val: float, thresh: float, side: int, include_boundary: bool, eps: float) -> bool:
+def _is_inside(val: float, thresh: float, side: int) -> bool:
     d = side * (val - thresh)
-    return d >= (-eps if include_boundary else eps)
+    return d >= (-EPS if INCLUDE_BOUNDARY else EPS)
 
 
 def _intersect_axis(a: np.ndarray, b: np.ndarray, axis: int, thresh: float) -> np.ndarray:
@@ -68,8 +69,6 @@ def _clip_polyline_halfspace(
     axis: int,
     thresh: float,
     side: int,
-    include_boundary: bool,
-    eps: float,
 ) -> list[np.ndarray]:
     """1 本のポリラインを軸整列半空間でクリップして部分線リストを返す。"""
     n = vertices.shape[0]
@@ -77,28 +76,24 @@ def _clip_polyline_halfspace(
         return []
     if n == 1:
         v = vertices[0]
-        return (
-            [vertices.copy()]
-            if _is_inside(float(v[axis]), thresh, side, include_boundary, eps)
-            else []
-        )
+        return [vertices.copy()] if _is_inside(float(v[axis]), thresh, side) else []
 
     out: list[np.ndarray] = []
     cur: list[np.ndarray] = []
     prev = vertices[0].astype(np.float32)
-    prev_in = _is_inside(float(prev[axis]), thresh, side, include_boundary, eps)
+    prev_in = _is_inside(float(prev[axis]), thresh, side)
     if prev_in:
         cur.append(prev)
     for i in range(1, n):
         pt = vertices[i].astype(np.float32)
-        now_in = _is_inside(float(pt[axis]), thresh, side, include_boundary, eps)
+        now_in = _is_inside(float(pt[axis]), thresh, side)
         if prev_in and now_in:
             # 内→内: そのまま追加
             cur.append(pt)
         elif prev_in and not now_in:
             # 内→外: 境界でクリップして閉じる
             ip = _intersect_axis(prev, pt, axis, thresh)
-            if len(cur) == 0 or not np.allclose(cur[-1], ip, atol=eps):
+            if len(cur) == 0 or not np.allclose(cur[-1], ip, atol=EPS):
                 cur.append(ip)
             if len(cur) >= 1:
                 out.append(np.vstack(cur).astype(np.float32))
@@ -124,20 +119,12 @@ def _clip_polyline_quadrant(
     cy: float,
     sx: int,
     sy: int,
-    include_boundary: bool,
-    eps: float,
 ) -> list[np.ndarray]:
     # 2 つの半空間の共通部分でクリップ（順次適用）
-    pieces = _clip_polyline_halfspace(
-        vertices, axis=0, thresh=cx, side=sx, include_boundary=include_boundary, eps=eps
-    )
+    pieces = _clip_polyline_halfspace(vertices, axis=0, thresh=cx, side=sx)
     res: list[np.ndarray] = []
     for p in pieces:
-        res.extend(
-            _clip_polyline_halfspace(
-                p, axis=1, thresh=cy, side=sy, include_boundary=include_boundary, eps=eps
-            )
-        )
+        res.extend(_clip_polyline_halfspace(p, axis=1, thresh=cy, side=sy))
     return res
 
 
@@ -153,11 +140,11 @@ def _reflect_y(vertices: np.ndarray, cy: float) -> np.ndarray:
     return r
 
 
-def _dedup_lines(lines: Iterable[np.ndarray], eps: float) -> list[np.ndarray]:
+def _dedup_lines(lines: Iterable[np.ndarray]) -> list[np.ndarray]:
     """量子化ハッシュで重複ポリラインを除去。"""
     seen: set[tuple] = set()
     out: list[np.ndarray] = []
-    inv = 1.0 / eps if eps > 0 else 1e6
+    inv = 1.0 / EPS if EPS > 0 else 1e6
     for ln in lines:
         if ln.shape[0] == 0:
             continue
@@ -177,9 +164,7 @@ def mirror(
     n_mirror: int = 1,
     cx: float = 0.0,
     cy: float = 0.0,
-    source_side: int | Sequence[int] = 1,
-    include_boundary: bool = True,
-    eps: float = 1e-6,
+    source_side: bool | Sequence[bool] = True,
 ) -> Geometry:
     """対象面ミラーリング（n=1/2）。
 
@@ -191,13 +176,14 @@ def mirror(
         1: x=cx による半空間ミラー。2: x=cx, y=cy による象限ミラー。
     cx, cy : float, default 0.0
         各対称平面の中心座標。
-    source_side : int | Sequence[int], default 1
-        半空間/象限のソース側を ±1 で指定。長さ不足は循環、int 単体は一括適用。
+    source_side : bool | Sequence[bool], default True
+        半空間/象限のソース側を指定。True=正側（x>=cx / y>=cy）、False=負側。
+        長さ不足は循環、bool 単体は全平面に適用。
         n=1: [sx]、n=2: [sx, sy] の順で解釈。
-    include_boundary : bool, default True
-        境界上の点/線を内側として扱う。
-    eps : float, default 1e-6
-        比較・交点・重複除去の許容誤差。
+
+    Notes
+    -----
+    許容誤差は EPS=1e-6、境界は INCLUDE_BOUNDARY=True 固定で運用する。
     """
     if n_mirror < 1:
         raise ValueError("n_mirror は 1 以上の整数である必要があります。")
@@ -229,9 +215,7 @@ def mirror(
             v = coords[offsets[i] : offsets[i + 1]]
             if v.shape[0] == 0:
                 continue
-            pieces = _clip_polyline_halfspace(
-                v, axis=0, thresh=float(cx), side=sx, include_boundary=include_boundary, eps=eps
-            )
+            pieces = _clip_polyline_halfspace(v, axis=0, thresh=float(cx), side=sx)
             for p in pieces:
                 if p.shape[0] >= 1:
                     src_lines.append(p.astype(np.float32))
@@ -249,15 +233,7 @@ def mirror(
             v = coords[offsets[i] : offsets[i + 1]]
             if v.shape[0] == 0:
                 continue
-            pieces = _clip_polyline_quadrant(
-                v,
-                cx=float(cx),
-                cy=float(cy),
-                sx=int(sx),
-                sy=int(sy),
-                include_boundary=include_boundary,
-                eps=eps,
-            )
+            pieces = _clip_polyline_quadrant(v, cx=float(cx), cy=float(cy), sx=int(sx), sy=int(sy))
             for p in pieces:
                 if p.shape[0] >= 1:
                     src_lines.append(p.astype(np.float32))
@@ -288,19 +264,19 @@ def mirror(
                 return []
             if npts == 1:
                 s = float(np.dot(vertices[0, :2] - cxy, nrm))
-                ok = s >= (-eps if include_boundary else eps)
+                ok = s >= (-EPS if INCLUDE_BOUNDARY else EPS)
                 return [vertices.copy()] if ok else []
             out_segs: list[np.ndarray] = []
             cur: list[np.ndarray] = []
             a = vertices[0].astype(np.float32)
             sA = float(np.dot(a[:2] - cxy, nrm))
-            inA = sA >= (-eps if include_boundary else eps)
+            inA = sA >= (-EPS if INCLUDE_BOUNDARY else EPS)
             if inA:
                 cur.append(a)
             for j in range(1, npts):
                 b = vertices[j].astype(np.float32)
                 sB = float(np.dot(b[:2] - cxy, nrm))
-                inB = sB >= (-eps if include_boundary else eps)
+                inB = sB >= (-EPS if INCLUDE_BOUNDARY else EPS)
                 if inA and inB:
                     cur.append(b)
                 elif inA and not inB:
@@ -309,7 +285,7 @@ def mirror(
                     t = 0.0 if abs(denom) < 1e-20 else sA / (sA - sB)
                     t = min(max(t, 0.0), 1.0)
                     p = a + (b - a) * np.float32(t)
-                    if len(cur) == 0 or not np.allclose(cur[-1], p, atol=eps):
+                    if len(cur) == 0 or not np.allclose(cur[-1], p, atol=EPS):
                         cur.append(p)
                     if len(cur) >= 1:
                         out_segs.append(np.vstack(cur).astype(np.float32))
@@ -353,7 +329,7 @@ def mirror(
                 out_lines.append(_rotate(pref, m * step, float(cx), float(cy)))
 
     # 重複除去
-    uniq = _dedup_lines(out_lines, eps=float(eps))
+    uniq = _dedup_lines(out_lines)
     if not uniq:
         return Geometry(coords.copy(), offsets.copy())
 

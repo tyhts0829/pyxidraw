@@ -30,8 +30,7 @@ def test_mirror_planes_n1_basic_remove_opposite_and_reflect() -> None:
         n_mirror=1,
         cx=0.0,
         cy=0.0,
-        source_side=+1,  # x >= 0 をソース
-        include_boundary=True,
+        source_side=True,  # x >= 0 をソース
     )
 
     # 期待: 右側2点は残存、左側2点は消え、右側2点の鏡映が左側に生成
@@ -67,8 +66,7 @@ def test_mirror_planes_n2_quadrant_fill_and_remove_others() -> None:
         n_mirror=2,
         cx=0.0,
         cy=0.0,
-        source_side=(+1, +1),  # 第1象限をソース
-        include_boundary=True,
+        source_side=(True, True),  # 第1象限をソース
     )
 
     # 期待: Q1 のみをソースに、3象限へ鏡映 → 4点全てが Q1 から生成される
@@ -96,8 +94,7 @@ def test_mirror_planes_n1_clip_crossing_segment_and_reflect() -> None:
         n_mirror=1,
         cx=0.0,
         cy=0.0,
-        source_side=+1,
-        include_boundary=True,
+        source_side=True,
     )
 
     # 期待: クリップされた [0,2] と、その鏡映 [0,-2]
@@ -128,8 +125,7 @@ def test_mirror_planes_preserve_z_and_boundary_dedup() -> None:
         n_mirror=1,
         cx=0.0,
         cy=0.0,
-        source_side=+1,
-        include_boundary=True,
+        source_side=True,
     )
 
     coords, offsets = out.as_arrays(copy=False)

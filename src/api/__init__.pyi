@@ -148,7 +148,7 @@ class _PipelineBuilder(Protocol):
     # meta: n_mirror (range=[1, 8])
     # meta: cx (range=[0, 1000.0])
     # meta: cy (range=[0, 1000.0])
-    def mirror(self, *, n_mirror: int = ..., cx: float = ..., cy: float = ..., source_side: int | Sequence[int] = ..., include_boundary: bool = ..., eps: float = ..., **_params: Any) -> _PipelineBuilder:
+    def mirror(self, *, n_mirror: int = ..., cx: float = ..., cy: float = ..., source_side: bool | Sequence[bool] = ..., **_params: Any) -> _PipelineBuilder:
         """
         対象面ミラーリング（n=1/2）。
 
