@@ -161,20 +161,28 @@ class _PipelineBuilder(Protocol):
         """
         ...
     # meta: n_azimuth (range=[1, 64])
-    # meta: cx (range=[-10000.0, 10000.0])
-    # meta: cy (range=[-10000.0, 10000.0])
-    # meta: cz (range=[-10000.0, 10000.0])
+    # meta: cx (range=[0.0, 1000.0])
+    # meta: cy (range=[0.0, 1000.0])
+    # meta: cz (range=[-1000.0, 1000.0])
+    # meta: axis (type=vec3, range=[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)])
     # meta: phi0_deg (range=[-180.0, 180.0])
-    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., **_params: Any) -> _PipelineBuilder:
+    # choices: mode in ['azimuth', 'polyhedral']
+    # choices: group in ['T', 'O', 'I']
+    # meta: use_reflection (type=bool)
+    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
-        球面くさびベースの 3D 放射状ミラー。
+        3D 放射状ミラー（azimuth/ polyhedral）。
 
         引数:
             n_azimuth: range [1, 64]
-            cx: range [-10000.0, 10000.0]
-            cy: range [-10000.0, 10000.0]
-            cz: range [-10000.0, 10000.0]
+            cx: range [0.0, 1000.0]
+            cy: range [0.0, 1000.0]
+            cz: range [-1000.0, 1000.0]
+            axis: vec3, range [(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)]
             phi0_deg: range [-180.0, 180.0]
+            mode: choices { 'azimuth', 'polyhedral' }
+            group: choices { 'T', 'O', 'I' }
+            use_reflection: bool
         """
         ...
     # choices: join in ['mitre', 'round', 'bevel']

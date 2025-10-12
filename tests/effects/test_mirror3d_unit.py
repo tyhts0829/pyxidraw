@@ -10,6 +10,7 @@ from effects.mirror3d import (
     _compute_azimuth_plane_normals,
     _equator_normal,
     _reflect_across_plane,
+    _reflect_matrix,
     _rotate_around_axis,
 )
 
@@ -84,3 +85,29 @@ def test_equator_normal_is_axis_unit() -> None:
     # 向きは a と同一直線上
     cosang = float(np.dot(n, a) / (np.linalg.norm(a) * np.linalg.norm(n)))
     assert np.isclose(abs(cosang), 1.0)
+
+
+def test_reflect_matrix_properties() -> None:
+    n = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    R = _reflect_matrix(n)
+    I = np.eye(3, dtype=np.float32)
+    # R^2 = I, det(R) = -1
+    assert np.allclose(R @ R, I, atol=1e-6)
+    assert np.isclose(np.linalg.det(R), -1.0, atol=1e-6)
+
+
+def test_clip_polyhedron_triangle_positive_octant() -> None:
+    # 3 半空間 AND: x>=0, y>=0, z>=0
+    n1 = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+    n2 = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    n3 = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    c = np.zeros(3, dtype=np.float32)
+    v = np.array([[-1.0, -1.0, -1.0], [0.5, 0.5, 0.5]], dtype=np.float32)
+    from effects.mirror3d import _clip_polyhedron_triangle
+
+    pieces = _clip_polyhedron_triangle(v, (n1, n2, n3), c)
+    assert len(pieces) == 1
+    seg = pieces[0]
+    # 始点は境界上へスナップ、終点は正の八分体内
+    assert seg[0, 0] >= -1e-6 and seg[0, 1] >= -1e-6 and seg[0, 2] >= -1e-6
+    assert np.allclose(seg[-1], np.array([0.5, 0.5, 0.5], dtype=np.float32))
