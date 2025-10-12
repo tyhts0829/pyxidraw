@@ -154,7 +154,7 @@ midi_devices:
 hud:
   # HUD で使用するフォント名/サイズ（任意）
   # - 未指定時は従来挙動（コード既定値/`status_manager.*` フォールバック）
-  font_name: HackGenConsoleNF-Regular
+  font_name: "HackGen Console NF"
   font_size: 12
   # HUD テキスト色（Hex/0–1/0–255）
   text_color: "#0000009B"
@@ -202,7 +202,7 @@ parameter_gui:
     padding: 2
     row_height: 28
     # Dear PyGui のフォント名（fonts.search_dirs から登録済みのものを推奨）
-    font_name: HackGenConsoleNF-Regular
+    font_name: "HackGen Console NF"
     font_size: 12
     value_precision: 3
     # ラベル列の比率（0.1..0.9）。残りは Bars:CC で配分

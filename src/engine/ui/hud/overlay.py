@@ -162,6 +162,8 @@ class OverlayHUD(Tickable):
                     sdirs = [str(sdirs)]
                 root = _root(Path(__file__).parent)
                 font_exts = (".ttf", ".otf", ".ttc")
+                files: list[Path] = []
+                resolved_dirs: list[Path] = []
                 for s in sdirs:
                     try:
                         p = Path(os.path.expandvars(os.path.expanduser(str(s))))
@@ -169,20 +171,24 @@ class OverlayHUD(Tickable):
                             p = (root / p).resolve()
                         if not p.exists() or not p.is_dir():
                             continue
+                        resolved_dirs.append(p)
                         for ext in font_exts:
-                            for fp in p.glob(f"**/*{ext}"):
-                                try:
-                                    pyglet.font.add_file(str(fp))
-                                except Exception:
-                                    # `.ttc` など非対応の場合もあるため握りつぶし
-                                    pass
+                            files.extend(p.glob(f"**/*{ext}"))
                     except Exception:
                         continue
+                for fp in files:
+                    try:
+                        pyglet.font.add_file(str(fp))
+                    except Exception:
+                        pass
             except Exception:
                 pass
+            # have_font チェックの print は抑制
         except Exception:
             # コンフィグ読み込み失敗時は既定を維持
             pass
+
+        # 実使用フォント名の print は抑制
 
     # -------- Tickable --------
     def tick(self, dt: float) -> None:

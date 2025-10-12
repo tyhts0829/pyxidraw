@@ -164,6 +164,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         exts = (".ttf", ".otf", ".ttc")
 
         files: list[Path] = []
+        resolved_dirs: list[Path] = []
         for s in sdirs:
             try:
                 p = Path(os.path.expandvars(os.path.expanduser(str(s))))
@@ -171,39 +172,80 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     p = (root / p).resolve()
                 if not p.exists() or not p.is_dir():
                     continue
+                resolved_dirs.append(p)
                 for ext in exts:
                     files.extend(p.glob(f"**/*{ext}"))
             except Exception:
                 continue
+        # 探索内容のデバッグ出力は抑制
         if not files:
             return
 
-        chosen: Path | None = None
-        if font_name:
-            for fp in files:
-                if font_name.lower() in fp.name.lower():
-                    chosen = fp
-                    break
-        if chosen is None:
-            chosen = files[0]
+        # ---- 候補のスコアリング（Regular/TTF を優先、Italic/Narrow/Variable を避ける）----
+        def _norm(s: str) -> str:
+            return s.lower().replace(" ", "").replace("-", "").replace("_", "").replace(".", "")
 
-        # フォント登録（`.ttc` など失敗時は握りつぶす）
+        req_norm = _norm(font_name) if isinstance(font_name, str) and font_name else None
+
+        def _score(fp: Path) -> tuple[int, int, int, int, int]:
+            name = fp.name.lower()
+            ext = fp.suffix.lower()
+            # 0:ttf, 1:otf, 2:ttc（DPG は ttc 非推奨）
+            ext_rank = 0 if ext == ".ttf" else (1 if ext == ".otf" else 2)
+            style_pen = 0
+            # 避けたいスタイル
+            for bad in (
+                "italic",
+                "oblique",
+                "narrow",
+                "condensed",
+                "light",
+                "thin",
+                "black",
+                "semibold",
+            ):
+                if bad in name:
+                    style_pen += 2
+            # 好み: regular
+            if "regular" in name:
+                style_pen -= 1
+            var_pen = 3 if ("variable" in name or "gx" in name) else 0
+            # リクエスト一致
+            req_pen = 0
+            if req_norm:
+                req_pen = 0 if req_norm in _norm(fp.stem) else 5
+            # 短い名前をやや優先
+            len_pen = len(name)
+            return (ext_rank, req_pen, style_pen, var_pen, len_pen)
+
+        # スコア順に並べ、上位から順に読み込みを試す（.ttc はスキップ）
+        candidates = sorted(files, key=_score)
+        # 候補上位のデバッグ出力は抑制
+
+        # フォント登録（順次トライ、`.ttc` はスキップ）
         try:
-            self._font_registry = dpg.add_font_registry()
-            try:
-                default_font = dpg.add_font(str(chosen), int(self._layout.font_size))
-            except Exception:
-                # `.ttc` で失敗する可能性 → `.ttf/.otf` のみ再トライ
-                default_font = None
-                if chosen.suffix.lower() == ".ttc":
-                    alt = next((f for f in files if f.suffix.lower() in (".ttf", ".otf")), None)
-                    if alt is not None:
-                        try:
-                            default_font = dpg.add_font(str(alt), int(self._layout.font_size))
-                        except Exception:
-                            default_font = None
-            if default_font is not None:
+            bound = None
+            attempts = 0
+            with dpg.font_registry() as reg:
+                self._font_registry = reg
+                for fp in candidates[:20]:  # 上位20まで試す
+                    if fp.suffix.lower() == ".ttc":
+                        continue
+                    attempts += 1
+                    try:
+                        f = dpg.add_font(str(fp), int(self._layout.font_size), parent=reg)
+                        bound = (fp, f)
+                        break
+                    except Exception:
+                        # 個別の試行失敗ログは抑制
+                        continue
+            if bound is not None:
+                fp, default_font = bound
                 dpg.bind_font(default_font)
+                # 採用フォントの出力は抑制
+            else:
+                # 失敗時の出力は抑制（フェイルソフト）
+                pass
         except Exception:
             # 失敗しても GUI 自体は続行
             pass

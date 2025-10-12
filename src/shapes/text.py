@@ -210,7 +210,7 @@ class TextRenderer:
             raise FileNotFoundError(
                 f"フォント '{font_name}' が見つからず、既定のフォントも検出できませんでした"
             )
-        logger.warning("Font '%s' not found; using default '%s'", font_name, str(fallback))
+        # フォールバック時も静かに進める（ログ出力なし）
         if fallback.suffix.lower() == ".ttc":
             font = TTFont(fallback, fontNumber=0)
         else:
@@ -435,7 +435,7 @@ setattr(
         "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
         # font は自由入力させない（GUI 非表示にするため choices を空に）
         "font": {"choices": []},
-        "font_index": {"type": "integer", "min": 0, "max": 8, "step": 1},
+        "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
         "text_align": {"choices": ["left", "center", "right"]},
         "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},
         "line_height": {"type": "number", "min": 0.8, "max": 3.0, "step": 0.1},
