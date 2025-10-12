@@ -18,7 +18,6 @@ from typing import Any, Iterable
 import numpy as np
 from numba import njit  # type: ignore[attr-defined]
 
-
 from engine.core.geometry import Geometry
 
 from .registry import shape
@@ -72,75 +71,40 @@ class TextRenderer:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    @staticmethod
-    def _os_font_dirs() -> list[Path]:
-        home = Path.home()
-        dirs: list[Path] = []
-        if sys.platform == "darwin":
-            dirs = [
-                home / "Library" / "Fonts",
-                Path("/System/Library/Fonts"),
-                Path("/System/Library/Fonts/Supplemental"),
-                Path("/Library/Fonts"),
-            ]
-        elif sys.platform.startswith("linux"):
-            dirs = [
-                Path("/usr/share/fonts"),
-                Path("/usr/local/share/fonts"),
-                home / ".fonts",
-                home / ".local/share/fonts",
-            ]
-        elif os.name == "nt":
-            windir = os.environ.get("WINDIR", r"C:\\Windows")
-            dirs = [Path(windir) / "Fonts"]
-        return [p for p in dirs if p.exists()]
-
     @classmethod
     def get_font_path_list(cls) -> list[Path]:
         """利用可能なフォントファイルのパス一覧を取得する。"""
         if cls._font_paths is None:
-            paths: list[Path] = []
+            from util.fonts import (  # type: ignore
+                glob_font_files,
+                os_font_dirs,
+                resolve_search_dirs,
+            )
+            from util.utils import load_config  # type: ignore
 
-            # 1) 設定で与えられたディレクトリ（優先）
+            cfg = load_config() or {}
+            fonts_cfg = cfg.get("fonts", {}) if isinstance(cfg, dict) else {}
+            include_os = True
             try:
-                from util.utils import _find_project_root, load_config  # type: ignore
-
-                cfg = load_config() or {}
-                fonts_cfg = cfg.get("fonts", {}) if isinstance(cfg, dict) else {}
-                search_dirs = (
-                    fonts_cfg.get("search_dirs", []) if isinstance(fonts_cfg, dict) else []
-                )
-                if isinstance(search_dirs, (str, Path)):
-                    search_dirs = [str(search_dirs)]
-                root = _find_project_root(Path(__file__).parent)
-                norm_dirs: list[Path] = []
-                for s in search_dirs:
-                    try:
-                        p = Path(os.path.expandvars(os.path.expanduser(str(s))))
-                        if not p.is_absolute():
-                            p = (root / p).resolve()
-                        if p.exists() and p.is_dir():
-                            norm_dirs.append(p)
-                    except Exception:
-                        continue
-                for d in norm_dirs:
-                    for ext in cls.EXTENSIONS:
-                        try:
-                            paths.extend(d.glob(f"**/*{ext}"))
-                        except Exception:
-                            continue
+                include_os = bool(fonts_cfg.get("include_os", True))
             except Exception:
-                # 設定読取に失敗しても OS 既定探索へフォールバック
-                pass
+                include_os = True
+            cfg_dirs_raw = fonts_cfg.get("search_dirs", []) if isinstance(fonts_cfg, dict) else []
+            if isinstance(cfg_dirs_raw, (str, Path)):
+                cfg_dirs_raw = [str(cfg_dirs_raw)]
 
-            # 2) OS 既定のフォントディレクトリ（従来どおり）
-            for d in cls._os_font_dirs():
-                for ext in cls.EXTENSIONS:
-                    try:
-                        paths.extend(d.glob(f"**/*{ext}"))
-                    except Exception:
-                        continue
-            cls._font_paths = paths
+            dirs: list[Path] = []
+            try:
+                dirs.extend(resolve_search_dirs(cfg_dirs_raw))
+            except Exception:
+                pass
+            if include_os:
+                try:
+                    dirs.extend(os_font_dirs())
+                except Exception:
+                    pass
+            # 列挙（重複除去/安定ソート）
+            cls._font_paths = glob_font_files(dirs, cls.EXTENSIONS)
         return cls._font_paths
 
     @classmethod

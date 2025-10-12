@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 from typing import Literal
@@ -65,7 +64,7 @@ class OverlayHUD(Tickable):
             cfg = _load_config() or {}
             hud_cfg = cfg.get("hud", {})
             if isinstance(hud_cfg, dict):
-                # フォント（任意）: hud.font_name / hud.font_size を優先。互換として status_manager.* を参照。
+                # フォント（任意）: hud.font_name / hud.font_size を優先。
                 try:
                     fn = hud_cfg.get("font_name")
                     if isinstance(fn, str) and fn.strip():
@@ -133,50 +132,32 @@ class OverlayHUD(Tickable):
                     self._meter_left_margin_px = int(
                         meters.get("meter_left_margin_px", self._meter_left_margin_px)
                     )
-            # 互換フォールバック: status_manager.font / status_manager.font_size
-            sm = cfg.get("status_manager", {})
-            if isinstance(sm, dict):
-                try:
-                    if (not self._font) or self._font == "HackGenConsoleNF-Regular":
-                        fn = sm.get("font")
-                        if isinstance(fn, str) and fn.strip():
-                            self._font = fn.strip()
-                except Exception:
-                    pass
-                try:
-                    if self.font_size == font_size:  # 未上書きの場合だけ
-                        fs = sm.get("font_size")
-                        if fs is not None:
-                            self.font_size = int(fs)
-                except Exception:
-                    pass
+            # status_manager.* の後方互換は撤廃（hud.* のみを参照）
             # 設定ディレクトリ配下のフォントを pyglet に登録（ベストエフォート）
             try:
-                from util.utils import _find_project_root as _root
+                from util.fonts import (  # type: ignore
+                    filter_files_for_family,
+                    glob_font_files,
+                    resolve_search_dirs,
+                )
                 from util.utils import load_config as _lc
 
                 ccfg = _lc() or {}
                 fcfg = ccfg.get("fonts", {}) if isinstance(ccfg, dict) else {}
                 sdirs = fcfg.get("search_dirs", []) if isinstance(fcfg, dict) else []
-                if isinstance(sdirs, (str, int)):
+                if isinstance(sdirs, (str, int, Path)):
                     sdirs = [str(sdirs)]
-                root = _root(Path(__file__).parent)
-                font_exts = (".ttf", ".otf", ".ttc")
-                files: list[Path] = []
-                resolved_dirs: list[Path] = []
-                for s in sdirs:
-                    try:
-                        p = Path(os.path.expandvars(os.path.expanduser(str(s))))
-                        if not p.is_absolute():
-                            p = (root / p).resolve()
-                        if not p.exists() or not p.is_dir():
-                            continue
-                        resolved_dirs.append(p)
-                        for ext in font_exts:
-                            files.extend(p.glob(f"**/*{ext}"))
-                    except Exception:
-                        continue
-                for fp in files:
+                files = glob_font_files(resolve_search_dirs(sdirs))
+
+                # 設定: 必要なもののみ登録（既定）。必要なら全登録も選択可。
+                hud_cfg2 = ccfg.get("hud", {}) if isinstance(ccfg, dict) else {}
+                load_all = (
+                    bool(hud_cfg2.get("load_all_fonts", False))
+                    if isinstance(hud_cfg2, dict)
+                    else False
+                )
+                targets = files if load_all else filter_files_for_family(files, self._font)
+                for fp in targets:
                     try:
                         pyglet.font.add_file(str(fp))
                     except Exception:

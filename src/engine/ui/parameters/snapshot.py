@@ -13,9 +13,9 @@
 from __future__ import annotations
 
 import inspect
+import os
 from collections import defaultdict
 from typing import Any, Mapping
-import os
 
 from .runtime import activate_runtime, deactivate_runtime
 from .state import ParameterStore

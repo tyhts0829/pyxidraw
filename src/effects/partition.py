@@ -30,7 +30,6 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
-
 # ── 幾何ヘルパ ──────────────────────────────────────────────────────────────
 
 

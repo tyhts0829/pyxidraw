@@ -176,8 +176,8 @@ Tips:
 フォント探索/適用:
 
 - 設定（`configs/default.yaml` → `config.yaml` 上書き）で `fonts.search_dirs` を指定すると、Text シェイプ（`src/shapes/text.py:108`）のフォント探索リストに最優先で追加される。拡張子は `.ttf/.otf/.ttc`。
-- HUD（`src/engine/ui/hud/overlay.py:26`）は起動時に `fonts.search_dirs` 配下のフォントを `pyglet.font.add_file()` で登録し、`hud.font_name`/`hud.font_size`（互換として `status_manager.font`/`status_manager.font_size`）を用いて描画フォントを決定する。
- - Parameter GUI（`src/engine/ui/parameters/dpg_window.py`）は Dear PyGui 起動時に `fonts.search_dirs` から `.ttf/.otf/.ttc` を `dpg.add_font_registry()` で登録し、`parameter_gui.layout.font_name` → `hud.font_name` → `status_manager.font` の優先順でフォント名を選択、`ParameterLayoutConfig.font_size` を用いて `dpg.bind_font()` で適用する（失敗時は既定フォント）。
+ - HUD（`src/engine/ui/hud/overlay.py`）は起動時に `fonts.search_dirs` 配下から必要なフォントのみを `pyglet.font.add_file()` で登録する（`hud.load_all_fonts=false` 既定、family 名に部分一致）。`hud.font_name` / `hud.font_size` を用いて描画フォントを決定する。HUD のフォント指定は family 名を想定する。
+ - Parameter GUI（`src/engine/ui/parameters/dpg_window.py`）は Dear PyGui 起動時に `fonts.search_dirs` からフォントファイルを列挙し、`parameter_gui.layout.font_name` の部分一致候補（優先: `.ttf`）を順次 `dpg.add_font()` でトライし、最初に成功したものを `dpg.bind_font()` で適用する（失敗時は Dear PyGui 既定フォント）。Parameter GUI の指定はファイル名ベース（family 名ではなくファイルパス登録）である。
   優先順位は「保存値 > config」（HUD は引数指定の導線なし）。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
   - Engine/UI 側は `util.cc_provider.get_cc_snapshot()` を経由して CC スナップショットを参照し、`engine/* -> api/*` の依存を避ける（登録は `api.cc` が `set_cc_snapshot_provider` で行う）。

@@ -13,7 +13,7 @@
 - 設定 `fonts.search_dirs` で指定したフォルダ（複数可）を再帰的に走査し、
   - Text シェイプのフォント探索リストに「最優先」追加する。
   - HUD で `pyglet` にフォントを登録して `font_name` 解決に使えるようにする。
-- HUD のフォント名/サイズを設定から読み取れるようにする（`hud.font_name`, `hud.font_size` を優先し、互換として `status_manager.font`/`status_manager.font_size` も読む）。
+- HUD のフォント名/サイズを設定から読み取れるようにする（`hud.font_name`, `hud.font_size` を使用）。
 - 既存の引数/API は変更しない（後方互換）。設定未指定時は従来挙動を維持。
 
 ## 非目標
@@ -29,7 +29,7 @@
     - 相対パスは「プロジェクトルート基準（`util.utils._find_project_root`）」で解決。
   - `hud.font_name: "HackGenConsoleNF-Regular"`（省略可）
   - `hud.font_size: 12`（省略可）
-  - 後方互換: `status_manager.font` / `status_manager.font_size` を HUD の既定として参照。
+  - 後方互換は設けない（`status_manager.*` は非推奨・参照しない）。
 - 優先順位（探索）
   1) `fonts.search_dirs`（再帰, `*.ttf|*.otf|*.ttc`）
   2) OS 既定ディレクトリ（現状実装）
@@ -53,7 +53,7 @@
   - [x] 例外時は安全にスキップしてOS探索へフォールバック。
 - [x] HUD 側のフォント登録: `src/engine/ui/hud/overlay.py`
   - [x] 初期化時に `fonts.search_dirs` を読み取り、該当パス配下のフォントを `pyglet.font.add_file()` で登録（失敗は握りつぶし）。
-  - [x] `hud.font_name`/`hud.font_size`（→ 無ければ `status_manager.*` → 既定）で `self._font`/`self.font_size` を上書き。
+  - [x] `hud.font_name` / `hud.font_size` で `self._font` / `self.font_size` を上書き。
   - [x] 既存の色/メータ設定ロジックと併存させる。
 - [x] ドキュメント整備
   - [x] `architecture.md` に「フォント探索の優先順位」「設定キー」「HUD 登録の流れ」を追記し、該当コード参照（`src/shapes/text.py`, `src/engine/ui/hud/overlay.py`）を明記。
@@ -64,7 +64,7 @@
 
 ### 追加タスク（Dear PyGui 側フォント適用）
 - [x] DPG: 設定 `fonts.search_dirs` 配下を再帰探索し、`.ttf/.otf/.ttc` を `dpg.add_font_registry` 経由で登録。
-- [x] DPG: フォント名の決定順（`parameter_gui.layout.font_name` > `hud.font_name` > `status_manager.font`）。
+  - [x] DPG: フォント名の決定順（`parameter_gui.layout.font_name` > `hud.font_name`）。
 - [x] DPG: `ParameterLayoutConfig.font_size` をサイズに使用し、`dpg.bind_font()` で適用。
 - [x] 例外時は握りつぶし（テスト/ヘッドレス環境でも安全）。
 - [ ] UI パラメータ系のテスト実行（環境で Dear PyGui の実行がタイムアウトするため未実施）。
@@ -101,7 +101,7 @@
 ---
 
 ## 追加の確認事項（ご承認お願いします）
-1) 設定キー名: `fonts.search_dirs` / `hud.font_name` / `hud.font_size` で問題ありませんか？（互換参照: `status_manager.*`）
+1) 設定キー名: `fonts.search_dirs` / `hud.font_name` / `hud.font_size` で問題ありませんか？
 2) `fonts.search_dirs` は再帰探索で問題ありませんか？（直下のみ希望なら切替可能）
 3) HUD の既定フォントは現状どおり `HackGenConsoleNF-Regular` を維持しつつ、設定で上書きする方針でよいですか？
 4) Dear PyGui についても、同様のフォント登録/適用を次段で対応しますか？（任意）

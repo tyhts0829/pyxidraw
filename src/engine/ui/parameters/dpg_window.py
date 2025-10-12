@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from threading import Thread
 from typing import Any, Iterable, Sequence, cast
@@ -123,12 +122,11 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
     # ---- フォント ----
     def _setup_fonts(self) -> None:
         try:
-            from util.utils import _find_project_root as _root
             from util.utils import load_config as _load_cfg
         except Exception:
             return
         cfg = _load_cfg() or {}
-        # フォント名の決定: parameter_gui.layout.font_name > hud.font_name > status_manager.font
+        # フォント名の決定: parameter_gui.layout.font_name > hud.font_name
         font_name: str | None = None
         try:
             pg = cfg.get("parameter_gui", {}) if isinstance(cfg, dict) else {}
@@ -146,37 +144,26 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     font_name = fn.strip()
             except Exception:
                 pass
-        if not font_name:
-            try:
-                sm = cfg.get("status_manager", {}) if isinstance(cfg, dict) else {}
-                fn = sm.get("font") if isinstance(sm, dict) else None
-                if isinstance(fn, str) and fn.strip():
-                    font_name = fn.strip()
-            except Exception:
-                pass
+        # status_manager.font の後方互換は撤廃（parameter_gui.layout/hud のみを参照）
 
         # 検索ディレクトリ
         fonts = cfg.get("fonts", {}) if isinstance(cfg, dict) else {}
         sdirs = fonts.get("search_dirs", []) if isinstance(fonts, dict) else []
         if isinstance(sdirs, (str, int, Path)):
             sdirs = [str(sdirs)]
-        root = _root(Path(__file__).parent)
-        exts = (".ttf", ".otf", ".ttc")
+
+        try:
+            from util.fonts import glob_font_files, resolve_search_dirs  # type: ignore
+        except Exception:
+            glob_font_files = None  # type: ignore
+            resolve_search_dirs = None  # type: ignore
 
         files: list[Path] = []
-        resolved_dirs: list[Path] = []
-        for s in sdirs:
+        if resolve_search_dirs is not None and glob_font_files is not None:
             try:
-                p = Path(os.path.expandvars(os.path.expanduser(str(s))))
-                if not p.is_absolute():
-                    p = (root / p).resolve()
-                if not p.exists() or not p.is_dir():
-                    continue
-                resolved_dirs.append(p)
-                for ext in exts:
-                    files.extend(p.glob(f"**/*{ext}"))
+                files = glob_font_files(resolve_search_dirs(sdirs))
             except Exception:
-                continue
+                files = []
         # 探索内容のデバッグ出力は抑制
         if not files:
             return
@@ -218,9 +205,19 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             len_pen = len(name)
             return (ext_rank, req_pen, style_pen, var_pen, len_pen)
 
-        # スコア順に並べ、上位から順に読み込みを試す（.ttc はスキップ）
-        candidates = sorted(files, key=_score)
-        # 候補上位のデバッグ出力は抑制
+        # 候補: 要求名部分一致（正規化）を最優先、なければ .ttf → .otf の順
+        req = req_norm
+
+        def _pref(files: list[Path], prefer_ttf: bool = True) -> list[Path]:
+            a = [f for f in files if f.suffix.lower() == ".ttf"] if prefer_ttf else []
+            b = [f for f in files if f.suffix.lower() == ".otf"]
+            return a + b
+
+        if req:
+            matched = [fp for fp in files if req in _norm(fp.stem)]
+            candidates = _pref(matched)
+        else:
+            candidates = _pref(files)
 
         # フォント登録（順次トライ、`.ttc` はスキップ）
         try:

@@ -22,11 +22,11 @@ import os
 from typing import Tuple
 
 import numpy as np
+from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 
 from .registry import effect
-from numba import njit  # type: ignore[attr-defined]
 
 EPS = 1e-12
 

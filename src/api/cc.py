@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+
 from util.cc_provider import set_cc_snapshot_provider  # 依存反転フック（api→util のみ）
 
 

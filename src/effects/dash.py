@@ -22,12 +22,11 @@ dash エフェクト（破線化）
 from __future__ import annotations
 
 import numpy as np
+from numba import njit  # type: ignore[attr-defined]
 
 from engine.core.geometry import Geometry
 
 from .registry import effect
-
-from numba import njit  # type: ignore[attr-defined]
 
 
 # ── Kernels（numba があれば JIT、無ければそのまま Python 実行）──────────────

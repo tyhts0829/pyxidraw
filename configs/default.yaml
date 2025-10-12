@@ -18,24 +18,6 @@ midi:
   enabled_default: true
   strict_default: false
 
-status_manager:
-  font: HackGenConsoleNF-Regular
-  font_size: 2
-  color: [0, 0, 0, 155]
-  pos:
-    x: 16
-    y: 1.5
-  pad:
-    x: 0
-    y: 3
-  info:
-    n_vertices: 0
-    n_lines: 1
-    fps: 2
-    cpu: 3
-    memory: 4
-    midi: 5
-    size: 6
 
 midi_devices:
   - port_name: "ArcController OUT"
@@ -153,9 +135,11 @@ midi_devices:
 # HUD（横棒メータ）の既定
 hud:
   # HUD で使用するフォント名/サイズ（任意）
-  # - 未指定時は従来挙動（コード既定値/`status_manager.*` フォールバック）
+  # - 未指定時は従来挙動（コード既定値）
   font_name: "HackGen Console NF"
   font_size: 12
+  # フォント登録方針（任意）: true なら search_dirs 配下を全登録、false なら要求 family に部分一致するもののみ登録。
+  load_all_fonts: false
   # HUD テキスト色（Hex/0–1/0–255）
   text_color: "#0000009B"
   meters:
@@ -185,6 +169,8 @@ hud:
 fonts:
   search_dirs:
     - data/fonts
+  # OS のフォントディレクトリを探索に含めるか（Text シェイプで有効）。
+  include_os: true
 
 # IO 関連の既定
 # - `io.cc_dir`: CC スナップショットの保存先。相対パスは実行CWD基準。
