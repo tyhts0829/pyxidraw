@@ -160,6 +160,23 @@ class _PipelineBuilder(Protocol):
             show_planes: bool
         """
         ...
+    # meta: n_azimuth (range=[1, 64])
+    # meta: cx (range=[-10000.0, 10000.0])
+    # meta: cy (range=[-10000.0, 10000.0])
+    # meta: cz (range=[-10000.0, 10000.0])
+    # meta: phi0_deg (range=[-180.0, 180.0])
+    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., **_params: Any) -> _PipelineBuilder:
+        """
+        球面くさびベースの 3D 放射状ミラー。
+
+        引数:
+            n_azimuth: range [1, 64]
+            cx: range [-10000.0, 10000.0]
+            cy: range [-10000.0, 10000.0]
+            cz: range [-10000.0, 10000.0]
+            phi0_deg: range [-180.0, 180.0]
+        """
+        ...
     # choices: join in ['mitre', 'round', 'bevel']
     # meta: segments_per_circle (type=integer, range=[1, 100])
     # meta: distance (type=number, range=[0.0, 25.0])

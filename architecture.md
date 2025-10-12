@@ -49,7 +49,22 @@
     書き込みが必要な場合は `copy=True` を使用する。
 - ファクトリとレジストリ
   - Shapes: `shapes/` + `@shape` で登録、`G.<name>(...) -> Geometry` を提供。
-  - Effects: `effects/` + `@effect` で登録、`E.pipeline.<name>(...)` でチェーン可能。
+- Effects: `effects/` + `@effect` で登録、`E.pipeline.<name>(...)` でチェーン可能。
+  - 例: `mirror`（2D放射状/直交の軽量版）、`mirror3d`（真の3D放射状: 球面くさび・大円境界）。
+
+### Effects: mirror / mirror3d 概要
+
+- mirror（2D）
+  - 半空間/象限（n=1/2）: `x=cx`, `y=cy` によるクリップ→反転。`source_side` は bool/列で側指定（True=正側）。Z は不変。
+  - 放射状（n≥3）: `(cx,cy)` を中心に扇形 `[0, π/n)` をソースとし、回転 `2π/n` と反転の組合せで 2n 複製。Z は不変。
+  - 数値安定: `EPS=1e-6`, `INCLUDE_BOUNDARY=True`。重複は量子化ハッシュで除去。
+
+- mirror3d（真の3D放射状）
+  - 球面くさび（大円境界）: 中心 `c=(cx,cy,cz)` と軸 `a` を基準に、方位角間隔 `Δφ=π/n_azimuth` の 2 境界面でくさびを形成。
+  - ソース抽出: 半空間の AND（`n0·(p-c)≥0` かつ `(-n1)·(p-c)≥0`）。
+  - 複製: 非反転/境界1反転を軸回りに `2π/n` ステップで n 回回転（2n）。`mirror_equator=True` で赤道反転を加え最大 4n。境界/赤道上の重複は除去。
+  - 反射式: `p' = c + (I - 2 nn^T)(p - c)`（n は単位法線）。
+  - 数値安定: `EPS=1e-6`, `INCLUDE_BOUNDARY=True`。重複は量子化ハッシュで除去。
   - 正規化キー（Camel→snake, lower, `-`→`_`）で一貫性を担保（`common/base_registry.py`）。
   - Effects はオプションで `__param_meta__` を公開できる（UI 表示のヒント）。
   - 公開インポート経路の単一路線: ユーザー拡張の登録デコレータは `from api import shape` のみを公式に提供（破壊的変更で統一）。

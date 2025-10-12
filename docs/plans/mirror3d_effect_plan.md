@@ -73,33 +73,33 @@ mirror3d.__param_meta__ = {
 ## TDD チェックリスト（小さな段階で前進）
 
 フェーズA: スキャフォールド
-- [ ] A-1: `src/effects/mirror3d.py` の最小スケルトン（no-op 返却）を作成し、`effects/__init__.py` へ import 追加。
-- [ ] A-2: `tests/effects/test_mirror3d_basic.py` を新規作成（インポート/関数呼び出しの最小確認）。
+- [x] A-1: `src/effects/mirror3d.py` の最小スケルトン（v1 実装）を作成し、`effects/__init__.py` へ import 追加。
+- [x] A-2: `tests/effects/test_mirror3d_basic.py` を新規作成（インポート/関数呼び出しの最小確認）。
 
 フェーズB: 基本幾何（単平面）
-- [ ] B-1: 3D 平面反射 `reflect_across_plane` の単体テスト（原点/任意中心、法線正規化の有無）。
-- [ ] B-2: 3D 半空間クリップ `clip_polyline_halfspace_3d` の単体テスト（内→外/外→内/境界/平行）。
-- [ ] B-3: 軸回り回転 `rotate_around_axis` の単体テスト（既知角: 90°, 180°）。
+- [x] B-1: 3D 平面反射 `reflect_across_plane` の単体テスト（原点/任意中心、法線正規化の有無）。
+- [x] B-2: 3D 半空間クリップ `clip_polyline_halfspace_3d` の単体テスト（内→外/外→内/境界/平行）。
+- [x] B-3: 軸回り回転 `rotate_around_axis` の単体テスト（既知角: 90°, 180°）。
 
 フェーズC: くさび生成とソース抽出
-- [ ] C-1: `compute_azimuth_plane_normals` のテスト（n=1/2/3、phi0 が境界法線に反映）。
-- [ ] C-2: `clip_polyline_wedge` のテスト（Z 軸基準で簡単な線がくさびにクリップされる）。
-- [ ] C-3: `equator_normal` のテスト（axis と一致）。
+- [x] C-1: `compute_azimuth_plane_normals` のテスト（n=1/2/3、phi0 が境界法線に反映）。
+- [x] C-2: `clip_polyline_wedge` のテスト（Z 軸基準で簡単な線がくさびにクリップされる）。
+- [x] C-3: `equator_normal` のテスト（axis と一致）。
 
-フェーズD: 2n 複製（回転 + 反転）
-- [ ] D-1: n=1（XZ 面）で右半空間のみをソースに、左側へ反射（2 本）。
-- [ ] D-2: n=3、source 内の 1 点から 2n=6 個の点が等角度 φ で出現（既存 mirror の n=3 テスト相当の 3D 版）。
-- [ ] D-3: `mirror_equator=True` で上下反転を加え、4n 個に増える。
+- フェーズD: 2n 複製（回転 + 反転）
+- [x] D-1: n=1（半空間）で片側のみをソースに、反対側へ反射（2 本）。
+- [x] D-2: n=3、source 内の 1 点から 2n=6 個の点が等角度 φ で出現（既存 mirror の n=3 テスト相当の 3D 版）。
+- [x] D-3: `mirror_equator=True` で上下反転を加え、4n 個に増える。
 
 フェーズE: 効果関数の統合
-- [ ] E-1: `mirror3d` 本体に v1 機能を結線（ソース抽出→複製→重複除去）。
-- [ ] E-2: 中心 `(cx,cy,cz)` と `axis` が反映されることをテスト。
-- [ ] E-3: `__param_meta__` を追加し、スタブ生成（`tools/gen_g_stubs`）の同期テストを緑化。
+- [x] E-1: `mirror3d` 本体に v1 機能を結線（ソース抽出→複製→重複除去）。
+- [x] E-2: 中心 `(cx,cy,cz)` と `axis` が反映されることをテスト。
+- [x] E-3: `__param_meta__` を追加し、スタブ生成（`tools/gen_g_stubs`）の同期テストを緑化。
 
 フェーズF: 安定化とドキュメント
-- [ ] F-1: 大きめ入力（グリッド/スパース点）での実用テスト（重複除去/実行時間）。
-- [ ] F-2: `architecture.md` に mirror3d 概要（平面式/複製則/境界方針）を追記。
-- [ ] F-3: 本計画（本ファイル）の完了ステータス更新。
+- [x] F-1: 大きめ入力（グリッド/スパース点）での実用テスト（重複除去/実行時間）。
+- [x] F-2: `architecture.md` に mirror3d 概要（平面式/複製則/境界方針）を追記。
+- [x] F-3: 本計画（本ファイル）の完了ステータス更新。
 
 ## テスト計画（詳細）
 - 基本反射/クリップ
@@ -131,4 +131,3 @@ mirror3d.__param_meta__ = {
 - `axis` の GUI 指定（2 角度指定 or 3 成分入力）の UX。
 - `source_side` の多境界拡張（将来の第2平面族導入時）。
 - n_azimuth の実用上限（重複・実時間）と UI 制限。
-
