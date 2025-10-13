@@ -6,3 +6,5 @@ render scaleとかもguiから動かしたい
 partitionのランダム性解除
 font indexエラー
 ミラーリングエフェクト
+エフェクト キャッシュ途中まで
+動画書き出し

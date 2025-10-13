@@ -287,6 +287,7 @@ def mirror3d(
     mode: str = "azimuth",
     group: str | None = "T",
     use_reflection: bool = False,
+    show_planes: bool = False,
 ) -> Geometry:
     """3D 放射状ミラー（azimuth/ polyhedral）。
 
@@ -525,6 +526,52 @@ def mirror3d(
             out_lines.extend(extra)
 
     uniq = _dedup_lines(out_lines)
+
+    # 可視化: 対象面のクロス線を追加
+    if show_planes:
+        if uniq:
+            all_pts = np.vstack(uniq).astype(np.float32)
+        else:
+            all_pts = coords.astype(np.float32, copy=True)
+        if all_pts.size == 0:
+            r = 1.0
+        else:
+            d = all_pts - center
+            r = float(np.sqrt(np.max(np.sum(d * d, axis=1))))
+            if not np.isfinite(r) or r <= 0.0:
+                r = 1.0
+        r *= 1.05
+
+        def _plane_cross_segments(n: np.ndarray) -> list[np.ndarray]:
+            n = _unit(n)
+            ref = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+            if abs(float(np.dot(n, ref))) > 0.95:
+                ref = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+            u = _unit(np.cross(n, ref))
+            v = _unit(np.cross(n, u))
+            p0 = center - r * u
+            p1 = center + r * u
+            q0 = center - r * v
+            q1 = center + r * v
+            return [np.vstack([p0, p1]).astype(np.float32), np.vstack([q0, q1]).astype(np.float32)]
+
+        plane_lines: list[np.ndarray] = []
+        if mode == "azimuth":
+            phi0 = float(np.deg2rad(phi0_deg))
+            n0, n1 = _compute_azimuth_plane_normals(int(max(1, n_azimuth)), ax, phi0)
+            plane_lines.extend(_plane_cross_segments(n0))
+            plane_lines.extend(_plane_cross_segments(n1))
+            if mirror_equator:
+                plane_lines.extend(_plane_cross_segments(ax))
+        else:
+            for n in (
+                np.array([1.0, 0.0, 0.0], dtype=np.float32),
+                np.array([0.0, 1.0, 0.0], dtype=np.float32),
+                np.array([0.0, 0.0, 1.0], dtype=np.float32),
+            ):
+                plane_lines.extend(_plane_cross_segments(n))
+        if plane_lines:
+            uniq.extend(plane_lines)
     if not uniq:
         return Geometry(coords.copy(), offsets.copy())
     all_coords = np.vstack(uniq).astype(np.float32)
@@ -550,4 +597,5 @@ mirror3d.__param_meta__ = {
     "group": {"choices": ["T", "O", "I"]},
     "use_reflection": {"type": "bool"},
     "axis": {"type": "vec3", "min": (-1.0, -1.0, -1.0), "max": (1.0, 1.0, 1.0)},
+    "show_planes": {"type": "bool"},
 }

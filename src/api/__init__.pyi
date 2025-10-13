@@ -169,7 +169,8 @@ class _PipelineBuilder(Protocol):
     # choices: mode in ['azimuth', 'polyhedral']
     # choices: group in ['T', 'O', 'I']
     # meta: use_reflection (type=bool)
-    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., **_params: Any) -> _PipelineBuilder:
+    # meta: show_planes (type=bool)
+    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., show_planes: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
         3D 放射状ミラー（azimuth/ polyhedral）。
 
@@ -183,6 +184,7 @@ class _PipelineBuilder(Protocol):
             mode: choices { 'azimuth', 'polyhedral' }
             group: choices { 'T', 'O', 'I' }
             use_reflection: bool
+            show_planes: bool
         """
         ...
     # choices: join in ['mitre', 'round', 'bevel']

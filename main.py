@@ -33,9 +33,9 @@ def draw(t: float) -> Geometry:
         .partition()
         .fill()
         .subdivide()
-        .displace()
-        .mirror3d()
-        .rotate(auto_center=True, angles_rad=(t * 0.1, t * 0.1, t * 0.1))
+        .displace(t_sec=osc(t * 0.01), spatial_freq=(osc(t * 0.05) + 1) * 0.02)
+        .mirror()
+        .rotate()
     )
     return pipe(base)
 
