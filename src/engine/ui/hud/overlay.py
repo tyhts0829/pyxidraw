@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 import pyglet
-from pyglet.shapes import Rectangle
+from pyglet.shapes import Circle, Rectangle
 from pyglet.window import Window
 
 from ...core.tickable import Tickable
@@ -50,6 +50,8 @@ class OverlayHUD(Tickable):
         self._bars_bg: dict[str, Rectangle] = {}
         self._bars_fg: dict[str, Rectangle] = {}
         self._meter_ema: dict[str, float] = {}
+        # REC indicator
+        self._rec_on: bool = False
         # メータ表示パラメータ（HUDConfig をベースに default.yaml で上書き）
         self._meter_width_px: int = int(self._config.meter_width_px)
         self._meter_height_px: int = int(self._config.meter_height_px)
@@ -319,6 +321,28 @@ class OverlayHUD(Tickable):
                 color=rgba,
             )
             lbl.draw()
+        # REC インジケータ（常時表示、小さな赤丸 + ラベル）
+        if self._rec_on:
+            try:
+                r = 6
+                cx = int(self.window.width - 10 - r)
+                cy = int(self.window.height - 10 - r)
+                dot = Circle(cx, cy, r, color=(220, 20, 60))
+                dot.opacity = 240
+                dot.draw()
+                lbl = pyglet.text.Label(
+                    text="REC",
+                    x=cx - 24,
+                    y=cy + r - 2,
+                    anchor_x="left",
+                    anchor_y="bottom",
+                    font_name=self._font,
+                    font_size=self.font_size,
+                    color=(220, 20, 60, 230),
+                )
+                lbl.draw()
+            except Exception:
+                pass
 
     # -------- helpers --------
     def _normalized_ratio(self, key: str) -> float | None:
@@ -396,3 +420,10 @@ class OverlayHUD(Tickable):
             self._meter_color_bg = (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
         except Exception:
             return
+
+    def set_recording(self, on: bool) -> None:
+        """REC インジケータの表示/非表示を切り替える。"""
+        try:
+            self._rec_on = bool(on)
+        except Exception:
+            self._rec_on = False

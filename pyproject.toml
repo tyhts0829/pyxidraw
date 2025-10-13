@@ -32,6 +32,8 @@ dev = [
   "fonttools",
   "fontpens",
   "types-PyYAML",
+  "imageio",
+  "imageio-ffmpeg",
 ]
 # 重い/任意依存をまとめたセット
 optional = [
@@ -40,6 +42,8 @@ optional = [
   "mido",
   "fonttools",
   "fontpens",
+  "imageio",
+  "imageio-ffmpeg",
 ]
 
 [tool.setuptools]

@@ -352,6 +352,7 @@ def run_sketch(
     from engine.core.render_window import RenderWindow
     from engine.export.image import save_png
     from engine.export.service import ExportService
+    from engine.export.video import VideoRecorder
     from engine.render.renderer import LineRenderer
     from engine.runtime.buffer import SwapBuffer
     from engine.runtime.receiver import StreamReceiver
@@ -548,9 +549,16 @@ def run_sketch(
                 pass
 
     # ---- Draw callbacks ----------------------------------
-    rendering_window.add_draw_callback(line_renderer.draw)
-    if overlay is not None:
-        rendering_window.add_draw_callback(overlay.draw)
+    # 品質最優先モード（Shift+V録画中）はウィンドウへは描画しない（FBO のみ）。
+    quality_recording: bool = False
+
+    def _draw_main() -> None:
+        if not quality_recording:
+            line_renderer.draw()
+            if overlay is not None:
+                overlay.draw()
+
+    rendering_window.add_draw_callback(_draw_main)
 
     # ---- ⑦ FrameCoordinator ---------------------------------------
     tickables: list[Tickable] = [midi_service, worker_pool, stream_receiver, line_renderer]
@@ -560,6 +568,7 @@ def run_sketch(
         tickables.append(overlay)
     frame_clock = FrameClock(tickables)
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
+    quality_tick_cb = None  # type: ignore[assignment]
 
     # ---- ⑨ Parameter GUI からの色変更を監視 --------------------------
     if parameter_manager is not None:
@@ -726,6 +735,91 @@ def run_sketch(
         pyglet_mod=pyglet,
     )
 
+    # ---- ⑤.5 Video Recorder -------------------------------------
+    video_recorder = VideoRecorder()
+
+    def _enter_quality_mode() -> None:
+        nonlocal worker_pool, stream_receiver, tickables, frame_clock, quality_recording, quality_tick_cb
+        import pyglet
+
+        # 既存スケジューラを停止
+        try:
+            pyglet.clock.unschedule(frame_clock.tick)
+        except Exception:
+            pass
+        # 既存ワーカを停止し、インラインへ切り替え
+        try:
+            worker_pool.close()
+        except Exception:
+            pass
+        worker_pool = WorkerPool(
+            fps=fps,
+            draw_callback=draw_callable,
+            cc_snapshot=cc_snapshot_fn,
+            apply_cc_snapshot=_apply_cc_snapshot,
+            num_workers=0,  # inline
+            apply_param_snapshot=apply_param_snapshot,
+            param_snapshot=_param_snapshot_fn,
+            metrics_snapshot=metrics_snapshot_fn,
+        )
+        stream_receiver = StreamReceiver(
+            swap_buffer, worker_pool.result_q, on_metrics=on_metrics_cb
+        )
+        # 品質最優先: 固定刻みで駆動
+        tickables = [midi_service, worker_pool, stream_receiver, line_renderer]
+        if sampler is not None:
+            tickables.append(sampler)
+        # overlay は描画はしないが tick は行う（HUD 内部更新のため）
+        if overlay is not None:
+            tickables.append(overlay)
+
+        def _quality_tick(_dt: float) -> None:
+            fixed = 1.0 / float(max(1, fps))
+            for t in tickables:
+                t.tick(fixed)
+
+        quality_tick_cb = _quality_tick
+        pyglet.clock.schedule_interval(quality_tick_cb, 1 / fps)
+        quality_recording = True
+
+    def _leave_quality_mode() -> None:
+        nonlocal worker_pool, stream_receiver, tickables, frame_clock, quality_recording, quality_tick_cb
+        import pyglet
+
+        # 品質モードのドライバ停止
+        try:
+            if quality_tick_cb is not None:
+                pyglet.clock.unschedule(quality_tick_cb)
+        except Exception:
+            pass
+        quality_tick_cb = None
+        quality_recording = False
+        # インラインワーカを停止して通常へ戻す
+        try:
+            worker_pool.close()
+        except Exception:
+            pass
+        worker_pool = WorkerPool(
+            fps=fps,
+            draw_callback=draw_callable,
+            cc_snapshot=cc_snapshot_fn,
+            apply_cc_snapshot=_apply_cc_snapshot,
+            num_workers=worker_count,
+            apply_param_snapshot=apply_param_snapshot,
+            param_snapshot=_param_snapshot_fn,
+            metrics_snapshot=metrics_snapshot_fn,
+        )
+        stream_receiver = StreamReceiver(
+            swap_buffer, worker_pool.result_q, on_metrics=on_metrics_cb
+        )
+        tickables = [midi_service, worker_pool, stream_receiver, line_renderer]
+        if sampler is not None:
+            tickables.append(sampler)
+        if overlay is not None:
+            tickables.append(overlay)
+        frame_clock = FrameClock(tickables)
+        pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
+
     @rendering_window.event
     def on_key_press(sym, mods):  # noqa: ANN001
         if sym == key.ESCAPE:
@@ -739,6 +833,52 @@ def run_sketch(
         # Shift+G → キャンセル
         if sym == key.G and (mods & key.MOD_SHIFT):
             _cancel_gcode_export()
+        # Video 録画トグル（V）
+        if sym == key.V:
+            try:
+                if not video_recorder.is_recording:
+                    _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
+                    if mods & key.MOD_SHIFT:
+                        # HUD を含まない録画（FBO 経由、ラインのみ）
+                        video_recorder.start(
+                            rendering_window,
+                            fps=fps,
+                            name_prefix=_name_prefix,
+                            include_overlay=False,
+                            mgl_context=mgl_ctx,
+                            draw=line_renderer.draw,
+                        )
+                        # 品質最優先モードへ移行
+                        _enter_quality_mode()
+                        if overlay is not None:
+                            overlay.show_message("品質最優先モード")
+                    else:
+                        # 画面そのまま（HUD 含む）
+                        video_recorder.start(
+                            rendering_window,
+                            fps=fps,
+                            name_prefix=_name_prefix,
+                            include_overlay=True,
+                        )
+                    if overlay is not None:
+                        overlay.show_message("REC 開始")
+                        try:
+                            overlay.set_recording(True)
+                        except Exception:
+                            pass
+                else:
+                    p = video_recorder.stop()
+                    # 品質最優先モードを解除
+                    _leave_quality_mode()
+                    if overlay is not None:
+                        overlay.show_message(f"Saved MP4: {p}")
+                        try:
+                            overlay.set_recording(False)
+                        except Exception:
+                            pass
+            except Exception as e:
+                if overlay is not None:
+                    overlay.show_message(f"録画エラー: {e}", level="error")
 
     @rendering_window.event
     def on_close():  # noqa: ANN001
@@ -748,6 +888,17 @@ def run_sketch(
             return
         try:
             worker_pool.close()
+        except Exception:
+            pass
+        try:
+            _leave_quality_mode()
+        except Exception:
+            pass
+        try:
+            if video_recorder.is_recording:
+                p = video_recorder.stop()
+                if overlay is not None:
+                    overlay.show_message(f"Saved MP4: {p}")
         except Exception:
             pass
         try:
@@ -766,5 +917,30 @@ def run_sketch(
             pass
         setattr(on_close, "_closed", True)
         pyglet.app.exit()
+
+    # 録画フック（最後に呼ぶ）。録画中のみフレームを取り出す。
+    def _capture_frame():
+        try:
+            video_recorder.capture_current_frame(rendering_window)
+            # 品質最優先モード中は、FBO→screen ブリット後に HUD を重ねる
+            if "quality_recording" in locals():
+                try:
+                    if quality_recording and overlay is not None:
+                        overlay.draw()
+                except Exception:
+                    pass
+        except Exception as e:
+            # 一度でも失敗したら停止を試み、HUD に通知
+            try:
+                if video_recorder.is_recording:
+                    p = video_recorder.stop()
+                    if overlay is not None:
+                        overlay.show_message(f"録画を停止しました: {p}")
+            except Exception:
+                pass
+            if overlay is not None:
+                overlay.show_message(f"録画フレーム取得失敗: {e}", level="error")
+
+    rendering_window.add_draw_callback(_capture_frame)
 
     pyglet.app.run()

@@ -76,25 +76,25 @@
 - 変更ファイルに対して `ruff/mypy/pytest` を実施して緑化する（編集ファイル優先）。
 
 Stage 0 — 保存先ユーティリティの拡張
-- [ ] `util/paths.py` に `ensure_video_dir() -> Path` を追加（`data/video/`）。
+- [x] `util/paths.py` に `ensure_video_dir() -> Path` を追加（`data/video/`）。
 - 合格基準: 既存/新規の両ケースで例外なし、Path を返す。
 
 Stage 1 — VideoRecorder（最小実装）
-- [ ] `engine/export/video.py` を新設し、`VideoRecorder` を実装。
-  - [ ] `start(...)`/`stop()`/`is_recording`/`attach_draw_callback(...)` を提供。
-  - [ ] `imageio-ffmpeg` が無い場合は `RuntimeError("imageio-ffmpeg が見つかりません")` を投げる。
-  - [ ] バッファ読み出し（RGBA→RGB、上下反転、偶数解像度クロップ）。
+- [x] `engine/export/video.py` を新設し、`VideoRecorder` を実装。
+  - [x] `start(...)`/`stop()`/`is_recording` を提供（draw コールバックはランナー側で登録）。
+  - [x] `imageio`/`imageio-ffmpeg` 未導入時は `RuntimeError` を投げる。
+  - [x] バッファ読み出し（RGBA→RGB、上下反転、偶数解像度クロップ）。
 - 合格基準: 単体で 10〜60 フレーム程度を生成可能（目視と簡易スモーク）。
 
 Stage 2 — ランナー配線/キーイベント
-- [ ] `api/sketch.py` に `V` キーのトグルを追加。
-- [ ] Window 初期化後に `recorder.attach_draw_callback(window)` を登録（overlay の後段）。
-- [ ] HUD で開始/停止/失敗メッセージを表示。
+- [x] `api/sketch.py` に `V` キーのトグルを追加。
+- [x] Window 初期化後に録画フックを最後に登録（overlay の後段）。
+- [x] HUD で開始/停止/失敗メッセージを表示。
 - 合格基準: 実行時に `V` で録画開始、再度 `V` で停止し、`.mp4` が保存される。
 
 Stage 3 — UX 改善（任意）
-- [ ] 常時表示の REC インジケータ（HUD へ小さな赤丸 or ラベル）。
-- [ ] `Shift+V`: HUD を含まない録画（FBO 経由、`LineRenderer.draw()` のみ）。
+- [x] 常時表示の REC インジケータ（HUD へ小さな赤丸 + ラベル）。
+- [x] `Shift+V`: HUD を含まない録画（FBO 経由、`LineRenderer.draw()` のみ）。
 - 合格基準: 視認性が良く、誤操作が起こりにくい。
 
 Stage 4 — テスト/CI（最小）

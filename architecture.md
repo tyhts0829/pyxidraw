@@ -212,6 +212,18 @@ Tips:
 
 ---
 
+## Export（保存系コンポーネントの要点）
+
+- 画像（PNG）: `engine/export/image.py`
+  - 低コスト: ウィンドウのカラーバッファをそのまま保存（HUD 含む）。
+  - 高品質: FBO にラインのみを描画して保存（HUD なし、スケール対応）。
+- G-code: `engine/export/service.py` + `engine/export/gcode.py`
+  - 非ブロッキングに変換・保存。HUD へ進捗通知。
+- 動画（MP4）: `engine/export/video.py`
+  - 最小の同期レコーダ。`imageio`/`imageio-ffmpeg` が存在すれば、1フレームずつ取りこぼしなく書き出す。
+  - HUD 含む録画（画面バッファ）/HUD なし録画（FBO + `LineRenderer.draw()`）を選択可能。
+
+
 ## 座標変換と投影（詳細）
 
 - 物理単位は mm。ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`（render_scale は float 可）。
