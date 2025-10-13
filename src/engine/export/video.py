@@ -92,6 +92,17 @@ class VideoRecorder:
         self._samples: int = 0
         self._msaa_fbo: Any | None = None
         self._resolve_fbo: Any | None = None
+        # PBO ring for async read (overlay=False)
+        self._pbo_ring: list[Any] | None = None
+        self._pbo_index: int = 0
+        self._pbo_filled: int = 0
+        self._pbo_bytes: int = 0
+        # Writer-side policy: drop first frame once to avoid initial glitch
+        self._drop_initial_frames: int = 0
+        # Pre-allocated FBOs for overlay=False (Shift+V)
+        self._samples: int = 0
+        self._msaa_fbo: Any | None = None
+        self._resolve_fbo: Any | None = None
 
     # ---- state ----
     @property
@@ -147,6 +158,53 @@ class VideoRecorder:
         self._include_overlay = bool(include_overlay)
         self._mgl_context = mgl_context
         self._draw_callable = draw
+        # drop first captured frame (warmup)
+        self._drop_initial_frames = 10
+        # Pre-allocate FBOs / PBOs for overlay=False
+        if not self._include_overlay:
+            try:
+                import moderngl  # noqa: F401
+            except Exception as e:
+                raise RuntimeError(f"ModernGL の利用に失敗: {e}") from e
+            assert self._mgl_context is not None
+            assert self._size is not None
+            w, h = int(self._size[0]), int(self._size[1])
+            # 推奨サンプル数（Window 設定があれば利用）
+            try:
+                self._samples = int(getattr(getattr(window, "config", None), "samples", 0))
+            except Exception:
+                self._samples = 0
+            if self._samples <= 0:
+                self._samples = 4
+            ctx = self._mgl_context
+            # 既存 FBO/PBO の開放
+            self._release_fbos()
+            self._release_pbos()
+            try:
+                # MSAA 優先
+                try:
+                    self._msaa_fbo = ctx.simple_framebuffer((w, h), components=4, samples=int(self._samples))  # type: ignore[attr-defined]
+                    self._resolve_fbo = ctx.simple_framebuffer((w, h), components=4)  # type: ignore[attr-defined]
+                except Exception:
+                    # 非 MSAA にフォールバック
+                    self._msaa_fbo = None
+                    self._resolve_fbo = ctx.simple_framebuffer((w, h), components=4)  # type: ignore[attr-defined]
+                # PBO リング（3枚）
+                self._pbo_bytes = int(w * h * 4)
+                ring = []
+                for _ in range(3):
+                    try:
+                        ring.append(ctx.buffer(reserve=self._pbo_bytes))  # type: ignore[attr-defined]
+                    except Exception:
+                        ring = []
+                        break
+                self._pbo_ring = ring if ring else None
+                self._pbo_index = 0
+                self._pbo_filled = 0
+            except Exception as e:
+                self._release_fbos()
+                self._release_pbos()
+                raise RuntimeError(f"FBO/PBO 初期化に失敗: {e}") from e
         # Pre-allocate FBOs for overlay=False
         if not self._include_overlay:
             try:
@@ -190,6 +248,7 @@ class VideoRecorder:
         finally:
             self._writer = None
             self._release_fbos()
+            self._release_pbos()
         return self._path
 
     # ---- drawing hook ----
@@ -250,7 +309,27 @@ class VideoRecorder:
                             ctx.copy_framebuffer(self._resolve_fbo, self._msaa_fbo)  # type: ignore[attr-defined]
                         except Exception:
                             self._msaa_fbo.copy_from(self._resolve_fbo)  # type: ignore[attr-defined]
-                        data = self._resolve_fbo.read(components=4, alignment=1)
+                        # 非同期 read: PBO があれば read_into（次フレームで取り出す）
+                        if self._pbo_ring:
+                            pbo = self._pbo_ring[self._pbo_index]
+                            self._resolve_fbo.read_into(pbo, components=4, alignment=1)  # type: ignore[attr-defined]
+                            # 画面へブリット（表示）。失敗時は無視
+                            try:
+                                ctx.copy_framebuffer(ctx.screen, self._resolve_fbo)  # type: ignore[attr-defined]
+                            except Exception:
+                                pass
+                            # 前フレームの PBO を読み出し
+                            if self._pbo_filled > 0:
+                                prev = (self._pbo_index - 1) % len(self._pbo_ring)
+                                data = self._pbo_ring[prev].read()  # type: ignore[attr-defined]
+                            else:
+                                # 初回は同期 read
+                                data = self._resolve_fbo.read(components=4, alignment=1)
+                                self._pbo_filled = 1
+                            self._pbo_index = (self._pbo_index + 1) % len(self._pbo_ring)
+                        else:
+                            # フォールバック: 同期 read
+                            data = self._resolve_fbo.read(components=4, alignment=1)
                         # 画面へブリット（表示）。失敗時は無視して録画継続。
                         try:
                             ctx.copy_framebuffer(ctx.screen, self._resolve_fbo)  # type: ignore[attr-defined]
@@ -259,12 +338,27 @@ class VideoRecorder:
                     except Exception as e:
                         raise RuntimeError(f"MSAA 解像に失敗: {e}") from e
                 else:
-                    data = target_fbo.read(components=4, alignment=1)
-                    # 画面へブリット（表示）。失敗時は無視して録画継続。
-                    try:
-                        ctx.copy_framebuffer(ctx.screen, target_fbo)  # type: ignore[attr-defined]
-                    except Exception:
-                        pass
+                    if self._pbo_ring:
+                        pbo = self._pbo_ring[self._pbo_index]
+                        target_fbo.read_into(pbo, components=4, alignment=1)  # type: ignore[attr-defined]
+                        try:
+                            ctx.copy_framebuffer(ctx.screen, target_fbo)  # type: ignore[attr-defined]
+                        except Exception:
+                            pass
+                        if self._pbo_filled > 0:
+                            prev = (self._pbo_index - 1) % len(self._pbo_ring)
+                            data = self._pbo_ring[prev].read()  # type: ignore[attr-defined]
+                        else:
+                            data = target_fbo.read(components=4, alignment=1)
+                            self._pbo_filled = 1
+                        self._pbo_index = (self._pbo_index + 1) % len(self._pbo_ring)
+                    else:
+                        data = target_fbo.read(components=4, alignment=1)
+                        # 画面へブリット（表示）。失敗時は無視
+                        try:
+                            ctx.copy_framebuffer(ctx.screen, target_fbo)  # type: ignore[attr-defined]
+                        except Exception:
+                            pass
 
                 arr = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 4)
                 arr = np.flipud(arr)
@@ -280,9 +374,12 @@ class VideoRecorder:
                 except Exception:
                     pass
 
-        # 書き出し（同期）。取りこぼし防止のためここでブロックを許容。
+        # 書き出し（同期）。初回フレームはドロップしてウォームアップ。
         assert self._writer is not None
-        self._writer.append_data(frame)
+        if self._drop_initial_frames > 0:
+            self._drop_initial_frames -= 1
+        else:
+            self._writer.append_data(frame)
 
     # ---- internal helpers ----
     def _release_fbos(self) -> None:
@@ -294,3 +391,17 @@ class VideoRecorder:
                 pass
         self._msaa_fbo = None
         self._resolve_fbo = None
+
+    def _release_pbos(self) -> None:
+        if not self._pbo_ring:
+            return
+        for b in self._pbo_ring:
+            try:
+                if b is not None:
+                    b.release()  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        self._pbo_ring = None
+        self._pbo_index = 0
+        self._pbo_filled = 0
+        self._pbo_bytes = 0
