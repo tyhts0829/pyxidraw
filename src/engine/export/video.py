@@ -64,7 +64,7 @@ def _open_writer(path: Path, width: int, height: int, fps: int) -> _Writer:
         import imageio.v3 as iio  # type: ignore
 
         # v3 は `iio.get_writer(..., plugin='ffmpeg')` が利用可能
-        writer = iio.get_writer(str(path), fps=int(fps), codec="libx264", plugin="ffmpeg")
+        writer = iio.get_writer(str(path), fps=int(fps), codec="libx264", plugin="ffmpeg")  # type: ignore
         return _Writer(close=writer.close, append_data=writer.append_data)
     except Exception:
         try:
