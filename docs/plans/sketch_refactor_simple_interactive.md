@@ -63,35 +63,35 @@ src/
 
 段階的移行（チェックリスト / 変更ファイル優先で検証）:
 
-- [ ] Phase 1: 骨格＋小改善（互換維持のまま動作不変）
-  - [ ] `src/api/sketch_runner/{__init__,utils.py}` を追加
-  - [ ] `resolve_fps`/`build_projection`/`resolve_canvas_size`/`hud_metrics_snapshot` を `utils.py` に実装し、`sketch.py` は呼び替え
-  - [ ] 小改善（このフェーズで一括導入）
-    - [ ] `fps` を `max(1, int(fps))` でクランプ（`src/api/sketch.py:130` と `schedule_interval` 呼び出し部 `src/api/sketch.py:570`, `src/api/sketch.py:782`）
-    - [ ] `render_scale > 0` を検証し、`window_width/height = max(1, round(...))`（`src/api/sketch.py:296`）
-    - [ ] `workers = max(0, workers)` にクランプ（`src/api/sketch.py:337` or `src/api/sketch.py:807` 生成直前）
-    - [ ] `canvas_size` 未知キーは `ValueError` with allowed keys（`src/api/sketch.py:293`）
-    - [ ] 主要な `except Exception: pass` を `logger.debug(..., exc_info=True)` に変更（色適用・HUD・録画周辺）
-    - [ ] `run_sketch` の docstring を NumPy スタイルへ簡潔整備（Parameters/Returns/Notes）
-  - [ ] 変更ファイルに対して `ruff/black/isort/mypy` を実行
-- [ ] Phase 2: エクスポート切り出し
-  - [ ] `export.py` に `make_gcode_export_handlers` と PNG 保存ラッパを移設
-  - [ ] `sketch.py` の呼び出し箇所を置換
-- [ ] Phase 3: MIDI 初期化切り出し
-  - [ ] `midi.py` に Null 実装と `setup_midi(use_midi)` を実装
-  - [ ] `sketch.py` の `_setup_midi` を撤去
-- [ ] Phase 4: レンダ初期化切り出し
-  - [ ] `render.py` に `create_window_and_renderer` を実装（背景/線色決定を含む）
-  - [ ] ModernGL 初期化と色自動決定を移設
-- [ ] Phase 5: Parameter GUI 連携切り出し
-  - [ ] `params.py` に初期色適用と subscribe による色反映を移設
-- [ ] Phase 6: 録画補助切り出し
-  - [ ] `recording.py` に品質モードの enter/leave（`pyglet.clock` 再スケジューリング）を移設
-- [ ] Phase 7: sketch.py の簡素化
-  - [ ] イベントハンドラはそのまま、各機能を `sketch_runner.*` へ委譲
-- [ ] Phase 8: 文書同期
-  - [ ] `architecture.md` のランナー図と参照ファイルを更新
-  - [ ] 公開 API 影響なしを確認（必要時のみスタブ再生成）
+- [x] Phase 1: 骨格＋小改善（互換維持のまま動作不変）
+  - [x] `src/api/sketch_runner/{__init__,utils.py}` を追加
+  - [x] `resolve_fps`/`build_projection`/`resolve_canvas_size`/`hud_metrics_snapshot` を `utils.py` に実装し、`sketch.py` は呼び替え
+  - [x] 小改善（このフェーズで一括導入）
+    - [x] `fps` を `max(1, int(fps))` でクランプ（`resolve_fps` 経由で適用）
+    - [x] `render_scale > 0` を検証し、`window_width/height = max(1, round(...))`（`src/api/sketch.py`）
+    - [x] `workers = max(0, workers)` にクランプ（`src/api/sketch.py`）
+    - [x] `canvas_size` 未知キーは `ValueError` with allowed keys（`resolve_canvas_size`）
+    - [x] 主要な `except Exception: pass` を `logger.debug(..., exc_info=True)` に変更（色適用・HUD・録画周辺）
+    - [x] `run_sketch` の docstring を NumPy スタイルへ簡潔整備（Parameters/Returns/Notes）
+  - [x] 変更ファイルに対して `ruff/black/isort/mypy` を実行
+- [x] Phase 2: エクスポート切り出し
+  - [x] `export.py` に `make_gcode_export_handlers` と PNG 保存ラッパを移設
+  - [x] `sketch.py` の呼び出し箇所を置換
+- [x] Phase 3: MIDI 初期化切り出し
+  - [x] `midi.py` に Null 実装と `setup_midi(use_midi)` を実装
+  - [x] `sketch.py` の `_setup_midi` を撤去
+- [x] Phase 4: レンダ初期化切り出し
+  - [x] `render.py` に `create_window_and_renderer` を実装（背景/線色決定を含む）
+  - [x] ModernGL 初期化と色自動決定を移設
+- [x] Phase 5: Parameter GUI 連携切り出し
+  - [x] `params.py` に初期色適用と subscribe による色反映を移設
+- [x] Phase 6: 録画補助切り出し
+  - [x] `recording.py` に品質モードの enter/leave（`pyglet.clock` 再スケジューリング）を移設
+- [x] Phase 7: sketch.py の簡素化
+  - [x] イベントハンドラはそのまま、各機能を `sketch_runner.*` へ委譲
+- [x] Phase 8: 文書同期
+  - [x] `architecture.md` のランナー関連記述を `sketch_runner` 分割構成へ更新
+  - [x] 公開 API 影響なしを確認（スタブ再生成は不要）
 
 付随の小改善（シンプルの範囲内で）:
 

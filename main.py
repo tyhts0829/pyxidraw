@@ -8,7 +8,7 @@ sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
 
 import os
 
-from api import E, G, cc, lfo, run  # type: ignore  # after sys.path tweak
+from api import E, G, lfo, run  # type: ignore  # after sys.path tweak
 from engine.core.geometry import Geometry  # type: ignore
 
 PXD_FILL_DEBUG = 1
@@ -25,7 +25,7 @@ def draw(t: float) -> Geometry:
         # G.polyhedron(polygon_index=int(cc[1] * 6))
         # .scale(80 + cc[2] * 150)
         # .translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
-        G.text(em_size_mm=cc[1] * 200).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
+        G.text(em_size_mm=150).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     )
     # pipe = E.pipeline.affine().partition().fill().subdivide().displace()
     pipe = (
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
-        render_scale=3,
+        render_scale=4.5,
         use_midi=True,
         use_parameter_gui=True,
         workers=6,

@@ -36,7 +36,7 @@
 - 単位はミリメートル[mm]が既定。`util.constants.CANVAS_SIZES` の定義を基にキャンバスの実寸を決める。
 - ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`。つまり 1mm は `render_scale` ピクセルに相当。
 - 座標系はスクリーン座標: 原点はキャンバス左上、+X 右、+Y 下、Z は奥行き（深度テストは既定で未使用）。
-  - ライン描画は正射影。`api.sketch` で ModernGL の射影行列を設定しており、mm→NDC 変換を一意に定義。
+  - ライン描画は正射影。`api.sketch` で ModernGL の射影行列を設定しており（行列の構築は `api.sketch_runner.utils.build_projection`）、mm→NDC 変換を一意に定義。
 
 ## 中核コンセプト
 
@@ -112,7 +112,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
   - `__init__.py`: 公開面（`G`, `E`, `run`/`run_sketch`, `Geometry`）。
 - `effects.py`: `Pipeline`, `PipelineBuilder`。
   - `shapes.py`: 形状 API。
-  - `sketch.py`: 実行エンジンの束ね（ModernGL/Pyglet、MIDI、ワーカー、HUD）。
+  - `sketch.py`: 実行エンジンの束ね（ModernGL/Pyglet、MIDI、ワーカー、HUD）。初期化・補助は内部ヘルパ `api/sketch_runner/*.py` に委譲。
 - `engine/`
   - `core/geometry.py`: 統一 `Geometry`、基本変換、`digest`。
   - `core/frame_clock.py`, `core/tickable.py`: フレーム調停と更新インターフェース。
@@ -120,7 +120,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
   - `render/renderer.py`: ライン描画（正射影行列、倍精度 →GPU 転送）。
   - `ui/hud/overlay.py`, `ui/hud/sampler.py`: HUD とメトリクス。
   - `ui/hud/`: `HUDConfig` とフィールド定義（HUD 表示/計測のオプション制御）。
-  - キャッシュ累計スナップショット取得は `api.sketch` 内のトップレベル関数で実装し、Worker へ関数注入する（engine は api を参照しない）。
+  - キャッシュ累計スナップショット取得は `api.sketch_runner.utils.hud_metrics_snapshot`（トップレベル関数）で実装し、Worker へ関数注入する（engine は api を参照しない）。
   - `io/`: MIDI 接続・スナップショット取得。
 - `effects/`: 幾何処理のオペレータ群と `registry.py`。
   - 代表例: `affine(auto_center: bool, pivot: Vec3, angles_rad: Vec3, scale: Vec3)` —
@@ -228,7 +228,7 @@ Tips:
 
 - 物理単位は mm。ウィンドウ解像度は `canvas_size(mm) × render_scale(px/mm)`（render_scale は float 可）。
 - 投影は正射影（擬似 2D）。Y 軸はスクリーン座標に合わせて上が負になる変換を適用。
-  - `api.sketch.run_sketch()` が ModernGL 用の 4x4 行列を構築し、`engine.render.renderer.LineRenderer` に渡す。
+  - `api.sketch.run_sketch()` が ModernGL 用の 4x4 行列（`api.sketch_runner.utils.build_projection`）を構築し、`engine.render.renderer.LineRenderer` に渡す。
   - 実装行列（転置後にシェーダへ書き込み）:
     ```python
     proj = [[ 2/w,   0,   0, -1],
@@ -468,6 +468,7 @@ Tips:
 ## 参考: 主要モジュールの対応表
 
 - API: `src/api/__init__.py`, `effects.py`, `sketch.py`, `shapes.py`, `lfo.py`
+- API (internal helpers): `src/api/sketch_runner/*.py`（`utils.py`, `midi.py`, `render.py`, `export.py`, `params.py`, `recording.py`）
 - Engine/Core: `core/geometry.py`, `core/frame_clock.py`, `core/render_window.py`, `core/tickable.py`
 - Engine/Runtime: `runtime/worker.py`, `runtime/receiver.py`, `runtime/buffer.py`
 - Engine/Render: `render/renderer.py`, `render/line_mesh.py`, `render/shader.py`
