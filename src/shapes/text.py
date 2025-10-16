@@ -113,7 +113,7 @@ class TextRenderer:
         candidates: list[Path] = []
         if sys.platform == "darwin":
             candidates = [
-                Path("/System/Library/Fonts/Helvetica.ttc"),
+                Path("/System/Library/Fonts/SFNS.ttc"),
                 Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
             ]
         elif sys.platform.startswith("linux"):
@@ -132,7 +132,7 @@ class TextRenderer:
         return font_paths[0] if font_paths else None
 
     @classmethod
-    def get_font(cls, font_name: str = "Helvetica", font_index: int = 0) -> Any:
+    def get_font(cls, font_name: str = "SFNS", font_index: int = 0) -> Any:
         """TTFont を取得（キャッシュ）。`font_name` は名前の部分一致 or パス。"""
         from fontTools.ttLib import TTFont  # type: ignore
 
@@ -318,7 +318,7 @@ def text(
     *,
     text: str = "HELLO",
     em_size_mm: float = 10.0,
-    font: str = "Helvetica",
+    font: str = "SFNS",
     font_index: int = 0,
     text_align: str = "left",
     tracking_em: float = 0.0,
