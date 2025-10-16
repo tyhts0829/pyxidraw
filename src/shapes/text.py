@@ -229,7 +229,7 @@ class TextRenderer:
 
         flat = RecordingPen()
         flatten_pen = FlattenPen(
-            flat, approximateSegmentLength=float(flat_seg_len_units), segmentLines=True
+            flat, approximateSegmentLength=float(flat_seg_len_units), segmentLines=True  # type: ignore
         )
         rec.replay(flatten_pen)
 
