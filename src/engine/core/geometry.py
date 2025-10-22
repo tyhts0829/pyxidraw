@@ -301,7 +301,7 @@ class Geometry:
 
     def scale(
         self,
-        sx: float,
+        sx: float = 100,
         sy: float | None = None,
         sz: float | None = None,
         center: Vec3 = (0.0, 0.0, 0.0),

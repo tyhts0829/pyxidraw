@@ -8,24 +8,19 @@
 注意:
 - 依存は既存のランタイムに準拠（`api.run` を使用）。
 - ラベル描画は `shapes.text` 依存（環境によりフォント/numba の有無で描画不可の場合は自動スキップ）。
+ - 前提: 事前に `pip install -e .[dev]` を実行して import パスを解決する。
 """
 
 from __future__ import annotations
 
-import sys
 from math import ceil
-from pathlib import Path
 from typing import Any, Mapping, Sequence
-
-# src/ を import パスへ追加（main.py と同様の簡易ブート）
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
 import effects  # noqa: F401  # register all effects (for fill)
 
 # 登録の副作用を有効にする
 import shapes  # noqa: F401  # register all shapes
-from api import G, run  # type: ignore  # after sys.path tweak
+from api import G, run
 from effects.registry import get_effect  # for labeling fill
 from engine.core.geometry import Geometry
 from engine.ui.parameters.introspection import FunctionIntrospector

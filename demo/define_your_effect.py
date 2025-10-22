@@ -12,12 +12,8 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
 
-sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
 from api import E, G, cc, effect, run_sketch
 from engine.core.geometry import Geometry
 

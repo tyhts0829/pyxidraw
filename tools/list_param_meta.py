@@ -1,19 +1,13 @@
-"""全 shape/effect の `__param_meta__` を一覧する開発用スクリプト。"""
+"""全 shape/effect の `__param_meta__` を一覧する開発用スクリプト。
+
+前提: 事前に `pip install -e .[dev]` を実行し、`api`/`effects` などを import 可能にしておく。
+"""
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
-from pathlib import Path
 from typing import Any, Mapping
-
-
-def _ensure_src_path() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    src_path = repo_root / "src"
-    if str(src_path) not in sys.path:
-        sys.path.insert(0, str(src_path))
 
 
 def _normalize_meta(meta: Any) -> dict[str, Mapping[str, Any]]:
@@ -73,8 +67,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="List parameter metadata for shapes and effects.")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args()
-
-    _ensure_src_path()
 
     sections = {
         "Shapes": _collect_shapes(),

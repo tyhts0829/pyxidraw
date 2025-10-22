@@ -9,25 +9,19 @@
 - 依存は既存ランタイムに準拠（`api.sketch.run`）。
 - ラベル描画は `shapes.text` 依存（フォント/numba 不在時は自動スキップ）。
 - 各エフェクトのパラメータは関数のデフォルト引数を使用する。
+- 前提: 事前に `pip install -e .[dev]` を実行して import パスを解決する。
 """
 
 from __future__ import annotations
 
-import sys
+import inspect
 from dataclasses import dataclass
 from math import ceil  # type: ignore
-from pathlib import Path
 from typing import Any
-
-# src/ を import パスへ追加（main.py と同様の簡易ブート）
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-import inspect
 
 # 登録の副作用を有効にする
 import effects  # noqa: F401  # register all effects
-from api import G, run  # type: ignore  # after sys.path tweak
+from api import G, run
 from effects.registry import get_effect, list_effects
 from engine.core.geometry import Geometry
 

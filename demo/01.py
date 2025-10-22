@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# src/ レイアウトからシンプルに import できるよう、`python main.py` 実行時にパスを補助
-sys.path.insert(0, str((Path(__file__).resolve().parent / "src")))
-
-from api import E, G, lfo, run  # type: ignore  # after sys.path tweak
-from engine.core.geometry import Geometry  # type: ignore
+from api import E, G, lfo, run
+from engine.core.geometry import Geometry
 
 CANVAS_SIZE = 400
 
