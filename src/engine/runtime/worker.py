@@ -111,19 +111,27 @@ class _WorkerProcess(mp.Process):
                     after = self.metrics_snapshot() if self.metrics_snapshot is not None else None
                 except Exception:
                     after = None
-                # HIT/MISS の二値判定（効果 → シェイプの順に判定）
+                # HIT/MISS の二値判定（MISS 優先: フレーム内で 1 つでも MISS 増分があれば MISS）
                 flags = None
                 if isinstance(before, dict) and isinstance(after, dict):
                     try:
-                        e_hit = after.get("effect", {}).get("hits", 0) > before.get(
-                            "effect", {}
-                        ).get("hits", 0)
-                        s_hit = after.get("shape", {}).get("hits", 0) > before.get("shape", {}).get(
-                            "hits", 0
-                        )
+                        e_hits_after = int(after.get("effect", {}).get("hits", 0))
+                        e_hits_before = int(before.get("effect", {}).get("hits", 0))
+                        e_miss_after = int(after.get("effect", {}).get("misses", 0))
+                        e_miss_before = int(before.get("effect", {}).get("misses", 0))
+                        s_hits_after = int(after.get("shape", {}).get("hits", 0))
+                        s_hits_before = int(before.get("shape", {}).get("hits", 0))
+                        s_miss_after = int(after.get("shape", {}).get("misses", 0))
+                        s_miss_before = int(before.get("shape", {}).get("misses", 0))
+
+                        e_miss = e_miss_after > e_miss_before
+                        e_hit = e_hits_after > e_hits_before
+                        s_miss = s_miss_after > s_miss_before
+                        s_hit = s_hits_after > s_hits_before
+
                         flags = {
-                            "effect": "HIT" if e_hit else "MISS",
-                            "shape": "HIT" if s_hit else "MISS",
+                            "effect": "MISS" if e_miss else ("HIT" if e_hit else "MISS"),
+                            "shape": "MISS" if s_miss else ("HIT" if s_hit else "MISS"),
                         }
                     except Exception:
                         flags = None
@@ -242,15 +250,23 @@ class WorkerPool(Tickable):
                     flags = None
                     if isinstance(before, dict) and isinstance(after, dict):
                         try:
-                            s_hit = after.get("shape", {}).get("hits", 0) > before.get(
-                                "shape", {}
-                            ).get("hits", 0)
-                            e_hit = after.get("effect", {}).get("hits", 0) > before.get(
-                                "effect", {}
-                            ).get("hits", 0)
+                            s_hits_after = int(after.get("shape", {}).get("hits", 0))
+                            s_hits_before = int(before.get("shape", {}).get("hits", 0))
+                            s_miss_after = int(after.get("shape", {}).get("misses", 0))
+                            s_miss_before = int(before.get("shape", {}).get("misses", 0))
+                            e_hits_after = int(after.get("effect", {}).get("hits", 0))
+                            e_hits_before = int(before.get("effect", {}).get("hits", 0))
+                            e_miss_after = int(after.get("effect", {}).get("misses", 0))
+                            e_miss_before = int(before.get("effect", {}).get("misses", 0))
+
+                            s_miss = s_miss_after > s_miss_before
+                            s_hit = s_hits_after > s_hits_before
+                            e_miss = e_miss_after > e_miss_before
+                            e_hit = e_hits_after > e_hits_before
+
                             flags = {
-                                "shape": "HIT" if s_hit else "MISS",
-                                "effect": "HIT" if e_hit else "MISS",
+                                "shape": "MISS" if s_miss else ("HIT" if s_hit else "MISS"),
+                                "effect": "MISS" if e_miss else ("HIT" if e_hit else "MISS"),
                             }
                         except Exception:
                             flags = None

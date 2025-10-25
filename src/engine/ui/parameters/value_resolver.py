@@ -142,6 +142,8 @@ class ParameterValueResolver:
         value_type: ValueType,
         has_default: bool,
     ) -> Any:
+        # グルーピング: shape は形状名、effect はパイプライン UID（未指定時は従来の scope 名）
+        category = context.name if context.scope == "shape" else (context.pipeline or context.scope)
         if source == "default":
             hint = self._range_hint_from_meta(
                 value_type=value_type,
@@ -153,7 +155,7 @@ class ParameterValueResolver:
                 id=descriptor_id,
                 label=f"{context.label_prefix}: {param_name}",
                 source=context.scope,
-                category=context.scope,
+                category=category,
                 value_type=value_type,
                 default_value=default_actual,
                 range_hint=hint,
@@ -194,11 +196,12 @@ class ParameterValueResolver:
         default_tuple = tuple(default_values[:dim])  # type: ignore[assignment]
 
         vector_hint = self._vector_range_hint_from_meta(meta_entry, dim)
+        category = context.name if context.scope == "shape" else (context.pipeline or context.scope)
         descriptor = ParameterDescriptor(
             id=descriptor_id,
             label=f"{context.label_prefix}: {param_name}",
             source=context.scope,
-            category=context.scope,
+            category=category,
             value_type="vector",
             default_value=default_tuple,
             range_hint=None,
@@ -295,11 +298,14 @@ class ParameterValueResolver:
                 multiline = False
                 height = None
 
+            category = (
+                context.name if context.scope == "shape" else (context.pipeline or context.scope)
+            )
             descriptor = ParameterDescriptor(
                 id=descriptor_id,
                 label=f"{context.label_prefix}: {param_name}",
                 source=context.scope,
-                category=context.scope,
+                category=category,
                 value_type=value_type,
                 default_value=default_value,
                 range_hint=None,
