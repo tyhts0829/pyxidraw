@@ -391,14 +391,49 @@ def text(
     return Geometry.from_lines(all_vertices)
 
 
+# --- GUI 用フォント候補（import 時に 1 回だけ列挙） ---
+def _font_choices() -> list[str]:
+    """Parameter GUI 用のフォント候補（config の search_dirs のみ）。
+
+    - OS フォントは含めない（`configs/default.yaml` の fonts.search_dirs のみ使用）。
+    - ファイル stem 名でユニーク化し、アルファベット昇順にする。
+    - 列挙失敗時は空配列を返す（GUI 非表示のまま）。
+    """
+    try:
+        from util.fonts import glob_font_files, resolve_search_dirs  # type: ignore
+        from util.utils import load_config  # type: ignore
+
+        cfg = load_config() or {}
+        fonts_cfg = cfg.get("fonts", {}) if isinstance(cfg, dict) else {}
+        sdirs = fonts_cfg.get("search_dirs", []) if isinstance(fonts_cfg, dict) else []
+        if isinstance(sdirs, (str, int, Path)):
+            sdirs = [str(sdirs)]
+        dirs = resolve_search_dirs(sdirs)
+        files = glob_font_files(dirs)
+    except Exception:
+        return []
+    seen: set[str] = set()
+    stems: list[str] = []
+    for p in files:
+        try:
+            name = str(p.stem)
+            if name and name not in seen:
+                stems.append(name)
+                seen.add(name)
+        except Exception:
+            continue
+    stems.sort(key=lambda s: s.lower())
+    return stems
+
+
 setattr(
     text,
     "__param_meta__",
     {
         "text": {"type": "string", "multiline": True, "height": 80},
         "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
-        # font は自由入力させない（GUI 非表示にするため choices を空に）
-        "font": {"choices": []},
+        # font は GUI から選択可能にする（候補は設定/OS のフォント列挙に基づく）
+        "font": {"choices": _font_choices()},
         "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
         "text_align": {"choices": ["left", "center", "right"]},
         "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},
