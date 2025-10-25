@@ -11,11 +11,12 @@ from .registry import shape
 
 
 @lru_cache(maxsize=128)
-def _sphere_latlon(subdivisions: int) -> list[np.ndarray]:
+def _sphere_latlon(subdivisions: int, mode: int = 2) -> list[np.ndarray]:
     """緯度経度線のみで球ワイヤーフレームを生成します。
 
     引数:
         subdivisions: 細分化レベル（0–5）
+        mode: 線の種類選択（0: 緯度のみ, 1: 経度のみ, 2: 両方）
 
     返り値:
         球ワイヤーフレームの頂点配列リスト
@@ -25,29 +26,38 @@ def _sphere_latlon(subdivisions: int) -> list[np.ndarray]:
 
     vertices_list = []
 
+    # 正規化（防御的に範囲内へ）
+    _mode = int(mode)
+    if _mode < 0:
+        _mode = 0
+    elif _mode > 2:
+        _mode = 2
+
     # 経度線
-    for j in range(segment_count):
-        lon = 2 * np.pi * j / segment_count
-        line = []
-        for i in range(ring_count + 1):
-            lat = np.pi * i / ring_count
-            x = np.sin(lat) * np.cos(lon) * 0.5
-            y = np.sin(lat) * np.sin(lon) * 0.5
-            z = np.cos(lat) * 0.5
-            line.append([x, y, z])
-        vertices_list.append(np.array(line, dtype=np.float32))
+    if _mode in (1, 2):
+        for j in range(segment_count):
+            lon = 2 * np.pi * j / segment_count
+            line = []
+            for i in range(ring_count + 1):
+                lat = np.pi * i / ring_count
+                x = np.sin(lat) * np.cos(lon) * 0.5
+                y = np.sin(lat) * np.sin(lon) * 0.5
+                z = np.cos(lat) * 0.5
+                line.append([x, y, z])
+            vertices_list.append(np.array(line, dtype=np.float32))
 
     # 緯度線
-    for i in range(1, ring_count):  # 極は除外
-        lat = np.pi * i / ring_count
-        line = []
-        for j in range(segment_count + 1):
-            lon = 2 * np.pi * j / segment_count
-            x = np.sin(lat) * np.cos(lon) * 0.5
-            y = np.sin(lat) * np.sin(lon) * 0.5
-            z = np.cos(lat) * 0.5
-            line.append([x, y, z])
-        vertices_list.append(np.array(line, dtype=np.float32))
+    if _mode in (0, 2):
+        for i in range(1, ring_count):  # 極は除外
+            lat = np.pi * i / ring_count
+            line = []
+            for j in range(segment_count + 1):
+                lon = 2 * np.pi * j / segment_count
+                x = np.sin(lat) * np.cos(lon) * 0.5
+                y = np.sin(lat) * np.sin(lon) * 0.5
+                z = np.cos(lat) * 0.5
+                line.append([x, y, z])
+            vertices_list.append(np.array(line, dtype=np.float32))
 
     return vertices_list
 
@@ -210,11 +220,12 @@ def _sphere_icosphere(subdivisions: int) -> list[np.ndarray]:
 
 
 @lru_cache(maxsize=128)
-def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
+def _sphere_rings(subdivisions: int, mode: int = 2) -> list[np.ndarray]:
     """水平リングで球を生成します。
 
     引数:
         subdivisions: 細分化レベル（0–5）
+        mode: リング種類選択（0: 横リングのみ, 1: 縦リングのみ, 2: 両方）
 
     返り値:
         リングの頂点配列リスト
@@ -224,106 +235,135 @@ def _sphere_rings(subdivisions: int) -> list[np.ndarray]:
 
     vertices_list = []
 
+    # 正規化
+    _mode = int(mode)
+    if _mode < 0:
+        _mode = 0
+    elif _mode > 2:
+        _mode = 2
+
     # 高さごとに水平リングを作成
-    for i in range(ring_count):
-        # 高さは -0.5 から 0.5
-        y = -0.5 + (i / (ring_count - 1))
+    if _mode in (0, 2):
+        for i in range(ring_count):
+            # 高さは -0.5 から 0.5
+            y = -0.5 + (i / (ring_count - 1))
 
-        # この高さでの半径（球の方程式 x² + y² + z² = r²）
-        if abs(y) <= 0.5:
-            radius = np.sqrt(0.25 - y * y)  # 高さ y における円の半径
+            # この高さでの半径（球の方程式 x² + y² + z² = r²）
+            if abs(y) <= 0.5:
+                radius = np.sqrt(0.25 - y * y)  # 高さ y における円の半径
 
-            # 円周上の点を生成
-            ring_points = []
-            for j in range(segment_count + 1):  # +1 to close the circle
-                angle = 2 * np.pi * j / segment_count
-                x = radius * np.cos(angle)
-                z = radius * np.sin(angle)
-                ring_points.append([x, y, z])
+                # 円周上の点を生成
+                ring_points = []
+                for j in range(segment_count + 1):  # +1 to close the circle
+                    angle = 2 * np.pi * j / segment_count
+                    x = radius * np.cos(angle)
+                    z = radius * np.sin(angle)
+                    ring_points.append([x, y, z])
 
-            vertices_list.append(np.array(ring_points, dtype=np.float32))
+                vertices_list.append(np.array(ring_points, dtype=np.float32))
 
     # X 軸に垂直なリング（YZ 平面に沿ったスライス）
-    for i in range(ring_count):
-        # X 位置は -0.5 から 0.5
-        x = -0.5 + (i / (ring_count - 1))
+    if _mode in (1, 2):
+        for i in range(ring_count):
+            # X 位置は -0.5 から 0.5
+            x = -0.5 + (i / (ring_count - 1))
 
-        # この X 位置での半径
-        if abs(x) <= 0.5:
-            radius = np.sqrt(0.25 - x * x)
+            # この X 位置での半径
+            if abs(x) <= 0.5:
+                radius = np.sqrt(0.25 - x * x)
 
-            # YZ 平面の円周上の点を生成
-            ring_points = []
-            for j in range(segment_count + 1):
-                angle = 2 * np.pi * j / segment_count
-                y = radius * np.cos(angle)
-                z = radius * np.sin(angle)
-                ring_points.append([x, y, z])
+                # YZ 平面の円周上の点を生成
+                ring_points = []
+                for j in range(segment_count + 1):
+                    angle = 2 * np.pi * j / segment_count
+                    y = radius * np.cos(angle)
+                    z = radius * np.sin(angle)
+                    ring_points.append([x, y, z])
 
-            vertices_list.append(np.array(ring_points, dtype=np.float32))
+                vertices_list.append(np.array(ring_points, dtype=np.float32))
 
     # Z 軸に垂直なリング（XY 平面に沿ったスライス）
-    for i in range(ring_count):
-        # Z 位置は -0.5 から 0.5
-        z = -0.5 + (i / (ring_count - 1))
+    if _mode in (1, 2):
+        for i in range(ring_count):
+            # Z 位置は -0.5 から 0.5
+            z = -0.5 + (i / (ring_count - 1))
 
-        # この Z 位置での半径
-        if abs(z) <= 0.5:
-            radius = np.sqrt(0.25 - z * z)
+            # この Z 位置での半径
+            if abs(z) <= 0.5:
+                radius = np.sqrt(0.25 - z * z)
 
-            # XY 平面の円周上の点を生成
-            ring_points = []
-            for j in range(segment_count + 1):
-                angle = 2 * np.pi * j / segment_count
-                x = radius * np.cos(angle)
-                y = radius * np.sin(angle)
-                ring_points.append([x, y, z])
+                # XY 平面の円周上の点を生成
+                ring_points = []
+                for j in range(segment_count + 1):
+                    angle = 2 * np.pi * j / segment_count
+                    x = radius * np.cos(angle)
+                    y = radius * np.sin(angle)
+                    ring_points.append([x, y, z])
 
-            vertices_list.append(np.array(ring_points, dtype=np.float32))
+                vertices_list.append(np.array(ring_points, dtype=np.float32))
 
     return vertices_list
 
 
+# UI/インデックス用の型順序（0..N-1）
+_STYLE_ORDER = ["latlon", "zigzag", "icosphere", "rings"]
+
+
 @shape
-def sphere(*, subdivisions: float = 0.5, sphere_type: float = 0.5, **_params: Any) -> Geometry:
+def sphere(
+    *,
+    subdivisions: int = 1,
+    sphere_type: int = 0,
+    mode: int = 2,
+    **_params: Any,
+) -> Geometry:
     """半径1の球を生成します（関数版）。
 
     引数:
         subdivisions: 細分化レベル（0–5）
-        sphere_type: 描画スタイル（0.0–1.0）:
-                    0.0–0.2: 緯経線（デフォルト）
-                    0.2–0.4: ワイヤーフレーム
-                    0.4–0.6: ジグザグ
-                    0.6–0.8: アイコスフィア
-                    0.8–1.0: リング
+        sphere_type: 描画スタイル（int, 0..3）
+            0: 緯経線（latlon）
+            1: ジグザグ（zigzag）
+            2: アイコスフィア（icosphere）
+            3: リング（rings）
 
     返り値:
         球のジオメトリを含む Geometry
     """
-    MIN_SUBDIVISIONS = 0
-    MAX_SUBDIVISIONS = 5
-    subdivisions_int = int(round(subdivisions))
-    if subdivisions_int < MIN_SUBDIVISIONS:
-        subdivisions_int = MIN_SUBDIVISIONS
-    if subdivisions_int > MAX_SUBDIVISIONS:
-        subdivisions_int = MAX_SUBDIVISIONS
+    # MIN_SUBDIVISIONS = 0
+    # MAX_SUBDIVISIONS = 5
+    # subdivisions_int = int(round(subdivisions))
+    # if subdivisions_int < MIN_SUBDIVISIONS:
+    #     subdivisions_int = MIN_SUBDIVISIONS
+    # if subdivisions_int > MAX_SUBDIVISIONS:
+    #     subdivisions_int = MAX_SUBDIVISIONS
 
-    # sphere_type に応じて生成方式を選択
-    if sphere_type < 0.2:
-        vertices_list = _sphere_latlon(subdivisions_int)
-    elif sphere_type < 0.4:
-        vertices_list = _sphere_zigzag(subdivisions_int)
-    elif sphere_type < 0.6:
-        vertices_list = _sphere_icosphere(subdivisions_int)
-    elif sphere_type < 0.8:
-        vertices_list = _sphere_rings(subdivisions_int)
+    # sphere_type に応じて生成方式を選択（整数インデックス制御）
+    idx = int(sphere_type)
+    if idx < 0:
+        idx = 0
+    elif idx >= len(_STYLE_ORDER):
+        idx = len(_STYLE_ORDER) - 1
+
+    builders = (
+        _sphere_latlon,
+        _sphere_zigzag,
+        _sphere_icosphere,
+        _sphere_rings,
+    )
+    if idx == 0:
+        vertices_list = _sphere_latlon(subdivisions, int(mode))
+    elif idx == 3:
+        vertices_list = _sphere_rings(subdivisions, int(mode))
     else:
-        vertices_list = _sphere_latlon(subdivisions_int)
+        vertices_list = builders[idx](subdivisions)
 
     return Geometry.from_lines(vertices_list)
 
 
 sphere.__param_meta__ = {
-    "subdivisions": {"type": "integer", "min": 0, "max": 5, "step": 1},
-    "sphere_type": {"type": "number", "min": 0.0, "max": 1.0},
+    "subdivisions": {"type": "integer", "min": 0, "max": 7, "step": 1},
+    "sphere_type": {"type": "integer", "min": 0, "max": len(_STYLE_ORDER) - 1, "step": 1},
+    # mode は latlon / rings スタイル専用（0: 横/緯度のみ, 1: 縦/経度のみ, 2: 両方）
+    "mode": {"type": "integer", "min": 0, "max": 2, "step": 1},
 }

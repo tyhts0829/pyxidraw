@@ -17,8 +17,11 @@ def draw(t: float) -> Geometry:
         # G.text(em_size_mm=150).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     )
     # pipe = E.pipeline.affine().partition().fill().subdivide().displace()
-    pipe = E.pipeline.affine().fill().subdivide().displace(t_sec=t * 0.01)
-    return pipe(base)
+    pipe = E.pipeline.affine().fill().subdivide().displace(t_sec=t * 1)
+    text = G.text(text="PyxiDraw")
+    pipe2 = E.pipeline.affine().fill()
+
+    return pipe(base) + pipe2(text)
 
 
 if __name__ == "__main__":
