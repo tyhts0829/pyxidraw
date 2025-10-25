@@ -439,6 +439,8 @@ def _render_pipeline_protocol(effect_names: Iterable[str]) -> tuple[str, list[st
     # ビルダの共通ユーティリティ
     lines.append("    def build(self) -> Pipeline: ...\n")
     lines.append("    def cache(self, *, maxsize: int | None) -> _PipelineBuilder: ...\n")
+    # Pipeline 識別ラベル（UI グルーピング用）
+    lines.append("    def label(self, uid: str) -> _PipelineBuilder: ...\n")
     lines.append("    def cache_info(self) -> dict[str, int]: ...\n")
     lines.append("    def clear_cache(self) -> None: ...\n")
     lines.append("    def __call__(self, g: Geometry) -> Geometry: ...\n\n")
