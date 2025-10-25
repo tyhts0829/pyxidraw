@@ -10,18 +10,18 @@ osc = lfo(wave="sine", freq=0.1, octaves=4, persistence=0.5, lacunarity=2.0)
 
 def draw(t: float) -> Geometry:
     """デモ描画関数（MIDI は `api.cc` で制御）。"""
-    base = (
+    sphere = (
         G.sphere()
         .scale()
         .translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
         # G.text(em_size_mm=150).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     )
     # pipe = E.pipeline.affine().partition().fill().subdivide().displace()
-    pipe = E.pipeline.affine().fill().subdivide().displace(t_sec=t * 1)
-    text = G.text(text="PyxiDraw")
-    pipe2 = E.pipeline.affine().fill()
+    e_pipe1 = E.pipeline.affine().fill().subdivide().displace(t_sec=t * 1)
+    text = G.text(text="PyxiDraw", font="Cappadocia")
+    e_pipe2 = E.pipeline.affine().translate().fill()
 
-    return pipe(base) + pipe2(text)
+    return e_pipe1(sphere) + e_pipe2(text)
 
 
 if __name__ == "__main__":

@@ -158,9 +158,11 @@ class SnapshotRuntime:
         self._overrides: dict[str, Any] = dict(overrides or {})
         self._shape_counters: dict[str, int] = defaultdict(int)
         self._t: float = 0.0
+        self._pipeline_counter: int = 0
 
     def begin_frame(self) -> None:
         self._shape_counters.clear()
+        self._pipeline_counter = 0
 
     def set_inputs(self, t: float) -> None:
         self._t = float(t)
@@ -219,12 +221,23 @@ class SnapshotRuntime:
         effect_name: str,
         fn: Any,
         params: Mapping[str, Any],
+        pipeline_uid: str = "",
     ) -> Mapping[str, Any]:
-        prefix = f"effect.{effect_name}#{step_index}"
+        # ParameterRuntime 互換: pipeline_uid があれば ID に含める
+        if pipeline_uid:
+            prefix = f"effect@{pipeline_uid}.{effect_name}#{step_index}"
+        else:
+            prefix = f"effect.{effect_name}#{step_index}"
         updated = dict(params)
         updated = self._inject_t(fn, updated)
         updated = self._apply_overrides(prefix, updated)
         return updated
+
+    # ParameterRuntime 互換: パイプライン順序 UID を提供
+    def next_pipeline_uid(self) -> str:
+        n = int(self._pipeline_counter)
+        self._pipeline_counter = n + 1
+        return f"p{n}"
 
 
 def apply_param_snapshot(overrides: Mapping[str, Any] | None, t: float) -> None:

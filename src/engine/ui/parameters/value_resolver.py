@@ -44,9 +44,15 @@ class ParameterContext:
     scope: SourceType
     name: str
     index: int
+    pipeline: str = ""
 
     @property
     def descriptor_prefix(self) -> str:
+        # effect のみ pipeline が空でなければ一意なパイプライン識別を付与
+        if self.scope == "effect":
+            if self.pipeline:
+                return f"effect@{self.pipeline}.{self.name}#{self.index}"
+            return f"effect.{self.name}#{self.index}"
         return f"{self.scope}.{self.name}#{self.index}"
 
     @property

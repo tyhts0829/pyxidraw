@@ -200,7 +200,13 @@ def global_cache_counters() -> dict[str, int]:
 
 
 class Pipeline:
-    def __init__(self, steps: Sequence[PipelineStep], *, cache_maxsize: int | None = 128):
+    def __init__(
+        self,
+        steps: Sequence[PipelineStep],
+        *,
+        cache_maxsize: int | None = 128,
+        pipeline_uid: str = "",
+    ):
         self._steps = list(steps)
         self._cache_maxsize: int | None = cache_maxsize
         self._compiled: _CompiledPipeline | None = None
@@ -208,6 +214,8 @@ class Pipeline:
             None
         )
         self._lock = RLock()
+        # Parameter GUI の一意識別に用いるラベル（空文字なら従来表記）
+        self._pipeline_uid: str = str(pipeline_uid or "")
 
     def _ensure_compiled(
         self, runtime_signature: tuple[tuple[str, tuple[tuple[str, object], ...]], ...]
@@ -245,6 +253,14 @@ class Pipeline:
     def __call__(self, g: Geometry) -> Geometry:
         # 各ステップの params を Runtime で解決→量子化→署名タプル列へ
         runtime = get_active_runtime()
+        # パイプライン UID: 明示 label を優先、未設定ならランタイムの逐次 UID（フレーム内安定）を使用
+        pipeline_uid = self._pipeline_uid
+        if not pipeline_uid and runtime is not None:
+            try:
+                # ParameterRuntime/SnapshotRuntime の両方で next_pipeline_uid を提供（無ければ空）
+                pipeline_uid = str(getattr(runtime, "next_pipeline_uid")())  # type: ignore[misc]
+            except Exception:
+                pipeline_uid = ""
         runtime_sig_list: list[tuple[str, tuple[tuple[str, object], ...]]] = []
         for idx, st in enumerate(self._steps):
             fn = get_effect(st.name)
@@ -256,6 +272,7 @@ class Pipeline:
                         effect_name=st.name,
                         fn=fn,
                         params=params,
+                        pipeline_uid=pipeline_uid,
                     )
                 )
             else:
@@ -290,6 +307,8 @@ class Pipeline:
         steps = ", ".join(
             f"{s.name}({', '.join(f'{k}={v!r}' for k, v in s.params.items())})" for s in self._steps
         )
+        if self._pipeline_uid:
+            return f"Pipeline(uid={self._pipeline_uid!r}, steps=[{steps}], cache_maxsize={self._cache_maxsize})"
         return f"Pipeline(steps=[{steps}], cache_maxsize={self._cache_maxsize})"
 
     __str__ = __repr__
@@ -311,6 +330,7 @@ class PipelineBuilder:
         # 既定サイズは環境変数から上書き可能
         self._cache_maxsize: int | None = None
         self._pipeline: Pipeline | None = None
+        self._uid: str | None = None
         _env = os.getenv("PXD_PIPELINE_CACHE_MAXSIZE")
         if _env is not None:
             try:
@@ -353,9 +373,18 @@ class PipelineBuilder:
         self._pipeline = None  # invalidate
         return self
 
+    # 任意: パイプラインの UI 識別子を明示設定（未設定時は自動採番）
+    def label(self, uid: str) -> "PipelineBuilder":
+        self._uid = str(uid)
+        self._pipeline = None  # invalidate
+        return self
+
     def _ensure_pipeline(self) -> Pipeline:
         if self._pipeline is None:
-            self._pipeline = Pipeline(self._steps, cache_maxsize=self._cache_maxsize)
+            uid = self._uid if self._uid is not None else ""
+            self._pipeline = Pipeline(
+                self._steps, cache_maxsize=self._cache_maxsize, pipeline_uid=uid
+            )
         return self._pipeline
 
     def build(self) -> Pipeline:
@@ -416,3 +445,13 @@ def _is_json_like(value: Any) -> bool:
 
 
 # 仕様検証 API は提供しない（縮減方針）。
+_PIPELINE_UID_COUNTER = 0
+_PIPELINE_UID_LOCK = RLock()
+
+
+def _next_pipeline_uid() -> str:
+    global _PIPELINE_UID_COUNTER
+    with _PIPELINE_UID_LOCK:
+        uid = f"p{_PIPELINE_UID_COUNTER}"
+        _PIPELINE_UID_COUNTER += 1
+        return uid

@@ -54,6 +54,7 @@ class ParameterRuntime:
         self._introspector = FunctionIntrospector()
         self._resolver = ParameterValueResolver(store)
         self._t: float = 0.0
+        self._pipeline_counter: int = 0
         # cc はランタイムでは扱わない（api.cc 内に閉じる）
 
     def set_lazy(self, lazy: bool) -> None:
@@ -67,6 +68,13 @@ class ParameterRuntime:
     def begin_frame(self) -> None:
         self._shape_registry.reset()
         self._effect_registry.reset()
+        self._pipeline_counter = 0
+
+    # フレーム内のパイプライン順序に基づく UID を供給
+    def next_pipeline_uid(self) -> str:
+        n = int(self._pipeline_counter)
+        self._pipeline_counter = n + 1
+        return f"p{n}"
 
     # --- 形状 ---
     def before_shape_call(
@@ -97,9 +105,12 @@ class ParameterRuntime:
         effect_name: str,
         fn: Any,
         params: Mapping[str, Any],
+        pipeline_uid: str = "",
     ) -> Mapping[str, Any]:
         info = self._introspector.resolve(kind="effect", name=effect_name, fn=fn)
-        context = ParameterContext(scope="effect", name=effect_name, index=step_index)
+        context = ParameterContext(
+            scope="effect", name=effect_name, index=step_index, pipeline=str(pipeline_uid or "")
+        )
         if info.signature is not None and "t" in info.signature.parameters and "t" not in params:
             params = {**params, "t": self._t}
         return self._resolver.resolve(
