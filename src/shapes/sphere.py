@@ -265,8 +265,16 @@ def _sphere_rings(subdivisions: int, mode: int = 2) -> list[np.ndarray]:
     返り値:
         リングの頂点配列リスト
     """
-    ring_count = 5 + 12 * subdivisions  # 各軸の分割数
-    segment_count = 64  # リングの点数
+    R = 0.5
+    ring_count = 5 + 12 * subdivisions  # 各軸の分割数（縦方向のスライス数）
+
+    # 周方向密度: 赤道の分割数を基準に決定（latlon と整合）
+    equator_segments = max(16, 64 * (int(subdivisions) + 1))
+    if int(subdivisions) <= 0:
+        # 最小 subdiv の周方向のカクつきを緩和（過度な増加は避ける）
+        equator_segments = max(equator_segments, 160)
+    target_step_equator = 2 * np.pi * R / float(equator_segments)
+    min_segments = 24 if int(subdivisions) <= 0 else 8
 
     vertices_list = []
 
@@ -277,65 +285,59 @@ def _sphere_rings(subdivisions: int, mode: int = 2) -> list[np.ndarray]:
     elif _mode > 2:
         _mode = 2
 
-    # 高さごとに水平リングを作成
+    # 高さごとに水平リング（Y 一定の XY 面の円）を作成
     if _mode in (0, 2):
         for i in range(ring_count):
-            # 高さは -0.5 から 0.5
-            y = -0.5 + (i / (ring_count - 1))
+            # 高さは -R から R
+            y = -R + (i / (ring_count - 1)) * (2 * R)
+            if abs(y) <= R:
+                radius = float(np.sqrt(max(0.0, R * R - y * y)))
+                if radius <= 1e-9:
+                    continue
+                segments = int(np.ceil((2 * np.pi * radius) / max(1e-9, target_step_equator)))
+                segments = max(min_segments, segments)
+                angles = np.linspace(0.0, 2 * np.pi, segments + 1, dtype=np.float32)
+                x_vals = (radius * np.cos(angles)).astype(np.float32)
+                z_vals = (radius * np.sin(angles)).astype(np.float32)
+                y_arr = np.full_like(x_vals, fill_value=np.float32(y))
+                ring_points = np.stack((x_vals, y_arr, z_vals), axis=1).astype(np.float32)
+                vertices_list.append(ring_points)
 
-            # この高さでの半径（球の方程式 x² + y² + z² = r²）
-            if abs(y) <= 0.5:
-                radius = np.sqrt(0.25 - y * y)  # 高さ y における円の半径
-
-                # 円周上の点を生成
-                ring_points = []
-                for j in range(segment_count + 1):  # +1 to close the circle
-                    angle = 2 * np.pi * j / segment_count
-                    x = radius * np.cos(angle)
-                    z = radius * np.sin(angle)
-                    ring_points.append([x, y, z])
-
-                vertices_list.append(np.array(ring_points, dtype=np.float32))
-
-    # X 軸に垂直なリング（YZ 平面に沿ったスライス）
+    # X 軸に垂直なリング（YZ 平面の円）
     if _mode in (1, 2):
         for i in range(ring_count):
-            # X 位置は -0.5 から 0.5
-            x = -0.5 + (i / (ring_count - 1))
+            # X 位置は -R から R
+            x = -R + (i / (ring_count - 1)) * (2 * R)
+            if abs(x) <= R:
+                radius = float(np.sqrt(max(0.0, R * R - x * x)))
+                if radius <= 1e-9:
+                    continue
+                segments = int(np.ceil((2 * np.pi * radius) / max(1e-9, target_step_equator)))
+                segments = max(min_segments, segments)
+                angles = np.linspace(0.0, 2 * np.pi, segments + 1, dtype=np.float32)
+                y_vals = (radius * np.cos(angles)).astype(np.float32)
+                z_vals = (radius * np.sin(angles)).astype(np.float32)
+                x_arr = np.full_like(y_vals, fill_value=np.float32(x))
+                ring_points = np.stack((x_arr, y_vals, z_vals), axis=1).astype(np.float32)
+                vertices_list.append(ring_points)
 
-            # この X 位置での半径
-            if abs(x) <= 0.5:
-                radius = np.sqrt(0.25 - x * x)
-
-                # YZ 平面の円周上の点を生成
-                ring_points = []
-                for j in range(segment_count + 1):
-                    angle = 2 * np.pi * j / segment_count
-                    y = radius * np.cos(angle)
-                    z = radius * np.sin(angle)
-                    ring_points.append([x, y, z])
-
-                vertices_list.append(np.array(ring_points, dtype=np.float32))
-
-    # Z 軸に垂直なリング（XY 平面に沿ったスライス）
+    # Z 軸に垂直なリング（XY 平面の円）
     if _mode in (1, 2):
         for i in range(ring_count):
-            # Z 位置は -0.5 から 0.5
-            z = -0.5 + (i / (ring_count - 1))
-
-            # この Z 位置での半径
-            if abs(z) <= 0.5:
-                radius = np.sqrt(0.25 - z * z)
-
-                # XY 平面の円周上の点を生成
-                ring_points = []
-                for j in range(segment_count + 1):
-                    angle = 2 * np.pi * j / segment_count
-                    x = radius * np.cos(angle)
-                    y = radius * np.sin(angle)
-                    ring_points.append([x, y, z])
-
-                vertices_list.append(np.array(ring_points, dtype=np.float32))
+            # Z 位置は -R から R
+            z = -R + (i / (ring_count - 1)) * (2 * R)
+            if abs(z) <= R:
+                radius = float(np.sqrt(max(0.0, R * R - z * z)))
+                if radius <= 1e-9:
+                    continue
+                segments = int(np.ceil((2 * np.pi * radius) / max(1e-9, target_step_equator)))
+                segments = max(min_segments, segments)
+                angles = np.linspace(0.0, 2 * np.pi, segments + 1, dtype=np.float32)
+                x_vals = (radius * np.cos(angles)).astype(np.float32)
+                y_vals = (radius * np.sin(angles)).astype(np.float32)
+                z_arr = np.full_like(x_vals, fill_value=np.float32(z))
+                ring_points = np.stack((x_vals, y_vals, z_arr), axis=1).astype(np.float32)
+                vertices_list.append(ring_points)
 
     return vertices_list
 
