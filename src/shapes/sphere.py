@@ -12,52 +12,87 @@ from .registry import shape
 
 @lru_cache(maxsize=128)
 def _sphere_latlon(subdivisions: int, mode: int = 2) -> list[np.ndarray]:
-    """緯度経度線のみで球ワイヤーフレームを生成します。
+    """緯度経度線のみで球ワイヤーフレームを生成。
 
     引数:
         subdivisions: 細分化レベル（0–5）
-        mode: 線の種類選択（0: 緯度のみ, 1: 経度のみ, 2: 両方）
+        mode: 線の種類（0: 緯度, 1: 経度, 2: 両方）
 
     返り値:
-        球ワイヤーフレームの頂点配列リスト
+        線分列の頂点配列リスト（float32, 半径0.5）
     """
-    segment_count = 16 + 32 * subdivisions  # Number of segments per ring
-    ring_count = segment_count // 2  # Number of rings (latitude lines)
+    R = 0.5
+    pi = np.pi
+    two_pi = 2.0 * np.pi
 
-    vertices_list = []
+    subdivisions_i = int(subdivisions)
 
-    # 正規化（防御的に範囲内へ）
-    _mode = int(mode)
-    if _mode < 0:
-        _mode = 0
-    elif _mode > 2:
-        _mode = 2
+    def _clamp_mode(m: int) -> int:
+        m = int(m)
+        if m < 0:
+            return 0
+        if m > 2:
+            return 2
+        return m
 
-    # 経度線
+    def _compute_layout(s: int) -> tuple[int, int, int, int]:
+        """レイアウト（分割数）を決定。
+
+        戻り値: (equator_segments, meridian_samples, latitude_rings, min_segments_at_lat)
+        """
+        eq_segments = max(16, 64 * (s + 1))
+        if s <= 0:
+            eq_segments = max(eq_segments, 160)
+        meridian_samples = max(12, eq_segments // 2)
+        if s <= 0:
+            lat_rings = max(4, meridian_samples // 4)
+            min_segments_lat = 24
+        else:
+            lat_rings = meridian_samples
+            min_segments_lat = 8
+        return eq_segments, meridian_samples, lat_rings, min_segments_lat
+
+    _mode = _clamp_mode(mode)
+    eq_segments, meridian_samples, lat_rings, min_segments_lat = _compute_layout(subdivisions_i)
+    target_step_equator = two_pi * R / float(eq_segments)
+
+    vertices_list: list[np.ndarray] = []
+
+    # 経度線（極→極）
     if _mode in (1, 2):
-        for j in range(segment_count):
-            lon = 2 * np.pi * j / segment_count
-            line = []
-            for i in range(ring_count + 1):
-                lat = np.pi * i / ring_count
-                x = np.sin(lat) * np.cos(lon) * 0.5
-                y = np.sin(lat) * np.sin(lon) * 0.5
-                z = np.cos(lat) * 0.5
-                line.append([x, y, z])
-            vertices_list.append(np.array(line, dtype=np.float32))
+        lat_vals = np.linspace(0.0, pi, meridian_samples + 1, dtype=np.float32)
+        sin_lat = np.sin(lat_vals)
+        cos_lat = np.cos(lat_vals)
 
-    # 緯度線
+        # 経度線の“本数”は mode=1/2 いずれも緯度リング数と同程度に揃える
+        meridian_lines = max(8, lat_rings)
+        stride = max(1, eq_segments // max(1, meridian_lines))
+        for j in range(0, eq_segments, stride):
+            lon = two_pi * j / eq_segments
+            cos_lon = np.float32(np.cos(lon))
+            sin_lon = np.float32(np.sin(lon))
+            x = (sin_lat * cos_lon * R).astype(np.float32)
+            y = (sin_lat * sin_lon * R).astype(np.float32)
+            z = (cos_lat * R).astype(np.float32)
+            line = np.stack((x, y, z), axis=1).astype(np.float32)
+            vertices_list.append(line)
+
+    # 緯度リング（周方向）
     if _mode in (0, 2):
-        for i in range(1, ring_count):  # 極は除外
-            lat = np.pi * i / ring_count
-            line = []
-            for j in range(segment_count + 1):
-                lon = 2 * np.pi * j / segment_count
-                x = np.sin(lat) * np.cos(lon) * 0.5
-                y = np.sin(lat) * np.sin(lon) * 0.5
-                z = np.cos(lat) * 0.5
-                line.append([x, y, z])
-            vertices_list.append(np.array(line, dtype=np.float32))
+        for i in range(1, lat_rings):  # 極は除外
+            lat = pi * i / lat_rings
+            r = abs(np.sin(lat)) * R
+            if r <= 1e-9:
+                continue
+            segments_at_lat = int(np.ceil((two_pi * r) / max(1e-9, target_step_equator)))
+            segments_at_lat = max(min_segments_lat, segments_at_lat)
+
+            angles = np.linspace(0.0, two_pi, segments_at_lat + 1, dtype=np.float32)
+            x = (np.cos(angles) * r).astype(np.float32)
+            y = (np.sin(angles) * r).astype(np.float32)
+            z = np.full_like(x, fill_value=np.cos(lat) * R, dtype=np.float32)
+            ring = np.stack((x, y, z), axis=1).astype(np.float32)
+            vertices_list.append(ring)
 
     return vertices_list
 
