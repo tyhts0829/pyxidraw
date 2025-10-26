@@ -99,46 +99,51 @@ def _sphere_latlon(subdivisions: int, mode: int = 2) -> list[np.ndarray]:
 
 @lru_cache(maxsize=128)
 def _sphere_zigzag(subdivisions: int) -> list[np.ndarray]:
-    """ジグザグパターンで球を生成します。
+    """ジグザグ（螺旋）スタイルで球を生成。
 
-    引数:
-        subdivisions: 細分化レベル（0–5）
-
-    返り値:
-        螺旋状の頂点配列リスト
+    - 交差密度を上げるため、位相をずらした複数ストランドの螺旋を生成。
+    - subdivisions が大きい場合でも過度に重くならないよう、
+      1周あたりの点数を控えめにしつつストランド数で密度を確保。
     """
-    # 螺旋の総回転数
-    total_rotations = 8 + 4 * subdivisions
-    # 1周あたりの点数
-    # points_per_rotation = 16 + 8 * subdivisions
-    points_per_rotation = 100
-    # 総点数
-    points = int(total_rotations * points_per_rotation)
+    s = int(subdivisions)
+    total_rotations = 8 + 4 * s
 
-    vertices = []
+    # ストランド数（位相オフセットで複数の螺旋）
+    if s <= 0:
+        strand_count = 2
+    elif s == 1:
+        strand_count = 3
+    elif s == 2:
+        strand_count = 4
+    else:
+        strand_count = 4
 
-    for i in range(points):
-        # パラメトリックな球（制御された螺旋）
-        y = 1 - (i / float(points - 1)) * 2  # y は 1→-1
-        radius = np.sqrt(1 - y * y)
+    # 1周あたりの点数（控えめに上限を設ける）
+    base_ppr = 64 + 16 * min(s, 2)  # 64, 80, 96, ...（>=2 は 96）
+    effective_ppr = base_ppr if strand_count <= 2 else max(48, base_ppr - 24)
 
-        # 制御された螺旋角度（1周あたりの点数で制御）
-        theta = (2 * np.pi * total_rotations * i) / points
+    vertices_list: list[np.ndarray] = []
 
+    for k in range(strand_count):
+        phase = 2.0 * np.pi * (k / float(strand_count))
+        points = int(total_rotations * effective_ppr)
+        # t: 0→1 の等間隔。これに応じて y を 1→-1 へ線形に落とす。
+        t = np.linspace(0.0, 1.0, points, dtype=np.float32)
+        y = 1.0 - 2.0 * t
+        radius = np.sqrt(np.maximum(0.0, 1.0 - y * y))
+        theta = 2.0 * np.pi * total_rotations * t + phase
         x = np.cos(theta) * radius * 0.5
         z = np.sin(theta) * radius * 0.5
         y = y * 0.5
 
-        vertices.append([x, y, z])
+        vertices = np.stack(
+            (x.astype(np.float32), y.astype(np.float32), z.astype(np.float32)), axis=1
+        )
 
-    # なめらかに描画するため短い線分列へ変換
-    vertices_list = []
-    vertices_array = np.array(vertices, dtype=np.float32)
-
-    # 隣接点同士の短い線分を作成
-    for i in range(len(vertices_array) - 1):
-        line_segment = np.array([vertices_array[i], vertices_array[i + 1]], dtype=np.float32)
-        vertices_list.append(line_segment)
+        # 短い線分列へ変換（隣接ペア）
+        for i in range(len(vertices) - 1):
+            seg = np.array([vertices[i], vertices[i + 1]], dtype=np.float32)
+            vertices_list.append(seg)
 
     return vertices_list
 
