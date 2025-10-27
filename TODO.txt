@@ -10,4 +10,3 @@ font indexエラー
 線の色をgeometryごとに選べるようにする
 スプライン曲線
 窓で切り抜きエフェクト fillの閉曲線検知と同じ方式で effectの引数にgeometryを取る
-affineに平行移動を含める
