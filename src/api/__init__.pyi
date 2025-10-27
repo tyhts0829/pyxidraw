@@ -265,13 +265,13 @@ class _PipelineBuilder(Protocol):
             subdivisions: integer, range [0, 10]
         """
         ...
-    # meta: delta (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
+    # meta: delta (type=vec3, range=[(-500.0, -500.0, -500.0), (500.0, 500.0, 500.0)])
     def translate(self, *, delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         指定ベクトルで平行移動。
 
         引数:
-            delta: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
+            delta: vec3, range [(-500.0, -500.0, -500.0), (500.0, 500.0, 500.0)]
         """
         ...
     # meta: start_param (type=number, range=[0.0, 1.0])

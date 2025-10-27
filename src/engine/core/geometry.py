@@ -276,7 +276,7 @@ class Geometry:
             self._digest = self._compute_digest()
         return self._digest
 
-    def translate(self, dx: float, dy: float, dz: float = 0.0) -> "Geometry":
+    def translate(self, dx: float = 0.0, dy: float = 0.0, dz: float = 0.0) -> "Geometry":
         """平行移動（純関数）。
 
         Parameters
