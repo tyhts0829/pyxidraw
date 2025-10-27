@@ -12,12 +12,17 @@ def draw(t: float) -> Geometry:
     """デモ描画関数（MIDI は `api.cc` で制御）。"""
     sphere = (
         G.sphere()
-        .scale()
-        .translate()
         # G.text(em_size_mm=150).translate(CANVAS_SIZE // 2, CANVAS_SIZE // 2, 0)
     )
     # pipe = E.pipeline.affine().partition().fill().subdivide().displace()
-    e_pipe1 = E.pipeline.affine().fill().subdivide().displace(t_sec=t * 1).mirror()
+    e_pipe1 = (
+        E.pipeline.affine()
+        .scale(scale=(200, 200, 200))
+        .fill()
+        .subdivide()
+        .displace(t_sec=t * 1)
+        .mirror()
+    )
     text = G.text(text="PyxiDraw", font="Cappadocia")
     e_pipe2 = E.pipeline.affine().translate().fill()
 

@@ -1,16 +1,17 @@
 """
-affine エフェクト（合成アフィン：スケール→回転）
+affine エフェクト（合成アフィン：スケール→回転→平行移動）
 
-- ピボットを中心にスケール後、XYZ（Rz·Ry·Rx の合成）回転を一括適用します。
+- ピボットを中心にスケール後、XYZ（Rz·Ry·Rx の合成）回転を一括適用し、最後にワールド座標で平行移動を加算する。
 
 パラメータ（新API）:
 - auto_center: True ならジオメトリの平均座標を中心に使用。False なら `pivot` を使用。
 - pivot: `auto_center=False` のときの中心座標。
 - angles_rad: (rx, ry, rz) [rad]。
 - scale: (sx, sy, sz) 倍率。
+- delta: (dx, dy, dz) [mm] 平行移動量。
 
 注意:
-- 平行移動は別エフェクト（translate）で行います。
+- 既定の `delta=(0,0,0)` では従来どおり「スケール→回転」のみを適用。
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ def _apply_combined_transform(
     center: np.ndarray,
     scale: np.ndarray,
     rotate: np.ndarray,
+    translate: np.ndarray,
 ) -> np.ndarray:
     """頂点に組み合わせ変換を適用します。"""
     # 回転行列を一度だけ計算
@@ -48,11 +50,12 @@ def _apply_combined_transform(
     R[2, 1] = sx * cy
     R[2, 2] = cx * cy
 
-    # 全頂点に変換を一度に適用（中心へ移動 -> スケール -> 回転 -> 中心へ戻す）
+    # 全頂点に変換を一度に適用
+    # 手順: 中心へ移動 -> スケール -> 回転 -> 中心へ戻す -> 平行移動
     centered = vertices - center
     scaled = centered * scale
     rotated = scaled @ R.T
-    transformed = rotated + center
+    transformed = rotated + center + translate
 
     return transformed
 
@@ -65,8 +68,9 @@ def affine(
     pivot: Vec3 = (0.0, 0.0, 0.0),
     angles_rad: Vec3 = (np.pi / 4, np.pi / 4, np.pi / 4),
     scale: Vec3 = (0.5, 0.5, 0.5),
+    delta: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
-    """スケール後に回転を適用（合成アフィン）。
+    """スケール→回転→平行移動を適用（合成アフィン）。
 
     Parameters
     ----------
@@ -80,6 +84,8 @@ def affine(
         回転角 [rad]（X, Y, Z）。
     scale : tuple[float, float, float], default (0.5, 0.5, 0.5)
         スケール倍率（X, Y, Z）。
+    delta : tuple[float, float, float], default (0.0, 0.0, 0.0)
+        最後に適用する平行移動量 [mm]（ワールド座標）。
     """
     coords, offsets = g.as_arrays(copy=False)
 
@@ -92,6 +98,7 @@ def affine(
         and abs(angles_rad[0]) < 1e-10
         and abs(angles_rad[1]) < 1e-10
         and abs(angles_rad[2]) < 1e-10
+        and delta == (0, 0, 0)
     ):
         return Geometry(coords.copy(), offsets.copy())
 
@@ -102,8 +109,11 @@ def affine(
         center_np = np.array(pivot, dtype=np.float32)
     scale_np = np.array(scale, dtype=np.float32)
     rotate_radians = np.array(angles_rad, dtype=np.float32)
+    translate_np = np.array(delta, dtype=np.float32)
 
-    transformed_coords = _apply_combined_transform(coords, center_np, scale_np, rotate_radians)
+    transformed_coords = _apply_combined_transform(
+        coords, center_np, scale_np, rotate_radians, translate_np
+    )
     return Geometry(transformed_coords, offsets.copy())
 
 
@@ -121,4 +131,9 @@ affine.__param_meta__ = {
         "max": (2 * np.pi, 2 * np.pi, 2 * np.pi),
     },
     "scale": {"type": "vec3", "min": (0.25, 0.25, 0.25), "max": (4.0, 4.0, 4.0)},
+    "delta": {
+        "type": "vec3",
+        "min": (-500.0, -500.0, -500.0),
+        "max": (500.0, 500.0, 500.0),
+    },
 }
