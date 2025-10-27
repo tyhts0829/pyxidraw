@@ -41,7 +41,7 @@ MAX_TOTAL_VERTICES = 10_000_000
 
 
 @effect()
-def subdivide(g: Geometry, *, subdivisions: int = 5) -> Geometry:
+def subdivide(g: Geometry, *, subdivisions: int = 0) -> Geometry:
     """中間点を追加して線を細分化。
 
     Parameters

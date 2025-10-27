@@ -590,7 +590,7 @@ mirror3d.__param_meta__ = {
     "n_azimuth": {"min": 1, "max": 64, "step": 1},
     "cx": {"min": 0.0, "max": 1000.0},
     "cy": {"min": 0.0, "max": 1000.0},
-    "cz": {"min": -1000.0, "max": 1000.0},
+    "cz": {"min": 0.0, "max": 1000.0},
     "phi0_deg": {"min": -180.0, "max": 180.0, "step": 1.0},
     # 追加（polyhedral モード向け）
     "mode": {"choices": ["azimuth", "polyhedral"]},

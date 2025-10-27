@@ -165,7 +165,7 @@ class _PipelineBuilder(Protocol):
     # meta: n_azimuth (range=[1, 64])
     # meta: cx (range=[0.0, 1000.0])
     # meta: cy (range=[0.0, 1000.0])
-    # meta: cz (range=[-1000.0, 1000.0])
+    # meta: cz (range=[0.0, 1000.0])
     # meta: axis (type=vec3, range=[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)])
     # meta: phi0_deg (range=[-180.0, 180.0])
     # choices: mode in ['azimuth', 'polyhedral']
@@ -180,7 +180,7 @@ class _PipelineBuilder(Protocol):
             n_azimuth: range [1, 64]
             cx: range [0.0, 1000.0]
             cy: range [0.0, 1000.0]
-            cz: range [-1000.0, 1000.0]
+            cz: range [0.0, 1000.0]
             axis: vec3, range [(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)]
             phi0_deg: range [-180.0, 180.0]
             mode: choices { 'azimuth', 'polyhedral' }
