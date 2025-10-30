@@ -68,7 +68,7 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 注意/制限:
 - 3D ではなく 2D 線の正射影描画を前提としている。Z は重なり順の補助程度。
 - ヘッドレス/仮想環境では `pyglet`/`ModernGL` の初期化に失敗する場合がある。
-  
+
 
 ロギング:
 - 初期化エラーやフォールバックは `logging` で通知。必要に応じてハンドラを設定すること。
@@ -87,14 +87,9 @@ from engine.export.gcode import GCodeWriter
 from engine.ui.hud.config import HUDConfig
 from engine.ui.parameters.manager import ParameterManager
 
-from .sketch_runner.utils import (
-    build_projection,
-)
+from .sketch_runner.utils import build_projection
 from .sketch_runner.utils import hud_metrics_snapshot as _hud_metrics_snapshot
-from .sketch_runner.utils import (
-    resolve_canvas_size,
-    resolve_fps,
-)
+from .sketch_runner.utils import resolve_canvas_size, resolve_fps
 
 # 型エイリアス（RGBA 0..1）
 RGBA = tuple[float, float, float, float]
@@ -201,10 +196,7 @@ def run_sketch(
     # Parameter スナップショット適用（spawn 互換のトップレベル関数）
     from engine.ui.parameters.snapshot import apply_param_snapshot
 
-    from .sketch_runner.export import (
-        make_gcode_export_handlers,
-        save_png_screen_or_offscreen,
-    )
+    from .sketch_runner.export import make_gcode_export_handlers, save_png_screen_or_offscreen
     from .sketch_runner.params import apply_initial_colors as _apply_initial_colors
     from .sketch_runner.params import make_param_snapshot_fn as _make_param_snapshot_fn
     from .sketch_runner.params import subscribe_color_changes as _subscribe_color_changes
@@ -248,8 +240,8 @@ def run_sketch(
                 shape_status = str(flags.get("shape", "MISS"))
                 effect_status = str(flags.get("effect", "MISS"))
                 # 効果 → シェイプの順で更新
-                sampler.data["CACHE/EFFECT"] = effect_status
-                sampler.data["CACHE/SHAPE"] = shape_status
+                sampler.data["E_CACHE"] = effect_status
+                sampler.data["S_CACHE"] = shape_status
             except Exception as e:
                 logger.debug("apply initial bg color failed: %s", e, exc_info=True)
 

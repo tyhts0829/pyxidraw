@@ -10,3 +10,4 @@ font indexエラー
 線の色をgeometryごとに選べるようにする
 スプライン曲線
 窓で切り抜きエフェクト fillの閉曲線検知と同じ方式で effectの引数にgeometryを取る
+mirror3d phi0_degをradiansに。引数についてもう一度検証

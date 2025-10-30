@@ -29,7 +29,7 @@ class HUDConfig:
     show_cpu_mem : bool
         CPU/MEM 表示の有無（未使用時は psutil 呼び出しを抑止）。
     show_cache_status : bool
-        CACHE/SHAPE と CACHE/EFFECT の表示と計測を有効化。
+        S_CACHE と E_CACHE の表示と計測を有効化。
     order : list[str] | None
         表示順（None なら既定順）。
     sample_interval : float

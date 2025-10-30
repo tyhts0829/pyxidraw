@@ -347,7 +347,7 @@ class OverlayHUD(Tickable):
     # -------- helpers --------
     def _normalized_ratio(self, key: str) -> float | None:
         # CACHE: MISS で塗りつぶし（1.0）、HIT で 0.0
-        if key in ("CACHE/SHAPE", "CACHE/EFFECT"):
+        if key in ("S_CACHE", "E_CACHE"):
             status = str(self.sampler.data.get(key, "")).upper()
             if "MISS" in status:
                 return 1.0

@@ -100,6 +100,9 @@ def hud_metrics_snapshot() -> dict[str, dict[str, int]]:
             "enabled": int(e_info.get("enabled", 0)),
             "hits": int(e_info.get("hits", 0)),
             "misses": int(e_info.get("misses", 0)),
+            # 追加: 中間キャッシュの統計（後方互換のため存在しなければ 0）
+            "step_hits": int(e_info.get("step_hits", 0)),
+            "step_misses": int(e_info.get("step_misses", 0)),
         },
     }
 

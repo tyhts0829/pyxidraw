@@ -21,10 +21,10 @@ def draw(t: float) -> Geometry:
         .fill()
         .subdivide()
         .displace(t_sec=t * 1)
-        .mirror3d()
+        # .mirror3d()
         .rotate()
     )
-    text = G.text(text="PyxiDraw", font="Cappadocia")
+    text = G.text(text="PyxiDraw", font="Cappadocia").scale(sx=5)
     e_pipe2 = E.pipeline.affine().translate().fill()
 
     return e_pipe1(sphere) + e_pipe2(text)

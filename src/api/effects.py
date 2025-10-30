@@ -104,6 +104,7 @@ class _CompiledPipeline:
         steps: Sequence[tuple[str, Callable[..., Geometry], tuple[tuple[str, object], ...]]],
         *,
         cache_maxsize: int | None,
+        step_cache_maxsize: int | None,
     ) -> None:
         self._steps = list(steps)
         self._cache_maxsize = cache_maxsize
@@ -113,12 +114,23 @@ class _CompiledPipeline:
         self._misses = 0
         self._evicts = 0
 
+        # 中間結果（prefix 単位）キャッシュ（CompiledPipeline ローカル）
+        self._step_cache_maxsize: int | None = step_cache_maxsize
+        self._step_cache: "OrderedDict[tuple[bytes, bytes], Geometry]" = OrderedDict()
+        self._step_hits = 0
+        self._step_misses = 0
+        self._step_evicts = 0
+
         # pipeline_key（16B）を計算
         h = hashlib.blake2b(digest_size=16)
+        # prefix_keys は各ステップ終了時点の累積ダイジェスト
+        self._prefix_keys: list[bytes] = []
         for name, fn, params_tuple in self._steps:
             h.update(name.encode())
             h.update(_fn_version(fn))
             h.update(_params_digest_from_tuple(params_tuple))
+            # 中間段階の累積ダイジェスト（コピーして確定）
+            self._prefix_keys.append(h.copy().digest())
         self._pipeline_key = h.digest()
 
     def __call__(self, g: Geometry) -> Geometry:
@@ -130,14 +142,44 @@ class _CompiledPipeline:
                 self._hits += 1
                 return out
 
+        # 終端ミス: 中間（prefix）キャッシュから最長一致を探す
+        g_hash = _geometry_hash(g)
+        start_index = 0
         out = g
-        for name, fn, params_tuple in self._steps:
+        used_step_cache = False
+        if self._step_cache_maxsize != 0 and self._prefix_keys:
+            with self._lock:
+                for i in range(len(self._prefix_keys) - 1, -1, -1):
+                    pkey = (g_hash, self._prefix_keys[i])
+                    if pkey in self._step_cache:
+                        out = self._step_cache.pop(pkey)
+                        self._step_cache[pkey] = out
+                        start_index = i + 1
+                        used_step_cache = True
+                        break
+        # 実行（最長一致の直後から）
+        for j in range(start_index, len(self._steps)):
+            _name, fn, params_tuple = self._steps[j]
             params = dict(params_tuple)
             out = fn(out, **params)
+            # 各段の中間結果を保存
+            if self._step_cache_maxsize != 0:
+                with self._lock:
+                    skey = (g_hash, self._prefix_keys[j])
+                    self._step_cache[skey] = out
+                    if self._step_cache_maxsize is not None and self._step_cache_maxsize > 0:
+                        while len(self._step_cache) > self._step_cache_maxsize:
+                            self._step_cache.popitem(last=False)
+                            self._step_evicts += 1
 
         if self._cache_maxsize == 0:
             return out
         with self._lock:
+            # 中間キャッシュヒット/ミスの統計（終端保存と一緒に更新）
+            if used_step_cache:
+                self._step_hits += 1
+            else:
+                self._step_misses += 1
             self._cache[key] = out
             if self._cache_maxsize is not None and self._cache_maxsize > 0:
                 while len(self._cache) > self._cache_maxsize:
@@ -161,6 +203,10 @@ class _CompiledPipeline:
                 "hits": self._hits,
                 "misses": self._misses,
                 "evicts": self._evicts,
+                # 参考: 中間キャッシュ統計（非公開拡張）
+                "step_hits": self._step_hits,
+                "step_misses": self._step_misses,
+                "step_evicts": self._step_evicts,
             }
 
 
@@ -186,6 +232,8 @@ def global_cache_counters() -> dict[str, int]:
         enabled = 0
         hits = 0
         misses = 0
+        step_hits = 0
+        step_misses = 0
         for cp in compiled_list:
             try:
                 # 有効判定
@@ -193,10 +241,19 @@ def global_cache_counters() -> dict[str, int]:
                     enabled += 1
                 hits += int(getattr(cp, "_hits", 0))
                 misses += int(getattr(cp, "_misses", 0))
+                step_hits += int(getattr(cp, "_step_hits", 0))
+                step_misses += int(getattr(cp, "_step_misses", 0))
             except Exception:
                 # 不正アクセスは無視（集計に影響しない）
                 pass
-        return {"compiled": compiled, "enabled": enabled, "hits": hits, "misses": misses}
+        return {
+            "compiled": compiled,
+            "enabled": enabled,
+            "hits": hits,
+            "misses": misses,
+            "step_hits": step_hits,
+            "step_misses": step_misses,
+        }
 
 
 class Pipeline:
@@ -206,6 +263,7 @@ class Pipeline:
         *,
         cache_maxsize: int | None = 128,
         pipeline_uid: str = "",
+        step_cache_maxsize: int | None = None,
     ):
         self._steps = list(steps)
         self._cache_maxsize: int | None = cache_maxsize
@@ -216,6 +274,8 @@ class Pipeline:
         self._lock = RLock()
         # Parameter GUI の一意識別に用いるラベル（空文字なら従来表記）
         self._pipeline_uid: str = str(pipeline_uid or "")
+        # 中間キャッシュ上限（None: 無制限, 0: 無効）
+        self._step_cache_maxsize: int | None = step_cache_maxsize
 
     def _ensure_compiled(
         self, runtime_signature: tuple[tuple[str, tuple[tuple[str, object], ...]], ...]
@@ -230,6 +290,8 @@ class Pipeline:
                     compiled._cache_maxsize = self._cache_maxsize  # type: ignore[attr-defined]
                     if self._cache_maxsize == 0:
                         compiled.clear_cache()
+                    # 中間キャッシュの上限も反映
+                    compiled._step_cache_maxsize = self._step_cache_maxsize  # type: ignore[attr-defined]
                 except Exception:
                     pass
             else:
@@ -239,7 +301,11 @@ class Pipeline:
                 for name, params_tuple in runtime_signature:
                     fn = get_effect(name)
                     compiled_steps.append((name, fn, params_tuple))
-                compiled = _CompiledPipeline(compiled_steps, cache_maxsize=self._cache_maxsize)
+                compiled = _CompiledPipeline(
+                    compiled_steps,
+                    cache_maxsize=self._cache_maxsize,
+                    step_cache_maxsize=self._step_cache_maxsize,
+                )
                 _GLOBAL_COMPILED_CACHE[runtime_signature] = compiled
                 if _GLOBAL_MAXSIZE is not None and _GLOBAL_MAXSIZE > 0:
                     while len(_GLOBAL_COMPILED_CACHE) > _GLOBAL_MAXSIZE:
@@ -331,6 +397,8 @@ class PipelineBuilder:
         self._cache_maxsize: int | None = None
         self._pipeline: Pipeline | None = None
         self._uid: str | None = None
+        # 中間キャッシュの上限（既定: 有効・無制限）
+        self._step_cache_maxsize: int | None = None
         _env = os.getenv("PXD_PIPELINE_CACHE_MAXSIZE")
         if _env is not None:
             try:
@@ -373,6 +441,23 @@ class PipelineBuilder:
         self._pipeline = None  # invalidate
         return self
 
+    # オプション: 中間（prefix）キャッシュの上限を設定（None で無制限）
+    def intermediate_cache(self, *, maxsize: int | None) -> "PipelineBuilder":
+        """パイプライン中間結果のキャッシュ上限を設定する。
+
+        Parameters
+        ----------
+        maxsize : int or None
+            中間キャッシュに保持する最大エントリ数。``None`` で無制限、``0`` で
+            キャッシュ無効、正の整数で上限を設定する。
+        """
+        if maxsize is not None and maxsize < 0:
+            self._step_cache_maxsize = 0
+        else:
+            self._step_cache_maxsize = maxsize
+        self._pipeline = None  # invalidate
+        return self
+
     # 任意: パイプラインの UI 識別子を明示設定（未設定時は自動採番）
     def label(self, uid: str) -> "PipelineBuilder":
         self._uid = str(uid)
@@ -383,7 +468,10 @@ class PipelineBuilder:
         if self._pipeline is None:
             uid = self._uid if self._uid is not None else ""
             self._pipeline = Pipeline(
-                self._steps, cache_maxsize=self._cache_maxsize, pipeline_uid=uid
+                self._steps,
+                cache_maxsize=self._cache_maxsize,
+                pipeline_uid=uid,
+                step_cache_maxsize=self._step_cache_maxsize,
             )
         return self._pipeline
 
