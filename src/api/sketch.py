@@ -80,6 +80,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Callable, Mapping, Optional
+from dataclasses import replace
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
@@ -115,6 +116,7 @@ def run_sketch(
     use_midi: bool = True,
     init_only: bool = False,
     use_parameter_gui: bool = False,
+    show_hud: bool | None = None,
     hud_config: HUDConfig | None = None,
 ) -> None:
     """スケッチを実行し、`user_draw` の結果を GPU で描画する。
@@ -142,6 +144,9 @@ def run_sketch(
         True で実機 MIDI を試行。未接続/未導入時は自動フォールバック。
     use_parameter_gui : bool, default False
         True で描画パラメータ GUI を有効化。
+    show_hud : bool | None, default None
+        HUD の有効/無効。None で上書きしない（従来の既定/`hud_config` を尊重）。
+        優先順位は「show_hud 明示 > hud_config.enabled > 既定(True)」。
     hud_config : HUDConfig | None
         HUD 表示設定。None で既定（FPS/VERTEX/CPU/MEM 表示、CACHE OFF）。
 
@@ -202,7 +207,14 @@ def run_sketch(
     from .sketch_runner.params import subscribe_color_changes as _subscribe_color_changes
 
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
-    hud_conf: HUDConfig = hud_config or HUDConfig()
+    # ---- HUD 設定の解決（優先: show_hud 明示 > hud_config.enabled > 既定 True）----
+    if hud_config is None:
+        if show_hud is None:
+            hud_conf: HUDConfig = HUDConfig()
+        else:
+            hud_conf = HUDConfig(enabled=bool(show_hud))
+    else:
+        hud_conf = hud_config if show_hud is None else replace(hud_config, enabled=bool(show_hud))
     swap_buffer = SwapBuffer()
     # API 層で CC スナップショット適用関数を注入（engine は api を知らない）
     try:

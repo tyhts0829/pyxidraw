@@ -47,7 +47,7 @@ class CCAPI:
     def __repr__(self) -> str:  # noqa: D401 - 簡潔
         try:
             items = ", ".join(
-                f"{k}: {v:.3f}" for k, v in sorted(self._snapshot.items(), key=lambda x: int(x[0]))
+                f"{k}: {v:.6f}" for k, v in sorted(self._snapshot.items(), key=lambda x: int(x[0]))
             )
             return f"cc{{{items}}}"
         except Exception:
