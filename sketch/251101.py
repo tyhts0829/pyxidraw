@@ -37,4 +37,5 @@ if __name__ == "__main__":
         use_parameter_gui=True,
         workers=6,
         line_thickness=0.001,
+        show_hud=False,
     )
