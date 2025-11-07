@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import weakref
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from common.param_utils import params_signature as _params_signature
@@ -42,7 +42,9 @@ class Pipeline:
     steps: tuple[tuple[str, tuple[tuple[str, object], ...]], ...]
     _realize_on_call: bool = False
     _cache_maxsize: int | None = 0
-    _cache: "OrderedDict[tuple[object, ...], Geometry | LazyGeometry]" = dataclass(init=False, repr=False)  # type: ignore[assignment]
+    _cache: "OrderedDict[tuple[object, ...], Geometry | LazyGeometry]" = field(
+        default_factory=OrderedDict, init=False, repr=False
+    )
     _hits: int = 0
     _misses: int = 0
     _evicts: int = 0
@@ -50,14 +52,18 @@ class Pipeline:
     _compiled_steps: tuple[tuple[Callable[[Geometry], Geometry], dict[str, Any]], ...] | None = None
 
     def __post_init__(self) -> None:  # noqa: D401
-        self._cache = OrderedDict()
         try:
             _GLOBAL_PIPELINES.add(self)
         except Exception:
             pass
 
     def realize(self) -> "Pipeline":
-        return Pipeline(self.steps, _realize_on_call=True)
+        return Pipeline(
+            self.steps,
+            _realize_on_call=True,
+            _cache_maxsize=self._cache_maxsize,
+            _compiled_steps=self._compiled_steps,
+        )
 
     def __call__(self, g: Geometry | LazyGeometry) -> Geometry | LazyGeometry:
         # 基本: LazyGeometry に plan（関数参照）を足して返す。

@@ -293,9 +293,9 @@ Tips:
 - 容量/動作
   - `PipelineBuilder.cache(maxsize=None|0|N)`、または `PXD_PIPELINE_CACHE_MAXSIZE` で設定。
   - 実装は `OrderedDict` による LRU 風（ヒットで末尾へ、上限超過で先頭を追い出し）。
-  - 中間キャッシュ（prefix 単位）: 各ステップ適用後の `Geometry` を CompiledPipeline ローカル LRU に保存。
-    - 鍵は `geometry_hash × prefix_key[i]`（`prefix_key` はパイプライン定義の累積 blake2b-128）。
-    - `PipelineBuilder.intermediate_cache(maxsize=None|0|N)` で上限を設定（`None`: 無制限、`0`: 無効）。既定は有効・無制限。
+  - 中間キャッシュ（prefix 単位）: 各ステップ適用後の `Geometry` を `LazyGeometry` 側のグローバル LRU に保存。
+    - 鍵は `(base_key, prefix_effect_sigs[:i])`（`impl_id` と量子化後パラメータ署名の列）。
+    - 環境変数で制御: `PXD_PREFIX_CACHE_ENABLED`, `PXD_PREFIX_CACHE_MAXSIZE`, `PXD_PREFIX_CACHE_MAX_VERTS`。
     - 終端ミス時に最長一致の prefix を再利用し、残りのステップのみ実行する。
 - 厳格検証
   - build 時に未知キーは検証しない（厳格モードは廃止）。

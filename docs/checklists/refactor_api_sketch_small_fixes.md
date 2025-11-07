@@ -8,15 +8,15 @@
 - 変更は `src/api/sketch.py` のみを基本対象とし、必要時に関連 md の追従（任意）。
 
 ## 変更チェックリスト（提案）
-- [ ] 未使用戻り値の明示破棄で lint 抑制（F841 相当）
+- [x] 未使用戻り値の明示破棄で lint 抑制（F841 相当）
   - 行: `src/api/sketch.py:271` — `create_window_and_renderer` の戻り値（色）を未使用である旨を明示。
     - 具体案A: `rendering_window, mgl_ctx, line_renderer, _bg_rgba, _line_rgba = ...`
     - 具体案B: `rendering_window, mgl_ctx, line_renderer, _, _ = ...`（読みやすさ優先ならA）
-- [ ] `quality_tick_cb` の型注釈を明示（`Callable[[float], None] | None`）
+- [x] `quality_tick_cb` の型注釈を明示（`Callable[[float], None] | None`）
   - 行: `src/api/sketch.py:350` — `type: ignore` を除去し型で表現。
-- [ ] 録画品質モード切替関数での重複 import の解消
+- [x] 録画品質モード切替関数での重複 import の解消
   - 行: `src/api/sketch.py:402`, `src/api/sketch.py:429` — ネスト内の `import pyglet` を削除し外側参照を使用。
-- [ ] HUD メトリクスコールバックの Null セーフ化（まれな順序依存の予防）
+- [x] HUD メトリクスコールバックの Null セーフ化（まれな順序依存の予防）
   - 行: `src/api/sketch.py:247-262` — `sampler is None` 時は早期 return を追加。
 - [ ] （任意）ModernGL/Window 初期化失敗時のユーザー向けログ強化
   - 範囲: `create_window_and_renderer(...)` 呼出し部を try/except で囲み、失敗時に `logger.error` と簡潔なガイドを出力。

@@ -28,21 +28,21 @@
 5) 未使用メソッド（`_generate_shape_resolved`）を削除。
 
 実施手順（チェックリスト）
-- [ ] 署名生成対象を impl に統一（`src/api/shapes.py:160-169`）
-- [ ] `_lazy_shape` を「`params_dict: dict[str, Any]` をそのまま payload に保存」へ明確化（`src/api/shapes.py:112-118`）
-- [ ] `_build_shape_method` を更新
-  - [ ] runtime 有り: `resolved = runtime.before_shape_call(...)`（非量子化）→ payload へ。署名は `params_signature(impl, resolved)`。
-  - [ ] runtime 無し: `params`（非量子化）→ payload へ。署名は `params_signature(impl, params)`。
-  - [ ] `_record_spec(name, params_tuple)` は維持（統計用途）。
-- [ ] 未使用メソッド `_generate_shape_resolved` の削除
-- [ ] docstring 整合
-  - [ ] モジュール冒頭の LRU 記述を `engine.core.lazy_geometry` の shape 結果 LRU に合わせて簡潔に修正。
-  - [ ] `_build_shape_method` の戻り値を `Callable[..., LazyGeometry]` に修正。
-  - [ ] 例の `subdivisions=0.5` を `subdivisions=1` へ（整数例に統一）。
-- [ ] 影響確認（最小範囲）
-  - [ ] `ruff check --fix src/api/shapes.py`
-  - [ ] `mypy src/api/shapes.py`
-  - [ ] `pytest -q tests/api/test_shapes_api.py`
+- [x] 署名生成対象を impl に統一（`src/api/shapes.py:160-169`）
+- [x] `_lazy_shape` を「`params_dict: dict[str, Any]` をそのまま payload に保存」へ明確化（`src/api/shapes.py:112-118`）
+- [x] `_build_shape_method` を更新
+  - [x] runtime 有り: `resolved = runtime.before_shape_call(...)`（非量子化）→ payload へ。署名は `params_signature(impl, resolved)`。
+  - [x] runtime 無し: `params`（非量子化）→ payload へ。署名は `params_signature(impl, params)`。
+  - [x] `_record_spec(name, params_tuple)` は維持（統計用途）。
+- [x] 未使用メソッド `_generate_shape_resolved` の削除
+- [x] docstring 整合
+  - [x] モジュール冒頭の LRU 記述を `engine.core.lazy_geometry` の shape 結果 LRU に合わせて簡潔に修正。
+  - [x] `_build_shape_method` の戻り値を `Callable[..., LazyGeometry]` に修正。
+  - [x] 例の `subdivisions=0.5` を `subdivisions=1` へ（整数例に統一）。
+- [x] 影響確認（最小範囲）
+  - [x] `ruff check --fix src/api/shapes.py`
+  - [x] `mypy src/api/shapes.py`
+  - [x] `pytest -q tests/api/test_shapes_api.py`
 
 検証観点
 - 量子化は LazyGeometry.realize() の shape 結果 LRU 鍵でも再計算されるため、今回の変更で鍵不一致が起きないこと（実引数と署名生成の入力が一致）。
@@ -62,4 +62,3 @@
 
 備考
 - 公開 API に変更はなく、スタブ再生成は不要の見込み。
-

@@ -248,6 +248,8 @@ def run_sketch(
 
         def _on_metrics(flags):  # type: ignore[no-untyped-def]
             try:
+                if sampler is None:
+                    return
                 prev_e = str(sampler.data.get("E_CACHE", "")).upper()
                 prev_s = str(sampler.data.get("S_CACHE", "")).upper()
                 effect_status = str(flags.get("effect", prev_e or "MISS")).upper()
@@ -268,7 +270,7 @@ def run_sketch(
 
     from .sketch_runner.render import create_window_and_renderer
 
-    rendering_window, mgl_ctx, line_renderer, bg_rgba, rgba = create_window_and_renderer(
+    rendering_window, mgl_ctx, line_renderer, _bg_rgba, _line_rgba = create_window_and_renderer(
         window_width,
         window_height,
         background=background,
@@ -347,7 +349,7 @@ def run_sketch(
         tickables.append(overlay)
     frame_clock = FrameClock(tickables)
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
-    quality_tick_cb = None  # type: ignore[assignment]
+    quality_tick_cb: Callable[[float], None] | None = None
 
     # ---- ⑨ Parameter GUI からの色変更を監視 --------------------------
     _subscribe_color_changes(parameter_manager, overlay, line_renderer, rendering_window, pyglet)
@@ -399,8 +401,6 @@ def run_sketch(
 
     def _enter_quality_mode() -> None:
         nonlocal worker_pool, stream_receiver, frame_clock, quality_recording, quality_tick_cb
-        import pyglet
-
         from .sketch_runner.recording import enter_quality_mode as _enter_q
 
         worker_pool, stream_receiver, frame_clock, quality_tick_cb = _enter_q(
@@ -426,8 +426,6 @@ def run_sketch(
 
     def _leave_quality_mode() -> None:
         nonlocal worker_pool, stream_receiver, frame_clock, quality_recording, quality_tick_cb
-        import pyglet
-
         from .sketch_runner.recording import leave_quality_mode as _leave_q
 
         worker_pool, stream_receiver, frame_clock = _leave_q(

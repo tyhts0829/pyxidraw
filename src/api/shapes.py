@@ -17,15 +17,14 @@ Notes
 - 生成結果は常に `engine.core.geometry.Geometry`（以下 Geometry）。Geometry 以外を返す
   シェイプ関数がある場合は「ポリライン列（list/ndarray の列）」のみ `Geometry.from_lines(...)`
   で受け付ける。旧タプル形式 `(coords, offsets)` は非サポート。
-- LRU は `functools.lru_cache(maxsize=128)` 固定。
-- CPython の `lru_cache` は内部ロックを持ち、並列呼び出しでも基本安全。
-  各シェイプの `generate` は純粋関数（副作用なし）であることを前提にする。
+- 形状結果の LRU は `engine.core.lazy_geometry` 側にあり、環境変数
+  `PXD_SHAPE_CACHE_MAXSIZE` で制御する。各シェイプは純粋関数（副作用なし）を前提。
 
 Design
 ------
 - 単一入口: 形状生成は `G` が一手に引き受ける。
 - 責務境界: 生成は `G`/各 shape 関数、変換は `Geometry`、加工は `E.pipeline`。
-- キャッシュ: 形状生成結果の LRU（maxsize=128）は本モジュールに集約。
+ - キャッシュ: 形状生成結果の LRU は `engine.core.lazy_geometry` に集約（`PXD_SHAPE_CACHE_MAXSIZE` で制御）。
 - 動的ディスパッチ: インスタンス `__getattr__` で遅延解決し、`G.sphere(...)` の形で提供。
 - 再現性と性能: `params_signature()` でパラメータを量子化→ハッシュ可能に正規化し、
   プロセス内 LRU を適用。
@@ -35,7 +34,7 @@ Examples
 --------
     from api import G, E
 
-    g = (G.sphere(subdivisions=0.5)
+    g = (G.sphere(subdivisions=1)
            .scale(100, 100, 100)
            .translate(100, 100, 0))
 
@@ -105,26 +104,18 @@ class ShapesAPI:
 
     使い方:
         from api import G
-        g1 = G.sphere(subdivisions=0.5)
+        g1 = G.sphere(subdivisions=1)
         g2 = G.polygon(n_sides=6)
     """
 
     @staticmethod
-    def _lazy_shape(shape_name: str, params_tuple: ParamsTuple) -> LazyGeometry:
-        """登録シェイプを spec として Lazy に構築する。"""
-        params_dict = dict(params_tuple)
+    def _lazy_shape(shape_name: str, params_dict: dict[str, Any]) -> LazyGeometry:
+        """登録シェイプを spec（非量子化パラメータ）として Lazy に構築する。"""
         fn = get_shape_generator(shape_name)
         impl = getattr(fn, "__shape_impl__", fn)
-        return LazyGeometry(base_kind="shape", base_payload=(impl, params_dict))
+        return LazyGeometry(base_kind="shape", base_payload=(impl, dict(params_dict)))
 
-    @staticmethod
-    def _generate_shape_resolved(shape_name: str, params_dict: dict[str, Any]) -> Geometry:
-        """Runtime 介在なしで直接シェイプ関数を実行し Geometry を返す。"""
-        fn = get_shape_generator(shape_name)
-        data = fn(**params_dict)
-        if isinstance(data, Geometry):
-            return data
-        return Geometry.from_lines(data)
+    # 直接実行のヘルパは不要（LazyGeometry.realize 側で統一処理）
 
     # 量子化ユーティリティは common.param_utils.signature_tuple を使用
 
@@ -142,8 +133,8 @@ class ShapesAPI:
 
         Returns
         -------
-        Callable[..., Geometry]
-            `G.<name>(**params) -> Geometry` となる呼び出し可能。
+        Callable[..., LazyGeometry]
+            `G.<name>(**params) -> LazyGeometry` となる呼び出し可能。
 
         Notes
         -----
@@ -158,15 +149,19 @@ class ShapesAPI:
                 raise AttributeError(f"'{self.__class__.__name__}' has no attribute '{name}'")
             runtime = get_active_runtime()
             fn = get_shape_generator(name)
+            impl = getattr(fn, "__shape_impl__", fn)
             if runtime is not None:
                 # ランタイムで最終値へ解決（量子化を含む）
                 resolved = dict(runtime.before_shape_call(name, fn, dict(params)))
-                params_tuple = _params_signature(fn, resolved)
+                # 署名は impl を対象に（鍵は量子化、実行は非量子化を payload に保持）
+                params_tuple = _params_signature(impl, resolved)
                 _record_spec(name, params_tuple)
-                return self._lazy_shape(name, params_tuple)
-            params_tuple = _params_signature(fn, dict(params))
+                return self._lazy_shape(name, resolved)
+            # ランタイム無し: 実値をそのまま payload に、鍵は量子化した署名
+            params_dict = dict(params)
+            params_tuple = _params_signature(impl, params_dict)
             _record_spec(name, params_tuple)
-            return self._lazy_shape(name, params_tuple)
+            return self._lazy_shape(name, params_dict)
 
         _shape_method.__name__ = name
         _shape_method.__qualname__ = f"{self.__class__.__name__}.{name}"

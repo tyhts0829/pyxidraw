@@ -21,27 +21,26 @@
 
 やること（タスク分解）
 1) フィールド初期化の是正（安全・最小）
-   - [ ] `Pipeline._cache` を `field(default_factory=OrderedDict, init=False, repr=False)` に修正。
+   - [x] `Pipeline._cache` を `field(default_factory=OrderedDict, init=False, repr=False)` に修正。
    - [ ] 簡潔な docstring 追記（LRU 風の終端キャッシュ）。
 
 2) `Pipeline.realize()` の一貫性確保
-   - 方針A（推奨）: 既存設定を引き継ぐ。
-     - [ ] `_cache_maxsize` と `_compiled_steps` を引き継いで新しい `Pipeline` を返す。
+   - 方針A（採用）: 既存設定を引き継ぐ。
+     - [x] `_cache_maxsize` と `_compiled_steps` を引き継いで新しい `Pipeline` を返す。
      - [ ] docstring に「戻り値は実行時に `LazyGeometry` を実体化するパイプライン（副作用なし）」を明記。
    - 方針B（代替）: 現状の非対称仕様を仕様として明記。
      - [ ] docstring/architecture.md を更新し、`Pipeline.realize()` の非対称動作を明文化。
    - [ ] A/B どちらにするか要確認（下段「質問」参照）。
 
 3) `PipelineBuilder` の API 整合
-   - `intermediate_cache(maxsize)`（選択肢あり）
+   - `intermediate_cache(maxsize)`（選択: B — 仕様撤回）
      - 選択肢A（実装）: パイプライン単位の prefix-cache 制御を導入。
        - [ ] Builder/Pipeline に `_step_cache_maxsize` を追加し、`LazyGeometry.realize()` の Prefix 保存時キーにパイプライン固有タグを混ぜる／または保存可否を委譲。
        - [ ] 簡易版として「0: 無効、それ以外: 有効（上限はグローバル上限を尊重）」の読み書きフラグに留める実装でも可。
        - [ ] HUD 集計に pipeline 単位の `step_hits/step_misses` を反映（可能なら、まずはグローバル合計のみ）。
      - 選択肢B（仕様同期のみ）: 現実装に合わせて記述削除。
-       - [ ] `architecture.md` の該当節（intermediate_cache の説明）を削除/将来計画へ移動。
-       - [ ] `tools/gen_g_stubs.py` から当該メソッド生成を削除し、`PYTHONPATH=src python -m tools.gen_g_stubs` で `src/api/__init__.pyi` を再生成。
-     - [ ] A/B どちらにするか要確認（下段「質問」参照）。
+       - [x] `architecture.md` の該当節（intermediate_cache の説明）を削除/将来計画へ移動。
+       - [x] `tools/gen_g_stubs.py` から当該メソッド生成を削除し、`PYTHONPATH=src python -m tools.gen_g_stubs` で `src/api/__init__.pyi` を再生成。
    - `label(uid: str)`（実装容易）
      - [ ] `PipelineBuilder.label(uid)` を追加し、`self._uid` を明示設定（runtime.before_effect_call に渡す UID の固定化）。
      - [ ] docstring を短く追加（HUD/GUI でのグルーピング・表示に使用）。
@@ -56,8 +55,8 @@
    - [ ] `Pipeline`/`PipelineBuilder` のクラス先頭に短い docstring。
 
 6) ドキュメント/スタブの同期
-   - [ ] `architecture.md` のパイプライン節を現実装に同期（2/B・3/B を選ぶ場合は記述修正）。
-   - [ ] `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`（必要時のみ）。
+   - [x] `architecture.md` のパイプライン節を現実装に同期（intermediate_cache を削除）。
+   - [x] `PYTHONPATH=src python -m tools.gen_g_stubs` 実行し、`src/api/__init__.pyi` を再生成。
 
 影響/互換性
 - 破壊的変更
@@ -90,4 +89,3 @@
 - 3) intermediate_cache（A: 1–2 日 / B: 0.5 日）
 - 4) HUD メトリクス拡充: 0.5 日
 - 6) ドキュメント/スタブ同期: 0.5 日
-
