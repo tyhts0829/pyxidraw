@@ -6,16 +6,16 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Sequence
 import hashlib
+import logging
+from collections import OrderedDict
+from typing import Any, Sequence
 
 import numpy as np
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
 from util.constants import PRIMITIVE_RESTART_INDEX
-from collections import OrderedDict
 
 from ..core.tickable import Tickable
 from ..runtime.buffer import SwapBuffer

@@ -96,5 +96,3 @@ class LineMesh:
         self.vbo.release()
         self.ibo.release()
         self.vao.release()
-
-    # 旧プロパティ `prim_restart_idx` は削除（`primitive_restart_index` を直接使用）

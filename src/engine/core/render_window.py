@@ -52,25 +52,8 @@ class RenderWindow(pyglet.window.Window):
         """
         self._draw_callbacks.append(func)
 
-    def center_on_screen(self) -> None:
-        """プライマリスクリーンの中央へウィンドウを配置する。"""
-        # ディスプレイとデフォルトスクリーンを取得
-        display = pyglet.display.get_display()
-        screen = display.get_default_screen()
-
-        # 中央位置を算出
-        x = (screen.width - self.width) // 2
-        y = (screen.height - self.height) // 2
-
-        # ウィンドウ位置を設定
-        self.set_location(x, y)
-
     def on_draw(self):  # Pyglet 既定のイベント名
-        # 初回描画時のみウィンドウを中央へ移動
-        if hasattr(self, "_should_center") and self._should_center:
-            self._should_center = False
-            self.center_on_screen()
-
+        """ウィンドウ描画イベントハンドラ。登録された描画コールバックを呼び出す。"""
         r, g, b, a = self._bg_color
         glClearColor(r, g, b, a)
         self.clear()

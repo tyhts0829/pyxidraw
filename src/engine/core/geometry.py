@@ -78,10 +78,6 @@ NumberLike = float | int
 LineLike = np.ndarray | Sequence[NumberLike] | Sequence[Sequence[NumberLike]]
 
 
-def _digest_enabled() -> bool:  # 廃止（互換のため残置、常に False）
-    return False
-
-
 def _normalize_geometry_input(
     coords: np.ndarray,
     offsets: np.ndarray,
@@ -220,8 +216,6 @@ class Geometry:
     def is_empty(self) -> bool:
         """座標配列が空かの簡易判定（読みやすさのための糖衣）。"""
         return self.coords.size == 0
-
-    # digest は廃止（同一性/キャッシュは LazySignature へ移行）
 
     def translate(self, dx: float = 0.0, dy: float = 0.0, dz: float = 0.0) -> "Geometry":
         """平行移動（純関数）。
