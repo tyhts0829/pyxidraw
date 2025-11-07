@@ -33,7 +33,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
-        render_scale=4.5,
+        render_scale=3,
         use_midi=True,
         use_parameter_gui=True,
         workers=4,

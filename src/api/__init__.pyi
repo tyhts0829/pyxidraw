@@ -42,6 +42,8 @@ class _GShapes(Protocol):
     def empty(self) -> Geometry: ...
     def from_lines(self, lines: Any) -> Geometry: ...
 
+from common.types import Vec3
+
 class _PipelineBuilder(Protocol):
     # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
@@ -94,7 +96,7 @@ class _PipelineBuilder(Protocol):
     # meta: amplitude_mm (type=number, range=[0.0, 50.0])
     # meta: spatial_freq (type=number, range=[(0.0, 0.0, 0.0), (0.1, 0.1, 0.1)])
     # meta: t_sec (type=number, range=[0.0, 60.0])
-    def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | Vec3 = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
+    def displace(self, *, amplitude_mm: float = ..., spatial_freq: float | tuple[float, float, float] = ..., t_sec: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         3次元頂点に Perlin ノイズ変位を追加。
 
@@ -118,7 +120,7 @@ class _PipelineBuilder(Protocol):
     # meta: scale (type=number, range=[0.0, 3.0])
     # meta: subdivisions (type=integer, range=[0, 8])
     # choices: center_mode in ['origin', 'auto']
-    def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: int = ..., center_mode: Literal['origin', 'auto'] = ..., **_params: Any) -> _PipelineBuilder:
+    def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: int = ..., center_mode: str = ..., **_params: Any) -> _PipelineBuilder:
         """
         2D/3Dポリラインを指定方向に押し出し、側面エッジを生成。
 
@@ -312,7 +314,7 @@ class _PipelineBuilder(Protocol):
     # meta: amplitude (type=number, range=[0.0, 20.0])
     # meta: frequency (type=number, range=[(0.0, 0.0, 0.0), (0.2, 0.2, 0.2)])
     # meta: phase (type=number, range=[0.0, 6.283185307179586])
-    def wobble(self, *, amplitude: float = ..., frequency: float | Vec3 = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
+    def wobble(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         線にウォブル/波の歪みを追加（純関数）。
 

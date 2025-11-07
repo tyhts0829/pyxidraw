@@ -12,12 +12,11 @@ canvas:
   line_color: "#000000"
 
 canvas_controller:
-  fps: 30
+  fps: 60
 
 midi:
   enabled_default: true
   strict_default: false
-
 
 midi_devices:
   - port_name: "ArcController OUT"

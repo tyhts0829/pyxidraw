@@ -102,9 +102,9 @@ Phase 2: API 注入化
 - [x] smoke を実行し、動作確認（アーキテクチャテストも緑）
 
 Phase 3: registry 純化
-- [ ] `shapes.registry`/`effects.registry` から Lazy/Geometry 依存を除去（必要なら後続）
-- [ ] デコレータは orig_impl を登録し、そのまま返す実装に簡素化（互換性確認後）
-- [ ] 影響するテストの更新（registry 直叩きは `api` へ寄せる or `.realize()` を介す）
+- [x] `shapes.registry`/`effects.registry` から Lazy/Geometry 依存を除去（必要なら後続）
+- [x] デコレータは orig_impl を登録し、そのまま返す実装に簡素化（互換性確認後）
+- [x] 影響するテストの更新（registry 直叩きは `api` へ寄せる or `.realize()` を介す）
 
 Phase 4: アーキテクチャテスト緑化
 - [x] `tests/test_architecture.py` を実行し、禁止エッジ/循環ゼロを確認
