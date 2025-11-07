@@ -23,7 +23,7 @@ def test_api_shape_import_and_registration():
     assert reg.is_shape_registered(NAME)
 
     # G ファクトリ経由で Geometry を取得できること
-    g = G.tmp_shape_smoke(n=5, r=2.0)
+    g = G.tmp_shape_smoke(n=5, r=2.0).realize()
     assert isinstance(g, Geometry)
     assert not g.is_empty
 

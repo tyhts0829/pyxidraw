@@ -76,6 +76,21 @@ class LineMesh:
 
         self.index_count = len(indices)
 
+    def update_vertices_only(self, vertices: np.ndarray) -> None:
+        """IBO を変更せず VBO のみ更新する軽量経路。"""
+        # 容量チェック（IBO は据え置き）
+        if vertices.nbytes > self.vbo.size:
+            self.vbo.release()
+            self.vbo = self.ctx.buffer(
+                reserve=max(vertices.nbytes, self.initial_reserve), dynamic=True
+            )
+            # VAO を張り直す
+            self.vao = self.ctx.simple_vertex_array(
+                self.program, self.vbo, "in_vert", index_buffer=self.ibo
+            )
+        self.vbo.orphan()
+        self.vbo.write(vertices.tobytes())
+
     def release(self) -> None:
         """GPUのメモリを解放する（終了時に使う）"""
         self.vbo.release()

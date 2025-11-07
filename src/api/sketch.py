@@ -78,9 +78,9 @@ from __future__ import annotations
 
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Mapping, Optional
-from dataclasses import replace
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
@@ -249,13 +249,15 @@ def run_sketch(
 
         def _on_metrics(flags):  # type: ignore[no-untyped-def]
             try:
-                shape_status = str(flags.get("shape", "MISS"))
-                effect_status = str(flags.get("effect", "MISS"))
+                prev_e = str(sampler.data.get("E_CACHE", "")).upper()
+                prev_s = str(sampler.data.get("S_CACHE", "")).upper()
+                effect_status = str(flags.get("effect", prev_e or "MISS")).upper()
+                shape_status = str(flags.get("shape", prev_s or "MISS")).upper()
                 # 効果 → シェイプの順で更新
                 sampler.data["E_CACHE"] = effect_status
                 sampler.data["S_CACHE"] = shape_status
             except Exception as e:
-                logger.debug("apply initial bg color failed: %s", e, exc_info=True)
+                logger.debug("hud cache status update failed: %s", e, exc_info=True)
 
         on_metrics_cb = _on_metrics
 
@@ -285,6 +287,38 @@ def run_sketch(
     if hud_conf.enabled:
         sampler = MetricSampler(swap_buffer, config=hud_conf)
         overlay = OverlayHUD(rendering_window, sampler, config=hud_conf)
+        # HUD が LazyGeometry を実体化しないよう、Renderer の実測値を参照させる
+        try:
+            sampler.set_counts_provider(line_renderer.get_last_counts)
+        except Exception:
+            pass
+        # 追加メトリクス（IBO/Indices LRU）の提供
+        try:
+            from engine.render.renderer import get_indices_cache_counters as _idx_counters
+
+            def _extra_metrics():  # type: ignore[no-redef]
+                d = {}
+                try:
+                    s = line_renderer.get_ibo_stats()
+                    d["ibo_reused"] = int(s.get("reused", 0))
+                    d["ibo_uploaded"] = int(s.get("uploaded", 0))
+                    d["indices_built"] = int(s.get("indices_built", 0))
+                except Exception:
+                    pass
+                try:
+                    c = _idx_counters()
+                    d["idx_hits"] = int(c.get("hits", 0))
+                    d["idx_misses"] = int(c.get("misses", 0))
+                    d["idx_stores"] = int(c.get("stores", 0))
+                    d["idx_evicts"] = int(c.get("evicts", 0))
+                    d["idx_size"] = int(c.get("size", 0))
+                except Exception:
+                    pass
+                return d
+
+            sampler.set_extra_metrics_provider(_extra_metrics)
+        except Exception:
+            pass
     # G-code エクスポート: 実 writer を接続
     export_service = ExportService(writer=GCodeWriter())
 

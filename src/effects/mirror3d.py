@@ -342,15 +342,7 @@ def mirror3d(
             tmp: list[np.ndarray] = []
             for p in pieces:
                 tmp.extend(_clip_polyline_halfspace_3d(p, normal=-n1, center=center))
-            if mirror_equator:
-                sign = 1 if (isinstance(source_side, bool) and source_side) else 1
-                if not isinstance(source_side, bool) and len(source_side) > 0:
-                    sign = 1 if bool(source_side[0]) else -1
-                eq_n = ax * float(sign)
-                tmp2: list[np.ndarray] = []
-                for p in tmp:
-                    tmp2.extend(_clip_polyline_halfspace_3d(p, normal=eq_n, center=center))
-                tmp = tmp2
+            # equator ミラーは後段の反映で行う（ソースの半空間クリップは行わない）
             for p in tmp:
                 if p.shape[0] >= 1:
                     src_lines.append(p.astype(np.float32))

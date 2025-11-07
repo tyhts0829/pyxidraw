@@ -1,6 +1,6 @@
 """
 どこで: `api.shapes`（形状生成の高レベル API）。
-何を: 登録済み shape 関数を解決して `Geometry` を返す薄いファサード（LRU キャッシュ付き）。
+何を: 登録済み shape 関数を解決して `LazyGeometry` を返す薄いファサード（既定で遅延）。
 なぜ: 生成（shape）と加工（effects）を分離しつつ、関数的に扱える統一入口を提供するため。
 
 api.shapes — 形状生成の入口（高レベル API）
@@ -48,13 +48,14 @@ Examples
 
 from __future__ import annotations
 
-from functools import lru_cache
+from collections import OrderedDict
 from typing import Any, Callable, Iterable
 
 # レジストリ登録の副作用を発火させるため、shapes パッケージを 1 度だけ import すれば十分
 import shapes  # noqa: F401  (登録目的の副作用)
 from common.param_utils import params_signature as _params_signature
 from engine.core.geometry import Geometry, LineLike
+from engine.core.lazy_geometry import LazyGeometry
 from engine.ui.parameters import get_active_runtime
 from shapes.registry import get_shape as get_shape_generator
 from shapes.registry import is_shape_registered  # ガード付きメモ化用（登録状態の即時反映）
@@ -64,14 +65,37 @@ from shapes.registry import list_shapes as list_registered_shapes
 # プロジェクト規約に合わせ、値の型は `Any` を用いる。
 ParamsTuple = tuple[tuple[str, Any], ...]
 
+# --- Lightweight spec cache (hits/misses only, no Geometry) ------------------
+_SPEC_CACHE_MAXSIZE = 256
+_spec_seen: "OrderedDict[tuple[str, ParamsTuple], None]" = OrderedDict()
+_spec_hits = 0
+_spec_misses = 0
+
+
+def _record_spec(shape_name: str, params_tuple: ParamsTuple) -> None:
+    global _spec_hits, _spec_misses
+    key = (shape_name, params_tuple)
+    if key in _spec_seen:
+        # move to end (recent)
+        _spec_seen.pop(key, None)
+        _spec_seen[key] = None
+        _spec_hits += 1
+        return
+    _spec_seen[key] = None
+    _spec_misses += 1
+    if len(_spec_seen) > _SPEC_CACHE_MAXSIZE:
+        try:
+            _spec_seen.popitem(last=False)
+        except Exception:
+            pass
+
 
 class ShapesAPI:
     """高性能キャッシュ付き形状 API（`G` の実体）。
 
     責務:
     - 形状名→生成関数の動的ディスパッチ（インスタンス属性で遅延解決）
-    - 生成結果の型統一（常に `Geometry` を返す）
-    - 形状生成結果の LRU キャッシュ（maxsize=128）
+    - 生成結果の型統一（`LazyGeometry` を返す）
 
     Notes
     -----
@@ -86,29 +110,12 @@ class ShapesAPI:
     """
 
     @staticmethod
-    @lru_cache(maxsize=128)
-    def _cached_shape(shape_name: str, params_tuple: ParamsTuple) -> Geometry:
-        """登録シェイプを生成して LRU に保存する。
-
-        Parameters
-        ----------
-        shape_name : str
-            形状名（レジストリ登録済みキー）。
-        params_tuple : ParamsTuple
-            パラメータ辞書を順序安定・ハッシュ可能に正規化したタプル。
-
-        Returns
-        -------
-        Geometry
-            生成された `Geometry`。
-
-        Notes
-        -----
-        - キャッシュキーは `(shape_name, params_tuple)`。
-        - 例外は下層からそのまま伝播。
-        """
+    def _lazy_shape(shape_name: str, params_tuple: ParamsTuple) -> LazyGeometry:
+        """登録シェイプを spec として Lazy に構築する。"""
         params_dict = dict(params_tuple)
-        return ShapesAPI._generate_shape_resolved(shape_name, params_dict)
+        fn = get_shape_generator(shape_name)
+        impl = getattr(fn, "__shape_impl__", fn)
+        return LazyGeometry(base_kind="shape", base_payload=(impl, params_dict))
 
     @staticmethod
     def _generate_shape_resolved(shape_name: str, params_dict: dict[str, Any]) -> Geometry:
@@ -125,7 +132,7 @@ class ShapesAPI:
 
     # _params_to_tuple は廃止（署名は params_signature で統一）
 
-    def _build_shape_method(self, name: str) -> Callable[..., Geometry]:
+    def _build_shape_method(self, name: str) -> Callable[..., LazyGeometry]:
         """レジストリ名から `G.<name>(**params)` を構築する。
 
         Parameters
@@ -144,7 +151,7 @@ class ShapesAPI:
         - 登録が外れた場合は `AttributeError` を送出。
         """
 
-        def _shape_method(**params: Any) -> Geometry:
+        def _shape_method(**params: Any) -> LazyGeometry:
             if not is_shape_registered(name):
                 # 登録解除と整合を取るため、キャッシュ済みの属性を破棄して AttributeError を送出
                 self.__dict__.pop(name, None)
@@ -152,12 +159,14 @@ class ShapesAPI:
             runtime = get_active_runtime()
             fn = get_shape_generator(name)
             if runtime is not None:
-                # Runtime 介在時も LRU を有効化するため、解決後の最終値（量子化後）で鍵を作る
+                # ランタイムで最終値へ解決（量子化を含む）
                 resolved = dict(runtime.before_shape_call(name, fn, dict(params)))
                 params_tuple = _params_signature(fn, resolved)
-                return self._cached_shape(name, params_tuple)
+                _record_spec(name, params_tuple)
+                return self._lazy_shape(name, params_tuple)
             params_tuple = _params_signature(fn, dict(params))
-            return self._cached_shape(name, params_tuple)
+            _record_spec(name, params_tuple)
+            return self._lazy_shape(name, params_tuple)
 
         _shape_method.__name__ = name
         _shape_method.__qualname__ = f"{self.__class__.__name__}.{name}"
@@ -192,7 +201,7 @@ class ShapesAPI:
         """
         return Geometry.from_lines([])
 
-    def __getattr__(self, name: str) -> Callable[..., Geometry]:
+    def __getattr__(self, name: str) -> Callable[..., LazyGeometry]:
         """レジストリに基づき `G.<name>` を遅延生成する。
 
         Parameters
@@ -202,8 +211,8 @@ class ShapesAPI:
 
         Returns
         -------
-        Callable[..., Geometry]
-            `G.<name>(**params) -> Geometry` を返す呼び出し可能。
+        Callable[..., LazyGeometry]
+            `G.<name>(**params) -> LazyGeometry` を返す呼び出し可能。
 
         Raises
         ------
@@ -232,19 +241,20 @@ class ShapesAPI:
 
     @classmethod
     def clear_cache(cls) -> None:
-        """形状生成結果の LRU キャッシュをクリアする。"""
-        cls._cached_shape.cache_clear()
+        """軽量 spec キャッシュ（統計のみ）をクリア。"""
+        global _spec_seen, _spec_hits, _spec_misses
+        _spec_seen.clear()
+        _spec_hits = 0
+        _spec_misses = 0
 
     @classmethod
     def cache_info(cls) -> dict[str, int]:
-        """LRU キャッシュの統計情報を取得する（辞書形式）。"""
-        info = cls._cached_shape.cache_info()
-        # functools._CacheInfo(hits, misses, maxsize, currsize)
+        """軽量 spec キャッシュの統計情報を返す。"""
         return {
-            "hits": getattr(info, "hits", 0),
-            "misses": getattr(info, "misses", 0),
-            "maxsize": getattr(info, "maxsize", 0),
-            "size": getattr(info, "currsize", 0),
+            "hits": _spec_hits,
+            "misses": _spec_misses,
+            "maxsize": _SPEC_CACHE_MAXSIZE,
+            "size": len(_spec_seen),
         }
 
     # 補完体験向上: dir(G) で登録シェイプ名を出す

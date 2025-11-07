@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import inspect
-import os
 from collections import defaultdict
 from typing import Any, Mapping
 
@@ -69,13 +68,7 @@ def extract_overrides(
             else:
                 lo, hi = 0.0, 1.0
             scaled = lo + (hi - lo) * cc_val
-            if os.getenv("PXD_DEBUG_CC"):
-                try:
-                    print(
-                        f"[CC] pid={pid} cc={cc_idx} val={cc_val:.3f} scaled={scaled:.3f} range=({lo},{hi})"
-                    )
-                except Exception:
-                    pass
+            # デバッグ出力は抑制
             if desc.value_type == "int":
                 overrides[pid] = int(round(scaled))
             else:
@@ -166,6 +159,10 @@ class SnapshotRuntime:
 
     def set_inputs(self, t: float) -> None:
         self._t = float(t)
+
+    # ParameterRuntime 互換: 現フレームの時刻を返す
+    def current_time(self) -> float:
+        return float(self._t)
 
     # --- 内部ユーティリティ ---
     def _inject_t(self, fn: Any, params: dict[str, Any]) -> dict[str, Any]:

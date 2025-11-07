@@ -46,10 +46,14 @@
   - 不変条件: `offsets[0]==0` かつ `offsets[-1]==len(coords)`。i 本目の線は `coords[offsets[i]:offsets[i+1]]`。
   - 2D 入力は Z=0 で補完し常に (N,3) へ正規化。空集合は `coords.shape==(0,3)`, `offsets=[0]`。
   - `as_arrays(copy=False)` は読み取り専用ビューを返す（digest/キャッシュ整合性を維持）。
-    書き込みが必要な場合は `copy=True` を使用する。
+-    書き込みが必要な場合は `copy=True` を使用する。
+- LazyGeometry（遅延 spec）
+  - `base`: shape 実装（関数参照）とパラメータ、または実体 `Geometry`。
+  - `plan`: effect 実装（関数参照）とパラメータの列。順序は固定。
+  - `realize()`: `base` を実行して `Geometry` を得た後、`plan` を順次適用。engine.core は registries を参照せず、API 層が注入した関数参照のみを用いる。
 - ファクトリとレジストリ
-  - Shapes: `shapes/` + `@shape` で登録、`G.<name>(...) -> Geometry` を提供。
-- Effects: `effects/` + `@effect` で登録、`E.pipeline.<name>(...)` でチェーン可能。
+  - Shapes: `shapes/` + `@shape` で登録。`G.<name>(...)` は既定で `LazyGeometry`（spec）を返し、終端で `realize()` して `Geometry` を得る。
+- Effects: `effects/` + `@effect` で登録。`E.pipeline.<name>(...)` でチェーンし、`LazyGeometry` の plan にエフェクト実装（関数参照）を積む。
   - 例: `mirror`（2D放射状/直交の軽量版）、`mirror3d`（真の3D放射状: 球面くさび・大円境界）。
 
 ### Effects: mirror / mirror3d 概要
@@ -75,7 +79,7 @@
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
     - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
     - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
-  - パイプライン定義ハッシュは、各ステップの「名前」「関数バイトコード近似（`__code__.co_code` の blake2b-64）」「量子化後パラメータ署名（`common.param_utils.params_signature` ベース）の blake2b-64」を積み、128bit に集約。
+  - Lazy 署名（`api.lazy_signature`）は shape/plan の「関数ID（`module:qualname`）」「量子化後パラメータ署名（`common.param_utils.params_signature`）」を順に積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
 - パラメータ GUI（Dear PyGui）
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する（実体は `engine.ui.parameters.dpg_window`）。

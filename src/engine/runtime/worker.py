@@ -20,6 +20,7 @@ from queue import Full, Queue
 from typing import Callable, Mapping, cast
 
 from engine.core.geometry import Geometry
+from engine.core.lazy_geometry import LazyGeometry
 
 from ..core.tickable import Tickable
 from .packet import RenderPacket
@@ -100,6 +101,12 @@ class _WorkerProcess(mp.Process):
                     before = None
                 # t のみを渡す（cc は api.cc 側で参照）
                 geometry = self.draw_callback(task.t)
+                # LazyGeometry はワーカ側で実体化してメインスレッド負荷を避ける
+                try:
+                    if isinstance(geometry, LazyGeometry):
+                        geometry = geometry.realize()
+                except Exception:
+                    pass
                 # Runtime をクリア（スナップショット無しを渡して明示的に無効化）
                 try:
                     if self.apply_param_snapshot is not None:
@@ -129,10 +136,17 @@ class _WorkerProcess(mp.Process):
                         s_miss = s_miss_after > s_miss_before
                         s_hit = s_hits_after > s_hits_before
 
-                        flags = {
-                            "effect": "MISS" if e_miss else ("HIT" if e_hit else "MISS"),
-                            "shape": "MISS" if s_miss else ("HIT" if s_hit else "MISS"),
-                        }
+                        # フレーム差分に基づくフラグ（増分なしのキーは送らない）
+                        flags = {}
+                        if e_miss:
+                            flags["effect"] = "MISS"
+                        elif e_hit:
+                            flags["effect"] = "HIT"
+                        if s_miss:
+                            flags["shape"] = "MISS"
+                        elif s_hit:
+                            flags["shape"] = "HIT"
+                        # デバッグ出力は抑制
                     except Exception:
                         flags = None
                 self.result_q.put(
@@ -235,6 +249,12 @@ class WorkerPool(Tickable):
                     except Exception:
                         before = None
                     geometry = self._draw_callback(task.t)
+                    # LazyGeometry はインライン実行でもここで実体化
+                    try:
+                        if isinstance(geometry, LazyGeometry):
+                            geometry = geometry.realize()
+                    except Exception:
+                        pass
                     # Runtime をクリア
                     try:
                         if self._apply_param_snapshot is not None:
@@ -264,10 +284,16 @@ class WorkerPool(Tickable):
                             e_miss = e_miss_after > e_miss_before
                             e_hit = e_hits_after > e_hits_before
 
-                            flags = {
-                                "shape": "MISS" if s_miss else ("HIT" if s_hit else "MISS"),
-                                "effect": "MISS" if e_miss else ("HIT" if e_hit else "MISS"),
-                            }
+                            flags = {}
+                            if s_miss:
+                                flags["shape"] = "MISS"
+                            elif s_hit:
+                                flags["shape"] = "HIT"
+                            if e_miss:
+                                flags["effect"] = "MISS"
+                            elif e_hit:
+                                flags["effect"] = "HIT"
+                            # デバッグ出力は抑制
                         except Exception:
                             flags = None
                     self._result_q.put(

@@ -10,7 +10,7 @@ from engine.core.geometry import Geometry
 
 def test_dynamic_dispatch_and_geometry() -> None:
     assert "sphere" in dir(G)
-    g = G.sphere(subdivisions=0.0)
+    g = G.sphere(subdivisions=0.0).realize()
     assert isinstance(g, Geometry)
 
 
@@ -30,7 +30,7 @@ def test_params_to_tuple_stability() -> None:
 def test_shape_factory_lru_returns_same_instance() -> None:
     a = G.sphere(subdivisions=0.0)
     b = G.sphere(subdivisions=0.0)
-    assert a is b
+    assert a.realize() is b.realize()
 
 
 def test_from_lines_and_empty() -> None:

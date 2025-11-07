@@ -13,7 +13,7 @@ def test_asemic_glyph_is_registered_and_generates_geometry():
 
     assert is_shape_registered("asemic_glyph")
     # 既定領域でスモーク
-    g = G.asemic_glyph(random_seed=1)
+    g = G.asemic_glyph(random_seed=1).realize()
     assert isinstance(g, Geometry)
     # 何らかの線分が得られる（空でも許容したい場合は is_empty を緩める）
     assert not g.is_empty
@@ -33,5 +33,5 @@ def test_asemic_glyph_fallback_without_scipy(monkeypatch):
 
     monkeypatch.setattr(ag, "generate_nodes", _mock_generate_nodes)
 
-    g = G.asemic_glyph(region=(-0.1, -0.1, 0.1, 0.1), random_seed=2)
+    g = G.asemic_glyph(region=(-0.1, -0.1, 0.1, 0.1), random_seed=2).realize()
     assert not g.is_empty

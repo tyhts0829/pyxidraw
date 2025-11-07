@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping
 
 from common.base_registry import BaseRegistry
 from engine.core.geometry import Geometry
+from engine.core.lazy_geometry import LazyGeometry
 
 EffectFn = Callable[[Geometry], Geometry]
 
@@ -39,7 +40,36 @@ def effect(arg: Any | None = None, /, name: str | None = None):
             raise TypeError(
                 f"@effect は関数のみ登録可能です（クラス/インスタンスは不可）: got {obj!r}"
             )
-        return _effect_registry.register(resolved_name)(obj)
+
+        # 元実装を保持しつつ、LazyGeometry に対応するラッパを登録
+        orig_fn = obj
+
+        def _wrapped(g: Geometry | LazyGeometry, /, **params):  # type: ignore[override]
+            # LazyGeometry → plan 追記のみ（関数参照を積む）
+            if isinstance(g, LazyGeometry):
+                return LazyGeometry(
+                    g.base_kind,
+                    g.base_payload,
+                    g.plan + [(orig_fn, dict(params))],
+                )
+            # Geometry → 元実装を実行
+            return orig_fn(g, **params)
+
+        # メタ情報を引き継ぐ
+        _wrapped.__name__ = orig_fn.__name__
+        _wrapped.__qualname__ = orig_fn.__qualname__
+        _wrapped.__doc__ = orig_fn.__doc__
+        try:
+            _wrapped.__signature__ = inspect.signature(orig_fn)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        # 便宜: 元実装を辿れるようにする
+        setattr(_wrapped, "__effect_impl__", orig_fn)
+        # パラメタメタも引き継ぎ（UI ヒント）
+        if hasattr(orig_fn, "__param_meta__"):
+            setattr(_wrapped, "__param_meta__", getattr(orig_fn, "__param_meta__"))
+
+        return _effect_registry.register(resolved_name)(_wrapped)
 
     # 直付け (@effect)
     if inspect.isfunction(arg) and name is None:

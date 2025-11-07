@@ -68,8 +68,6 @@ API 方針（ADR 準拠）:
 
 from __future__ import annotations
 
-import hashlib
-import os
 from typing import Iterable, Sequence
 
 import numpy as np
@@ -80,10 +78,8 @@ NumberLike = float | int
 LineLike = np.ndarray | Sequence[NumberLike] | Sequence[Sequence[NumberLike]]
 
 
-def _digest_enabled() -> bool:
-    """環境変数でダイジェスト機能の有効/無効を判定する小関数。"""
-    v = os.environ.get("PXD_DISABLE_GEOMETRY_DIGEST", "0")
-    return v not in ("1", "true", "TRUE", "True")
+def _digest_enabled() -> bool:  # 廃止（互換のため残置、常に False）
+    return False
 
 
 def _normalize_geometry_input(
@@ -121,7 +117,7 @@ class Geometry:
     フィールド:
     - `coords (N,3) float32`: すべての点列を連結した配列。
     - `offsets (M+1,) int32`: 各ポリラインの開始 index（末尾は N）。
-    - `_digest: bytes | None`: 有効時のみ保持する内容ハッシュ（内部用途）。
+    - digest は廃止（同一性/キャッシュは LazySignature へ移行）。
 
     設計意図:
     - 表現を 1 種に統一し、Shapes/E.pipeline/Renderer 間の境界を単純化する。
@@ -129,17 +125,15 @@ class Geometry:
     - 生成時に dtype/形状を検証し、正規化済み状態だけを許容する。
     """
 
-    __slots__ = ("coords", "offsets", "_digest")
+    __slots__ = ("coords", "offsets")
 
     coords: np.ndarray
     offsets: np.ndarray
-    _digest: bytes | None
 
     def __init__(self, coords: np.ndarray, offsets: np.ndarray) -> None:
         norm_coords, norm_offsets = _normalize_geometry_input(coords, offsets)
         self.coords = norm_coords
         self.offsets = norm_offsets
-        self._digest = None
 
     # ── ファクトリ ───────────────────
     @classmethod
@@ -227,54 +221,7 @@ class Geometry:
         """座標配列が空かの簡易判定（読みやすさのための糖衣）。"""
         return self.coords.size == 0
 
-    # ---- ダイジェスト（スナップショットID） ---------------------------------
-    # Digest 概要:
-    # - Geometry（coords/offsets）の内容から計算する短いハッシュ指紋（スナップショットID）。
-    # - 主用途は Pipeline のキャッシュ鍵（入力ジオメトリの digest × パイプライン定義のハッシュ）。
-    # - 生成・変換直後に必要があれば遅延計算して保持し、以降の同一性判定を高速化します。
-    # - 環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化できます（ベンチ等の比較向け）。
-    #   無効化時に `g.digest` を呼ぶと例外を投げますが、Pipeline 側はフォールバックで
-    #   配列からハッシュを都度計算するため、キャッシュは引き続き機能します。
-    # - 大規模ジオメトリでは初回のハッシュ計算にコストがかかりますが、ヒット率と
-    #   同一性判定の安定性のために採用しています。
-    def _compute_digest(self) -> bytes:
-        """`coords/offsets` から決定的なダイジェストを計算（blake2b-128）。"""
-        c = np.ascontiguousarray(self.coords)
-        o = np.ascontiguousarray(self.offsets)
-        h = hashlib.blake2b(digest_size=16)
-        # ndarray を安定したバイト列に変換してハッシュ（view(np.uint8) は不要）
-        h.update(c.tobytes())
-        h.update(o.tobytes())
-        return h.digest()
-
-    @property
-    def digest(self) -> bytes:
-        """ジオメトリ内容のハッシュ指紋（blake2b-128）。
-
-        Returns
-        -------
-        bytes
-            `coords/offsets` の内容から計算した 16 バイトのダイジェスト。初回アクセス時に
-            遅延計算し、以後はキャッシュを再利用する。
-
-        Raises
-        ------
-        RuntimeError
-            環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` が設定されている場合。
-
-        Notes
-        -----
-        digest が無効化されている場合でもパイプライン側は配列から都度ハッシュを計算して
-        フォールバックするため、キャッシュ機構は動作を継続する。
-        """
-        # 環境変数で無効化可能（ベンチ用）
-        if not _digest_enabled():
-            raise RuntimeError(
-                "環境変数によりジオメトリのダイジェスト計算が無効です: PXD_DISABLE_GEOMETRY_DIGEST"
-            )
-        if self._digest is None:
-            self._digest = self._compute_digest()
-        return self._digest
+    # digest は廃止（同一性/キャッシュは LazySignature へ移行）
 
     def translate(self, dx: float = 0.0, dy: float = 0.0, dz: float = 0.0) -> "Geometry":
         """平行移動（純関数）。

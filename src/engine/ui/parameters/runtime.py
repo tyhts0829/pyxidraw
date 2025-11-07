@@ -76,6 +76,10 @@ class ParameterRuntime:
         self._pipeline_counter = n + 1
         return f"p{n}"
 
+    # スナップショット（署名用の軽量アクセス）
+    def current_time(self) -> float:
+        return float(self._t)
+
     # --- 形状 ---
     def before_shape_call(
         self,

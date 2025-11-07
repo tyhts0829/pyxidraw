@@ -15,6 +15,7 @@ import inspect
 from typing import Any, Callable, Mapping
 
 from common.base_registry import BaseRegistry
+from engine.core.lazy_geometry import LazyGeometry
 
 ShapeFn = Callable[..., Any]
 
@@ -36,7 +37,25 @@ def shape(arg: Any | None = None, /, name: str | None = None):
     def _register_checked(obj: Any, resolved_name: str | None = None):
         if not inspect.isfunction(obj):
             raise TypeError(f"@shape は関数のみ登録可能です: got {obj!r}")
-        return _shape_registry.register(resolved_name)(obj)
+
+        orig_fn = obj
+
+        def _wrapped(**params):  # Lazy 前提: 呼び出しで spec を返す
+            return LazyGeometry(base_kind="shape", base_payload=(orig_fn, dict(params)))
+
+        # メタ情報を引き継ぐ
+        _wrapped.__name__ = orig_fn.__name__
+        _wrapped.__qualname__ = orig_fn.__qualname__
+        _wrapped.__doc__ = orig_fn.__doc__
+        try:
+            _wrapped.__signature__ = inspect.signature(orig_fn)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        setattr(_wrapped, "__shape_impl__", orig_fn)
+        if hasattr(orig_fn, "__param_meta__"):
+            setattr(_wrapped, "__param_meta__", getattr(orig_fn, "__param_meta__"))
+
+        return _shape_registry.register(resolved_name)(_wrapped)
 
     # 直付け (@shape)
     if inspect.isfunction(arg) and name is None:

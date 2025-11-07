@@ -269,51 +269,52 @@
 
 - 型・基盤（LazyGeometry）
 
-  - [ ] `LazyGeometry(base: ShapeSpec | Geometry, plan: list[EffectStep])` を追加。
-  - [ ] `realize()` を実装（単回評価キャッシュ、再入安全、例外時の整合）。
-  - [ ] `as_arrays()/len()/is_empty` は必要時に自動 `realize()` し、読み取り専用ビューを返す（`copy=False`）。
+  - [x] `LazyGeometry(base: ShapeSpec | Geometry, plan: list[EffectStep])` を追加。
+  - [x] `realize()` を実装（単回評価キャッシュ、再入安全、例外時の整合）。
+  - [x] `as_arrays()/len()/is_empty` は必要時に自動 `realize()` し、読み取り専用ビューを返す（`copy=False`）。
 
 - デコレータ層（登録と呼び出しの遅延）
 
-  - [ ] `shapes.registry.shape` を追加（呼び出しで `LazyGeometry(base=shape_spec)` を返す）。
-  - [ ] `effects.registry.effect` を更新（呼び出しで `EffectStep(name, params)` を `g.plan` に追加）。
-  - [ ] `__param_meta__` を用いた量子化ステップ/RangeHint の取得を統一（不足 step は末尾補完）。
+  - [x] `shapes.registry.shape` を追加（呼び出しで `LazyGeometry(base=shape_spec)` を返す）。
+  - [x] `effects.registry.effect` を更新（呼び出しで `EffectStep(name, params)` を `g.plan` に追加）。
+  - [x] `__param_meta__` を用いた量子化ステップ/RangeHint の取得を統一（不足 step は末尾補完）。
 
 - 量子化/署名（LazySignature）
 
-  - [ ] 量子化規約: float のみ量子化・int/bool は素通し・ベクトルは成分別（既定 step=1e-6、`PXD_PIPELINE_QUANT_STEP` で上書き）。
-  - [ ] 直列化の正規化: キー順ソート・型の明示・NaN 非許容（前段で妥当化）。
-  - [ ] `blake2b-128` により `shape_spec + effect_chain + t/cc` から `LazySignature` を生成。
+  - [x] 量子化規約: float のみ量子化・int/bool は素通し・ベクトルは成分別（既定 step=1e-6、`PXD_PIPELINE_QUANT_STEP` で上書き）。
+  - [x] 直列化の正規化: キー順ソート・型の明示・NaN 非許容（前段で妥当化）。
+  - [x] `blake2b-128` により `shape_spec + effect_chain` から `LazySignature` を生成（t/cc は別項で追補）。
+  - [x] t/cc スナップショットの組み込み（`begin_frame/set_inputs` 凍結）を署名へ反映。
 
 - パイプライン再設計（E.pipeline）
 
-  - [ ] `PipelineBuilder`/`Pipeline` を `LazyGeometry` 入出力へ切替（中間は plan 連結のみ）。
-  - [ ] 実行時は終端で `realize()` を 1 回だけ実行（順序固定）。
-  - [ ] キャッシュを `LazySignature` 単独キーへ一本化（prefix 共有も署名ベース）。
-  - [ ] `E.pipeline.realize()` を追加（評価バリアとして明示的に Geometry 化）。
+  - [x] `PipelineBuilder`/`Pipeline` を `LazyGeometry` 入出力へ切替（中間は plan 連結のみ）。
+  - [x] 実行時は終端で `realize()` を 1 回だけ実行（順序固定）。
+  - [x] キャッシュを `LazySignature` 単独キーへ一本化（prefix 共有も署名ベース）。
+  - [x] `E.pipeline.realize()` を追加（評価バリアとして明示的に Geometry 化）。
 
 - ランタイム/描画（Lazy 前提のクリーン実装）
 
-  - [ ] `engine/runtime/receiver.py` は `LazyGeometry` をそのまま流す（変換/realize しない）。
-  - [ ] `SwapBuffer` は `LazyGeometry | None` を保持する型に変更。
-  - [ ] `engine/render/renderer.LineRenderer` は `LazyGeometry | Geometry` を受け取り、アップロード直前に `realize()` し `as_arrays(copy=False)` を用いて GPU 転送する（配列直送を許容）。
-  - [ ] エクスポート経路（G-code/PNG/Video）は `LazyGeometry` を受け、処理前に明示 `realize()` する。
+  - [x] `engine/runtime/receiver.py` は `LazyGeometry` をそのまま流す（変換/realize しない）。
+  - [x] `SwapBuffer` は `LazyGeometry | None` を保持する型に変更。
+  - [x] `engine/render/renderer.LineRenderer` は `LazyGeometry | Geometry` を受け取り、アップロード直前に `realize()` し `as_arrays(copy=False)` を用いて GPU 転送する（配列直送を許容）。
+  - [x] エクスポート経路（G-code/PNG/Video）は `LazyGeometry` を受け、処理前に明示 `realize()` する。
 
 - digest 廃止
 
-  - [ ] `Geometry.digest` を削除し関連ロジックを撤去（環境変数も含む）。
-  - [ ] `api/effects.py` の `(geometry_digest, pipeline_key)` と `_geometry_hash()` を撤廃し、`LazySignature` へ移行。
+  - [x] `Geometry.digest` を削除し関連ロジックを撤去（環境変数も含む）。
+  - [x] `api/effects.py` の `(geometry_digest, pipeline_key)` と `_geometry_hash()` を撤廃し、`LazySignature` へ移行。
 
 - 一貫性・不変条件
 
-  - [ ] `as_arrays(copy=False)` は常に「反映済み読み取り専用ビュー」を返す（未反映内部配列は露出しない）。
+  - [x] `as_arrays(copy=False)` は常に「反映済み読み取り専用ビュー」を返す（未反映内部配列は露出しない）。
   - [ ] すべての effect は純関数（副作用・外部状態依存を禁止）を明文化。
 
 - テスト
 
   - [ ] `LazyGeometry` の単体（単回評価・自動 realize・例外時の再使用不可）。
   - [ ] 量子化/署名の決定性テスト（float step・ベクトル補完・順序正規化）。
-  - [ ] 受信境界での暗黙 `realize()`（Renderer までの E2E スモーク）。
+  - [x] 受信境界での暗黙 `realize()`（Renderer までの E2E スモーク）。
   - [ ] 既存 effect 群の動作（呼び出しは記録のみ、realize 時に実実行）。
 
 - スタブ/CI/整形

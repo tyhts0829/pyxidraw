@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Optional
+from typing import Optional, Callable
 
-from engine.core.geometry import Geometry
+from engine.core.lazy_geometry import LazyGeometry
 
 from ...core.tickable import Tickable
 from ...runtime.buffer import SwapBuffer
@@ -95,6 +95,10 @@ class MetricSampler(Tickable):
         self._last_ver = self._swap.version()
         self.data: dict[str, str] = {}
         self.values: dict[str, float] = {}
+        # Renderer 公開値（直近アップロードの頂点/ライン数）を取得するためのプロバイダ
+        self._counts_provider: Optional[Callable[[], tuple[int, int]]] = None
+        # 追加メトリクス（IBO/Indices LRU など）を取得するプロバイダ
+        self._extra_metrics_provider: Optional[Callable[[], Mapping[str, int]]] = None
 
     # -------- Tickable --------
     def tick(self, dt: float) -> None:
@@ -116,9 +120,19 @@ class MetricSampler(Tickable):
             self.data.pop(FPS, None)
             self.values.pop(FPS, None)
 
+        # Renderer からの計数（ある場合のみ 1 回だけ呼ぶ）
+        counts: Optional[tuple[int, int]] = None
+        if self._counts_provider is not None:
+            try:
+                counts = self._counts_provider()
+            except Exception:
+                counts = None
+
         # 頂点数
         if self._config.show_vertex_count:
-            verts = self._vertex_count(self._swap.get_front())
+            verts = (
+                int(counts[0]) if counts is not None else self._vertex_count(self._swap.get_front())
+            )
             self.data[VERTEX] = f"{verts}"
             self.values[VERTEX] = float(verts)
         else:
@@ -127,7 +141,9 @@ class MetricSampler(Tickable):
 
         # ライン数（ポリライン本数）
         if self._config.show_line_count:
-            lines = self._line_count(self._swap.get_front())
+            lines = (
+                int(counts[1]) if counts is not None else self._line_count(self._swap.get_front())
+            )
             self.data[LINE] = f"{lines}"
             self.values[LINE] = float(lines)
         else:
@@ -154,10 +170,57 @@ class MetricSampler(Tickable):
             self.values.pop(CPU, None)
             self.values.pop(MEM, None)
 
+        # 追加メトリクス（キャッシュ統計など、テキストのみ）
+        if self._config.show_cache_status and self._extra_metrics_provider is not None:
+            try:
+                extra = self._extra_metrics_provider()
+            except Exception:
+                extra = None
+            if isinstance(extra, dict):
+                # IBO stats (reused/uploaded/indices_built)
+                r = int(extra.get("ibo_reused", 0))
+                u = int(extra.get("ibo_uploaded", 0))
+                b = int(extra.get("indices_built", 0))
+                self.data["IBO"] = f"R:{r} U:{u} B:{b}"
+                # Indices cache stats (hits/misses/stores/evicts/size)
+                ih = int(extra.get("idx_hits", 0))
+                im = int(extra.get("idx_misses", 0))
+                is_ = int(extra.get("idx_stores", 0))
+                ie = int(extra.get("idx_evicts", 0))
+                iz = int(extra.get("idx_size", 0))
+                self.data["IDX"] = f"H:{ih} M:{im} S:{is_} E:{ie} Z:{iz}"
+            else:
+                self.data.pop("IBO", None)
+                self.data.pop("IDX", None)
+
     # -------- helpers --------
     @staticmethod
-    def _vertex_count(geometry: Geometry | None) -> int:
-        return 0 if geometry is None else len(geometry.coords)
+    def _vertex_count(geometry: object | None) -> int:
+        if geometry is None:
+            return 0
+        # LazyGeometry は実体化しない（HUD での暗黙実体化を回避）
+        try:
+            if isinstance(geometry, LazyGeometry):
+                return 0
+        except Exception:
+            pass
+        # 優先: 互換プロパティ
+        try:
+            nv = getattr(geometry, "n_vertices")
+            return int(nv)
+        except Exception:
+            pass
+        # Geometry 互換（coords）
+        try:
+            return int(len(getattr(geometry, "coords")))
+        except Exception:
+            pass
+        # LazyGeometry 互換（as_arrays）
+        try:
+            c, _ = getattr(geometry, "as_arrays")(copy=False)
+            return int(c.shape[0])
+        except Exception:
+            return 0
 
     @staticmethod
     def _human(n: float) -> str:
@@ -168,14 +231,32 @@ class MetricSampler(Tickable):
         return f"{n:4.1f}PB"
 
     @staticmethod
-    def _line_count(geometry: Geometry | None) -> int:
+    def _line_count(geometry: object | None) -> int:
         if geometry is None:
             return 0
+        # LazyGeometry は実体化しない
+        try:
+            if isinstance(geometry, LazyGeometry):
+                return 0
+        except Exception:
+            pass
         try:
             return geometry.n_lines
         except Exception:
             # 念のためのフォールバック
-            return int(geometry.offsets.shape[0] - 1) if geometry.offsets.size > 0 else 0
+            try:
+                return int(geometry.offsets.shape[0] - 1) if geometry.offsets.size > 0 else 0
+            except Exception:
+                return 0
+
+    # -------- external provider wiring (Renderer → HUD) --------
+    def set_counts_provider(self, provider: Callable[[], tuple[int, int]]) -> None:
+        """LineRenderer 等からアップロード済みの頂点/ライン数を受け取るプロバイダを登録する。"""
+        self._counts_provider = provider
+
+    def set_extra_metrics_provider(self, provider: Callable[[], Mapping[str, int]]) -> None:
+        """追加メトリクス（IBO/Indices LRU 等）を提供するプロバイダを登録する。"""
+        self._extra_metrics_provider = provider
 
     # -------- normalization helpers for OverlayHUD --------
     def mem_max_bytes(self) -> int:
