@@ -11,6 +11,7 @@ import logging
 from collections import OrderedDict
 from typing import Any, Sequence
 
+import moderngl as mgl
 import numpy as np
 
 from engine.core.geometry import Geometry
@@ -102,11 +103,6 @@ class LineRenderer(Tickable):
     def draw(self) -> None:
         """GPUに送ったデータを画面に描画"""
         if self.gpu.index_count > 0:
-            # optional 依存（moderngl）はローカル import。未導入環境では描画をスキップ。
-            try:  # pragma: no cover - 実行環境依存
-                import moderngl as mgl  # type: ignore
-            except Exception:
-                return
             self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
         else:
             # Debug only: nothing to draw this frame

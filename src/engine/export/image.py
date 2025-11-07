@@ -96,12 +96,6 @@ def save_png(
         return path
     else:
         # FBO 経由で高解像度（overlay なし）を描画
-        # moderngl を直接 import（未導入時は実行時エラーに委ねる）
-        try:
-            import moderngl  # noqa: F401
-        except Exception as e:  # pragma: no cover - 実行時依存
-            raise RuntimeError(f"ModernGL の利用に失敗: {e}") from e
-
         # 型を緩く扱う（mypy: Any）、実行時は moderngl.Context を想定
         assert mgl_context is not None
         assert draw is not None

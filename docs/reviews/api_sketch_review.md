@@ -5,13 +5,13 @@
 - 参照: アーキテクチャ規約（architecture.md, src/api/AGENTS.md）に整合
 
 ## 総評（Summary）
-- 責務分離が明確で、`api.sketch` 本体はオーケストレーションに徹し、具体実装は `sketch_runner/*` に分割されている。遅延 import（pyglet/ModernGL 等）も適切に配置され、ヘッドレス環境への配慮が行き届いている。
+- 責務分離が明確で、`api.sketch` 本体はオーケストレーションに徹し、具体実装は `sketch_runner/*` に分割されている。ModernGL は必須依存だが、遅延 import の配置によりヘッドレス検証には `init_only=True` で配慮されている。
 - ワーカ（生成）と描画（UI）の分離、HUD/メトリクス、MIDI フォールバック、動画/PNG/G-code エクスポートなど、実行環境まわりのUXが一通り揃っている。
 - 一方で小さな不整合がいくつか存在（軽微なバグ1件、import/型スタイルの細部、一部の重複）。設計の大枠に影響する問題は見当たらない。
 
 ## 良い点（Strengths）
 - 遅延 import と安全なフォールバック
-  - pyglet/ModernGL/各種サービスは関数内遅延 import。ヘッドレス/未導入環境対策（`src/api/sketch.py:186`、`src/api/sketch_runner/render.py:26`）。
+  - pyglet/各種サービスは関数内遅延 import。ModernGL は必須だが、`init_only=True` 経路では import されないためヘッドレス/CI に配慮（`src/api/sketch.py:186`、`src/api/sketch_runner/render.py`）。
   - MIDI は Null 実装へ安全にフォールバックし、ログ通知（`src/api/sketch_runner/midi.py:29`）。
 - 責務分割の明確さ
   - 初期化と純粋関数は `sketch_runner/utils.py`（FPS/キャンバス/投影/HUDメトリクス）。

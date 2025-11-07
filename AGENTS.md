@@ -17,6 +17,7 @@
 ## Build & Test（編集ファイル優先の高速ループ）
 
 - 環境: Python 3.10。初期化: `python3.10 -m venv .venv && source .venv/bin/activate && pip install -U pip && pip install -e .[dev]`
+- 実行時依存: ModernGL は必須（ヘッドレス検証のみ行う場合は `run_sketch(..., init_only=True)` で GL 初期化を回避可能）。
 - 実行: `python main.py`
   - スタブ再生成: `PYTHONPATH=src python -m tools.gen_g_stubs && git add src/api/__init__.pyi`
 - プロジェクト全体チェック（明示要求時のみ）:

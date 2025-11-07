@@ -46,7 +46,7 @@
   - 不変条件: `offsets[0]==0` かつ `offsets[-1]==len(coords)`。i 本目の線は `coords[offsets[i]:offsets[i+1]]`。
   - 2D 入力は Z=0 で補完し常に (N,3) へ正規化。空集合は `coords.shape==(0,3)`, `offsets=[0]`。
   - `as_arrays(copy=False)` は読み取り専用ビューを返す（digest/キャッシュ整合性を維持）。
--    書き込みが必要な場合は `copy=True` を使用する。
+- 書き込みが必要な場合は `copy=True` を使用する。
 - LazyGeometry（遅延 spec）
   - `base`: shape 実装（関数参照）とパラメータ、または実体 `Geometry`。
   - `plan`: effect 実装（関数参照）とパラメータの列。順序は固定。
@@ -54,24 +54,10 @@
 - ファクトリとレジストリ
   - Shapes: `shapes/` + `@shape` で登録。`G.<name>(...)` は既定で `LazyGeometry`（spec）を返し、終端で `realize()` して `Geometry` を得る。
 - Effects: `effects/` + `@effect` で登録。`E.pipeline.<name>(...)` でチェーンし、`LazyGeometry` の plan にエフェクト実装（関数参照）を積む。
-  - 例: `mirror`（2D放射状/直交の軽量版）、`mirror3d`（真の3D放射状: 球面くさび・大円境界）。
+  - 例: `mirror`（2D 放射状/直交の軽量版）、`mirror3d`（真の 3D 放射状: 球面くさび・大円境界）。
 
-### Effects: mirror / mirror3d 概要
+### Effects 概要
 
-- mirror（2D）
-  - 半空間/象限（n=1/2）: `x=cx`, `y=cy` によるクリップ→反転。`source_side` は bool/列で側指定（True=正側）。Z は不変。
-  - 放射状（n≥3）: `(cx,cy)` を中心に扇形 `[0, π/n)` をソースとし、回転 `2π/n` と反転の組合せで 2n 複製。Z は不変。
-  - 数値安定: `EPS=1e-6`, `INCLUDE_BOUNDARY=True`。重複は量子化ハッシュで除去。
-
-- mirror3d（真の3D放射状）
-  - 球面くさび（大円境界）: 中心 `c=(cx,cy,cz)` と軸 `a` を基準に、方位角間隔 `Δφ=π/n_azimuth` の 2 境界面でくさびを形成。
-  - ソース抽出: 半空間の AND（`n0·(p-c)≥0` かつ `(-n1)·(p-c)≥0`）。
-  - 複製: 非反転/境界1反転を軸回りに `2π/n` ステップで n 回回転（2n）。`mirror_equator=True` で赤道反転を加え最大 4n。境界/赤道上の重複は除去。
-  - 反射式: `p' = c + (I - 2 nn^T)(p - c)`（n は単位法線）。
-  - 数値安定: `EPS=1e-6`, `INCLUDE_BOUNDARY=True`。重複は量子化ハッシュで除去。
-  - 正規化キー（Camel→snake, lower, `-`→`_`）で一貫性を担保（`common/base_registry.py`）。
-  - Effects はオプションで `__param_meta__` を公開できる（UI 表示のヒント）。
-  - 公開インポート経路の単一路線: ユーザー拡張の登録デコレータは `from api import shape` のみを公式に提供（破壊的変更で統一）。
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
   - 厳格検証（build 時の未知パラメータ検出）は行わない。実行時に関数シグネチャで自然に検出され得る。
@@ -79,7 +65,7 @@
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
     - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
     - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
-  - Lazy 署名（`api.lazy_signature`）は shape/plan の「関数ID（`module:qualname`）」「量子化後パラメータ署名（`common.param_utils.params_signature`）」を順に積み、128bit に集約。
+  - Lazy 署名（`api.lazy_signature`）は shape/plan の「関数 ID（`module:qualname`）」「量子化後パラメータ署名（`common.param_utils.params_signature`）」を順に積み、128bit に集約。
   - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
 - パラメータ GUI（Dear PyGui）
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する（実体は `engine.ui.parameters.dpg_window`）。
@@ -195,8 +181,8 @@ Tips:
 フォント探索/適用:
 
 - 設定（`configs/default.yaml` → `config.yaml` 上書き）で `fonts.search_dirs` を指定すると、Text シェイプ（`src/shapes/text.py:108`）のフォント探索リストに最優先で追加される。拡張子は `.ttf/.otf/.ttc`。
- - HUD（`src/engine/ui/hud/overlay.py`）は起動時に `fonts.search_dirs` 配下から必要なフォントのみを `pyglet.font.add_file()` で登録する（`hud.load_all_fonts=false` 既定、family 名に部分一致）。`hud.font_name` / `hud.font_size` を用いて描画フォントを決定する。HUD のフォント指定は family 名を想定する。
- - Parameter GUI（`src/engine/ui/parameters/dpg_window.py`）は Dear PyGui 起動時に `fonts.search_dirs` からフォントファイルを列挙し、`parameter_gui.layout.font_name` の部分一致候補（優先: `.ttf`）を順次 `dpg.add_font()` でトライし、最初に成功したものを `dpg.bind_font()` で適用する（失敗時は Dear PyGui 既定フォント）。Parameter GUI の指定はファイル名ベース（family 名ではなくファイルパス登録）である。
+- HUD（`src/engine/ui/hud/overlay.py`）は起動時に `fonts.search_dirs` 配下から必要なフォントのみを `pyglet.font.add_file()` で登録する（`hud.load_all_fonts=false` 既定、family 名に部分一致）。`hud.font_name` / `hud.font_size` を用いて描画フォントを決定する。HUD のフォント指定は family 名を想定する。
+- Parameter GUI（`src/engine/ui/parameters/dpg_window.py`）は Dear PyGui 起動時に `fonts.search_dirs` からフォントファイルを列挙し、`parameter_gui.layout.font_name` の部分一致候補（優先: `.ttf`）を順次 `dpg.add_font()` でトライし、最初に成功したものを `dpg.bind_font()` で適用する（失敗時は Dear PyGui 既定フォント）。Parameter GUI の指定はファイル名ベース（family 名ではなくファイルパス登録）である。
   優先順位は「保存値 > config」。HUD 表示の有効/無効は `run(..., show_hud=...)` で指定可能。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
   - Engine/UI 側は `util.cc_provider.get_cc_snapshot()` を経由して CC スナップショットを参照し、`engine/* -> api/*` の依存を避ける（登録は `api.cc` が `set_cc_snapshot_provider` で行う）。
@@ -224,9 +210,8 @@ Tips:
 - G-code: `engine/export/service.py` + `engine/export/gcode.py`
   - 非ブロッキングに変換・保存。HUD へ進捗通知。
 - 動画（MP4）: `engine/export/video.py`
-  - 最小の同期レコーダ。`imageio`/`imageio-ffmpeg` が存在すれば、1フレームずつ取りこぼしなく書き出す。
+  - 最小の同期レコーダ。`imageio`/`imageio-ffmpeg` が存在すれば、1 フレームずつ取りこぼしなく書き出す。
   - HUD 含む録画（画面バッファ）/HUD なし録画（FBO + `LineRenderer.draw()`）を選択可能。
-
 
 ## 座標変換と投影（詳細）
 

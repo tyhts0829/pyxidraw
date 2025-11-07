@@ -63,14 +63,16 @@ def _open_writer(path: Path, width: int, height: int, fps: int) -> _Writer:
     try:
         import imageio.v3 as iio  # type: ignore
 
-        # v3 は `iio.get_writer(..., plugin='ffmpeg')` が利用可能
-        writer = iio.get_writer(str(path), fps=int(fps), codec="libx264", plugin="ffmpeg")  # type: ignore
+        # v3 は `iio.get_writer(..., plugin='ffmpeg')` が利用可能（型は緩く扱う）
+        _gw = getattr(iio, "get_writer")
+        writer = _gw(str(path), fps=int(fps), codec="libx264", plugin="ffmpeg")
         return _Writer(close=writer.close, append_data=writer.append_data)
     except Exception:
         try:
             import imageio as iio  # type: ignore
 
-            writer = iio.get_writer(str(path), fps=int(fps))
+            _gw2 = getattr(iio, "get_writer")
+            writer = _gw2(str(path), fps=int(fps))
             return _Writer(close=writer.close, append_data=writer.append_data)
         except Exception as e:
             raise RuntimeError("imageio/imageio-ffmpeg が見つからないため録画できません") from e
@@ -99,10 +101,7 @@ class VideoRecorder:
         self._pbo_bytes: int = 0
         # Writer-side policy: drop first frame once to avoid initial glitch
         self._drop_initial_frames: int = 0
-        # Pre-allocated FBOs for overlay=False (Shift+V)
-        self._samples: int = 0
-        self._msaa_fbo: Any | None = None
-        self._resolve_fbo: Any | None = None
+        # Pre-allocated FBOs for overlay=False (Shift+V) [deduped]
 
     # ---- state ----
     @property
@@ -162,10 +161,6 @@ class VideoRecorder:
         self._drop_initial_frames = 10
         # Pre-allocate FBOs / PBOs for overlay=False
         if not self._include_overlay:
-            try:
-                import moderngl  # noqa: F401
-            except Exception as e:
-                raise RuntimeError(f"ModernGL の利用に失敗: {e}") from e
             assert self._mgl_context is not None
             assert self._size is not None
             w, h = int(self._size[0]), int(self._size[1])
@@ -207,10 +202,6 @@ class VideoRecorder:
                 raise RuntimeError(f"FBO/PBO 初期化に失敗: {e}") from e
         # Pre-allocate FBOs for overlay=False
         if not self._include_overlay:
-            try:
-                import moderngl  # noqa: F401
-            except Exception as e:
-                raise RuntimeError(f"ModernGL の利用に失敗: {e}") from e
             assert self._mgl_context is not None
             assert self._size is not None
             w, h = int(self._size[0]), int(self._size[1])

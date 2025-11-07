@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
+import moderngl
+
 
 def create_window_and_renderer(
     window_width: int,
     window_height: int,
     *,
-    canvas_width_mm: float,
-    canvas_height_mm: float,
     background: Any,
     line_color: Any,
     projection_matrix,
@@ -27,9 +27,6 @@ def create_window_and_renderer(
     -------
     (rendering_window, mgl_ctx, line_renderer, bg_rgba, line_rgba)
     """
-
-    # 遅延 import（ヘッドレス環境での import 失敗を避ける）
-    import moderngl
 
     from engine.core.render_window import RenderWindow
     from engine.render.renderer import LineRenderer

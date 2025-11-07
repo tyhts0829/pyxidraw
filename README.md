@@ -25,6 +25,8 @@ python -m pip install -U pip
 pip install -e .[dev]
 ```
 
+注記: ModernGL は必須依存です（`pip install -e .[dev]` または `pip install -e .` で自動的に導入されます）。ヘッドレス検証のみを行う場合は `run_sketch(..., init_only=True)` を使用してください（GL を初期化しません）。
+
 2) スタブ生成とスモークテスト:
 ```
 PYTHONPATH=src python -m tools.gen_g_stubs

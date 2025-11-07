@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import Any, Callable, Mapping, Sequence
 
 from common.func_id import impl_id as _impl_id
 from common.param_utils import params_signature as _params_signature
@@ -21,7 +21,7 @@ def _digest_for_params_tuple(params_tuple: tuple[tuple[str, object], ...]) -> by
 
 
 def _freeze_plan(
-    plan: list[tuple[object, dict[str, Any]]],
+    plan: Sequence[tuple[Callable[[Geometry], Geometry], Mapping[str, Any]]],
 ) -> tuple[tuple[str, tuple[tuple[str, object], ...]], ...]:
     items: list[tuple[str, tuple[tuple[str, object], ...]]] = []
     for impl, params in plan:

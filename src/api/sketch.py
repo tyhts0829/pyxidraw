@@ -271,8 +271,6 @@ def run_sketch(
     rendering_window, mgl_ctx, line_renderer, bg_rgba, rgba = create_window_and_renderer(
         window_width,
         window_height,
-        canvas_width_mm=float(canvas_width),
-        canvas_height_mm=float(canvas_height),
         background=background,
         line_color=line_color,
         projection_matrix=proj,
