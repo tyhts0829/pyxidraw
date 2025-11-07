@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from common.func_id import impl_id as _impl_id
 from common.param_utils import params_signature as _params_signature
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
@@ -17,15 +18,6 @@ from engine.core.lazy_geometry import LazyGeometry
 def _digest_for_params_tuple(params_tuple: tuple[tuple[str, object], ...]) -> bytes:
     data = repr(params_tuple).encode()
     return hashlib.blake2b(data, digest_size=8).digest()
-
-
-def _impl_id(fn: object) -> str:
-    try:
-        mod = getattr(fn, "__module__", "")
-        qn = getattr(fn, "__qualname__", getattr(fn, "__name__", ""))
-        return f"{mod}:{qn}"
-    except Exception:
-        return str(id(fn))
 
 
 def _freeze_plan(

@@ -9,6 +9,11 @@
 - macOS など `multiprocessing` が spawn 方式の環境では、サブプロセスに渡すコールバック
   （`draw_callback`/`apply_cc_snapshot`/`metrics_snapshot`）は「ピクル可能＝トップレベル定義」である必要がある。
   ローカル関数や `functools.partial` でクロージャを含むものは避けること。
+
+キャッシュに関する注記:
+- engine.core の LRU（shape/prefix）はプロセスローカルであり、子プロセス起動時は空の状態から開始する。
+- 親プロセスのキャッシュは共有しない。必要に応じて `os.register_at_fork` により子プロセス初期化時の
+  キャッシュクリアを登録可能だが、現状は明示の初期化は行っていない（設計上の簡素化）。
 """
 
 from __future__ import annotations

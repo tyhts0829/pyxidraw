@@ -80,11 +80,10 @@ import logging
 import sys
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, Mapping, Optional
+from typing import Callable, Mapping
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
-from engine.export.gcode import GCodeWriter
 from engine.ui.hud.config import HUDConfig
 from engine.ui.parameters.manager import ParameterManager
 
@@ -244,7 +243,7 @@ def run_sketch(
     )
 
     # HUD: キャッシュ HIT/MISS を受け取って更新（有効時のみ）
-    on_metrics_cb: Optional[Callable[[Mapping[str, str]], None]] = None
+    on_metrics_cb: Callable[[Mapping[str, str]], None] | None = None
     if hud_conf.enabled and hud_conf.show_cache_status:
 
         def _on_metrics(flags):  # type: ignore[no-untyped-def]
@@ -319,13 +318,14 @@ def run_sketch(
             sampler.set_extra_metrics_provider(_extra_metrics)
         except Exception:
             pass
-    # G-code エクスポート: 実 writer を接続
+    # G-code エクスポート: 実 writer を接続（遅延 import）
+    from engine.export.gcode import GCodeWriter  # 遅延 import（重依存の統一方針）
+
     export_service = ExportService(writer=GCodeWriter())
 
     # （line_renderer は create_window_and_renderer で初期化済み）
 
     # ---- 初期色の復帰（Parameter GUI の保存値があれば優先） ---------
-    from .sketch_runner.params import apply_initial_colors as _apply_initial_colors  # local alias
 
     _apply_initial_colors(parameter_manager, rendering_window, line_renderer, overlay)
 
@@ -556,10 +556,9 @@ def run_sketch(
         try:
             video_recorder.capture_current_frame(rendering_window)
             # 品質最優先モード中は、FBO→screen ブリット後に HUD を重ねる
-            if "quality_recording" in locals():
+            if quality_recording and overlay is not None:
                 try:
-                    if quality_recording and overlay is not None:
-                        overlay.draw()
+                    overlay.draw()
                 except Exception:
                     pass
         except Exception as e:

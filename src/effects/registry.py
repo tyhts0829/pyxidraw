@@ -1,10 +1,10 @@
 """
 どこで: `effects` のレジストリ層（関数専用）。
-何を: `@effect` デコレータによる登録と取得/一覧/検査を提供（キーは正規化）。
+何を: `@effect` デコレータで純関数エフェクトを登録し、取得/一覧/検査を提供。
 なぜ: 加工ステージの拡張を一貫 API で管理し、`api.effects` から安全に解決するため。
 
 公開 API 概要:
-- `effect`（デコレータ）: 関数を登録
+- `effect`（デコレータ）: 関数を登録（Lazy 非依存。登録するのは元実装の純関数）。
 - `get_effect(name)` / `list_effects()` / `is_effect_registered(name)` / `clear_registry()`
 - `get_registry()`: 読み取り専用ビュー（テスト/診断用）
 """

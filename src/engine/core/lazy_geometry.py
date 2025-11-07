@@ -17,6 +17,8 @@ from collections import OrderedDict
 from typing import Any, Callable, Literal
 
 from engine.core.geometry import Geometry
+from common.func_id import impl_id as _impl_id
+from common.env import env_int, env_bool
 
 
 BaseKind = Literal["shape", "geometry"]
@@ -47,24 +49,17 @@ class LazyGeometry:
             # 形状結果の LRU キャッシュ（フレーム間共有）
             try:
                 params_tuple = _params_signature(shape_impl, dict(params))
-                impl_id = (_safe_getattr(shape_impl, "__module__"), _safe_name(shape_impl))
-                key = ("shape", impl_id, params_tuple)
+                key = ("shape", _impl_id(shape_impl), params_tuple)
             except Exception:
                 key = None  # フォールバック: キャッシュを使わない
 
             g = None
             if key is not None:
-                try:
-                    _entry = _SHAPE_CACHE.get(key)
-                except Exception:
-                    _entry = None
+                _entry = _SHAPE_CACHE.get(key)
                 if _entry is not None:
-                    try:
-                        # LRU: move to end
-                        _ = _SHAPE_CACHE.pop(key)
-                        _SHAPE_CACHE[key] = _entry
-                    except Exception:
-                        pass
+                    # LRU: move to end
+                    _ = _SHAPE_CACHE.pop(key)
+                    _SHAPE_CACHE[key] = _entry
                     g = _entry
             if g is None:
                 # 実生成
@@ -74,13 +69,10 @@ class LazyGeometry:
                     g = Geometry.from_lines(g)
                 # キャッシュへ格納
                 if key is not None:
-                    try:
-                        _SHAPE_CACHE[key] = g
-                        if _SHAPE_CACHE_MAXSIZE is not None and _SHAPE_CACHE_MAXSIZE > 0:
-                            while len(_SHAPE_CACHE) > _SHAPE_CACHE_MAXSIZE:
-                                _SHAPE_CACHE.popitem(last=False)
-                    except Exception:
-                        pass
+                    _SHAPE_CACHE[key] = g
+                    if _SHAPE_CACHE_MAXSIZE is not None and _SHAPE_CACHE_MAXSIZE > 0:
+                        while len(_SHAPE_CACHE) > _SHAPE_CACHE_MAXSIZE:
+                            _SHAPE_CACHE.popitem(last=False)
             base_key = key or ("shape", id(shape_impl))
 
         # 2) effect を順次適用（Prefix LRU による途中結果の再利用を試みる）
@@ -89,82 +81,56 @@ class LazyGeometry:
         start_idx = 0
 
         # ---- Prefix Cache: 最長一致プレフィックスを検索 ----
-        try:
-            if _PREFIX_CACHE_ENABLED and steps:
-                effect_sigs: list[tuple[tuple[str, str], tuple[tuple[str, object], ...]]] = []
-                for impl, eparams in steps:
-                    try:
-                        e_tuple = _params_signature(impl, dict(eparams))
-                    except Exception:
-                        e_tuple = tuple()
-                    effect_sigs.append(
-                        ((_safe_getattr(impl, "__module__"), _safe_name(impl)), e_tuple)
-                    )
+        if _PREFIX_CACHE_ENABLED and steps:
+            effect_sigs: list[tuple[str, tuple[tuple[str, object], ...]]] = []
+            for impl, eparams in steps:
+                try:
+                    # 署名生成に失敗した場合は「非キャッシュ相当」として空署名を採用
+                    e_tuple = _params_signature(impl, dict(eparams))
+                except Exception:
+                    e_tuple = tuple()
+                effect_sigs.append((_impl_id(impl), e_tuple))
 
-                for i in range(len(effect_sigs), 0, -1):
-                    k = (base_key, tuple(effect_sigs[:i]))
-                    try:
-                        cached_geo = _PREFIX_CACHE.get(k)
-                    except Exception:
-                        cached_geo = None
-                    if cached_geo is not None:
-                        # LRU: move to end
-                        try:
-                            _ = _PREFIX_CACHE.pop(k)
-                            _PREFIX_CACHE[k] = cached_geo
-                        except Exception:
-                            pass
-                        out = cached_geo
-                        start_idx = i
-                        _PREFIX_HITS_INC()
-                        break
-                else:
-                    _PREFIX_MISSES_INC()
-        except Exception:
-            pass
+            for i in range(len(effect_sigs), 0, -1):
+                k = (base_key, tuple(effect_sigs[:i]))
+                cached_geo = _PREFIX_CACHE.get(k)
+                if cached_geo is not None:
+                    # LRU: move to end
+                    _ = _PREFIX_CACHE.pop(k)
+                    _PREFIX_CACHE[k] = cached_geo
+                    out = cached_geo
+                    start_idx = i
+                    _PREFIX_HITS_INC()
+                    break
+            else:
+                _PREFIX_MISSES_INC()
 
         # ---- 残りの effect を適用 ----
+        # 事前に効果署名列を用意（上と同等）。署名生成に失敗した場合は保存キーに空署名を使用。
         try:
-            # 事前に効果署名列を用意（上と同等）
-            try:
-                effect_sigs_all = []
-                for impl, eparams in steps:
-                    e_tuple = _params_signature(impl, dict(eparams))
-                    effect_sigs_all.append(
-                        ((_safe_getattr(impl, "__module__"), _safe_name(impl)), e_tuple)
-                    )
-            except Exception:
-                effect_sigs_all = []
-
-            for i in range(start_idx, len(steps)):
-                impl, params = steps[i]
-                out = impl(out, **params)
-
-                # プレフィックスキャッシュへの格納（最大頂点数などの制約つき）
-                if _PREFIX_CACHE_ENABLED:
-                    # 頂点数ガード
-                    try:
-                        vcount = int(out.coords.shape[0])
-                    except Exception:
-                        vcount = 0
-                    k = (
-                        (base_key, tuple(effect_sigs_all[: i + 1]))
-                        if steps
-                        else (base_key, tuple())
-                    )
-                    if _PREFIX_CACHE_MAXSIZE != 0 and vcount <= _PREFIX_CACHE_MAX_VERTS:
-                        _PREFIX_CACHE[k] = out
-                        # LRU 制御
-                        if _PREFIX_CACHE_MAXSIZE is not None and _PREFIX_CACHE_MAXSIZE > 0:
-                            while len(_PREFIX_CACHE) > _PREFIX_CACHE_MAXSIZE:
-                                try:
-                                    _PREFIX_CACHE.popitem(last=False)
-                                    _PREFIX_EVICTS_INC()
-                                except Exception:
-                                    break
-                        _PREFIX_STORES_INC()
+            effect_sigs_all = []
+            for impl, eparams in steps:
+                e_tuple = _params_signature(impl, dict(eparams))
+                effect_sigs_all.append((_impl_id(impl), e_tuple))
         except Exception:
-            pass
+            effect_sigs_all = []
+
+        for i in range(start_idx, len(steps)):
+            impl, params = steps[i]
+            out = impl(out, **params)
+
+            # プレフィックスキャッシュへの格納（最大頂点数などの制約つき）
+            if _PREFIX_CACHE_ENABLED:
+                vcount = int(out.coords.shape[0])
+                k = (base_key, tuple(effect_sigs_all[: i + 1])) if steps else (base_key, tuple())
+                if _PREFIX_CACHE_MAXSIZE != 0 and vcount <= _PREFIX_CACHE_MAX_VERTS:
+                    _PREFIX_CACHE[k] = out
+                    # LRU 制御
+                    if _PREFIX_CACHE_MAXSIZE is not None and _PREFIX_CACHE_MAXSIZE > 0:
+                        while len(_PREFIX_CACHE) > _PREFIX_CACHE_MAXSIZE:
+                            _PREFIX_CACHE.popitem(last=False)
+                            _PREFIX_EVICTS_INC()
+                    _PREFIX_STORES_INC()
 
         self._cached = out
         return out
@@ -234,84 +200,54 @@ class LazyGeometry:
 
 
 # ---- 形状結果 LRU（プロセス内共有） -----------------------------------------
-import os as _os  # noqa: E402  # 遅延でなくモジュール末尾にまとめて定義
 
-try:
-    _SHAPE_CACHE_MAXSIZE_ENV = _os.getenv("PXD_SHAPE_CACHE_MAXSIZE")
-    _SHAPE_CACHE_MAXSIZE: int | None = (
-        int(_SHAPE_CACHE_MAXSIZE_ENV) if _SHAPE_CACHE_MAXSIZE_ENV is not None else 128
-    )
-    if _SHAPE_CACHE_MAXSIZE is not None and _SHAPE_CACHE_MAXSIZE < 0:
-        _SHAPE_CACHE_MAXSIZE = 0
-except Exception:
-    _SHAPE_CACHE_MAXSIZE = 128
+_SHAPE_CACHE_MAXSIZE: int | None = env_int("PXD_SHAPE_CACHE_MAXSIZE", 128, min_value=0)
 
 _SHAPE_CACHE: "OrderedDict[object, Geometry]" = OrderedDict()
 
 # ---- Prefix（途中結果）LRU --------------------------------------------------
-try:
-    _PREFIX_CACHE_ENABLED = int(_os.getenv("PXD_PREFIX_CACHE_ENABLED", "1")) != 0
-except Exception:
-    _PREFIX_CACHE_ENABLED = True
-try:
-    _PREFIX_CACHE_MAXSIZE_ENV = _os.getenv("PXD_PREFIX_CACHE_MAXSIZE")
-    _PREFIX_CACHE_MAXSIZE: int | None = (
-        int(_PREFIX_CACHE_MAXSIZE_ENV) if _PREFIX_CACHE_MAXSIZE_ENV is not None else 128
-    )
-    if _PREFIX_CACHE_MAXSIZE is not None and _PREFIX_CACHE_MAXSIZE < 0:
-        _PREFIX_CACHE_MAXSIZE = 0
-except Exception:
-    _PREFIX_CACHE_MAXSIZE = 128
-try:
-    _PREFIX_CACHE_MAX_VERTS = int(_os.getenv("PXD_PREFIX_CACHE_MAX_VERTS", "10000000"))
-except Exception:
-    _PREFIX_CACHE_MAX_VERTS = 10_000_000
-try:
-    _PREFIX_DEBUG = int(_os.getenv("PXD_DEBUG_PREFIX_CACHE", "0")) != 0
-except Exception:
-    _PREFIX_DEBUG = False
+_PREFIX_CACHE_ENABLED = env_bool("PXD_PREFIX_CACHE_ENABLED", True)
+_PREFIX_CACHE_MAXSIZE: int | None = env_int("PXD_PREFIX_CACHE_MAXSIZE", 128, min_value=0)
+_PREFIX_CACHE_MAX_VERTS: int = env_int("PXD_PREFIX_CACHE_MAX_VERTS", 10_000_000, min_value=0) or 0
+_PREFIX_DEBUG = env_bool("PXD_DEBUG_PREFIX_CACHE", False)
 
 _PREFIX_CACHE: "OrderedDict[object, Geometry]" = OrderedDict()
 _PREFIX_HITS = 0
 _PREFIX_MISSES = 0
 _PREFIX_STORES = 0
 _PREFIX_EVICTS = 0
-_PREFIX_TAIL_SKIPPED = 0
 
 
 def _PREFIX_HITS_INC() -> None:
+    # デバッグ無効時はカウンタ更新をスキップ（実行コスト削減）
+    if not _PREFIX_DEBUG:
+        return
     global _PREFIX_HITS
     _PREFIX_HITS += 1
 
 
 def _PREFIX_MISSES_INC() -> None:
+    if not _PREFIX_DEBUG:
+        return
     global _PREFIX_MISSES
     _PREFIX_MISSES += 1
 
 
 def _PREFIX_STORES_INC() -> None:
+    if not _PREFIX_DEBUG:
+        return
     global _PREFIX_STORES
     _PREFIX_STORES += 1
 
 
 def _PREFIX_EVICTS_INC() -> None:
+    if not _PREFIX_DEBUG:
+        return
     global _PREFIX_EVICTS
     _PREFIX_EVICTS += 1
 
 
-try:
-    _PREFIX_STORE_TAIL = int(_os.getenv("PXD_PREFIX_CACHE_STORE_TAIL", "0")) != 0
-except Exception:
-    _PREFIX_STORE_TAIL = False
-try:
-    _PREFIX_STORE_ON_MISS_UP_TO = int(_os.getenv("PXD_PREFIX_CACHE_STORE_ON_MISS_UP_TO", "16"))
-except Exception:
-    _PREFIX_STORE_ON_MISS_UP_TO = 16
-
-
-def _PREFIX_TAIL_SKIPPED_INC() -> None:
-    global _PREFIX_TAIL_SKIPPED
-    _PREFIX_TAIL_SKIPPED += 1
+## 末尾保存やミス時プリウォームの環境スイッチは未採用（将来案）。
 
 
 # ---- コア内蔵の軽量エフェクト（engine.core 依存のみ） ----------------------
@@ -346,16 +282,4 @@ def _fx_rotate(
     return g.rotate(x=rx, y=ry, z=rz, center=center)
 
 
-def _safe_getattr(obj: Any, name: str) -> str:
-    try:
-        v = getattr(obj, name)
-        return str(v)
-    except Exception:
-        return ""
-
-
-def _safe_name(fn: Callable[..., Any]) -> str:
-    try:
-        return str(getattr(fn, "__qualname__", getattr(fn, "__name__", "")))
-    except Exception:
-        return ""
+# 末尾にあった安全取得ユーティリティは共通化（common.func_id.impl_id を使用）

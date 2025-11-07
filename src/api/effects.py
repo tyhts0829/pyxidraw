@@ -46,6 +46,8 @@ class Pipeline:
     _hits: int = 0
     _misses: int = 0
     _evicts: int = 0
+    # 事前コンパイル済みステップ（関数参照 + 正規化済み params）: 任意
+    _compiled_steps: tuple[tuple[Callable[[Geometry], Geometry], dict[str, Any]], ...] | None = None
 
     def __post_init__(self) -> None:  # noqa: D401
         self._cache = OrderedDict()
@@ -59,26 +61,30 @@ class Pipeline:
 
     def __call__(self, g: Geometry | LazyGeometry) -> Geometry | LazyGeometry:
         # 基本: LazyGeometry に plan（関数参照）を足して返す。
-        # ここで effects.registry を解決し、engine.core 側には関数参照のみを渡す。
-        from effects.registry import get_effect as _get_effect  # local import
+        # steps の事前コンパイルがあればそれを使用、無ければ都度コンパイル。
+        if self._compiled_steps is None:
+            from effects.registry import get_effect as _get_effect  # local import
 
-        compiled_steps: list[tuple[Callable[[Geometry], Geometry], dict[str, Any]]] = []
-        for name, params_tuple in self.steps:
-            fn = _get_effect(name)
-            impl = getattr(fn, "__effect_impl__", fn)
-            compiled_steps.append((impl, dict(params_tuple)))
+            compiled_steps: list[tuple[Callable[[Geometry], Geometry], dict[str, Any]]] = []
+            for name, params_tuple in self.steps:
+                fn = _get_effect(name)
+                impl = getattr(fn, "__effect_impl__", fn)
+                compiled_steps.append((impl, dict(params_tuple)))
+            steps_compiled = compiled_steps
+        else:
+            steps_compiled = list(self._compiled_steps)
 
         if isinstance(g, LazyGeometry):
             lg = LazyGeometry(
                 base_kind=g.base_kind,
                 base_payload=g.base_payload,
-                plan=list(g.plan) + compiled_steps,
+                plan=list(g.plan) + steps_compiled,
             )
         else:
             lg = LazyGeometry(
                 base_kind="geometry",
                 base_payload=g,
-                plan=compiled_steps,
+                plan=steps_compiled,
             )
         # キャッシュ
         key = (b"sig", lazy_signature_for(lg))
@@ -157,7 +163,21 @@ class PipelineBuilder:
             p = None
         if p is not None:
             return p
-        p = Pipeline(steps_tuple, _realize_on_call=False, _cache_maxsize=self._cache_maxsize)
+        # 事前に name→impl へ解決
+        from effects.registry import get_effect as _get_effect  # local import
+
+        compiled_steps: list[tuple[Callable[[Geometry], Geometry], dict[str, Any]]] = []
+        for name, params_tuple in steps_tuple:
+            fn = _get_effect(name)
+            impl = getattr(fn, "__effect_impl__", fn)
+            compiled_steps.append((impl, dict(params_tuple)))
+
+        p = Pipeline(
+            steps_tuple,
+            _realize_on_call=False,
+            _cache_maxsize=self._cache_maxsize,
+            _compiled_steps=tuple(compiled_steps),
+        )
         try:
             _GLOBAL_COMPILED[key] = p  # type: ignore[index]
             if _GLOBAL_COMPILED_MAXSIZE is not None and _GLOBAL_COMPILED_MAXSIZE > 0:
