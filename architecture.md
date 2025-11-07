@@ -42,10 +42,10 @@
 
 - Geometry（統一表現）
   - `coords: float32 (N,3)` と `offsets: int32 (M+1,)` によるポリライン集合の正規化表現。
-  - すべての変換は純関数（新しい Geometry を返す）。`digest: bytes` により内容指紋を保持（キャッシュ鍵）。
+  - すべての変換は純関数（新しい Geometry を返す）。キャッシュは「Lazy 署名（`api.lazy_signature`）」を基準に行う（Geometry 自体は digest を持たない）。
   - 不変条件: `offsets[0]==0` かつ `offsets[-1]==len(coords)`。i 本目の線は `coords[offsets[i]:offsets[i+1]]`。
   - 2D 入力は Z=0 で補完し常に (N,3) へ正規化。空集合は `coords.shape==(0,3)`, `offsets=[0]`。
-  - `as_arrays(copy=False)` は読み取り専用ビューを返す（digest/キャッシュ整合性を維持）。
+  - `as_arrays(copy=False)` は読み取り専用ビューを返す（キャッシュ整合性を維持）。
 - 書き込みが必要な場合は `copy=True` を使用する。
 - LazyGeometry（遅延 spec）
   - `base`: shape 実装（関数参照）とパラメータ、または実体 `Geometry`。
@@ -61,12 +61,12 @@
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
   - 厳格検証（build 時の未知パラメータ検出）は行わない。実行時に関数シグネチャで自然に検出され得る。
-  - 単層 LRU キャッシュ（インスタンス内）: 入力 `Geometry.digest` × パイプライン定義ハッシュでヒット判定。
+  - 単層 LRU キャッシュ（インスタンス内）: キーは `(b"sig", lazy_signature_for(LazyGeometry))`。
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。
-    - 既定値は環境変数 `PXD_PIPELINE_CACHE_MAXSIZE` でも上書き可能（負値は 0=無効 として扱う）。
-    - 実装は `OrderedDict` による LRU 風で、get/set/evict は `RLock` で最小限保護（軽量なスレッド安全性）。
-  - Lazy 署名（`api.lazy_signature`）は shape/plan の「関数 ID（`module:qualname`）」「量子化後パラメータ署名（`common.param_utils.params_signature`）」を順に積み、128bit に集約。
-  - ジオメトリ側の `digest` は環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（パイプラインは配列から都度ハッシュでフォールバック）。
+    - 既定値は環境変数 `PXD_COMPILED_CACHE_MAXSIZE` で上書き可（実装準拠）。
+    - 実装は `OrderedDict` による LRU 風。
+  - Lazy 署名（`api.lazy_signature`）は shape/plan ごとに「関数 ID（`module:qualname`／`common.func_id.impl_id`）」「量子化後パラメータ署名（`common.param_utils.params_signature`）」を積み、128bit に集約。
+  - 中間結果（prefix 単位）の LRU は `LazyGeometry.realize()`（engine.core）側にあり、最長一致の prefix を再利用する。
 - パラメータ GUI（Dear PyGui）
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する（実体は `engine.ui.parameters.dpg_window`）。
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と Descriptor 登録を行い、GUI override を適用してから元の関数へ委譲（変換レイヤは廃止し、実値を扱う）。
@@ -74,7 +74,7 @@
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン →`ParameterWindowController` を起動。
   - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
   - パラメータ GUI はメインスレッドで維持しつつ、ワーカ側へは GUI 値のスナップショットを渡して適用する（SnapshotRuntime）。このため GUI 有効時でも `WorkerPool` は並列実行できる。
-  - 駆動方式は内部ドライバで抽象化。可能なら `pyglet.clock.schedule_interval` に統合（メインスレッドから `render_dearpygui_frame()` を実行）、未導入時はバックグラウンドスレッドで `start_dearpygui()` を実行。ヘッドレス/未導入環境ではスタブ実装が自動で選択され、インポートは失敗しない。
+  - 駆動方式は内部ドライバで抽象化。可能なら `pyglet.clock.schedule_interval` に統合（メインスレッドから `render_dearpygui_frame()` を実行）、未導入時はバックグラウンドスレッドで `start_dearpygui()` を実行。Dear PyGui 未導入環境では GUI を起動しない限り import は行われない（スタブは用意していないため、起動時は未導入で ImportError となる）。
 
 ## データフロー（概略）
 
@@ -236,9 +236,9 @@ Tips:
   - `offsets[0]==0`、`offsets[-1]==len(coords)`、2D 入力は `Z=0` 補完、空集合は `coords.shape==(0,3)`, `offsets=[0]`。
   - 変換は純関数（`translate/scale/rotate/concat`）。常に新インスタンスを返す。
   - コンストラクタで dtype/形状を検証し、`coords` は float32 C-contig、`offsets` は int32 C-contig へ強制正規化。
-- ダイジェスト（キャッシュ協調）
-  - `digest: bytes` は `blake2b(digest_size=16)` による内容指紋。初回遅延計算 → 以後再利用。
-  - 無効化: `PXD_DISABLE_GEOMETRY_DIGEST=1`。この場合 `g.digest` アクセスは例外、ただしパイプライン側が配列から都度ハッシュでフォールバック。
+- 署名（キャッシュ協調）
+  - Geometry 自体に digest は保持しない。パイプラインのキャッシュは `api.lazy_signature.lazy_signature_for(LazyGeometry)` により生成される 128bit 署名を用いる。
+  - 署名は base（実体 Geometry は `id()`、shape は `impl_id + params_signature`）と plan（各 `impl_id + params_signature`）を順に積んで `blake2b-128` に集約。
 
 ## レンダリング（ModernGL / 1 ドローの設計）
 
@@ -260,8 +260,8 @@ Tips:
   - トップレベルの try-import/sentinel/専用例外は用いない（ImportError はそのまま上げる）。
   - 依存未導入時の挙動は各レイヤの責務で扱う（例: API 層で Null フォールバック、または機能をスキップ）。
 - 代表モジュールの現状
-  - ModernGL: `renderer.draw()` でローカル import。未導入時は描画をスキップ。`line_mesh` は型を Any にして import 依存を排除。
-  - pyglet: 使用箇所でローカル import。`export.image` と Parameter GUI（`dpg_window`）は実行時のみ import。
+  - ModernGL: 描画パスの必須依存。`engine.render.renderer` および `api.sketch_runner.render` などでトップレベル import。ヘッドレス検証のみ行う場合は `run_sketch(..., init_only=True)` で GL 初期化を回避可能。
+  - pyglet: 使用箇所でローカル import。`export.image` と Parameter GUI は実行時にコントローラ経由で読み込む（`dpg_window` は Dear PyGui をトップレベルで import するが、GUI を開始したときのみモジュールが import される）。
   - mido: `engine.io.manager`/`engine.io.controller` ともにローカル import。未導入時は API 層がフォールバック（MIDI 無効）。
   - shapely: `effects.offset/partition` は処理関数内でローカル import。未導入時は `partition` が耳切り三角分割にフォールバック。
   - numba: デコレータ `njit` は未導入時 no-op で吸収（例: `effects.dash`）。
@@ -288,10 +288,8 @@ Tips:
 ## パイプライン（キャッシュ/厳格検証の詳細）
 
 - キャッシュ鍵
-  - 入力 `geometry_hash` × `pipeline_key`。
-  - `geometry_hash`: 通常は `Geometry.digest`（無効時は配列から都度 blake2b-128）。
-  - `pipeline_key`: ステップ列を順にハッシュして合成。
-    - 各ステップで `name.encode()`、エフェクト関数の近似版 `__code__.co_code` ハッシュ（blake2b-64）、パラメータ（dict/配列の決定的 repr）ハッシュ（blake2b-64）を積む。
+  - `Pipeline` の LRU は `(b"sig", api.lazy_signature.lazy_signature_for(LazyGeometry))` をキーにする。
+  - 形状結果 LRU と中間（prefix）LRU は `engine.core.lazy_geometry.LazyGeometry.realize()` 側にあり、`impl_id` と量子化後パラメータ署名で構成。
 - 容量/動作
   - `PipelineBuilder.cache(maxsize=None|0|N)`、または `PXD_PIPELINE_CACHE_MAXSIZE` で設定。
   - 実装は `OrderedDict` による LRU 風（ヒットで末尾へ、上限超過で先頭を追い出し）。
