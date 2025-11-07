@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import os
 import weakref
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -26,7 +25,9 @@ from .lazy_signature import lazy_signature_for
 
 _GLOBAL_PIPELINES: "weakref.WeakSet[Pipeline]"  # forward decl
 _GLOBAL_COMPILED: "OrderedDict[tuple, Pipeline]"  # forward compiled cache
-_GLOBAL_COMPILED_MAXSIZE_ENV = os.getenv("PXD_COMPILED_CACHE_MAXSIZE")
+import os as _os  # 局所 import（環境既定のフォールバック用）
+
+_GLOBAL_COMPILED_MAXSIZE_ENV = _os.getenv("PXD_COMPILED_CACHE_MAXSIZE")
 try:
     _GLOBAL_COMPILED_MAXSIZE: int | None = (
         int(_GLOBAL_COMPILED_MAXSIZE_ENV) if _GLOBAL_COMPILED_MAXSIZE_ENV is not None else 128

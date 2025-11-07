@@ -96,8 +96,17 @@ def filter_files_for_family(files: Sequence[Path], family: str | None) -> list[P
 
 def debug_print(msg: str) -> None:
     """PXD_DEBUG_FONTS が真のときだけ出力する軽量デバッグ出力。"""
-    if os.environ.get("PXD_DEBUG_FONTS"):
-        try:
-            print(msg)
-        except Exception:
-            pass
+    try:
+        from common.settings import get as _get_settings
+
+        if _get_settings().DEBUG_FONTS:
+            try:
+                print(msg)
+            except Exception:
+                pass
+    except Exception:
+        if os.environ.get("PXD_DEBUG_FONTS"):
+            try:
+                print(msg)
+            except Exception:
+                pass

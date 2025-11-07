@@ -104,7 +104,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
   - `shapes.py`: 形状 API。
   - `sketch.py`: 実行エンジンの束ね（ModernGL/Pyglet、MIDI、ワーカー、HUD）。初期化・補助は内部ヘルパ `api/sketch_runner/*.py` に委譲。
 - `engine/`
-  - `core/geometry.py`: 統一 `Geometry`、基本変換、`digest`。
+  - `core/geometry.py`: 統一 `Geometry`、基本変換。
   - `core/frame_clock.py`, `core/tickable.py`: フレーム調停と更新インターフェース。
   - `runtime/`: `WorkerPool`, `StreamReceiver`, `buffer` 等の並行処理。
   - `render/renderer.py`: ライン描画（正射影行列、倍精度 →GPU 転送）。
@@ -189,7 +189,7 @@ Tips:
 
 ## テストとの接点（要点）
 
-- `Geometry` はスナップショット（`digest`）で回帰検知しやすい。
+- `Geometry` は `coords/offsets` の JSON スナップショットで回帰検知しやすい（digest は廃止）。
 - パイプラインは build 時検証を行わず、実行時に自然に検出される。キャッシュは `cache(maxsize=...)` で制御可能。
 
 ## 拡張のガイド（最短ルート）

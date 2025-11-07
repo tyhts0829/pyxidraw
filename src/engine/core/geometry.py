@@ -16,19 +16,12 @@ API 方針（ADR 準拠）:
 - すべて純関数（副作用ゼロ）であり、新しい `Geometry` インスタンスを返す。
 - 変換チェーンは `Geometry` 側で完結し、エフェクトは `E.pipeline` に委譲する。
 
-ダイジェスト（キャッシュ連携）:
-- `digest: bytes` は `coords/offsets` 内容から算出する短いハッシュ指紋。
-- パイプラインの単層キャッシュ鍵 `(geometry_digest, pipeline_key)` の片翼として用いられる。
-- 環境変数 `PXD_DISABLE_GEOMETRY_DIGEST=1` で無効化可能（無効化時の詳細は `digest` docstring 参照）。
-
 構築ユーティリティ:
 - `Geometry.from_lines(lines)` は多様な入力（list/ndarray, 2D/3D, 1D ベクトル）から
   上記データモデルへ正規化する。無効な形状は `ValueError`。
 
 性能上の注意:
 - 可能な限りコピーを避け、dtype 変換のみで整形する。大規模データでも可読性と速度の両立を狙う。
-- ダイジェスト計算では `np.ascontiguousarray(...).tobytes()` により安定したバイト列へ変換して
-  ハッシュ化する（初回のみコピー、以後はキャッシュされた `digest` を再利用）。
 
 直感図（複数線の格納）:
 
@@ -200,7 +193,7 @@ class Geometry:
         Notes
         -----
         `copy=False` は読み取り専用ビュー（`setflags(write=False)`）を返す。外部からの
-        就地変更による `digest` 不整合やキャッシュキー破壊を防ぐ。書き込みが必要な場合は
+        就地変更によるキャッシュキー不整合や内容破壊を防ぐ。書き込みが必要な場合は
         `copy=True` を指定する。
         """
         if copy:

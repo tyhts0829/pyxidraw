@@ -201,15 +201,29 @@ class LazyGeometry:
 
 # ---- 形状結果 LRU（プロセス内共有） -----------------------------------------
 
-_SHAPE_CACHE_MAXSIZE: int | None = env_int("PXD_SHAPE_CACHE_MAXSIZE", 128, min_value=0)
+try:
+    from common.settings import get as _get_settings
+
+    _s = _get_settings()
+    _SHAPE_CACHE_MAXSIZE: int | None = (
+        int(_s.SHAPE_CACHE_MAXSIZE) if _s.SHAPE_CACHE_MAXSIZE is not None else None
+    )
+    _PREFIX_CACHE_ENABLED = bool(_s.PREFIX_CACHE_ENABLED)
+    _PREFIX_CACHE_MAXSIZE: int | None = (
+        int(_s.PREFIX_CACHE_MAXSIZE) if _s.PREFIX_CACHE_MAXSIZE is not None else None
+    )
+    _PREFIX_CACHE_MAX_VERTS: int = int(_s.PREFIX_CACHE_MAX_VERTS or 0)
+    _PREFIX_DEBUG = bool(_s.DEBUG_PREFIX_CACHE)
+except Exception:
+    _SHAPE_CACHE_MAXSIZE = env_int("PXD_SHAPE_CACHE_MAXSIZE", 128, min_value=0)
+    _PREFIX_CACHE_ENABLED = env_bool("PXD_PREFIX_CACHE_ENABLED", True)
+    _PREFIX_CACHE_MAXSIZE = env_int("PXD_PREFIX_CACHE_MAXSIZE", 128, min_value=0)
+    _PREFIX_CACHE_MAX_VERTS = env_int("PXD_PREFIX_CACHE_MAX_VERTS", 10_000_000, min_value=0) or 0
+    _PREFIX_DEBUG = env_bool("PXD_DEBUG_PREFIX_CACHE", False)
 
 _SHAPE_CACHE: "OrderedDict[object, Geometry]" = OrderedDict()
 
 # ---- Prefix（途中結果）LRU --------------------------------------------------
-_PREFIX_CACHE_ENABLED = env_bool("PXD_PREFIX_CACHE_ENABLED", True)
-_PREFIX_CACHE_MAXSIZE: int | None = env_int("PXD_PREFIX_CACHE_MAXSIZE", 128, min_value=0)
-_PREFIX_CACHE_MAX_VERTS: int = env_int("PXD_PREFIX_CACHE_MAX_VERTS", 10_000_000, min_value=0) or 0
-_PREFIX_DEBUG = env_bool("PXD_DEBUG_PREFIX_CACHE", False)
 
 _PREFIX_CACHE: "OrderedDict[object, Geometry]" = OrderedDict()
 _PREFIX_HITS = 0

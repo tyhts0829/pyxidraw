@@ -387,8 +387,13 @@ def collapse(
     divisions = max(1, int(subdivisions))
 
     # Numba の使用可否（環境変数で無効化可能）
-    use_numba_env = os.environ.get("PYX_USE_NUMBA", "1")
-    use_numba = use_numba_env not in {"0", "false", "False"}
+    try:
+        from common.settings import get as _get_settings
+
+        use_numba = bool(_get_settings().USE_NUMBA)
+    except Exception:
+        use_numba_env = os.environ.get("PYX_USE_NUMBA", "1")
+        use_numba = use_numba_env not in {"0", "false", "False"}
 
     if use_numba:
         new_coords, new_offsets = _collapse_numba(coords, offsets, float(intensity), divisions)

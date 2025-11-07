@@ -25,11 +25,16 @@ from .state import ParameterDescriptor, ParameterStore
 
 
 def _default_step() -> float:
-    env = os.getenv("PXD_PIPELINE_QUANT_STEP")
     try:
-        return float(env) if env is not None else 1e-6
+        from common.settings import get as _get_settings
+
+        return float(_get_settings().PIPELINE_QUANT_STEP)
     except Exception:
-        return 1e-6
+        env = os.getenv("PXD_PIPELINE_QUANT_STEP")
+        try:
+            return float(env) if env is not None else 1e-6
+        except Exception:
+            return 1e-6
 
 
 def _quantize_value(value: Any, *, step: float | None) -> Any:

@@ -60,16 +60,23 @@ def test_translate_is_pure_and_new_instance() -> None:
     assert np.array_equal(g1.offsets, g0.offsets)
 
 
-def test_digest_disabled_raises(env_no_digest: None) -> None:
-    g = Geometry.from_lines([np.array([[0, 0, 0]], dtype=np.float32)])
-    with pytest.raises(RuntimeError):
-        _ = g.digest
+def test_len_and_count_properties() -> None:
+    # 2 本の線（2D と 1D 混在）
+    l2d = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float32)  # 2 点
+    l1d = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)  # 2 点（1D → 3D 整形）
+    g = Geometry.from_lines([l2d, l1d])
+    assert len(g) == 2
+    assert g.n_lines == 2
+    assert g.n_vertices == 4
 
 
-def test_digest_enabled_returns_cached_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("PXD_DISABLE_GEOMETRY_DIGEST", raising=False)
-    g2 = Geometry.from_lines([np.array([[0, 0, 0]], dtype=np.float32)])
-    d1 = g2.digest
-    d2 = g2.digest
-    assert isinstance(d1, (bytes, bytearray)) and len(d1) == 16
-    assert d1 is d2
+def test_concat_merges_coords_and_offsets() -> None:
+    g1 = Geometry.from_lines([np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32)])
+    g2 = Geometry.from_lines([np.array([[2.0, 0.0, 0.0]], dtype=np.float32)])
+    g = g1.concat(g2)
+
+    # coords は縦結合され、offsets は後段がシフトされる
+    expect_coords = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32)
+    expect_offsets = np.array([0, 2, 3], dtype=np.int32)
+    assert np.allclose(g.coords, expect_coords)
+    assert np.array_equal(g.offsets, expect_offsets)

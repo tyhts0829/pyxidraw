@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from engine.core.geometry import Geometry
 
@@ -65,13 +64,13 @@ def test_rotate_known_quarter_turns() -> None:
     assert np.allclose(gx.coords, np.array([[0.0, 0.0, 1.0]], dtype=np.float32), atol=1e-6)
 
 
-def test_digest_change_detection(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("PXD_DISABLE_GEOMETRY_DIGEST", raising=False)
+def test_translate_changes_coords_and_preserves_offsets() -> None:
     g = Geometry.from_lines([np.array([[0.0, 0.0, 0.0]], dtype=np.float32)])
-    d1 = g.digest
     g2 = g.translate(1.0, 0.0, 0.0)
-    d2 = g2.digest
-    assert d1 != d2
+    # 内容が変わる（座標は +x 方向へ移動）
+    assert np.allclose(g2.coords, g.coords + np.array([1.0, 0.0, 0.0], dtype=np.float32))
+    # offsets は不変
+    assert np.array_equal(g2.offsets, g.offsets)
 
 
 def test_equality_is_identity_based() -> None:

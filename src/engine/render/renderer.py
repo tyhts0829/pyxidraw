@@ -78,10 +78,11 @@ class LineRenderer(Tickable):
         self._indices_built: int = 0
         # 実験の有効/ログ（環境変数）
         try:
-            import os as _os
+            from common.settings import get as _get_settings
 
-            self._ibo_freeze_enabled = int(_os.getenv("PXD_IBO_FREEZE_ENABLED", "1")) != 0
-            self._ibo_debug = int(_os.getenv("PXD_IBO_DEBUG", "0")) != 0
+            _s = _get_settings()
+            self._ibo_freeze_enabled = bool(_s.IBO_FREEZE_ENABLED)
+            self._ibo_debug = bool(_s.IBO_DEBUG)
         except Exception:
             self._ibo_freeze_enabled = True
             self._ibo_debug = False
@@ -303,16 +304,14 @@ def _geometry_to_vertices_indices(
 
 # ---- Indices LRU: 設定/カウンタ/取得API -------------------------------------
 try:
-    import os as _os
+    from common.settings import get as _get_settings
 
-    _INDICES_CACHE_ENABLED = int(_os.getenv("PXD_INDICES_CACHE_ENABLED", "1")) != 0
-    _INDICES_CACHE_MAXSIZE_ENV = _os.getenv("PXD_INDICES_CACHE_MAXSIZE")
-    _INDICES_CACHE_MAXSIZE: int | None = (
-        int(_INDICES_CACHE_MAXSIZE_ENV) if _INDICES_CACHE_MAXSIZE_ENV is not None else 64
-    )
+    _s2 = _get_settings()
+    _INDICES_CACHE_ENABLED = bool(_s2.INDICES_CACHE_ENABLED)
+    _INDICES_CACHE_MAXSIZE: int | None = _s2.INDICES_CACHE_MAXSIZE
     if _INDICES_CACHE_MAXSIZE is not None and _INDICES_CACHE_MAXSIZE < 0:
         _INDICES_CACHE_MAXSIZE = 0
-    _INDICES_DEBUG = int(_os.getenv("PXD_INDICES_DEBUG", "0")) != 0
+    _INDICES_DEBUG = bool(_s2.INDICES_DEBUG)
 except Exception:
     _INDICES_CACHE_ENABLED = True
     _INDICES_CACHE_MAXSIZE = 64

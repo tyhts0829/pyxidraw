@@ -1,5 +1,5 @@
 """
-Pipeline の miss/hit とキャッシュ/ダイジェスト条件の軽量ベンチ。
+Pipeline の miss/hit とキャッシュ条件の軽量ベンチ。
 
 重依存を避けるため、効果は軽量な `rotate/scale/translate` のみを使用する。
 """
@@ -47,29 +47,8 @@ def test_pipeline_miss_vs_hit(benchmark, mode: str):
     )
 
 
-@pytest.mark.perf
-@pytest.mark.parametrize("digest", ["on", "off"])  # digest 切替
-def test_pipeline_digest_on_off(monkeypatch, benchmark, digest: str):
-    g = G.grid(subdivisions=(80, 80)).scale(150, 150, 1)
-    pipe = E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.2)).cache(maxsize=64).build()
-
-    def run_once():
-        pipe.clear_cache()
-        return pipe(g)
-
-    if digest == "on":
-        monkeypatch.delenv("PXD_DISABLE_GEOMETRY_DIGEST", raising=False)
-    else:
-        monkeypatch.setenv("PXD_DISABLE_GEOMETRY_DIGEST", "1")
-
-    _ = benchmark(run_once)
-    benchmark.extra_info.update(
-        {
-            "case": f"pipeline/digest/{digest}",
-            "N": g.n_vertices,
-            "M": g.n_lines,
-        }
-    )
+## digest は廃止（Geometry 固有のダイジェストは持たない）。
+## パイプラインのキャッシュキーは `lazy_signature_for(LazyGeometry)` に基づく。
 
 
 @pytest.mark.perf
