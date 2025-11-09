@@ -46,7 +46,11 @@ class VectorRangeHint:
 
 @dataclass(frozen=True)
 class ParameterDescriptor:
-    """GUI に表示するパラメータのメタ情報。"""
+    """GUI に表示するパラメータのメタ情報。
+
+    - 並び順制御のために optional メタ（pipeline_uid/step_index/param_order）を保持する。
+      互換維持のため、未設定時は None。
+    """
 
     id: str
     label: str
@@ -62,6 +66,10 @@ class ParameterDescriptor:
     # string 入力用 UI ヒント（明示制御）
     string_multiline: bool = False
     string_height: int | None = None
+    # 並び順のヒント（effect グループで使用）
+    pipeline_uid: str | None = None
+    step_index: int | None = None
+    param_order: int | None = None
 
 
 @dataclass

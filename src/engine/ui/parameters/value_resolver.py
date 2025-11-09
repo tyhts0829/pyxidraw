@@ -77,6 +77,22 @@ class ParameterValueResolver:
         skip: set[str] | None = None,
     ) -> dict[str, Any]:
         merged, sources = self._merge_with_defaults(params, signature, skip=skip)
+        # シグネチャ順（0..N）を param_order として付与（存在しないものは None）
+        param_order_map: dict[str, int] = {}
+        try:
+            if signature is not None:
+                for i, (name, parameter) in enumerate(signature.parameters.items()):
+                    if skip and name in skip:
+                        continue
+                    if parameter.kind in (
+                        inspect.Parameter.VAR_POSITIONAL,
+                        inspect.Parameter.VAR_KEYWORD,
+                        inspect.Parameter.POSITIONAL_ONLY,
+                    ):
+                        continue
+                    param_order_map[name] = int(i)
+        except Exception:
+            param_order_map = {}
         updated: dict[str, Any] = {}
 
         for key, raw_value in merged.items():
@@ -98,6 +114,7 @@ class ParameterValueResolver:
                     doc=doc,
                     meta_entry=meta_entry,
                     has_default=self._has_default(signature, key),
+                    param_order=param_order_map.get(key),
                 )
                 continue
 
@@ -113,6 +130,7 @@ class ParameterValueResolver:
                     meta_entry=meta_entry,
                     value_type=value_type,
                     has_default=self._has_default(signature, key),
+                    param_order=param_order_map.get(key),
                 )
                 continue
 
@@ -125,6 +143,7 @@ class ParameterValueResolver:
                 doc=doc,
                 default_value=default_actual,
                 meta_entry=meta_entry,
+                param_order=param_order_map.get(key),
             )
 
         return updated
@@ -142,6 +161,7 @@ class ParameterValueResolver:
         meta_entry: Mapping[str, Any],
         value_type: ValueType,
         has_default: bool,
+        param_order: int | None,
     ) -> Any:
         # グルーピング: shape は形状名、effect はパイプライン UID（未指定時は従来の scope 名）
         category = context.name if context.scope == "shape" else (context.pipeline or context.scope)
@@ -161,6 +181,9 @@ class ParameterValueResolver:
                 default_value=default_actual,
                 range_hint=hint,
                 help_text=doc,
+                pipeline_uid=(context.pipeline or None) if context.scope == "effect" else None,
+                step_index=int(context.index) if context.scope == "effect" else None,
+                param_order=param_order,
             )
             return self._register_scalar(descriptor, default_actual)
         # provided は登録せず、そのまま返す
@@ -178,6 +201,7 @@ class ParameterValueResolver:
         doc: str | None,
         meta_entry: Mapping[str, Any],
         has_default: bool,
+        param_order: int | None,
     ) -> tuple[Any, ...]:
         # 提供値（provided）は登録せず、実値をタプルとしてそのまま返す
         if source == "provided":
@@ -208,6 +232,9 @@ class ParameterValueResolver:
             range_hint=None,
             help_text=doc,
             vector_hint=vector_hint,
+            pipeline_uid=(context.pipeline or None) if context.scope == "effect" else None,
+            step_index=int(context.index) if context.scope == "effect" else None,
+            param_order=param_order,
         )
         self._store.register(descriptor, default_tuple)
         resolved = self._store.resolve(descriptor_id, default_tuple)
@@ -263,6 +290,7 @@ class ParameterValueResolver:
         doc: str | None,
         default_value: Any,
         meta_entry: Mapping[str, Any] | None,
+        param_order: int | None,
     ) -> Any:
         # 判定は meta 優先（choices→enum / type:"string"→string）、無指定時は値から推定
         meta_map: Mapping[str, Any] = meta_entry if isinstance(meta_entry, Mapping) else {}
@@ -315,6 +343,9 @@ class ParameterValueResolver:
                 choices=choices_list,
                 string_multiline=multiline,
                 string_height=height,
+                pipeline_uid=(context.pipeline or None) if context.scope == "effect" else None,
+                step_index=int(context.index) if context.scope == "effect" else None,
+                param_order=param_order,
             )
             self._store.register(descriptor, value)
             return self._store.resolve(descriptor.id, value)

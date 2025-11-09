@@ -81,8 +81,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         self._build_root_window()
         self._setup_theme()
 
-        # 初期マウントと購読
-        self.mount(sorted(self._store.descriptors(), key=lambda d: d.id))
+        # 初期マウントと購読（登録順を維持してマウント）
+        self.mount(self._store.descriptors())
 
         def _on_store_change_wrapper(ids: Iterable[str]) -> None:
             try:
@@ -272,13 +272,22 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             rgba = _norm(app_data)
             # style.color は vec3 扱い（αは保存しない）
             if isinstance(pid, str) and pid.endswith(".color") and ".style#" in pid:
-                value = (float(rgba[0]), float(rgba[1]), float(rgba[2]))
+                value_tuple: tuple[float, ...] = (
+                    float(rgba[0]),
+                    float(rgba[1]),
+                    float(rgba[2]),
+                )
             else:
-                value = rgba
+                # rgba は (r,g,b,a)
+                try:
+                    value_tuple = tuple(float(v) for v in rgba)  # type: ignore[misc]
+                except Exception:
+                    r, g, b, a = float(rgba[0]), float(rgba[1]), float(rgba[2]), float(rgba[3])
+                    value_tuple = (r, g, b, a)
         except Exception:
             logger.exception("store_rgb01 failed to normalize: pid=%s val=%s", pid, app_data)
             return
-        self._store.set_override(pid, value)
+        self._store.set_override(pid, value_tuple)
 
     # ---- ヘルパ ----
     def _safe_norm(
@@ -528,9 +537,32 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             "runner.hud_meter_bg_color",
         }
         filtered = [d for d in descriptors if d.id not in excluded]
-        sorted_desc = sorted(filtered, key=lambda d: (d.category, d.id))
-        current_cat: str | None = None
-        group_items: list[ParameterDescriptor] = []
+        # カテゴリの出現順（登録順に基づく）を保持
+        cat_items: dict[str | None, list[ParameterDescriptor]] = {}
+        cat_order: list[str | None] = []
+        for d in filtered:
+            cat = d.category if d.category else None
+            if cat not in cat_items:
+                cat_items[cat] = [d]
+                cat_order.append(cat)
+            else:
+                cat_items[cat].append(d)
+
+        def _sort_items(items: list[ParameterDescriptor]) -> list[ParameterDescriptor]:
+            if not items:
+                return items
+            # effect グループ: step_index → param_order → id
+            is_effect_group = any(it.source == "effect" for it in items)
+            if is_effect_group:
+
+                def _key(it: ParameterDescriptor) -> tuple[int, int, str]:
+                    si = it.step_index if isinstance(it.step_index, int) else 10**9
+                    po = it.param_order if isinstance(it.param_order, int) else 10**9
+                    return (si, po, it.id)
+
+                return sorted(items, key=_key)
+            # それ以外は従来どおり id で安定ソート
+            return sorted(items, key=lambda x: x.id)
 
         def flush(cat: str | None, items: list[ParameterDescriptor]) -> None:
             if not items or not any(it.supported for it in items):
@@ -574,23 +606,14 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                         dpg.add_table_column(label="Parameter")
                         dpg.add_table_column(label="Bars")
                         dpg.add_table_column(label="CC")
-                    for it in items:
+                    for it in _sort_items(items):
                         if not it.supported:
                             continue
                         self._create_row_3cols(table, it)
 
-        for desc in sorted_desc:
-            if current_cat is None:
-                current_cat = desc.category
-                group_items = [desc]
-                continue
-            if desc.category != current_cat:
-                flush(current_cat, group_items)
-                current_cat = desc.category
-                group_items = [desc]
-            else:
-                group_items.append(desc)
-        flush(current_cat, group_items)
+        for cat in cat_order:
+            items = cat_items.get(cat, [])
+            flush(cat, items)
 
     def _label_value_ratio(self) -> tuple[float, float]:
         left = 0.5
