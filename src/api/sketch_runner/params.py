@@ -109,6 +109,12 @@ def subscribe_color_changes(
             pass
 
     def _apply_line_color(_dt: float, raw_val) -> None:  # noqa: ANN001, D401 - pyglet schedule 互換
+        """ランタイム線色を即時反映（単純化）。
+
+        - レイヤー描画時は各レイヤーの色が優先されるため、ここでの更新は
+          次の描画サイクルで上書きされ得るが、安全（副作用なし）。
+        - 以前の layers-active ガードは冗長となったため削除（更新取りこぼし回避）。
+        """
         try:
             line_renderer.set_line_color(_norm(raw_val))
         except Exception:
@@ -131,7 +137,7 @@ def subscribe_color_changes(
                     val = parameter_manager.store.original_value("runner.background")
                 if val is not None:
                     pyglet_mod.clock.schedule_once(lambda dt, v=val: _apply_bg_color(dt, v), 0.0)
-                    # line_color が未指定（override 無し）の場合は自動選択も委譲
+                    # line_color が未指定（override 無し）の場合は自動選択
                     lc_cur = parameter_manager.store.current_value("runner.line_color")
                     if lc_cur is None:
                         br, bg_, bb, _ = _norm(val)

@@ -52,7 +52,13 @@ class StreamReceiver(Tickable):
 
             # 最新のフレームならバッファに追加
             if (self._latest_frame is None) or (packet.frame_id > self._latest_frame):
-                self._swap_buffer.push(packet.geometry)
+                layers = getattr(packet, "layers", None)
+                if layers is not None:
+                    self._swap_buffer.push(list(layers))
+                else:
+                    geom = getattr(packet, "geometry", None)
+                    if geom is not None:
+                        self._swap_buffer.push(geom)
                 self._latest_frame = packet.frame_id
                 # HUD 用メトリクス（任意）
                 try:

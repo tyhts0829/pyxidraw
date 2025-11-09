@@ -270,10 +270,15 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             from util.color import normalize_color as _norm
 
             rgba = _norm(app_data)
+            # style.color は vec3 扱い（αは保存しない）
+            if isinstance(pid, str) and pid.endswith(".color") and ".style#" in pid:
+                value = (float(rgba[0]), float(rgba[1]), float(rgba[2]))
+            else:
+                value = rgba
         except Exception:
             logger.exception("store_rgb01 failed to normalize: pid=%s val=%s", pid, app_data)
             return
-        self._store.set_override(pid, rgba)
+        self._store.set_override(pid, value)
 
     # ---- ヘルパ ----
     def _safe_norm(
@@ -617,6 +622,10 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
     def _create_bars(self, parent: int | str, desc: ParameterDescriptor) -> None:
         vt = desc.value_type
         value = self._current_or_default(desc)
+        # style.color は型に関わらずカラーエディタ（0-255, α非表示）を使用
+        if self._is_style_color_desc(desc):
+            self._create_style_color_picker(parent, desc, value)
+            return
         if vt == "vector":
             vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
             dim = 4 if len(vec) >= 4 else 3
@@ -871,6 +880,9 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         return txt_id
 
     def _create_vector(self, parent: int | str, desc: ParameterDescriptor, value: Any) -> int:
+        # 特別扱い: style.color は RGB カラーピッカー（0-255, α非表示）
+        if self._is_style_color_desc(desc):
+            return self._create_style_color_picker(parent, desc, value)
         vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
         dim = 4 if len(vec) >= 4 else 3
         vh = desc.vector_hint
@@ -1136,6 +1148,49 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             pass
         return box
 
+    # ---- 特殊判定: style.color ----
+    def _is_style_color_desc(self, desc: ParameterDescriptor) -> bool:
+        try:
+            if desc.value_type != "vector":
+                return False
+            pid = str(desc.id)
+            if not pid.endswith(".color"):
+                return False
+            if str(getattr(desc, "source", "")) != "effect":
+                return False
+            # effect@{pipeline}.style#N.color の形式を想定（厳密一致は不要）
+            return ".style#" in pid or pid.count(".style") >= 1
+        except Exception:
+            return False
+
+    def _create_style_color_picker(
+        self, parent: int | str, desc: ParameterDescriptor, value: Any
+    ) -> int:
+        """style.color 用のカラーピッカー（0–255, α非表示）を生成する。"""
+        r, g, b, _ = self._safe_norm(value, (0.0, 0.0, 0.0, 1.0))
+        picker = dpg.add_color_edit(
+            tag=desc.id,
+            parent=parent,
+            default_value=[int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+            no_label=True,
+            no_alpha=True,
+            alpha_preview=getattr(dpg, "mvColorEdit_AlphaPreviewHalf", 1),
+            display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+            display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+            input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+            alpha_bar=False,
+        )
+        self.force_set_rgb_u8(
+            picker,
+            [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
+        )
+        dpg.configure_item(
+            picker,
+            callback=lambda s, a, u: self.store_rgb01(u, a),
+            user_data=desc.id,
+        )
+        return picker
+
     def _on_store_change(self, ids: Iterable[str]) -> None:
         self._syncing = True
         try:
@@ -1153,6 +1208,12 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                     ):
                         r, g, b, _ = self._safe_norm(value, (1.0, 1.0, 1.0, 1.0))
                         dpg.set_value(
+                            pid, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
+                        )
+                    elif isinstance(pid, str) and pid.endswith(".color") and ".style#" in pid:
+                        # style.color は DPG を 0–255 表示で一貫
+                        r, g, b, _ = self._safe_norm(value, (0.0, 0.0, 0.0, 1.0))
+                        self.force_set_rgb_u8(
                             pid, [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))]
                         )
                     else:

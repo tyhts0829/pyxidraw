@@ -16,6 +16,7 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
+from .types import StyledLayer
 from util.constants import PRIMITIVE_RESTART_INDEX
 
 from ..core.tickable import Tickable
@@ -54,14 +55,19 @@ class LineRenderer(Tickable):
         self.line_program = Shader.create_shader(mgl_context)
         self.line_program["projection"].write(projection_matrix.tobytes())
         # 線幅はクリップ空間（-1..1 基準）で設定する
-        self.line_program["line_thickness"].value = float(line_thickness)
+        self._base_line_thickness = float(line_thickness)
+        self.line_program["line_thickness"].value = float(self._base_line_thickness)
         # 線色（RGBA, 0–1）
         from util.color import normalize_color as _normalize_color  # 局所参照（依存を明示）
 
         try:
-            self.line_program["color"].value = _normalize_color(line_color)
+            base_col = _normalize_color(line_color)
+            self.line_program["color"].value = base_col
+            # 基準色を保持（レイヤー未指定時に使用）
+            self._base_line_color: tuple[float, float, float, float] = base_col
         except Exception:  # pragma: no cover - 防御的フォールバック
             self.line_program["color"].value = (0.0, 0.0, 0.0, 1.0)
+            self._base_line_color = (0.0, 0.0, 0.0, 1.0)
 
         # GPUBuffer を保持
         self.gpu = LineMesh(
@@ -85,7 +91,16 @@ class LineRenderer(Tickable):
             self._ibo_debug = bool(_s.IBO_DEBUG)
         except Exception:
             self._ibo_freeze_enabled = True
-            self._ibo_debug = False
+        self._ibo_debug = False
+        # レイヤーフレームバッファ（存在時は draw() 側で逐次アップロード）
+        self._frame_layers: list[StyledLayer] | None = None
+        # 直近レイヤーのスナップショット（no-layers フレームで再描画に利用）
+        self._last_layers_snapshot: list[StyledLayer] | None = None
+        # 直近レイヤーで適用した色（次フレーム以降に再適用するための粘着色）
+        self._sticky_color: tuple[float, float, float, float] | None = None
+        # subscribe 競合回避用の簡易フレームトラッキング
+        self._frame_counter: int = 0
+        self._last_layers_frame: int = -1
 
     # --------------------------------------------------------------------- #
     # Tickable                                                               #
@@ -95,7 +110,22 @@ class LineRenderer(Tickable):
         毎フレーム呼ばれ、SwapBufferに新データがあればGPUへ転送。
         """
         if self.swap_buffer.try_swap():
-            geometry = self.swap_buffer.get_front()
+            front = self.swap_buffer.get_front()
+            # レイヤー列が来た場合は draw() で逐次アップロード（duck-typing を採用）
+            try:
+                if isinstance(front, (list, tuple)) and front:
+                    fst = front[0]
+                    if (
+                        hasattr(fst, "geometry")
+                        and hasattr(fst, "color")
+                        and hasattr(fst, "thickness")
+                    ):
+                        self._frame_layers = list(front)  # type: ignore[list-item]
+                        return
+            except Exception:
+                pass
+            geometry = front  # type: ignore[assignment]
+            self._frame_layers = None
             self._upload_geometry(geometry)
 
     # --------------------------------------------------------------------- #
@@ -103,12 +133,128 @@ class LineRenderer(Tickable):
     # --------------------------------------------------------------------- #
     def draw(self) -> None:
         """GPUに送ったデータを画面に描画"""
+        # on_draw は描画のみを担当（受信は tick で行う）
+        # フレーム番号を増分
+        try:
+            self._frame_counter += 1
+        except Exception:
+            self._frame_counter = 0
+        # レイヤーが来ている場合は各レイヤーを順描画
+        if self._frame_layers:
+            # このフレームでレイヤー活動があったことを記録
+            self._last_layers_frame = int(self._frame_counter)
+
+            total_vertices = 0
+            total_indices = 0
+            snapshot: list[StyledLayer] = []
+            for layer in self._frame_layers:
+                # 色
+                if layer.color is not None:
+                    try:
+                        self.set_line_color(layer.color)
+                        # 粘着色を更新（最後に適用した色を保持）
+                        try:
+                            r, g, b, a = layer.color  # type: ignore[misc]
+                            self._sticky_color = (float(r), float(g), float(b), float(a))
+                        except Exception:
+                            self._sticky_color = None
+                    except Exception:
+                        pass
+                else:
+                    # style 未指定レイヤーは基準色に戻す
+                    try:
+                        self.set_line_color(self._base_line_color)
+                        self._sticky_color = tuple(self._base_line_color)
+                    except Exception:
+                        pass
+                # 太さ（倍率）
+                if layer.thickness is not None:
+                    try:
+                        _mul = self._base_line_thickness * float(layer.thickness)
+                        self.set_line_thickness(_mul)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.set_line_thickness(self._base_line_thickness)
+                    except Exception:
+                        pass
+                # アップロード→描画
+                self._upload_geometry(layer.geometry)
+                if self.gpu.index_count > 0:
+                    self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
+                    try:
+                        total_vertices += int(getattr(self, "_last_vertex_count", 0))
+                        total_indices += int(self.gpu.index_count)
+                    except Exception:
+                        pass
+                # スナップショット: Lazy を実体化して保存
+                try:
+                    from engine.core.lazy_geometry import LazyGeometry as _LG
+
+                    g = layer.geometry
+                    if isinstance(g, _LG):
+                        g = g.realize()
+                    snapshot.append(
+                        StyledLayer(geometry=g, color=layer.color, thickness=layer.thickness)
+                    )
+                except Exception:
+                    pass
+            # HUD 合算（近似。最後の状態を上書き）
+            try:
+                self._last_vertex_count = int(total_vertices)
+                num_lines = max(0, int(total_indices) - int(total_vertices))
+                self._last_line_count = int(num_lines)
+            except Exception:
+                pass
+            # レイヤーを消費
+            self._frame_layers = None
+            # スナップショットを保持（no-layers フレームのフォールバック描画に使用）
+            try:
+                self._last_layers_snapshot = snapshot if snapshot else None
+            except Exception:
+                self._last_layers_snapshot = None
+            return
+        # 通常経路（レイヤーが無いフレーム）
+        # フォールバック: 直近レイヤーのスナップショットを再描画
+        if self._last_layers_snapshot:
+            for layer in self._last_layers_snapshot:
+                # 色/太さを適用
+                if layer.color is not None:
+                    try:
+                        self.set_line_color(layer.color)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.set_line_color(self._base_line_color)
+                    except Exception:
+                        pass
+                if layer.thickness is not None:
+                    try:
+                        self.set_line_thickness(self._base_line_thickness * float(layer.thickness))
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.set_line_thickness(self._base_line_thickness)
+                    except Exception:
+                        pass
+                # アップロード→描画（実体 Geometry のはず）
+                self._upload_geometry(layer.geometry)
+                if self.gpu.index_count > 0:
+                    self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
+            return
+        # スナップショットが無ければ、従来の geometry-only 描画へ（粘着色を適用）
+        try:
+            if self._sticky_color is not None:
+                self.set_line_color(self._sticky_color)
+        except Exception:
+            pass
         if self.gpu.index_count > 0:
             self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
         else:
-            # Debug only: nothing to draw this frame
-            if self._logger.isEnabledFor(logging.DEBUG):
-                self._logger.debug("LineRenderer.draw(): no indices (skipped)")
+            pass
 
     def clear(self, color: Sequence[float]) -> None:
         """画面を指定色でクリア"""
@@ -125,10 +271,39 @@ class LineRenderer(Tickable):
         from util.color import normalize_color as _normalize_color
 
         try:
-            self.line_program["color"].value = _normalize_color(rgba)
+            col = _normalize_color(rgba)
+            self.line_program["color"].value = col
         except Exception:
             # mgl 非存在などの環境では黙って無視
             pass
+
+    def set_line_thickness(self, value: float) -> None:
+        """線の太さ（クリップ空間基準）を即時更新する。"""
+        try:
+            v = float(value)
+            self.line_program["line_thickness"].value = v
+        except Exception:
+            pass
+
+    def get_base_line_thickness(self) -> float:
+        """初期化時の基準線太さを返す。"""
+        try:
+            return float(self._base_line_thickness)
+        except Exception:
+            return 0.0006
+
+    # ---- subscribe ガード用の公開ヘルパ ----
+    def has_pending_layers(self) -> bool:
+        try:
+            return bool(self._frame_layers)
+        except Exception:
+            return False
+
+    def layers_active_this_frame(self) -> bool:
+        try:
+            return int(self._last_layers_frame) == int(self._frame_counter)
+        except Exception:
+            return False
 
     # --------------------------------------------------------------------- #
     # Internal helpers                                                      #
@@ -146,6 +321,7 @@ class LineRenderer(Tickable):
                 self._last_line_count = 0  # type: ignore[attr-defined]
             except Exception:
                 pass
+
             return
         # LazyGeometry はここで実体化
         if isinstance(geometry, LazyGeometry):
@@ -159,6 +335,7 @@ class LineRenderer(Tickable):
                     self._last_line_count = 0  # type: ignore[attr-defined]
                 except Exception:
                     pass
+
                 return
         except Exception:
             pass

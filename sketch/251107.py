@@ -6,7 +6,7 @@ from api import E, G, lfo, run
 from engine.core.geometry import Geometry
 
 # PXD_DEBUG_PREFIX_CACHEをTrueに
-os.environ["PXD_IBO_FREEZE_ENABLED"] = "1"
+os.environ["PXD_DEBUG_GLOBAL"] = "1"
 CANVAS_SIZE = 400
 
 osc = lfo(wave="sine", freq=0.1, octaves=4, persistence=0.5, lacunarity=2.0)
@@ -23,10 +23,14 @@ def draw(t: float) -> Geometry:
         .fill()
         .subdivide()
         .displace(t_sec=t)
-        # .mirror()
+        .style()
     )
 
-    return e_pipe1(geo)
+    geo2 = G.polyhedron()
+    # pipe = E.pipeline.affine().partition().fill().subdivide().displace()
+    e_pipe2 = E.pipeline.affine().scale(scale=(80, 80, 80)).translate().fill().style()
+
+    return e_pipe1(geo), e_pipe2(geo2)
 
 
 if __name__ == "__main__":

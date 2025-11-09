@@ -22,10 +22,11 @@ import itertools
 import logging
 import multiprocessing as mp
 from queue import Full, Queue
-from typing import Callable, Mapping, cast
+from typing import Callable, Mapping, Sequence, cast
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
+from engine.render.types import StyledLayer
 
 from ..core.tickable import Tickable
 from .packet import RenderPacket
@@ -56,6 +57,104 @@ class WorkerTaskError(Exception):
     def __reduce__(self):
         # ピクル化時はメッセージのみで再構築できるようにする
         return (WorkerTaskError, (str(self),))
+
+
+# ---- internal helpers -----------------------------------------------------
+
+
+def _is_style_impl(impl: object) -> bool:
+    try:
+        kind = getattr(impl, "__effect_kind__", None)
+        if kind == "style":
+            return True
+        name = getattr(impl, "__name__", "")
+        return name == "style"
+    except Exception:
+        return False
+
+
+def _normalize_to_layers(
+    result: Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry],
+) -> tuple[Geometry | LazyGeometry | None, list[StyledLayer] | None]:
+    """draw() の戻り値を RenderPacket 用に正規化（レイヤー化）する。
+
+    - Sequence が返れば常にレイヤー化。
+    - LazyGeometry に style ステップが含まれる場合はレイヤー化し、style ステップは plan から除去。
+    - Geometry の単体はそのまま geometry として返す。
+    """
+    try:
+        from util.color import normalize_color as _norm_color
+    except Exception:
+
+        def _norm_color(v):  # type: ignore
+            return (0.0, 0.0, 0.0, 1.0)
+
+    _DEBUG = False  # renderer 側で集約的に出力するため、ここでは抑制
+
+    # 1) Sequence → レイヤー
+    if isinstance(result, Sequence) and not isinstance(result, (Geometry, LazyGeometry)):
+        layers: list[StyledLayer] = []
+        for item in result:
+            if isinstance(item, LazyGeometry):
+                # style を抽出して plan から除去
+                last_color = None
+                last_thickness = None
+                filtered: list[tuple[Callable[[Geometry], Geometry], dict[str, object]]] = []
+                for impl, params in item.plan:
+                    if _is_style_impl(impl):
+                        try:
+                            c = params.get("color")  # type: ignore[assignment]
+                            if isinstance(c, (int, float)):
+                                last_color = (float(c), float(c), float(c))
+                            else:
+                                last_color = c if c is not None else last_color
+                            last_thickness = (
+                                float(params.get("thickness", 1.0))  # type: ignore[arg-type]
+                                if params is not None
+                                else last_thickness
+                            )
+                        except Exception:
+                            pass
+                        continue
+                    filtered.append((impl, dict(params)))
+                lg = LazyGeometry(item.base_kind, item.base_payload, filtered)
+                rgba = _norm_color(tuple(last_color)) if last_color is not None else None
+                layers.append(StyledLayer(geometry=lg, color=rgba, thickness=last_thickness))
+            else:
+                # Geometry
+                layers.append(StyledLayer(geometry=item, color=None, thickness=None))
+        return None, layers
+
+    # 2) 単体: LazyGeometry に style があれば 1 レイヤー化、なければ geometry
+    if isinstance(result, LazyGeometry):
+        last_color = None
+        last_thickness = None
+        filtered2: list[tuple[Callable[[Geometry], Geometry], dict[str, object]]] = []
+        for impl, params in result.plan:
+            if _is_style_impl(impl):
+                try:
+                    c = params.get("color")  # type: ignore[assignment]
+                    if isinstance(c, (int, float)):
+                        last_color = (float(c), float(c), float(c))
+                    else:
+                        last_color = c if c is not None else last_color
+                    last_thickness = (
+                        float(params.get("thickness", 1.0))  # type: ignore[arg-type]
+                        if params is not None
+                        else last_thickness
+                    )
+                except Exception:
+                    pass
+                continue
+            filtered2.append((impl, dict(params)))
+        if last_color is not None or last_thickness is not None:
+            lg = LazyGeometry(result.base_kind, result.base_payload, filtered2)
+            rgba = _norm_color(tuple(last_color)) if last_color is not None else None
+            return None, [StyledLayer(geometry=lg, color=rgba, thickness=last_thickness)]
+        return result, None
+
+    # 3) 単体 Geometry
+    return cast(Geometry | LazyGeometry, result), None
 
 
 class _WorkerProcess(mp.Process):
@@ -105,13 +204,10 @@ class _WorkerProcess(mp.Process):
                 except Exception:
                     before = None
                 # t のみを渡す（cc は api.cc 側で参照）
-                geometry = self.draw_callback(task.t)
-                # LazyGeometry はワーカ側で実体化してメインスレッド負荷を避ける
-                try:
-                    if isinstance(geometry, LazyGeometry):
-                        geometry = geometry.realize()
-                except Exception:
-                    pass
+                geometry_or_seq = self.draw_callback(task.t)
+                # スタイル抽出（Sequence 返却や style 指定をレイヤーへ）
+                packet_geom, packet_layers = _normalize_to_layers(geometry_or_seq)
+                # LazyGeometry の実体化は Renderer に委譲（layers 経路でも安全）
                 # Runtime をクリア（スナップショット無しを渡して明示的に無効化）
                 try:
                     if self.apply_param_snapshot is not None:
@@ -155,7 +251,12 @@ class _WorkerProcess(mp.Process):
                     except Exception:
                         flags = None
                 self.result_q.put(
-                    RenderPacket(geometry=geometry, frame_id=task.frame_id, cache_flags=flags)
+                    RenderPacket(
+                        geometry=packet_geom,
+                        frame_id=task.frame_id,
+                        cache_flags=flags,
+                        layers=tuple(packet_layers) if packet_layers else None,
+                    )
                 )
             except Exception as e:  # 例外を親へ
                 # デバッグ用：分類情報を付与
@@ -253,13 +354,8 @@ class WorkerPool(Tickable):
                         )
                     except Exception:
                         before = None
-                    geometry = self._draw_callback(task.t)
-                    # LazyGeometry はインライン実行でもここで実体化
-                    try:
-                        if isinstance(geometry, LazyGeometry):
-                            geometry = geometry.realize()
-                    except Exception:
-                        pass
+                    geometry_or_seq = self._draw_callback(task.t)
+                    packet_geom, packet_layers = _normalize_to_layers(geometry_or_seq)
                     # Runtime をクリア
                     try:
                         if self._apply_param_snapshot is not None:
@@ -302,7 +398,12 @@ class WorkerPool(Tickable):
                         except Exception:
                             flags = None
                     self._result_q.put(
-                        RenderPacket(geometry=geometry, frame_id=task.frame_id, cache_flags=flags)
+                        RenderPacket(
+                            geometry=packet_geom,
+                            frame_id=task.frame_id,
+                            cache_flags=flags,
+                            layers=tuple(packet_layers) if packet_layers else None,
+                        )
                     )
                 except Exception as exc:  # 例外を揃える
                     self._result_q.put(WorkerTaskError(task.frame_id, exc))

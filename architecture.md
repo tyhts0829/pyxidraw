@@ -253,6 +253,23 @@ Tips:
   - `engine.core.render_window.RenderWindow` が MSAA 有効（`samples=4`）で生成、初回描画時に画面中央へ配置。
   - `moderngl` にてブレンド有効化（`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`）。
 
+### レイヤー描画とフォールバック（on_draw 先行対策）
+
+- 背景
+  - `style` は非幾何エフェクトとして plan に積まれるが、ワーカ側で抽出し描画レイヤーへ変換する。
+  - 抽出後、幾何の plan から `style` ステップは除去され、幾何計算（キャッシュ）に影響しない。
+- 生成→受信→描画の流れ
+  - Worker: `engine/runtime/worker.py` が `draw(t)` の戻り値を正規化し、`StyledLayer[]` に展開（`style` の後勝ちを反映）。
+  - Receiver: `engine/runtime/receiver.py` が最新フレームのみを取り出し、`layers`（または `geometry`）を `SwapBuffer.push(...)` する。
+  - Renderer（tick）: `engine/render/renderer.py` が `SwapBuffer.try_swap()` に成功したら front を取り出し、`layers` のときは `_frame_layers` に保持、`geometry` のときは即アップロード。
+  - Renderer（draw）: `_frame_layers` があれば、各レイヤーの `color/thickness` を適用してアップロード→描画を順次実行。
+- フォールバック再描画（本件の安定化）
+  - 背景などの GUI 操作により `on_draw` が `tick` より先行して発火すると、レイヤー未到達のフレームが挟まることがある。
+  - その場合でも見た目が崩れないよう、`renderer.draw()` は直前フレームで描いたレイヤーのスナップショット（`StyledLayer` + 実体 `Geometry`）を保持し、`_frame_layers` が無いフレームではそれを再描画する。
+  - これにより「片方のレイヤーだけが描かれる」「単色化する」などの点滅/消失を回避する。
+  - 実装: `engine/render/renderer.py`（`_last_layers_snapshot` の保持と再描画）。
+
+
 ## Optional Dependencies（方針）
 
 - 実行ポリシー

@@ -26,6 +26,7 @@ from . import trim  # noqa: F401
 from . import twist  # noqa: F401
 from . import weave  # noqa: F401
 from . import wobble  # noqa: F401
+from . import style  # noqa: F401
 from .registry import effect, get_effect, list_effects
 
 __all__ = [

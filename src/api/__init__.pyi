@@ -258,6 +258,17 @@ class _PipelineBuilder(Protocol):
             scale: vec3, range [(0.1, 0.1, 0.1), (5.0, 5.0, 5.0)]
         """
         ...
+    # meta: color (type=vec3, range=[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)])
+    # meta: thickness (type=number, range=[1.0, 10.0])
+    def style(self, *, color: Vec3 | Iterable[float] | None = ..., thickness: float = ..., **_params: Any) -> _PipelineBuilder:
+        """
+        線の色（RGB 0..1）と太さ倍率を指定する（no-op）。
+
+        引数:
+            color: vec3, range [(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)]
+            thickness: number, range [1.0, 10.0]
+        """
+        ...
     # meta: subdivisions (type=integer, range=[0, 10])
     def subdivide(self, *, subdivisions: int = ..., **_params: Any) -> _PipelineBuilder:
         """

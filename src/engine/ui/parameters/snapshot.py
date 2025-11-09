@@ -189,7 +189,8 @@ class SnapshotRuntime:
                 if param_name.startswith("."):
                     param_name = param_name[1:]
                 # ネストはサポートしない前提（現仕様）
-                if param_name and param_name not in updated:
+                # 未指定（キーなし）または None の場合は GUI override を適用
+                if param_name and (param_name not in updated or updated.get(param_name) is None):
                     updated[param_name] = value
             except Exception:
                 continue

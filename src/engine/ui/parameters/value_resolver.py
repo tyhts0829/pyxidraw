@@ -86,7 +86,8 @@ class ParameterValueResolver:
             source = sources.get(key, "provided")
             value_type = self._determine_value_type(meta_entry, default_actual, raw_value)
 
-            if self._is_vector_value(raw_value, default_actual):
+            # vector は meta.type に従って優先判定（default が None でも表示したい）
+            if value_type == "vector" or self._is_vector_value(raw_value, default_actual):
                 updated[key] = self._resolve_vector(
                     context=context,
                     descriptor_id=descriptor_id,
@@ -415,6 +416,9 @@ class ParameterValueResolver:
                 return "bool"
             if lowered == "string":
                 return "string"
+            # ベクトル指定（vec/vec2/vec3/vec4/vector/rgb/rgba）は vector として扱う
+            if any(k in lowered for k in ("vec", "vector", "rgb")):
+                return "vector"
         if default_value is not None:
             return self._value_type(default_value)
         return self._value_type(raw_value)

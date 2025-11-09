@@ -54,6 +54,7 @@ class RenderWindow(pyglet.window.Window):
 
     def on_draw(self):  # Pyglet 既定のイベント名
         """ウィンドウ描画イベントハンドラ。登録された描画コールバックを呼び出す。"""
+        # フレームカウンタは保持しない（不要な状態を削減）
         r, g, b, a = self._bg_color
         glClearColor(r, g, b, a)
         self.clear()
