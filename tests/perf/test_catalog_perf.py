@@ -27,7 +27,7 @@ from shapes.registry import list_shapes
 from ._mem import measure_memory
 
 # 代表入力（effects 用）: 中規模グリッド
-_BASE_GEOM = G.grid(subdivisions=(100.0, 100.0)).scale(200.0, 200.0, 1.0)
+_BASE_GEOM = G.grid(nx=100, ny=100).scale(200.0, 200.0, 1.0)
 
 
 def _try_import_all_effect_modules() -> None:

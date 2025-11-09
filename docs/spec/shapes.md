@@ -7,7 +7,7 @@
 ## 代表的なシェイプ
 
 - `polygon(n_sides)`: 単位円に内接する正多角形。
-- `grid(subdivisions=(x,y))`: 1×1 の正方形グリッド。
+- `grid(nx, ny)`: 1×1 の正方形グリッド（縦横の線数）。
 - `sphere(subdivisions, sphere_type)`: 半径1の球（スタイル切替）。
 - `torus(major_radius, minor_radius, ...)`: トーラス。
 - `capsule(radius, height, ...)`: カプセル形状。

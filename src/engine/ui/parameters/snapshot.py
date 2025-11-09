@@ -16,6 +16,8 @@ import inspect
 from collections import defaultdict
 from typing import Any, Mapping
 
+from common.types import ObjectRef as _ObjectRef
+
 from .runtime import activate_runtime, deactivate_runtime
 from .state import ParameterStore
 
@@ -104,7 +106,8 @@ def extract_overrides(
                 else (0.0, 0.0, 0.0)
             )
         vec = list(base)
-        dim = min(max(3, len(vec)), 4)
+        # 2..4 の範囲で実次元に合わせる
+        dim = min(max(2, len(vec)), 4)
         vec = (vec + [0.0] * dim)[:dim]
         # レンジ（ヒント優先、なければ 0..1）
         try:
@@ -226,7 +229,31 @@ class SnapshotRuntime:
             prefix = f"effect@{pipeline_uid}.{effect_name}#{step_index}"
         else:
             prefix = f"effect.{effect_name}#{step_index}"
-        updated = dict(params)
+
+        # LazyGeometry/Geometry を安定に運ぶため ObjectRef で包む（署名は id ベース、実行時に unwrap）
+        def _materialize(v: Any) -> Any:
+            try:
+                from engine.core.lazy_geometry import LazyGeometry  # local import
+
+                if isinstance(v, LazyGeometry):
+                    return _ObjectRef(v.realize())
+            except Exception:
+                pass
+            try:
+                from engine.core.geometry import Geometry as _Geometry
+
+                if isinstance(v, _Geometry):
+                    return _ObjectRef(v)
+            except Exception:
+                pass
+            try:
+                if isinstance(v, (list, tuple)):
+                    return [_materialize(x) for x in list(v)]
+            except Exception:
+                pass
+            return v
+
+        updated = {k: _materialize(v) for k, v in dict(params).items()}
         updated = self._inject_t(fn, updated)
         updated = self._apply_overrides(prefix, updated)
         return updated
@@ -244,11 +271,11 @@ def apply_param_snapshot(overrides: Mapping[str, Any] | None, t: float) -> None:
     - overrides が Truthy の場合: SnapshotRuntime を生成して有効化（t を注入）。
     - None/空 の場合: `deactivate_runtime()` を呼び、ランタイムを無効化。
     """
-    if overrides:
+    if overrides is not None:
         rt = SnapshotRuntime(overrides)
         rt.begin_frame()
         rt.set_inputs(t)
-        activate_runtime(rt)
+        activate_runtime(rt)  # type: ignore[arg-type]
     else:
         deactivate_runtime()
 

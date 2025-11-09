@@ -651,7 +651,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             return
         if vt == "vector":
             vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
-            dim = 4 if len(vec) >= 4 else 3
+            # 2..4 の範囲で実次元に合わせる
+            dim = max(2, min(len(vec), 4))
             vh = desc.vector_hint
             if vh is None:
                 default_vh = self._layout.derive_vector_range(dim=dim)
@@ -784,7 +785,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                 if isinstance(desc.default_value, (list, tuple))
                 else (0.0, 0.0, 0.0)
             )
-            dim = 4 if len(vec) >= 4 else 3
+            # 2..4 の範囲で実次元に合わせる
+            dim = max(2, min(len(vec), 4))
             with dpg.table(
                 parent=parent,
                 header_row=False,
@@ -907,7 +909,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         if self._is_style_color_desc(desc):
             return self._create_style_color_picker(parent, desc, value)
         vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
-        dim = 4 if len(vec) >= 4 else 3
+        # 2..4 の範囲で実次元に合わせる
+        dim = max(2, min(len(vec), 4))
         vh = desc.vector_hint
         if vh is None:
             default_vh = self._layout.derive_vector_range(dim=dim)
@@ -1075,7 +1078,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                 if not isinstance(current, (list, tuple)):
                     current = self._store.original_value(parent_id)
                 vec = list(current) if isinstance(current, (list, tuple)) else [0.0, 0.0, 0.0]
-                dim = 4 if len(vec) >= 4 else 3
+                # 2..4 の範囲で実次元に合わせる
+                dim = max(2, min(len(vec), 4))
                 base = (vec + [0.0] * dim)[:dim]
                 base[idx] = float(app_data)
                 self._store.set_override(parent_id, tuple(base))

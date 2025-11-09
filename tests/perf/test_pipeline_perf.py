@@ -16,7 +16,7 @@ from api import E, G
 @pytest.mark.perf
 @pytest.mark.parametrize("mode", ["miss", "hit"])  # 1 ベンチ/1 呼び出し
 def test_pipeline_miss_vs_hit(benchmark, mode: str):
-    g = G.grid(subdivisions=(100, 100)).scale(200, 200, 1)
+    g = G.grid(nx=100, ny=100).scale(200, 200, 1)
     pipe = (
         E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.3))
         .scale(scale=(1.05, 0.95, 1.0))
@@ -54,7 +54,7 @@ def test_pipeline_miss_vs_hit(benchmark, mode: str):
 @pytest.mark.perf
 @pytest.mark.parametrize("cache", ["off", "on"])  # cache on/off 計測
 def test_pipeline_cache_on_off(benchmark, cache: str):
-    g = G.grid(subdivisions=(120, 120)).scale(180, 180, 1)
+    g = G.grid(nx=120, ny=120).scale(180, 180, 1)
 
     pipe_off = (
         E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.25))

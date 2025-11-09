@@ -25,7 +25,7 @@ class _GShapes(Protocol):
         ...
     def cylinder(self, *, radius: float = ..., height: float = ..., segments: int = ..., **_params: Any) -> Geometry:
         ...
-    def grid(self, *, subdivisions: tuple[float, float] = ..., **_params: Any) -> Geometry:
+    def grid(self, *, nx: int = ..., ny: int = ..., **_params: Any) -> Geometry:
         ...
     def lissajous(self, *, freq_x: float = ..., freq_y: float = ..., freq_z: float = ..., phase: float = ..., phase_y: float = ..., phase_z: float = ..., points: int = ..., **_params: Any) -> Geometry:
         ...
@@ -69,6 +69,27 @@ class _PipelineBuilder(Protocol):
 
         引数:
             boldness: number, range [0.0, 10.0]
+        """
+        ...
+    # meta: draw_outline (type=boolean)
+    # meta: draw_inside (type=boolean)
+    # meta: draw_outside (type=boolean)
+    # meta: use_projection_fallback (type=boolean)
+    # meta: projection_use_world_xy (type=boolean)
+    # meta: eps_abs (type=number, range=[1e-07, 0.01])
+    # meta: eps_rel (type=number, range=[1e-07, 0.01])
+    def clip(self, *, outline: engine.core.geometry.Geometry | Sequence[engine.core.geometry.Geometry], draw_outline: bool = ..., draw_inside: bool = ..., draw_outside: bool = ..., use_projection_fallback: bool = ..., projection_use_world_xy: bool = ..., eps_abs: float = ..., eps_rel: float = ..., **_params: Any) -> _PipelineBuilder:
+        """
+        閉曲線マスクで対象をクリップ（純関数）。
+
+        引数:
+            draw_outline: boolean
+            draw_inside: boolean
+            draw_outside: boolean
+            use_projection_fallback: boolean
+            projection_use_world_xy: boolean
+            eps_abs: number, range [1e-07, 0.01]
+            eps_rel: number, range [1e-07, 0.01]
         """
         ...
     # meta: intensity (type=number, range=[0.0, 10.0])

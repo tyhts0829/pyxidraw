@@ -112,6 +112,37 @@ class ParameterRuntime:
         pipeline_uid: str = "",
     ) -> Mapping[str, Any]:
         info = self._introspector.resolve(kind="effect", name=effect_name, fn=fn)
+
+        # LazyGeometry をパラメータに含む場合はここで実体化して Geometry に揃える
+        # （パイプライン署名生成でハッシュ可能にするため、また実行時に実体値を利用できるようにするため）。
+        from common.types import ObjectRef as _ObjectRef  # 局所 import（循環回避）
+
+        def _materialize(v: Any) -> Any:
+            try:
+                # 遅延ジオメトリ本体
+                from engine.core.lazy_geometry import LazyGeometry  # local import
+
+                if isinstance(v, LazyGeometry):
+                    return _ObjectRef(v.realize())
+            except Exception:
+                pass
+            # Geometry を直接包む（キャッシュ鍵のために hashable にする）
+            try:
+                from engine.core.geometry import Geometry as _Geometry
+
+                if isinstance(v, _Geometry):
+                    return _ObjectRef(v)
+            except Exception:
+                pass
+            # コンテナ（浅い）
+            try:
+                if isinstance(v, (list, tuple)):
+                    return [_materialize(x) for x in list(v)]
+            except Exception:
+                pass
+            return v
+
+        params = {k: _materialize(v) for k, v in dict(params).items()}
         context = ParameterContext(
             scope="effect", name=effect_name, index=step_index, pipeline=str(pipeline_uid or "")
         )
