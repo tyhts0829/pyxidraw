@@ -170,7 +170,6 @@ def _clip_lines_without_shapely(
     mask_rings_xy: list[np.ndarray],
     *,
     draw_inside: bool,
-    draw_outside: bool,
 ) -> list[np.ndarray]:
     """Shapely 不在時の簡易クリップ。
 
@@ -213,7 +212,7 @@ def _clip_lines_without_shapely(
                     if _point_in_polygon(ring, float(mx), float(my)):
                         cnt += 1
                 inside = (cnt % 2) == 1
-                if (inside and draw_inside) or ((not inside) and draw_outside):
+                if inside == draw_inside:
                     p0 = np.array(
                         [a[0] + t0 * (b[0] - a[0]), a[1] + t0 * (b[1] - a[1])], dtype=np.float32
                     )
@@ -413,7 +412,6 @@ def _clip_lines_project_xy_prepared(
     prep: dict[str, Any],
     *,
     draw_inside: bool,
-    draw_outside: bool,
 ) -> list[np.ndarray]:
     rings_xy: list[np.ndarray] = prep.get("rings_xy", [])
     if not rings_xy:
@@ -438,7 +436,7 @@ def _clip_lines_project_xy_prepared(
         poly2 = target_coords[s:e, :2]
         pminx, pminy, pmaxx, pmaxy = _aabb2d(poly2)
         if not _aabb_overlap(pminx, pminy, pmaxx, pmaxy, *union_bounds):
-            if draw_outside and not draw_inside:
+            if not draw_inside:
                 for j in range(s, e - 1):
                     out_lines.append(
                         np.vstack([target_coords[j], target_coords[j + 1]]).astype(np.float32)
@@ -522,7 +520,7 @@ def _clip_lines_project_xy_prepared(
                         if _point_in_polygon(r_xy, mx, my):
                             cnt += 1
                     inside = (cnt % 2) == 1
-                if (inside and draw_inside) or ((not inside) and draw_outside):
+                if inside == draw_inside:
                     out_lines.append(np.vstack([A3, B3]).astype(np.float32))
                 continue
             ts_sorted = sorted(ts)
@@ -553,7 +551,7 @@ def _clip_lines_project_xy_prepared(
                         if _point_in_polygon(r_xy, mx, my):
                             cnt += 1
                     inside = (cnt % 2) == 1
-                if (inside and draw_inside) or ((not inside) and draw_outside):
+                if inside == draw_inside:
                     P0 = A3 + (B3 - A3) * t0
                     P1 = A3 + (B3 - A3) * t1
                     out_lines.append(np.vstack([P0, P1]).astype(np.float32))
@@ -807,7 +805,6 @@ def clip(
     outline: Geometry | Sequence[Geometry],
     draw_outline: bool = False,
     draw_inside: bool = True,
-    draw_outside: bool = False,
     use_projection_fallback: bool = True,
     projection_use_world_xy: bool = True,
     eps_abs: float = 1e-5,
@@ -825,8 +822,6 @@ def clip(
         出力にマスク輪郭も含める。
     draw_inside : bool, default True
         マスク内側を出力に含める。
-    draw_outside : bool, default False
-        マスク外側を出力に含める。
     use_projection_fallback : bool, default True
         共平面でない場合に XY 投影フォールバックでクリップする。
     projection_use_world_xy : bool, default True
@@ -839,9 +834,7 @@ def clip(
     - on-edge の扱いは Shapely 経路とフォールバック経路で差があり得る（中点評価/半開区間条件）。
     - モード安定化（_MODE_PIN）はマスク内容ごとに初回決定モードを弱く固定する（仕様変更は要検討）。
     """
-    if not (draw_inside or draw_outside):
-        # 何も描かない指定は no-op とする
-        return Geometry(g.coords.copy(), g.offsets.copy())
+    # `draw_inside` のみで内外を切替（none/both は廃止）。
 
     tgt_coords, tgt_offs = g.as_arrays(copy=False)
     # マスク収集（収集済みの再利用を試みる）
@@ -891,7 +884,6 @@ def clip(
             mask_digest_q,
             tgt_digest_q,
             bool(draw_inside),
-            bool(draw_outside),
             bool(draw_outline),
             bool(use_projection_fallback),
             bool(projection_use_world_xy),
@@ -911,7 +903,7 @@ def clip(
                 prep = _prepare_projection_mask(rings3d)
                 _mask_cache_put(cache_key, prep)
             out_lines_3d = _clip_lines_project_xy_prepared(
-                tgt_coords, tgt_offs, prep, draw_inside=draw_inside, draw_outside=draw_outside
+                tgt_coords, tgt_offs, prep, draw_inside=draw_inside
             )
             out_geo = _numpy_lines_to_geometry(out_lines_3d)
             if draw_outline:
@@ -960,7 +952,6 @@ def clip(
         mask_digest_q,
         tgt_digest_q,
         bool(draw_inside),
-        bool(draw_outside),
         bool(draw_outline),
         bool(use_projection_fallback),
         bool(projection_use_world_xy),
@@ -985,7 +976,7 @@ def clip(
                 _mask_cache_put(cache_key, prep)
             # XY 投影でクリップし、3D は元線分で復元
             out_lines_3d = _clip_lines_project_xy_prepared(
-                tgt_coords, tgt_offs, prep, draw_inside=draw_inside, draw_outside=draw_outside
+                tgt_coords, tgt_offs, prep, draw_inside=draw_inside
             )
             out_geo = _numpy_lines_to_geometry(out_lines_3d)
             if draw_outline:
@@ -1101,7 +1092,7 @@ def clip(
                     float(rb[2]),
                     float(rb[3]),
                 ):
-                    if draw_outside and not draw_inside:
+                    if not draw_inside:
                         out_lines_xy.append(pl)
                     # inside のみならスキップ
                     continue
@@ -1109,11 +1100,11 @@ def clip(
             if prepared_region is not None:
                 try:
                     if prepared_region.disjoint(ls):
-                        if draw_outside and not draw_inside:
+                        if not draw_inside:
                             out_lines_xy.append(pl)
                         continue
                     if prepared_region.contains(ls):
-                        if draw_inside and not draw_outside:
+                        if draw_inside:
                             out_lines_xy.append(pl)
                         continue
                 except Exception:
@@ -1129,7 +1120,7 @@ def clip(
                 if draw_inside:
                     gi = mls.intersection(region_obj)
                     out_lines_xy.extend(_to_lines_from_shapely(gi))
-                if draw_outside:
+                else:
                     go = mls.difference(region_obj)
                     out_lines_xy.extend(_to_lines_from_shapely(go))
             except Exception:
@@ -1140,7 +1131,7 @@ def clip(
                         if draw_inside:
                             gi = ls.intersection(region_obj)
                             out_lines_xy.extend(_to_lines_from_shapely(gi))
-                        if draw_outside:
+                        else:
                             go = ls.difference(region_obj)
                             out_lines_xy.extend(_to_lines_from_shapely(go))
                     except Exception:
@@ -1173,7 +1164,6 @@ def clip(
         tgt_offs,
         mask_rings_xy,
         draw_inside=draw_inside,
-        draw_outside=draw_outside,
     )
     lines_3d = [transform_back(l.astype(np.float32), R_all, z_all) for l in lines_xy]
     out_geo = _numpy_lines_to_geometry(lines_3d)
@@ -1192,7 +1182,6 @@ def clip(
 cast(Any, clip).__param_meta__ = {
     "draw_outline": {"type": "boolean"},
     "draw_inside": {"type": "boolean"},
-    "draw_outside": {"type": "boolean"},
     "use_projection_fallback": {"type": "boolean"},
     "projection_use_world_xy": {"type": "boolean"},
     "eps_abs": {"type": "number", "min": 1e-7, "max": 1e-2, "step": 1e-6},

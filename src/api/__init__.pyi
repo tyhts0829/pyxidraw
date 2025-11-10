@@ -73,19 +73,17 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: draw_outline (type=boolean)
     # meta: draw_inside (type=boolean)
-    # meta: draw_outside (type=boolean)
     # meta: use_projection_fallback (type=boolean)
     # meta: projection_use_world_xy (type=boolean)
     # meta: eps_abs (type=number, range=[1e-07, 0.01])
     # meta: eps_rel (type=number, range=[1e-07, 0.01])
-    def clip(self, *, outline: engine.core.geometry.Geometry | Sequence[engine.core.geometry.Geometry], draw_outline: bool = ..., draw_inside: bool = ..., draw_outside: bool = ..., use_projection_fallback: bool = ..., projection_use_world_xy: bool = ..., eps_abs: float = ..., eps_rel: float = ..., **_params: Any) -> _PipelineBuilder:
+    def clip(self, *, outline: engine.core.geometry.Geometry | Sequence[engine.core.geometry.Geometry], draw_outline: bool = ..., draw_inside: bool = ..., use_projection_fallback: bool = ..., projection_use_world_xy: bool = ..., eps_abs: float = ..., eps_rel: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         閉曲線マスクで対象をクリップ（純関数）。
 
         引数:
             draw_outline: boolean
             draw_inside: boolean
-            draw_outside: boolean
             use_projection_fallback: boolean
             projection_use_world_xy: boolean
             eps_abs: number, range [1e-07, 0.01]

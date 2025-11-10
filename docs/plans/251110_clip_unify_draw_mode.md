@@ -19,27 +19,27 @@
 
 実施項目（チェックリスト）
 
-- [ ] 署名変更（破壊的）
-  - [ ] `clip(..., draw_inside: bool = True, draw_outside: bool = False, ...)` から `draw_outside` を削除
-  - [ ] docstring から `draw_outside` を削除し、切替仕様を明記（`draw_inside=True/False`）
+- [x] 署名変更（破壊的）
+  - [x] `clip(..., draw_inside: bool = True, draw_outside: bool = False, ...)` から `draw_outside` を削除
+  - [x] docstring から `draw_outside` を削除し、切替仕様を明記（`draw_inside=True/False`）
 
-- [ ] 分岐ロジックの一本化
-  - [ ] Shapely 経路: `draw_inside` が True なら `intersection`、False なら `difference` のみ実行
-  - [ ] フォールバック経路: 「inside XOR draw_inside == True」を採択条件に統一
-  - [ ] 早期分岐: `bounds`/`prepared.contains/disjoint` も `draw_inside` に従って単純化
+- [x] 分岐ロジックの一本化
+  - [x] Shapely 経路: `draw_inside` が True なら `intersection`、False なら `difference` のみ実行
+  - [x] フォールバック経路: 「inside == draw_inside」を採択条件に統一
+  - [x] 早期分岐: `bounds`/`prepared.contains/disjoint` も `draw_inside` に従って単純化
 
-- [ ] 結果キャッシュキーの更新
-  - [ ] `res_key` から `bool(draw_outside)` を削除（互換不要。キー縮減）
-  - [ ] プロジェクション・プラナーモード双方で同様に修正
+- [x] 結果キャッシュキーの更新
+  - [x] `res_key` から `bool(draw_outside)` を削除（互換不要。キー縮減）
+  - [x] プロジェクション・プラナーモード双方で同様に修正
 
-- [ ] UI/メタデータ
-  - [ ] `__param_meta__` の `draw_outside` エントリ削除
+- [x] UI/メタデータ
+  - [x] `__param_meta__` の `draw_outside` エントリ削除
   - [ ]（必要なら）既存 GUI での表示確認（`draw_inside` のみ）
 
-- [ ] 呼び出し箇所の置換（必要時に限定）
-  - [ ] `draw_outside=True` を `draw_inside=False` に書き換え
-  - [ ] `draw_inside=True, draw_outside=True`（both）は `draw_inside=True` で十分（意味同等）
-  - [ ] `draw_inside=False, draw_outside=False`（none）は `draw_inside=False` に一本化
+- [x] 呼び出し箇所の置換（必要時に限定）
+  - [x] `draw_outside=True` を `draw_inside=False` に書き換え（該当なし）
+  - [x] `draw_inside=True, draw_outside=True`（both）は `draw_inside=True` で十分（該当なし）
+  - [x] `draw_inside=False, draw_outside=False`（none）は `draw_inside=False` に一本化（該当なし）
 
 - [ ] ドキュメント（最小）
   - [ ] 本計画ファイルへの「移行ガイド」節を追記（コミット後）
