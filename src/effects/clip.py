@@ -38,6 +38,11 @@ from util.polygon_grouping import point_in_polygon_njit as _point_in_polygon
 from .registry import effect
 
 
+# 平面性判定の内部定数（従来デフォルトと同値）
+_PLANAR_EPS_ABS = 1e-5
+_PLANAR_EPS_REL = 1e-4
+
+
 def _ensure_closed(loop: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     if loop.shape[0] == 0:
         return loop
@@ -805,8 +810,6 @@ def clip(
     outline: Geometry | Sequence[Geometry],
     draw_outline: bool = False,
     draw_inside: bool = True,
-    eps_abs: float = 1e-5,
-    eps_rel: float = 1e-4,
 ) -> Geometry:
     """閉曲線マスクで対象をクリップ（純関数）。
 
@@ -822,8 +825,7 @@ def clip(
         マスク内側を出力に含める。
     非共平面の場合は常に XY 投影でクリップする（フォールバックの切替は不可）。
     平面時は Shapely が利用可能な場合に Polygon の対称差で偶奇領域を構成してクリップする。
-    eps_abs, eps_rel : float, default 1e-5, 1e-4
-        共平面判定の絶対/相対許容誤差。
+    平面性判定のしきい値（abs/rel）は内部定数で管理する。
 
     Notes
     -----
@@ -922,7 +924,7 @@ def clip(
         comb_offs = comb_offs.astype(np.int32, copy=False)
 
     planar, v2d_all, R_all, z_all, _ref_h = choose_coplanar_frame(
-        comb_coords, comb_offs, eps_abs=float(eps_abs), eps_rel=float(eps_rel)
+        comb_coords, comb_offs, eps_abs=float(_PLANAR_EPS_ABS), eps_rel=float(_PLANAR_EPS_REL)
     )
 
     # 最終モード決定とピン更新
@@ -1153,6 +1155,4 @@ def clip(
 cast(Any, clip).__param_meta__ = {
     "draw_outline": {"type": "boolean"},
     "draw_inside": {"type": "boolean"},
-    "eps_abs": {"type": "number", "min": 1e-7, "max": 1e-2, "step": 1e-6},
-    "eps_rel": {"type": "number", "min": 1e-7, "max": 1e-2, "step": 1e-6},
 }

@@ -9,15 +9,15 @@
 - しきい値の微妙な変更でキャッシュキーに含まれない差分が生じ得るため、外部公開パラメータとしての価値が低い。
 
 変更内容（チェックリスト）
-- [ ] API 署名の破壊的変更
-  - [ ] `clip` シグネチャから `eps_abs: float` と `eps_rel: float` を削除
-  - [ ] 関数 docstring から両引数の説明を削除/整理
-  - [ ] `__param_meta__` から `eps_abs`/`eps_rel` を削除
-- [ ] 内部定数の導入
-  - [ ] `src/effects/clip.py` に `_PLANAR_EPS_ABS = 1e-5` と `_PLANAR_EPS_REL = 1e-4` を定義
-  - [ ] `choose_coplanar_frame(..., eps_abs=_PLANAR_EPS_ABS, eps_rel=_PLANAR_EPS_REL)` で使用
-- [ ] スタブ/メタの同期
-  - [ ] `src/api/__init__.pyi` の `clip` から該当メタ行/引数を削除
+- [x] API 署名の破壊的変更
+  - [x] `clip` シグネチャから `eps_abs: float` と `eps_rel: float` を削除
+  - [x] 関数 docstring から両引数の説明を削除/整理
+  - [x] `__param_meta__` から `eps_abs`/`eps_rel` を削除
+- [x] 内部定数の導入
+  - [x] `src/effects/clip.py` に `_PLANAR_EPS_ABS = 1e-5` と `_PLANAR_EPS_REL = 1e-4` を定義
+  - [x] `choose_coplanar_frame(..., eps_abs=_PLANAR_EPS_ABS, eps_rel=_PLANAR_EPS_REL)` で使用
+- [x] スタブ/メタの同期
+  - [x] `src/api/__init__.pyi` の `clip` から該当メタ行/引数を削除
 - [ ] ドキュメント注記
   - [ ] モジュール/関数 docstring に「しきい値は定数運用（将来変更は内部実装）」を追記
 - [ ] 検証（編集ファイル限定）
