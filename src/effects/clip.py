@@ -13,12 +13,18 @@ from __future__ import annotations
 - Shapely が利用可能なら `Polygon` の `symmetric_difference` で偶奇領域を構成し、
   `LineString` の `intersection`/`difference` でクリップする。
 - Shapely が利用不可の場合は簡易フォールバック（線分をマスクリングで分割→中点の偶奇判定）。
+
+注記:
+- on-edge（マスク境界上）近傍の扱いは、Shapely 経路とフォールバック経路でわずかに差が生じることがある。
+  フォールバックは中点サンプリングと半開区間レイキャスト実装に依存する。
+- モード安定化（`_MODE_PIN`）はマスク内容に対して初回に観測されたモード（`planar`/`proj`）を弱くピン止めする。
+  要件により昇格/TTL などの方針変更は検討可能。
 """
 
 import hashlib
 import os as _os
 from collections import OrderedDict
-from typing import Any, Iterable, Sequence, Tuple, cast
+from typing import Any, Iterable, Sequence, cast
 
 import numpy as np
 from numba import njit  # type: ignore[attr-defined]
@@ -40,6 +46,17 @@ def _ensure_closed(loop: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     if float(np.linalg.norm(p0 - p1)) <= eps:
         return loop
     return np.vstack([loop, p0])
+
+
+def _ensure_closed2d(loop2d: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+    """2D ループの簡易クローズ（必要なら先頭点を末尾に複製）。"""
+    if loop2d.shape[0] == 0:
+        return loop2d
+    p0 = loop2d[0]
+    p1 = loop2d[-1]
+    if float(np.linalg.norm(p0 - p1)) <= eps:
+        return loop2d
+    return np.vstack([loop2d, p0])
 
 
 def _collect_mask_rings_from_outline(
@@ -77,9 +94,7 @@ def _collect_mask_rings_from_outline(
         except Exception:
             pass
     all_coords: list[np.ndarray] = []
-    all_offsets: list[np.ndarray] = []
     rings3d: list[np.ndarray] = []
-    coord_shift = 0
     for g in outlines:
         c, o = g.as_arrays(copy=False)
         for i in range(len(o) - 1):
@@ -92,15 +107,7 @@ def _collect_mask_rings_from_outline(
             if ring_closed.shape[0] < 3:
                 continue
             all_coords.append(ring_closed.astype(np.float32, copy=False))
-            # offsets は個々のリングを独立に扱う
-            if all_offsets:
-                prev = all_offsets[-1][-1]
-            else:
-                prev = 0
-            n = ring_closed.shape[0]
-            all_offsets.append(np.array([prev, prev + n], dtype=np.int32))
             rings3d.append(ring_closed.astype(np.float32, copy=False))
-            coord_shift += n
     if not all_coords:
         return (
             np.zeros((0, 3), dtype=np.float32),
@@ -139,12 +146,9 @@ def _to_lines_from_shapely(geom) -> list[np.ndarray]:  # type: ignore[no-untyped
 
 def _segment_intersections_with_polygon_edges(
     a: np.ndarray, b: np.ndarray, poly2d: np.ndarray
-) -> list[Tuple[float, float]]:
-    """線分 AB と多角形の各辺の交点（パラメータ t, 点 x）を返す（t∈[0,1]）。
-
-    戻り値は (t, x) のリスト。数値安定性のため重複 t は後段でユニーク化する想定。
-    """
-    out: list[Tuple[float, float]] = []
+) -> list[float]:
+    """線分 AB と多角形の各辺の交点パラメータ t（t∈[0,1]）のリスト。"""
+    out: list[float] = []
     n = poly2d.shape[0]
     for i in range(n - 1):
         c = poly2d[i]
@@ -156,8 +160,7 @@ def _segment_intersections_with_polygon_edges(
         t = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den
         u = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den
         if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
-            x = a[0] + t * (b[0] - a[0])
-            out.append((float(t), float(x)))
+            out.append(float(t))
     return out
 
 
@@ -186,14 +189,12 @@ def _clip_lines_without_shapely(
             a = poly[j]
             b = poly[j + 1]
             ts = [0.0, 1.0]
-            xs = [a[0], b[0]]  # 参考用（ソート安定化目的のみ）
             # 全マスクリングの各辺と交差
             for ring in mask_rings_xy:
                 inters = _segment_intersections_with_polygon_edges(a, b, ring)
-                for t, x in inters:
+                for t in inters:
                     if 0.0 < t < 1.0:
                         ts.append(t)
-                        xs.append(x)
             # ソート→ユニーク化
             order = np.argsort(np.asarray(ts))
             ts_sorted = np.asarray(ts)[order]
@@ -258,8 +259,7 @@ def _prepare_projection_mask(rings3d: list[np.ndarray]) -> dict[str, Any]:
         if ring3d.shape[0] < 3:
             continue
         r2 = ring3d[:, :2].astype(np.float32, copy=False)
-        r2h = _ensure_closed(np.hstack([r2, np.zeros((r2.shape[0], 1), dtype=np.float32)]))
-        r = r2h[:, :2]
+        r = _ensure_closed2d(r2)
         if r.shape[0] < 3:
             continue
         rings_xy.append(r)
@@ -567,8 +567,6 @@ try:
     _s = _get_settings()
     _MASK_CACHE_MAXSIZE = int(getattr(_s, "CLIP_MASK_CACHE_MAXSIZE", 64) or 64)
 except Exception:
-    import os as _os
-
     try:
         _MASK_CACHE_MAXSIZE = int(_os.getenv("PXD_CLIP_MASK_CACHE_MAXSIZE", "64"))
     except Exception:
@@ -623,8 +621,6 @@ try:
     _DIGEST_STEP_DEFAULT = float(getattr(_s2, "CLIP_DIGEST_STEP", 1e-4))
     _MODE_STABLE_ENABLED = bool(getattr(_s2, "CLIP_MODE_STABLE", True))
 except Exception:
-    import os as _os
-
     try:
         _RESULT_CACHE_MAXSIZE = int(_os.getenv("PXD_CLIP_RESULT_CACHE_MAXSIZE", "16"))
     except Exception:
@@ -837,6 +833,11 @@ def clip(
         True のときワールド XY へ投影（将来拡張用スイッチ）。
     eps_abs, eps_rel : float, default 1e-5, 1e-4
         共平面判定の絶対/相対許容誤差。
+
+    Notes
+    -----
+    - on-edge の扱いは Shapely 経路とフォールバック経路で差があり得る（中点評価/半開区間条件）。
+    - モード安定化（_MODE_PIN）はマスク内容ごとに初回決定モードを弱く固定する（仕様変更は要検討）。
     """
     if not (draw_inside or draw_outside):
         # 何も描かない指定は no-op とする
@@ -1164,8 +1165,8 @@ def clip(
     for i in range(len(mask_offs) - 1):
         s, e = int(mask_offs[i]), int(mask_offs[i + 1])
         ring = mask_xy_all[s:e, :2].astype(np.float32, copy=False)
-        ring = _ensure_closed(np.hstack([ring, np.zeros((ring.shape[0], 1), dtype=np.float32)]))
-        mask_rings_xy.append(ring[:, :2])
+        ring2d = _ensure_closed2d(ring)
+        mask_rings_xy.append(ring2d)
 
     lines_xy = _clip_lines_without_shapely(
         tgt_xy_all.astype(np.float32, copy=False),
