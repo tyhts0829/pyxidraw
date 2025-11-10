@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import os
 
 from api import E, G, lfo, run
 from engine.core.geometry import Geometry
 
-# PXD_DEBUG_PREFIX_CACHEをTrueに
-os.environ["PXD_DEBUG_GLOBAL"] = "1"
 CANVAS_SIZE = 400
 
 osc = lfo(wave="sine", freq=0.1, octaves=4, persistence=0.5, lacunarity=2.0)

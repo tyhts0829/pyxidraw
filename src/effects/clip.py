@@ -16,6 +16,7 @@ from __future__ import annotations
 """
 
 import hashlib
+import os as _os
 from collections import OrderedDict
 from typing import Any, Iterable, Sequence, Tuple, cast
 
@@ -629,9 +630,9 @@ except Exception:
     except Exception:
         _RESULT_CACHE_MAXSIZE = 16
     try:
-        _RESULT_CACHE_MAX_VERTS = int(_os.getenv("PXD_CLIP_RESULT_CACHE_MAX_VERTS", "200000"))
+        _RESULT_CACHE_MAX_VERTS = int(_os.getenv("PXD_CLIP_RESULT_CACHE_MAX_VERTS", "2000000"))
     except Exception:
-        _RESULT_CACHE_MAX_VERTS = 200_000
+        _RESULT_CACHE_MAX_VERTS = 2000000
     try:
         _DIGEST_STEP_DEFAULT = float(_os.getenv("PXD_CLIP_DIGEST_STEP", "1e-4"))
     except Exception:
@@ -641,23 +642,78 @@ except Exception:
     except Exception:
         _MODE_STABLE_ENABLED = True
 
+# ダイジェスト軽量化パラメータ（環境変数）
+try:
+    _DIGEST_STRIDE_DEFAULT = int(_os.getenv("PXD_CLIP_DIGEST_STRIDE", "16"))
+except Exception:
+    _DIGEST_STRIDE_DEFAULT = 16
+try:
+    _DIGEST_USE_FLOAT32 = bool(int(_os.getenv("PXD_CLIP_USE_FLOAT32_DIGEST", "0")))
+except Exception:
+    _DIGEST_USE_FLOAT32 = False
+try:
+    _DIGEST_CHUNK_ROWS = int(_os.getenv("PXD_CLIP_DIGEST_CHUNK_ROWS", "4096"))
+except Exception:
+    _DIGEST_CHUNK_ROWS = 4096
+
 _RESULT_CACHE: "OrderedDict[tuple[Any, ...], Geometry]" = OrderedDict()
 _MODE_PIN: dict[bytes, str] = {}
 
 
-def _quantized_digest_for_coords(coords: np.ndarray, offsets: np.ndarray, step: float) -> bytes:
+def _quantized_digest_for_coords(
+    coords: np.ndarray,
+    offsets: np.ndarray,
+    step: float,
+    *,
+    stride: int | None = None,
+    use_float32: bool | None = None,
+    chunk_rows: int | None = None,
+) -> bytes:
     h = hashlib.blake2b(digest_size=16)
     if coords.size:
-        q = np.rint(coords.astype(np.float64, copy=False) / float(step)).astype(
-            np.int64, copy=False
-        )
-        h.update(q.tobytes())
+        s = int(stride) if (stride is not None and stride > 1) else 1
+        arr = coords[::s]
+        use32 = bool(use_float32) if use_float32 is not None else False
+        cr = int(chunk_rows) if (chunk_rows is not None and chunk_rows > 0) else 0
+        n = arr.shape[0]
+        if cr <= 0:
+            if use32:
+                q = np.rint(arr.astype(np.float32, copy=False) / float(step)).astype(
+                    np.int32, copy=False
+                )
+            else:
+                q = np.rint(arr.astype(np.float64, copy=False) / float(step)).astype(
+                    np.int64, copy=False
+                )
+            h.update(q.tobytes())
+        else:
+            i = 0
+            while i < n:
+                j = min(n, i + cr)
+                chunk = arr[i:j]
+                if use32:
+                    q = np.rint(chunk.astype(np.float32, copy=False) / float(step)).astype(
+                        np.int32, copy=False
+                    )
+                else:
+                    q = np.rint(chunk.astype(np.float64, copy=False) / float(step)).astype(
+                        np.int64, copy=False
+                    )
+                h.update(q.tobytes())
+                i = j
     if offsets.size:
         h.update(offsets.astype(np.int32, copy=False).tobytes())
     return h.digest()
 
 
-def _quantized_digest_for_rings(rings3d: list[np.ndarray], step: float) -> bytes:
+def _quantized_digest_for_rings(
+    rings3d: list[np.ndarray],
+    step: float,
+    *,
+    stride: int | None = None,
+    use_float32: bool | None = None,
+    chunk_rows: int | None = None,
+) -> bytes:
     if not rings3d:
         return b"\x00" * 16
     coords_list: list[np.ndarray] = []
@@ -670,15 +726,31 @@ def _quantized_digest_for_rings(rings3d: list[np.ndarray], step: float) -> bytes
         offs.append(s)
     coords = np.vstack(coords_list).astype(np.float32, copy=False)
     offsets = np.asarray(offs, dtype=np.int32)
-    return _quantized_digest_for_coords(coords, offsets, step)
+    return _quantized_digest_for_coords(
+        coords,
+        offsets,
+        step,
+        stride=stride,
+        use_float32=use_float32,
+        chunk_rows=chunk_rows,
+    )
 
 
-def _outline_digest_quantized(outline: Geometry | Sequence[Geometry], step: float) -> bytes:
+def _outline_digest_quantized(
+    outline: Geometry | Sequence[Geometry],
+    step: float,
+    *,
+    stride: int | None = None,
+    use_float32: bool | None = None,
+    chunk_rows: int | None = None,
+) -> bytes:
     h = hashlib.blake2b(digest_size=16)
 
     def _one(g: Geometry) -> None:
         c, o = g.as_arrays(copy=False)
-        dg = _quantized_digest_for_coords(c, o, step)
+        dg = _quantized_digest_for_coords(
+            c, o, step, stride=stride, use_float32=use_float32, chunk_rows=chunk_rows
+        )
         h.update(dg)
 
     if isinstance(outline, Geometry):
@@ -711,7 +783,13 @@ except Exception:
 def _collect_mask_rings_cached(
     outline: Geometry | Sequence[Geometry], *, step: float
 ) -> list[np.ndarray]:
-    d = _outline_digest_quantized(outline, step)
+    d = _outline_digest_quantized(
+        outline,
+        step,
+        stride=_DIGEST_STRIDE_DEFAULT,
+        use_float32=_DIGEST_USE_FLOAT32,
+        chunk_rows=_DIGEST_CHUNK_ROWS,
+    )
     v = _MASK_RINGS_CACHE.get(d)
     if v is not None:
         _ = _MASK_RINGS_CACHE.pop(d)
@@ -786,8 +864,21 @@ def clip(
 
     # 結果キャッシュのための digest（量子化ステップ）
     digest_step = float(_DIGEST_STEP_DEFAULT)
-    mask_digest_q = _quantized_digest_for_rings(rings3d, digest_step)
-    tgt_digest_q = _quantized_digest_for_coords(tgt_coords, tgt_offs, digest_step)
+    mask_digest_q = _quantized_digest_for_rings(
+        rings3d,
+        digest_step,
+        stride=_DIGEST_STRIDE_DEFAULT,
+        use_float32=_DIGEST_USE_FLOAT32,
+        chunk_rows=_DIGEST_CHUNK_ROWS,
+    )
+    tgt_digest_q = _quantized_digest_for_coords(
+        tgt_coords,
+        tgt_offs,
+        digest_step,
+        stride=_DIGEST_STRIDE_DEFAULT,
+        use_float32=_DIGEST_USE_FLOAT32,
+        chunk_rows=_DIGEST_CHUNK_ROWS,
+    )
 
     # モード安定化（弱ピン止め）: proj ピンの場合は choose_coplanar_frame をスキップ
     last_mode = _MODE_PIN.get(mask_digest_q) if _MODE_STABLE_ENABLED else None

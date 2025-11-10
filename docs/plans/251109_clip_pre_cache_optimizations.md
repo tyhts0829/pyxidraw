@@ -69,8 +69,8 @@ DoD（受け入れ）
 - [ ] WeakKeyDictionary による per-Geometry digest/memo を併用。
 
 2) ダイジェスト軽量化
-- [ ] チャンク更新/float32+int32 量子化に対応（env で切替）。
-- [ ] サンプリングハッシュ（stride）を実装（既定オフ）。
+- [x] チャンク更新/float32+int32 量子化に対応（env で切替）。
+- [x] サンプリングハッシュ（stride）を実装（既定オフ）。
 - [ ] per-Geometry digest のメモ化を導入。
 
 3) 共平面判定スキップ
