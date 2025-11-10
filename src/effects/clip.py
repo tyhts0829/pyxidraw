@@ -805,8 +805,6 @@ def clip(
     outline: Geometry | Sequence[Geometry],
     draw_outline: bool = False,
     draw_inside: bool = True,
-    use_projection_fallback: bool = True,
-    projection_use_world_xy: bool = True,
     eps_abs: float = 1e-5,
     eps_rel: float = 1e-4,
 ) -> Geometry:
@@ -822,10 +820,8 @@ def clip(
         出力にマスク輪郭も含める。
     draw_inside : bool, default True
         マスク内側を出力に含める。
-    use_projection_fallback : bool, default True
-        共平面でない場合に XY 投影フォールバックでクリップする。
-    projection_use_world_xy : bool, default True
-        True のときワールド XY へ投影（将来拡張用スイッチ）。
+    非共平面の場合は常に XY 投影でクリップする（フォールバックの切替は不可）。
+    平面時は Shapely が利用可能な場合に Polygon の対称差で偶奇領域を構成してクリップする。
     eps_abs, eps_rel : float, default 1e-5, 1e-4
         共平面判定の絶対/相対許容誤差。
 
@@ -885,8 +881,6 @@ def clip(
             tgt_digest_q,
             bool(draw_inside),
             bool(draw_outline),
-            bool(use_projection_fallback),
-            bool(projection_use_world_xy),
         )
         if _RESULT_CACHE_MAXSIZE != 0:
             try:
@@ -895,34 +889,25 @@ def clip(
                 return out_cached
             except KeyError:
                 pass
-        if use_projection_fallback and projection_use_world_xy:
-            digest = _mask_digest_from_rings(rings3d)
-            cache_key = (digest, "proj")
-            prep = _mask_cache_get(cache_key)
-            if prep is None:
-                prep = _prepare_projection_mask(rings3d)
-                _mask_cache_put(cache_key, prep)
-            out_lines_3d = _clip_lines_project_xy_prepared(
-                tgt_coords, tgt_offs, prep, draw_inside=draw_inside
-            )
-            out_geo = _numpy_lines_to_geometry(out_lines_3d)
-            if draw_outline:
-                out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
-            if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-                _RESULT_CACHE[res_key] = out_geo
-                if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
-                    while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
-                        _RESULT_CACHE.popitem(last=False)
-            return out_geo
-        out = Geometry(g.coords.copy(), g.offsets.copy())
+        # 常に XY 投影でクリップ
+        digest = _mask_digest_from_rings(rings3d)
+        cache_key = (digest, "proj")
+        prep = _mask_cache_get(cache_key)
+        if prep is None:
+            prep = _prepare_projection_mask(rings3d)
+            _mask_cache_put(cache_key, prep)
+        out_lines_3d = _clip_lines_project_xy_prepared(
+            tgt_coords, tgt_offs, prep, draw_inside=draw_inside
+        )
+        out_geo = _numpy_lines_to_geometry(out_lines_3d)
         if draw_outline:
-            out = out.concat(_numpy_lines_to_geometry(rings3d))
-        if _RESULT_CACHE_MAXSIZE != 0 and out.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-            _RESULT_CACHE[res_key] = out
+            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out_geo
             if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
                 while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
                     _RESULT_CACHE.popitem(last=False)
-        return out
+        return out_geo
 
     # ここで初めて共平面判定/整列（必要ケースのみ）
     if tgt_coords.size == 0:
@@ -953,8 +938,6 @@ def clip(
         tgt_digest_q,
         bool(draw_inside),
         bool(draw_outline),
-        bool(use_projection_fallback),
-        bool(projection_use_world_xy),
     )
     if _RESULT_CACHE_MAXSIZE != 0:
         try:
@@ -966,39 +949,27 @@ def clip(
 
     # 非共平面 or 安定化モードが proj の場合: 投影フォールバック or no-op
     if not planar or mode == "proj":
-        if use_projection_fallback and projection_use_world_xy:
-            # マスク前処理（内容ダイジェストで LRU）
-            digest = _mask_digest_from_rings(rings3d)
-            cache_key = (digest, "proj")
-            prep = _mask_cache_get(cache_key)
-            if prep is None:
-                prep = _prepare_projection_mask(rings3d)
-                _mask_cache_put(cache_key, prep)
-            # XY 投影でクリップし、3D は元線分で復元
-            out_lines_3d = _clip_lines_project_xy_prepared(
-                tgt_coords, tgt_offs, prep, draw_inside=draw_inside
-            )
-            out_geo = _numpy_lines_to_geometry(out_lines_3d)
-            if draw_outline:
-                out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
-            # 結果を保存
-            if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-                _RESULT_CACHE[res_key] = out_geo
-                if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
-                    while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
-                        _RESULT_CACHE.popitem(last=False)
-            return out_geo
-        # フォールバック無効: no-op + 輪郭連結のみ
-        out = Geometry(g.coords.copy(), g.offsets.copy())
+        # マスク前処理（内容ダイジェストで LRU）
+        digest = _mask_digest_from_rings(rings3d)
+        cache_key = (digest, "proj")
+        prep = _mask_cache_get(cache_key)
+        if prep is None:
+            prep = _prepare_projection_mask(rings3d)
+            _mask_cache_put(cache_key, prep)
+        # XY 投影でクリップし、3D は元線分で復元
+        out_lines_3d = _clip_lines_project_xy_prepared(
+            tgt_coords, tgt_offs, prep, draw_inside=draw_inside
+        )
+        out_geo = _numpy_lines_to_geometry(out_lines_3d)
         if draw_outline:
-            out = out.concat(_numpy_lines_to_geometry(rings3d))
-        # 結果保存（no-op）
-        if _RESULT_CACHE_MAXSIZE != 0 and out.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-            _RESULT_CACHE[res_key] = out
+            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+        # 結果を保存
+        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out_geo
             if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
                 while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
                     _RESULT_CACHE.popitem(last=False)
-        return out
+        return out_geo
 
     # XY 座標に分離
     n_t = tgt_coords.shape[0]
@@ -1182,8 +1153,6 @@ def clip(
 cast(Any, clip).__param_meta__ = {
     "draw_outline": {"type": "boolean"},
     "draw_inside": {"type": "boolean"},
-    "use_projection_fallback": {"type": "boolean"},
-    "projection_use_world_xy": {"type": "boolean"},
     "eps_abs": {"type": "number", "min": 1e-7, "max": 1e-2, "step": 1e-6},
     "eps_rel": {"type": "number", "min": 1e-7, "max": 1e-2, "step": 1e-6},
 }
