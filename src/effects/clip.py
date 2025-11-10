@@ -15,9 +15,12 @@ from __future__ import annotations
 - Shapely が利用不可の場合は簡易フォールバック（線分をマスクリングで分割→中点の偶奇判定）。
 """
 
+import hashlib
+from collections import OrderedDict
 from typing import Any, Iterable, Sequence, Tuple, cast
 
 import numpy as np
+from numba import njit  # type: ignore[attr-defined]
 
 from common.types import ObjectRef as _ObjectRef
 from engine.core.geometry import Geometry
@@ -235,25 +238,22 @@ def _aabb_overlap(
     return not (ax1 < bx0 or bx1 < ax0 or ay1 < by0 or by1 < ay0)
 
 
-def _clip_lines_project_xy(
-    target_coords: np.ndarray,
-    target_offs: np.ndarray,
-    mask_rings_3d: list[np.ndarray],
-    *,
-    draw_inside: bool,
-    draw_outside: bool,
-) -> list[np.ndarray]:
-    """非共平面でも XY 投影で確実に切るフォールバック。
+def _numpy_lines_to_geometry(lines: Iterable[np.ndarray]) -> Geometry:
+    arrs = [np.asarray(l, dtype=np.float32) for l in lines if l is not None and len(l) > 0]
+    if not arrs:
+        return Geometry.from_lines([])
+    return Geometry.from_lines(arrs)
 
-    - マスクは 3D→XY 投影し偶奇規則で採否。
-    - 対象は各セグメントを XY で分割し、3D は線形補間で復元。
-    """
-    if target_coords.size == 0 or target_offs.size <= 1:
-        return []
-    # 投影マスクと AABB
+
+def _prepare_projection_mask(rings3d: list[np.ndarray]) -> dict[str, Any]:
+    """投影系マスクの前処理（XY 投影 + AABB + 簡易グリッド）。"""
     rings_xy: list[np.ndarray] = []
     rings_aabb: list[tuple[float, float, float, float]] = []
-    for ring3d in mask_rings_3d:
+    union_bounds = [float("inf"), float("inf"), float("-inf"), float("-inf")]
+    total_edges = 0
+    coords_concat: list[np.ndarray] = []
+    offsets_list: list[int] = [0]
+    for ring3d in rings3d:
         if ring3d.shape[0] < 3:
             continue
         r2 = ring3d[:, :2].astype(np.float32, copy=False)
@@ -262,15 +262,186 @@ def _clip_lines_project_xy(
         if r.shape[0] < 3:
             continue
         rings_xy.append(r)
-        rings_aabb.append(_aabb2d(r))
+        coords_concat.append(r)
+        offsets_list.append(offsets_list[-1] + r.shape[0])
+        aabb = _aabb2d(r)
+        rings_aabb.append(aabb)
+        union_bounds[0] = min(union_bounds[0], aabb[0])
+        union_bounds[1] = min(union_bounds[1], aabb[1])
+        union_bounds[2] = max(union_bounds[2], aabb[2])
+        union_bounds[3] = max(union_bounds[3], aabb[3])
+        total_edges += max(0, r.shape[0] - 1)
+    if not rings_xy:
+        return {"rings_xy": [], "rings_aabb": [], "union": (0, 0, 0, 0), "grid": {}}
+    nx = max(8, min(128, int(np.sqrt(max(1, total_edges)))))
+    ny = nx
+    minx, miny, maxx, maxy = union_bounds
+    width = max(1e-9, float(maxx - minx))
+    height = max(1e-9, float(maxy - miny))
+    csx = width / float(nx)
+    csy = height / float(ny)
+    grid: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for ri, r in enumerate(rings_xy):
+        m = r.shape[0]
+        for ei in range(m - 1):
+            p = r[ei]
+            q = r[ei + 1]
+            x0 = float(min(p[0], q[0]))
+            x1 = float(max(p[0], q[0]))
+            y0 = float(min(p[1], q[1]))
+            y1 = float(max(p[1], q[1]))
+            ix0 = int((x0 - minx) / csx)
+            iy0 = int((y0 - miny) / csy)
+            ix1 = int((x1 - minx) / csx)
+            iy1 = int((y1 - miny) / csy)
+            if ix0 < 0:
+                ix0 = 0
+            if iy0 < 0:
+                iy0 = 0
+            if ix1 >= nx:
+                ix1 = nx - 1
+            if iy1 >= ny:
+                iy1 = ny - 1
+            for ix in range(ix0, ix1 + 1):
+                for iy in range(iy0, iy1 + 1):
+                    grid.setdefault((ix, iy), []).append((ri, ei))
+    coords2d = (
+        np.vstack(coords_concat).astype(np.float32, copy=False)
+        if coords_concat
+        else np.zeros((0, 2), dtype=np.float32)
+    )
+    offsets = np.asarray(offsets_list, dtype=np.int32)
+    return {
+        "rings_xy": rings_xy,
+        "rings_aabb": rings_aabb,
+        "union": (
+            float(union_bounds[0]),
+            float(union_bounds[1]),
+            float(union_bounds[2]),
+            float(union_bounds[3]),
+        ),
+        "grid": grid,
+        "minx": float(minx),
+        "miny": float(miny),
+        "csx": float(csx),
+        "csy": float(csy),
+        "nx": int(nx),
+        "ny": int(ny),
+        "coords2d": coords2d,
+        "offsets": offsets,
+    }
+
+
+def _segment_intersections_with_candidates(
+    A2: np.ndarray,
+    B2: np.ndarray,
+    rings_xy: list[np.ndarray],
+    candidates: list[tuple[int, int]],
+) -> list[float]:
+    out: list[float] = []
+    ax, ay = float(A2[0]), float(A2[1])
+    bx, by = float(B2[0]), float(B2[1])
+    for ri, ei in candidates:
+        r = rings_xy[ri]
+        p = r[ei]
+        q = r[ei + 1]
+        den = (bx - ax) * (q[1] - p[1]) - (by - ay) * (q[0] - p[0])
+        if abs(den) < 1e-12:
+            continue
+        t = ((p[0] - ax) * (q[1] - p[1]) - (p[1] - ay) * (q[0] - p[0])) / den
+        u = ((p[0] - ax) * (by - ay) - (p[1] - ay) * (bx - ax)) / den
+        if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+            out.append(float(t))
+    return out
+
+
+@njit(cache=True)
+def _njit_intersections_with_candidates(
+    ax: float,
+    ay: float,
+    bx: float,
+    by: float,
+    coords2d: np.ndarray,
+    offsets: np.ndarray,
+    cand_pairs: np.ndarray,
+) -> np.ndarray:
+    max_n = cand_pairs.shape[0]
+    out = np.empty(max_n, dtype=np.float32)
+    count = 0
+    for k in range(max_n):
+        ri = int(cand_pairs[k, 0])
+        ei = int(cand_pairs[k, 1])
+        s = int(offsets[ri])
+        p0 = coords2d[s + ei]
+        p1 = coords2d[s + ei + 1]
+        den = (bx - ax) * (p1[1] - p0[1]) - (by - ay) * (p1[0] - p0[0])
+        if abs(den) < 1e-12:
+            continue
+        t = ((p0[0] - ax) * (p1[1] - p0[1]) - (p0[1] - ay) * (p1[0] - p0[0])) / den
+        u = ((p0[0] - ax) * (by - ay) - (p0[1] - ay) * (bx - ax)) / den
+        if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+            out[count] = np.float32(t)
+            count += 1
+    return out[:count]
+
+
+@njit(cache=True)
+def _njit_evenodd_point(x: float, y: float, coords2d: np.ndarray, offsets: np.ndarray) -> int:
+    inside = False
+    nr = offsets.shape[0] - 1
+    for i in range(nr):
+        s = int(offsets[i])
+        e = int(offsets[i + 1])
+        # レイキャスト（半開区間）
+        j = e - 1
+        for k in range(s, e):
+            xi = coords2d[k, 0]
+            yi = coords2d[k, 1]
+            xj = coords2d[j, 0]
+            yj = coords2d[j, 1]
+            cond = ((yi > y) != (yj > y)) and (x <= (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi)
+            if cond:
+                inside = not inside
+            j = k
+    return 1 if inside else 0
+
+
+def _clip_lines_project_xy_prepared(
+    target_coords: np.ndarray,
+    target_offs: np.ndarray,
+    prep: dict[str, Any],
+    *,
+    draw_inside: bool,
+    draw_outside: bool,
+) -> list[np.ndarray]:
+    rings_xy: list[np.ndarray] = prep.get("rings_xy", [])
     if not rings_xy:
         return []
-
+    rings_aabb = prep.get("rings_aabb", [])
+    union_bounds = prep.get("union", (0.0, 0.0, 0.0, 0.0))
+    grid = prep.get("grid", {})
+    minx = float(prep.get("minx", 0.0))
+    miny = float(prep.get("miny", 0.0))
+    csx = float(prep.get("csx", 1.0))
+    csy = float(prep.get("csy", 1.0))
+    nx = int(prep.get("nx", 1))
+    ny = int(prep.get("ny", 1))
+    coords2d = prep.get("coords2d")
+    offsets = prep.get("offsets")
     out_lines: list[np.ndarray] = []
     eps = 1e-9
     for i in range(len(target_offs) - 1):
         s, e = int(target_offs[i]), int(target_offs[i + 1])
         if e - s < 2:
+            continue
+        poly2 = target_coords[s:e, :2]
+        pminx, pminy, pmaxx, pmaxy = _aabb2d(poly2)
+        if not _aabb_overlap(pminx, pminy, pmaxx, pmaxy, *union_bounds):
+            if draw_outside and not draw_inside:
+                for j in range(s, e - 1):
+                    out_lines.append(
+                        np.vstack([target_coords[j], target_coords[j + 1]]).astype(np.float32)
+                    )
             continue
         for j in range(s, e - 1):
             A3 = target_coords[j]
@@ -282,28 +453,77 @@ def _clip_lines_project_xy(
             seg_miny = float(min(A2[1], B2[1]))
             seg_maxy = float(max(A2[1], B2[1]))
             ts: list[float] = [0.0, 1.0]
-            # 交点収集（AABB で早期除外）
-            for r_xy, aabb in zip(rings_xy, rings_aabb):
-                if not _aabb_overlap(seg_minx, seg_miny, seg_maxx, seg_maxy, *aabb):
-                    continue
-                inters = _segment_intersections_with_polygon_edges(A2, B2, r_xy)
-                for t, _x in inters:
-                    if eps < t < 1.0 - eps:
-                        ts.append(float(t))
+            ix0 = int((seg_minx - minx) / csx)
+            iy0 = int((seg_miny - miny) / csy)
+            ix1 = int((seg_maxx - minx) / csx)
+            iy1 = int((seg_maxy - miny) / csy)
+            if ix0 < 0:
+                ix0 = 0
+            if iy0 < 0:
+                iy0 = 0
+            if ix1 >= nx:
+                ix1 = nx - 1
+            if iy1 >= ny:
+                iy1 = ny - 1
+            cand: list[tuple[int, int]] = []
+            seen: set[tuple[int, int]] = set()
+            for ix in range(ix0, ix1 + 1):
+                for iy in range(iy0, iy1 + 1):
+                    for ri, ei in grid.get((ix, iy), []):
+                        key = (ri, ei)
+                        if key not in seen:
+                            seen.add(key)
+                            aabb = rings_aabb[ri]
+                            if _aabb_overlap(seg_minx, seg_miny, seg_maxx, seg_maxy, *aabb):
+                                cand.append(key)
+            if cand:
+                if isinstance(coords2d, np.ndarray) and isinstance(offsets, np.ndarray):
+                    try:
+                        cand_arr = np.asarray(cand, dtype=np.int32)
+                        inters = _njit_intersections_with_candidates(
+                            float(A2[0]),
+                            float(A2[1]),
+                            float(B2[0]),
+                            float(B2[1]),
+                            coords2d.astype(np.float32, copy=False),
+                            offsets.astype(np.int32, copy=False),
+                            cand_arr,
+                        )
+                        for t in inters:
+                            if eps < t < 1.0 - eps:
+                                ts.append(float(t))
+                    except Exception:
+                        inters = _segment_intersections_with_candidates(A2, B2, rings_xy, cand)
+                        for t in inters:
+                            if eps < t < 1.0 - eps:
+                                ts.append(float(t))
+                else:
+                    inters = _segment_intersections_with_candidates(A2, B2, rings_xy, cand)
+                    for t in inters:
+                        if eps < t < 1.0 - eps:
+                            ts.append(float(t))
             if len(ts) <= 2:
-                # セグメント全体の中点で判定
                 m = 0.5
                 mx = float(A2[0] + m * (B2[0] - A2[0]))
                 my = float(A2[1] + m * (B2[1] - A2[1]))
-                cnt = 0
-                for r_xy in rings_xy:
-                    if _point_in_polygon(r_xy, mx, my):
-                        cnt += 1
-                inside = (cnt % 2) == 1
+                if isinstance(coords2d, np.ndarray) and isinstance(offsets, np.ndarray):
+                    try:
+                        inside = bool(_njit_evenodd_point(float(mx), float(my), coords2d, offsets))
+                    except Exception:
+                        cnt = 0
+                        for r_xy in rings_xy:
+                            if _point_in_polygon(r_xy, mx, my):
+                                cnt += 1
+                        inside = (cnt % 2) == 1
+                else:
+                    cnt = 0
+                    for r_xy in rings_xy:
+                        if _point_in_polygon(r_xy, mx, my):
+                            cnt += 1
+                    inside = (cnt % 2) == 1
                 if (inside and draw_inside) or ((not inside) and draw_outside):
                     out_lines.append(np.vstack([A3, B3]).astype(np.float32))
                 continue
-            # ソート＆ユニーク化
             ts_sorted = sorted(ts)
             uniq: list[float] = []
             for t in ts_sorted:
@@ -317,11 +537,21 @@ def _clip_lines_project_xy(
                 m = (t0 + t1) * 0.5
                 mx = float(A2[0] + m * (B2[0] - A2[0]))
                 my = float(A2[1] + m * (B2[1] - A2[1]))
-                cnt = 0
-                for r_xy in rings_xy:
-                    if _point_in_polygon(r_xy, mx, my):
-                        cnt += 1
-                inside = (cnt % 2) == 1
+                if isinstance(coords2d, np.ndarray) and isinstance(offsets, np.ndarray):
+                    try:
+                        inside = bool(_njit_evenodd_point(float(mx), float(my), coords2d, offsets))
+                    except Exception:
+                        cnt = 0
+                        for r_xy in rings_xy:
+                            if _point_in_polygon(r_xy, mx, my):
+                                cnt += 1
+                        inside = (cnt % 2) == 1
+                else:
+                    cnt = 0
+                    for r_xy in rings_xy:
+                        if _point_in_polygon(r_xy, mx, my):
+                            cnt += 1
+                    inside = (cnt % 2) == 1
                 if (inside and draw_inside) or ((not inside) and draw_outside):
                     P0 = A3 + (B3 - A3) * t0
                     P1 = A3 + (B3 - A3) * t1
@@ -329,11 +559,118 @@ def _clip_lines_project_xy(
     return out_lines
 
 
-def _numpy_lines_to_geometry(lines: Iterable[np.ndarray]) -> Geometry:
-    arrs = [np.asarray(l, dtype=np.float32) for l in lines if l is not None and len(l) > 0]
-    if not arrs:
-        return Geometry.from_lines([])
-    return Geometry.from_lines(arrs)
+# ── マスク前処理キャッシュ（内容ベース LRU） ─────────────────────────────
+try:
+    from common.settings import get as _get_settings  # 設定優先
+
+    _s = _get_settings()
+    _MASK_CACHE_MAXSIZE = int(getattr(_s, "CLIP_MASK_CACHE_MAXSIZE", 64) or 64)
+except Exception:
+    import os as _os
+
+    try:
+        _MASK_CACHE_MAXSIZE = int(_os.getenv("PXD_CLIP_MASK_CACHE_MAXSIZE", "64"))
+    except Exception:
+        _MASK_CACHE_MAXSIZE = 64
+
+_MASK_CACHE: "OrderedDict[tuple[bytes, str], dict[str, Any]]" = OrderedDict()
+_MASK_CACHE_HITS = 0
+_MASK_CACHE_MISSES = 0
+
+
+def _mask_digest_from_rings(rings3d: list[np.ndarray]) -> bytes:
+    """閉路リング群の内容から blake2b-128 ダイジェストを生成。"""
+    h = hashlib.blake2b(digest_size=16)
+    for r in rings3d:
+        try:
+            a = np.ascontiguousarray(r.astype(np.float32, copy=False))
+            h.update(a.view(np.uint8).tobytes())
+            h.update(np.int64(a.shape[0]).tobytes())
+        except Exception:
+            # 失敗時は型情報のみ
+            h.update(b"ring")
+    return h.digest()
+
+
+def _mask_cache_get(key: tuple[bytes, str]) -> dict[str, Any] | None:
+    global _MASK_CACHE_HITS
+    try:
+        v = _MASK_CACHE.pop(key)
+    except KeyError:
+        return None
+    _MASK_CACHE[key] = v
+    _MASK_CACHE_HITS += 1
+    return v
+
+
+def _mask_cache_put(key: tuple[bytes, str], value: dict[str, Any]) -> None:
+    global _MASK_CACHE_MISSES
+    _MASK_CACHE[key] = value
+    _MASK_CACHE_MISSES += 1
+    if _MASK_CACHE_MAXSIZE is not None and _MASK_CACHE_MAXSIZE > 0:
+        while len(_MASK_CACHE) > _MASK_CACHE_MAXSIZE:
+            _MASK_CACHE.popitem(last=False)
+
+
+# 結果キャッシュ/量子化 digest/モード安定化
+try:
+    from common.settings import get as _get_settings  # type: ignore
+
+    _s2 = _get_settings()
+    _RESULT_CACHE_MAXSIZE = int(getattr(_s2, "CLIP_RESULT_CACHE_MAXSIZE", 16) or 16)
+    _RESULT_CACHE_MAX_VERTS = int(getattr(_s2, "CLIP_RESULT_CACHE_MAX_VERTS", 200_000) or 200_000)
+    _DIGEST_STEP_DEFAULT = float(getattr(_s2, "CLIP_DIGEST_STEP", 1e-4))
+    _MODE_STABLE_ENABLED = bool(getattr(_s2, "CLIP_MODE_STABLE", True))
+except Exception:
+    import os as _os
+
+    try:
+        _RESULT_CACHE_MAXSIZE = int(_os.getenv("PXD_CLIP_RESULT_CACHE_MAXSIZE", "16"))
+    except Exception:
+        _RESULT_CACHE_MAXSIZE = 16
+    try:
+        _RESULT_CACHE_MAX_VERTS = int(_os.getenv("PXD_CLIP_RESULT_CACHE_MAX_VERTS", "200000"))
+    except Exception:
+        _RESULT_CACHE_MAX_VERTS = 200_000
+    try:
+        _DIGEST_STEP_DEFAULT = float(_os.getenv("PXD_CLIP_DIGEST_STEP", "1e-4"))
+    except Exception:
+        _DIGEST_STEP_DEFAULT = 1e-4
+    try:
+        _MODE_STABLE_ENABLED = bool(int(_os.getenv("PXD_CLIP_MODE_STABLE", "1")))
+    except Exception:
+        _MODE_STABLE_ENABLED = True
+
+_RESULT_CACHE: "OrderedDict[tuple[Any, ...], Geometry]" = OrderedDict()
+_MODE_PIN: dict[bytes, str] = {}
+
+
+def _quantized_digest_for_coords(coords: np.ndarray, offsets: np.ndarray, step: float) -> bytes:
+    h = hashlib.blake2b(digest_size=16)
+    if coords.size:
+        q = np.rint(coords.astype(np.float64, copy=False) / float(step)).astype(
+            np.int64, copy=False
+        )
+        h.update(q.tobytes())
+    if offsets.size:
+        h.update(offsets.astype(np.int32, copy=False).tobytes())
+    return h.digest()
+
+
+def _quantized_digest_for_rings(rings3d: list[np.ndarray], step: float) -> bytes:
+    if not rings3d:
+        return b"\x00" * 16
+    coords_list: list[np.ndarray] = []
+    offs = [0]
+    s = 0
+    for r in rings3d:
+        a = np.asarray(r, dtype=np.float32)
+        coords_list.append(a)
+        s += a.shape[0]
+        offs.append(s)
+    coords = np.vstack(coords_list).astype(np.float32, copy=False)
+    offsets = np.asarray(offs, dtype=np.int32)
+    return _quantized_digest_for_coords(coords, offsets, step)
 
 
 @effect()
@@ -380,6 +717,11 @@ def clip(
         # 有効な閉曲線が無い場合は安全側で no-op（落とさない）
         return Geometry(g.coords.copy(), g.offsets.copy())
 
+    # 結果キャッシュのための digest（量子化ステップ）
+    digest_step = float(_DIGEST_STEP_DEFAULT)
+    mask_digest_q = _quantized_digest_for_rings(rings3d, digest_step)
+    tgt_digest_q = _quantized_digest_for_coords(tgt_coords, tgt_offs, digest_step)
+
     # 連結して共平面判定/整列
     if tgt_coords.size == 0:
         comb_coords = mask_coords
@@ -396,25 +738,71 @@ def clip(
         comb_coords, comb_offs, eps_abs=float(eps_abs), eps_rel=float(eps_rel)
     )
 
-    # 非共平面: 投影フォールバック or no-op
-    if not planar:
+    # モード安定化（弱ピン止め）
+    mode_initial = "planar" if planar else "proj"
+    mode = mode_initial
+    if _MODE_STABLE_ENABLED:
+        last = _MODE_PIN.get(mask_digest_q)
+        if last in ("planar", "proj"):
+            # use last mode if available
+            mode = cast(str, last)
+        else:
+            _MODE_PIN[mask_digest_q] = mode
+
+    # 結果 LRU（ヒット時は即返す）
+    res_key = (
+        "clip-result",
+        mode,
+        mask_digest_q,
+        tgt_digest_q,
+        bool(draw_inside),
+        bool(draw_outside),
+        bool(draw_outline),
+        bool(use_projection_fallback),
+        bool(projection_use_world_xy),
+    )
+    if _RESULT_CACHE_MAXSIZE != 0:
+        try:
+            out_cached = _RESULT_CACHE.pop(res_key)
+            _RESULT_CACHE[res_key] = out_cached
+            return out_cached
+        except KeyError:
+            pass
+
+    # 非共平面 or 安定化モードが proj の場合: 投影フォールバック or no-op（キャッシュ利用）
+    if (not planar) or (mode == "proj"):
         if use_projection_fallback and projection_use_world_xy:
+            # マスク前処理（内容ダイジェストで LRU）
+            digest = _mask_digest_from_rings(rings3d)
+            cache_key = (digest, "proj")
+            prep = _mask_cache_get(cache_key)
+            if prep is None:
+                prep = _prepare_projection_mask(rings3d)
+                _mask_cache_put(cache_key, prep)
             # XY 投影でクリップし、3D は元線分で復元
-            out_lines_3d = _clip_lines_project_xy(
-                tgt_coords,
-                tgt_offs,
-                rings3d,
-                draw_inside=draw_inside,
-                draw_outside=draw_outside,
+            out_lines_3d = _clip_lines_project_xy_prepared(
+                tgt_coords, tgt_offs, prep, draw_inside=draw_inside, draw_outside=draw_outside
             )
             out_geo = _numpy_lines_to_geometry(out_lines_3d)
             if draw_outline:
                 out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+            # 結果を保存
+            if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+                _RESULT_CACHE[res_key] = out_geo
+                if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                    while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                        _RESULT_CACHE.popitem(last=False)
             return out_geo
         # フォールバック無効: no-op + 輪郭連結のみ
         out = Geometry(g.coords.copy(), g.offsets.copy())
         if draw_outline:
             out = out.concat(_numpy_lines_to_geometry(rings3d))
+        # 結果保存（no-op）
+        if _RESULT_CACHE_MAXSIZE != 0 and out.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out
+            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                    _RESULT_CACHE.popitem(last=False)
         return out
 
     # XY 座標に分離
@@ -431,31 +819,61 @@ def clip(
     except Exception:
         shapely_ok = False
 
-    if shapely_ok:
+    if shapely_ok and (mode == "planar"):
         from shapely.geometry import Polygon  # type: ignore
 
-        region_obj = None
-        for i in range(len(mask_offs) - 1):
-            s, e = int(mask_offs[i]), int(mask_offs[i + 1])
-            ring = mask_xy_all[s:e, :2].astype(np.float32, copy=False)
-            ring = ring if ring.shape[0] < 2 or not np.allclose(ring[0], ring[-1]) else ring[:-1]
-            if ring.shape[0] < 3:
-                continue
+        # マスク領域（偶奇合成）を内容ダイジェストで LRU
+        digest = _mask_digest_from_rings(rings3d)
+        cache_key = (digest, "planar")
+        cached = _mask_cache_get(cache_key)
+        prepared_region = None
+        if cached is not None:
+            region_obj = cached.get("region")
+            region_bounds = cached.get("bounds", None)
+            prepared_region = cached.get("prepared")
+        else:
+            region_obj = None
+            for i in range(len(mask_offs) - 1):
+                s, e = int(mask_offs[i]), int(mask_offs[i + 1])
+                ring = mask_xy_all[s:e, :2].astype(np.float32, copy=False)
+                ring = (
+                    ring if ring.shape[0] < 2 or not np.allclose(ring[0], ring[-1]) else ring[:-1]
+                )
+                if ring.shape[0] < 3:
+                    continue
+                try:
+                    pg = Polygon(ring)
+                    if not pg.is_valid:
+                        pg = pg.buffer(0)
+                except Exception:
+                    continue
+                region_obj = pg if region_obj is None else region_obj.symmetric_difference(pg)
+            if region_obj is None or region_obj.is_empty:
+                out = Geometry(g.coords.copy(), g.offsets.copy())
+                if draw_outline:
+                    out = out.concat(_numpy_lines_to_geometry(rings3d))
+                return out
+            region_bounds = getattr(region_obj, "bounds", None)
             try:
-                pg = Polygon(ring)
-                if not pg.is_valid:
-                    pg = pg.buffer(0)
+                from shapely.prepared import prep as _prep  # type: ignore
+
+                prepared_region = _prep(region_obj)
             except Exception:
-                continue
-            region_obj = pg if region_obj is None else region_obj.symmetric_difference(pg)
-        if region_obj is None or region_obj.is_empty:
+                prepared_region = None
+            _mask_cache_put(
+                cache_key,
+                {"region": region_obj, "bounds": region_bounds, "prepared": prepared_region},
+            )
+
+        if region_obj is None or getattr(region_obj, "is_empty", False):
             out = Geometry(g.coords.copy(), g.offsets.copy())
             if draw_outline:
                 out = out.concat(_numpy_lines_to_geometry(rings3d))
             return out
 
-        # 対象ラインをクリップ
+        # 対象ラインをクリップ（prepared 早期分岐 + バルク処理）
         out_lines_xy: list[np.ndarray] = []
+        bulk_lines: list[np.ndarray] = []
         for i in range(len(tgt_offs) - 1):
             s, e = int(tgt_offs[i]), int(tgt_offs[i + 1])
             pl = tgt_xy_all[s:e, :2].astype(np.float32, copy=False)
@@ -465,24 +883,76 @@ def clip(
                 ls = LineString(pl)
             except Exception:
                 continue
-            if draw_inside:
+            # 早期除外（bounds ベース）
+            if region_bounds is not None:
+                pminx, pminy, pmaxx, pmaxy = _aabb2d(pl)
+                rb = region_bounds
+                if not _aabb_overlap(
+                    pminx,
+                    pminy,
+                    pmaxx,
+                    pmaxy,
+                    float(rb[0]),
+                    float(rb[1]),
+                    float(rb[2]),
+                    float(rb[3]),
+                ):
+                    if draw_outside and not draw_inside:
+                        out_lines_xy.append(pl)
+                    # inside のみならスキップ
+                    continue
+            # prepared による完全内外の早期分岐
+            if prepared_region is not None:
                 try:
-                    gi = ls.intersection(region_obj)
+                    if prepared_region.disjoint(ls):
+                        if draw_outside and not draw_inside:
+                            out_lines_xy.append(pl)
+                        continue
+                    if prepared_region.contains(ls):
+                        if draw_inside and not draw_outside:
+                            out_lines_xy.append(pl)
+                        continue
+                except Exception:
+                    pass
+            # バルクへ回す
+            bulk_lines.append(pl)
+
+        if bulk_lines:
+            try:
+                from shapely.geometry import MultiLineString  # type: ignore
+
+                mls = MultiLineString(bulk_lines)
+                if draw_inside:
+                    gi = mls.intersection(region_obj)
                     out_lines_xy.extend(_to_lines_from_shapely(gi))
-                except Exception:
-                    pass
-            if draw_outside:
-                try:
-                    go = ls.difference(region_obj)
+                if draw_outside:
+                    go = mls.difference(region_obj)
                     out_lines_xy.extend(_to_lines_from_shapely(go))
-                except Exception:
-                    pass
+            except Exception:
+                # フォールバック: per-line
+                for pl in bulk_lines:
+                    try:
+                        ls = LineString(pl)
+                        if draw_inside:
+                            gi = ls.intersection(region_obj)
+                            out_lines_xy.extend(_to_lines_from_shapely(gi))
+                        if draw_outside:
+                            go = ls.difference(region_obj)
+                            out_lines_xy.extend(_to_lines_from_shapely(go))
+                    except Exception:
+                        continue
 
         # XY → 3D
         out_lines = [transform_back(arr.astype(np.float32), R_all, z_all) for arr in out_lines_xy]
         out_geo = _numpy_lines_to_geometry(out_lines)
         if draw_outline:
             out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+        # 結果保存
+        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out_geo
+            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                    _RESULT_CACHE.popitem(last=False)
         return out_geo
 
     # ---- フォールバック（Shapely 無） -------------------------------------
@@ -505,6 +975,12 @@ def clip(
     out_geo = _numpy_lines_to_geometry(lines_3d)
     if draw_outline:
         out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+    # 結果保存
+    if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+        _RESULT_CACHE[res_key] = out_geo
+        if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+            while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                _RESULT_CACHE.popitem(last=False)
     return out_geo
 
 
