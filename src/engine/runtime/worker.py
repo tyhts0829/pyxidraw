@@ -183,92 +183,21 @@ class _WorkerProcess(mp.Process):
 
     def run(self) -> None:
         """頂点データとフレームIDを持つ RenderPacket を生成し、結果キューに送る。"""
-        logger = logging.getLogger(__name__)
         for task in iter(self.task_q.get, None):  # None = sentinel
-            try:
-                # CC スナップショットを適用（API レイヤから受け取った関数を使用）
-                try:
-                    if self.apply_cc_snapshot is not None:
-                        self.apply_cc_snapshot(task.cc_state)
-                except Exception:
-                    pass
-                # Parameter スナップショットを適用（SnapshotRuntime を有効化）
-                try:
-                    if self.apply_param_snapshot is not None:
-                        self.apply_param_snapshot(getattr(task, "param_overrides", None), task.t)
-                except Exception:
-                    pass
-                # 直前のスナップショット
-                try:
-                    before = self.metrics_snapshot() if self.metrics_snapshot is not None else None
-                except Exception:
-                    before = None
-                # t のみを渡す（cc は api.cc 側で参照）
-                geometry_or_seq = self.draw_callback(task.t)
-                # スタイル抽出（Sequence 返却や style 指定をレイヤーへ）
-                packet_geom, packet_layers = _normalize_to_layers(geometry_or_seq)
-                # LazyGeometry の実体化は Renderer に委譲（layers 経路でも安全）
-                # Runtime をクリア（スナップショット無しを渡して明示的に無効化）
-                try:
-                    if self.apply_param_snapshot is not None:
-                        self.apply_param_snapshot(None, 0.0)
-                except Exception:
-                    pass
-                # 直後のスナップショット
-                try:
-                    after = self.metrics_snapshot() if self.metrics_snapshot is not None else None
-                except Exception:
-                    after = None
-                # HIT/MISS の二値判定（MISS 優先: フレーム内で 1 つでも MISS 増分があれば MISS）
-                flags = None
-                if isinstance(before, dict) and isinstance(after, dict):
-                    try:
-                        e_hits_after = int(after.get("effect", {}).get("hits", 0))
-                        e_hits_before = int(before.get("effect", {}).get("hits", 0))
-                        e_miss_after = int(after.get("effect", {}).get("misses", 0))
-                        e_miss_before = int(before.get("effect", {}).get("misses", 0))
-                        s_hits_after = int(after.get("shape", {}).get("hits", 0))
-                        s_hits_before = int(before.get("shape", {}).get("hits", 0))
-                        s_miss_after = int(after.get("shape", {}).get("misses", 0))
-                        s_miss_before = int(before.get("shape", {}).get("misses", 0))
-
-                        e_miss = e_miss_after > e_miss_before
-                        e_hit = e_hits_after > e_hits_before
-                        s_miss = s_miss_after > s_miss_before
-                        s_hit = s_hits_after > s_hits_before
-
-                        # フレーム差分に基づくフラグ（増分なしのキーは送らない）
-                        flags = {}
-                        if e_miss:
-                            flags["effect"] = "MISS"
-                        elif e_hit:
-                            flags["effect"] = "HIT"
-                        if s_miss:
-                            flags["shape"] = "MISS"
-                        elif s_hit:
-                            flags["shape"] = "HIT"
-                        # デバッグ出力は抑制
-                    except Exception:
-                        flags = None
-                self.result_q.put(
-                    RenderPacket(
-                        geometry=packet_geom,
-                        frame_id=task.frame_id,
-                        cache_flags=flags,
-                        layers=tuple(packet_layers) if packet_layers else None,
-                    )
-                )
-            except Exception as e:  # 例外を親へ
-                # デバッグ用：分類情報を付与
-                import traceback
-
-                logger.exception(
-                    "[worker] stage=draw_callback frame_id=%s error=%s\n%s",
-                    getattr(task, "frame_id", -1),
-                    e,
-                    traceback.format_exc(),
-                )
-                self.result_q.put(WorkerTaskError(getattr(task, "frame_id", -1), e))
+            packet, err = _execute_draw_to_packet(
+                t=task.t,
+                frame_id=task.frame_id,
+                draw_callback=self.draw_callback,
+                apply_cc_snapshot=self.apply_cc_snapshot,
+                apply_param_snapshot=self.apply_param_snapshot,
+                cc_state=getattr(task, "cc_state", None),
+                param_overrides=getattr(task, "param_overrides", None),
+                metrics_snapshot=self.metrics_snapshot,
+            )
+            if err is not None:
+                self.result_q.put(err)
+            elif packet is not None:
+                self.result_q.put(packet)
 
 
 class WorkerPool(Tickable):
@@ -334,79 +263,20 @@ class WorkerPool(Tickable):
                 param_overrides=self._param_snapshot(),
             )
             if self._inline:
-                try:
-                    # CC スナップショットを適用（インライン時）
-                    try:
-                        if self._apply_cc_snapshot is not None:
-                            self._apply_cc_snapshot(task.cc_state)
-                    except Exception:
-                        pass
-                    # Parameter スナップショットを適用（インライン時）
-                    try:
-                        if self._apply_param_snapshot is not None:
-                            self._apply_param_snapshot(task.param_overrides, task.t)
-                    except Exception:
-                        pass
-                    # 直前/直後で差分を取得
-                    try:
-                        before = (
-                            self._metrics_snapshot() if self._metrics_snapshot is not None else None
-                        )
-                    except Exception:
-                        before = None
-                    geometry_or_seq = self._draw_callback(task.t)
-                    packet_geom, packet_layers = _normalize_to_layers(geometry_or_seq)
-                    # Runtime をクリア
-                    try:
-                        if self._apply_param_snapshot is not None:
-                            self._apply_param_snapshot(None, 0.0)
-                    except Exception:
-                        pass
-                    try:
-                        after = (
-                            self._metrics_snapshot() if self._metrics_snapshot is not None else None
-                        )
-                    except Exception:
-                        after = None
-                    flags = None
-                    if isinstance(before, dict) and isinstance(after, dict):
-                        try:
-                            s_hits_after = int(after.get("shape", {}).get("hits", 0))
-                            s_hits_before = int(before.get("shape", {}).get("hits", 0))
-                            s_miss_after = int(after.get("shape", {}).get("misses", 0))
-                            s_miss_before = int(before.get("shape", {}).get("misses", 0))
-                            e_hits_after = int(after.get("effect", {}).get("hits", 0))
-                            e_hits_before = int(before.get("effect", {}).get("hits", 0))
-                            e_miss_after = int(after.get("effect", {}).get("misses", 0))
-                            e_miss_before = int(before.get("effect", {}).get("misses", 0))
-
-                            s_miss = s_miss_after > s_miss_before
-                            s_hit = s_hits_after > s_hits_before
-                            e_miss = e_miss_after > e_miss_before
-                            e_hit = e_hits_after > e_hits_before
-
-                            flags = {}
-                            if s_miss:
-                                flags["shape"] = "MISS"
-                            elif s_hit:
-                                flags["shape"] = "HIT"
-                            if e_miss:
-                                flags["effect"] = "MISS"
-                            elif e_hit:
-                                flags["effect"] = "HIT"
-                            # デバッグ出力は抑制
-                        except Exception:
-                            flags = None
-                    self._result_q.put(
-                        RenderPacket(
-                            geometry=packet_geom,
-                            frame_id=task.frame_id,
-                            cache_flags=flags,
-                            layers=tuple(packet_layers) if packet_layers else None,
-                        )
-                    )
-                except Exception as exc:  # 例外を揃える
-                    self._result_q.put(WorkerTaskError(task.frame_id, exc))
+                packet, err = _execute_draw_to_packet(
+                    t=task.t,
+                    frame_id=task.frame_id,
+                    draw_callback=self._draw_callback,
+                    apply_cc_snapshot=self._apply_cc_snapshot,
+                    apply_param_snapshot=self._apply_param_snapshot,
+                    cc_state=task.cc_state,
+                    param_overrides=task.param_overrides,
+                    metrics_snapshot=self._metrics_snapshot,
+                )
+                if err is not None:
+                    self._result_q.put(err)
+                elif packet is not None:
+                    self._result_q.put(packet)
             else:
                 self._task_q.put_nowait(task)
         except Full:
@@ -445,3 +315,102 @@ class WorkerPool(Tickable):
                     cast(mp.Queue, self._result_q).close()
                 except Exception:
                     pass
+
+
+# ---- 共通化ヘルパ ---------------------------------------------------------
+
+
+def _execute_draw_to_packet(
+    *,
+    t: float,
+    frame_id: int,
+    draw_callback: Callable[[float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]],
+    apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
+    apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None,
+    cc_state: Mapping[int, float] | None,
+    param_overrides: Mapping[str, object] | None,
+    metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None,
+) -> tuple[RenderPacket | None, WorkerTaskError | None]:
+    """1 フレーム分の draw 実行～正規化～メトリクス差分～Packet 生成を共通化。
+
+    例外は内部で捕捉して `WorkerTaskError` を返し、呼び出し側では put するだけにする。
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        # CC スナップショットを適用（存在時のみ）
+        try:
+            if apply_cc_snapshot is not None:
+                apply_cc_snapshot(cc_state)
+        except Exception:
+            pass
+        # Parameter スナップショットを適用（SnapshotRuntime を有効化）
+        try:
+            if apply_param_snapshot is not None:
+                apply_param_snapshot(param_overrides, t)
+        except Exception:
+            pass
+
+        # 直前メトリクス
+        try:
+            before = metrics_snapshot() if metrics_snapshot is not None else None
+        except Exception:
+            before = None
+
+        # user draw 実行（t のみ）
+        geometry_or_seq = draw_callback(t)
+        packet_geom, packet_layers = _normalize_to_layers(geometry_or_seq)
+
+        # Runtime のクリア（パラメータ）
+        try:
+            if apply_param_snapshot is not None:
+                apply_param_snapshot(None, 0.0)
+        except Exception:
+            pass
+
+        # 直後メトリクス
+        try:
+            after = metrics_snapshot() if metrics_snapshot is not None else None
+        except Exception:
+            after = None
+
+        # HIT/MISS の二値判定（MISS 優先）
+        flags = None
+        if isinstance(before, dict) and isinstance(after, dict):
+            try:
+                e_hits_after = int(after.get("effect", {}).get("hits", 0))
+                e_hits_before = int(before.get("effect", {}).get("hits", 0))
+                e_miss_after = int(after.get("effect", {}).get("misses", 0))
+                e_miss_before = int(before.get("effect", {}).get("misses", 0))
+                s_hits_after = int(after.get("shape", {}).get("hits", 0))
+                s_hits_before = int(before.get("shape", {}).get("hits", 0))
+                s_miss_after = int(after.get("shape", {}).get("misses", 0))
+                s_miss_before = int(before.get("shape", {}).get("misses", 0))
+
+                e_miss = e_miss_after > e_miss_before
+                e_hit = e_hits_after > e_hits_before
+                s_miss = s_miss_after > s_miss_before
+                s_hit = s_hits_after > s_hits_before
+
+                flags = {}
+                if e_miss:
+                    flags["effect"] = "MISS"
+                elif e_hit:
+                    flags["effect"] = "HIT"
+                if s_miss:
+                    flags["shape"] = "MISS"
+                elif s_hit:
+                    flags["shape"] = "HIT"
+            except Exception:
+                flags = None
+
+        packet = RenderPacket(
+            geometry=packet_geom,
+            frame_id=frame_id,
+            cache_flags=flags,
+            layers=tuple(packet_layers) if packet_layers else None,
+        )
+        return packet, None
+    except Exception as e:
+        # 例外を統一ログ（stacktrace 付き）
+        logger.exception("[worker] stage=draw_pipeline frame_id=%s error=%s", frame_id, e)
+        return None, WorkerTaskError(frame_id, e)

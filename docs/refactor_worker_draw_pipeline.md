@@ -78,10 +78,10 @@
   - 緩和: 現行の MISS 優先規則をコメントとテストで固定
 
 ## 変更チェックリスト（承認後に着手）
-- [ ] `_execute_draw_to_packet` を追加（仕様通り・型注釈）
-- [ ] `_WorkerProcess.run` の重複ロジックを置換
-- [ ] `WorkerPool.tick` の inline ブランチを置換
-- [ ] 例外ログの重複を削減（呼び出し側の `logger.exception` を削除/最小化）
+- [x] `_execute_draw_to_packet` を追加（仕様通り・型注釈）
+- [x] `_WorkerProcess.run` の重複ロジックを置換
+- [x] `WorkerPool.tick` の inline ブランチを置換
+- [x] 例外ログの重複を削減（呼び出し側の `logger.exception` を削除/最小化）
 - [ ] 簡易ユニットテスト（可能なら）を追加/更新
 - [ ] 目視リグレッション（デモ起動、HUD の cache status が更新されること）
 
@@ -90,5 +90,9 @@
 2) ヘルパの戻り値を `RenderPacket | WorkerTaskError` にする方針で良いか（None は返さない）。
 3) ヘルパは `worker.py` 内ローカルに留め、外部公開はしない方針で良いか。
 
-承認いただければ、チェックリストに沿って実装を進め、進捗は本ファイルに反映（チェックを付与）します。
+暫定対応（実装に反映）
+- 1) は `logger.exception` を採用。
+- 2) は「`(packet, None)` または `(None, error)` を返す」タプル設計で実装。
+- 3) は `worker.py` 内部スコープに限定して実装。
 
+承認いただければ、チェックリストに沿って実装を進め、進捗は本ファイルに反映（チェックを付与）します。
