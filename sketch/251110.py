@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from api import E, G, lfo, run
 from engine.core.geometry import Geometry
 
@@ -19,21 +18,31 @@ def draw(t: float) -> Geometry:
     """
 
     # 1) マスク（リング）と対象（グリッド）を用意（同一平面・同一座標系）
-    ring_inner = G.polygon()
-    p1 = E.pipeline.scale().affine().displace()
-    ring_inner = p1(ring_inner)
+    mask = G.polygon()
+    p1 = E.pipeline.scale(scale=(50, 50, 1.0)).affine().subdivide().displace()
+    mask = p1(mask)
 
     # 2) 対象（グリッド）
-    ring_outer = G.polygon()
-    p2 = E.pipeline.scale().affine().displace().fill().clip(outline=ring_inner)
-    return p2(ring_outer)
+    ring = G.polygon()
+    p2 = (
+        E.pipeline.scale(scale=(80, 80, 1.0))
+        .affine()
+        .displace()
+        .scale(scale=(1, 1, 0))
+        .fill()
+        .clip(outline=mask)
+    )
+
+    dot = G.polygon()
+    p3 = E.pipeline.scale(scale=(10, 10, 1.0)).affine().fill()
+    return p2(ring), p3(dot)
 
 
 if __name__ == "__main__":
     run(
         draw,
         canvas_size="A5",
-        render_scale=10,
+        render_scale=6,
         use_midi=True,
         use_parameter_gui=True,
         workers=4,

@@ -37,7 +37,6 @@ from util.polygon_grouping import point_in_polygon_njit as _point_in_polygon
 
 from .registry import effect
 
-
 # 平面性判定の内部定数（従来デフォルトと同値）
 _PLANAR_EPS_ABS = 1e-5
 _PLANAR_EPS_REL = 1e-4
@@ -1066,7 +1065,9 @@ def clip(
                     float(rb[3]),
                 ):
                     if not draw_inside:
-                        out_lines_xy.append(pl)
+                        # Z=0 列を付与して (N,3) に正規化
+                        pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
+                        out_lines_xy.append(pl3)
                     # inside のみならスキップ
                     continue
             # prepared による完全内外の早期分岐
@@ -1074,11 +1075,13 @@ def clip(
                 try:
                     if prepared_region.disjoint(ls):
                         if not draw_inside:
-                            out_lines_xy.append(pl)
+                            pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
+                            out_lines_xy.append(pl3)
                         continue
                     if prepared_region.contains(ls):
                         if draw_inside:
-                            out_lines_xy.append(pl)
+                            pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
+                            out_lines_xy.append(pl3)
                         continue
                 except Exception:
                     pass

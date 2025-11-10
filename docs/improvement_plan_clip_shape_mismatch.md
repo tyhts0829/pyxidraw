@@ -64,3 +64,11 @@
 - 変更箇所の `ruff/mypy/pytest` 緑。
 - 対象スケッチ実行で例外が発生しない。
 
+---
+
+## 進捗チェックリスト（実施・記録）
+- [x] 早期経路3箇所の (N,3) 正規化を実装（`src/effects/clip.py`）
+- [x] 変更ファイル限定の Lint/Format 実行（ruff/black/isort）
+- [x] 変更ファイル限定の型チェック実行（mypy）
+- [ ] 局所テストの追加と実行（`tests/effects/test_clip_planar_shapely_early_branch.py`）
+- [ ] スモーク（対象スケッチ/`main.py` 実行で異常なしを確認）

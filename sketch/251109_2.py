@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from api import E, G, lfo, run
 from engine.core.geometry import Geometry
 
@@ -27,7 +26,7 @@ def draw(t: float) -> Geometry:
 
     # 3) clip を適用（内側保持 + マスクも描画に含める）
     # p2 = E.pipeline.affine().displace()
-    p2 = E.pipeline.affine().subdivide().displace().clip(outline=[mask])
+    p2 = E.pipeline.affine().subdivide().displace().scale(scale=(1, 1, 0)).clip(outline=[mask])
     clipped_grid = p2(grid)
     return clipped_grid
 
