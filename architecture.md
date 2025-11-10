@@ -184,6 +184,7 @@ Tips:
 - HUD（`src/engine/ui/hud/overlay.py`）は起動時に `fonts.search_dirs` 配下から必要なフォントのみを `pyglet.font.add_file()` で登録する（`hud.load_all_fonts=false` 既定、family 名に部分一致）。`hud.font_name` / `hud.font_size` を用いて描画フォントを決定する。HUD のフォント指定は family 名を想定する。
 - Parameter GUI（`src/engine/ui/parameters/dpg_window.py`）は Dear PyGui 起動時に `fonts.search_dirs` からフォントファイルを列挙し、`parameter_gui.layout.font_name` の部分一致候補（優先: `.ttf`）を順次 `dpg.add_font()` でトライし、最初に成功したものを `dpg.bind_font()` で適用する（失敗時は Dear PyGui 既定フォント）。Parameter GUI の指定はファイル名ベース（family 名ではなくファイルパス登録）である。
   優先順位は「保存値 > config」。HUD 表示の有効/無効は `run(..., show_hud=...)` で指定可能。
+  `show_hud=None` かつ Parameter GUI 有効時は、GUI の「Show HUD（runner.show_hud）」で表示/非表示を動的に切替できる（明示引数がある場合は引数優先でロック）。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
   - Engine/UI 側は `util.cc_provider.get_cc_snapshot()` を経由して CC スナップショットを参照し、`engine/* -> api/*` の依存を避ける（登録は `api.cc` が `set_cc_snapshot_provider` で行う）。
 

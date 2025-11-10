@@ -399,6 +399,24 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             with dpg.table(header_row=False, policy=hud_tbl_policy):
                 left, right = self._label_value_ratio()
                 self._add_two_columns(left, right)
+                # Show HUD トグル（可視性）
+                with dpg.table_row():
+                    with dpg.table_cell():
+                        dpg.add_text("Show HUD")
+                    with dpg.table_cell():
+                        try:
+                            sh_val = store.current_value("runner.show_hud")
+                            if sh_val is None:
+                                sh_val = store.original_value("runner.show_hud")
+                            sh_def = bool(sh_val) if sh_val is not None else True
+                        except Exception:
+                            sh_def = True
+                        dpg.add_checkbox(
+                            tag="runner.show_hud",
+                            label="",
+                            default_value=sh_def,
+                            callback=lambda s, a, u: store.set_override("runner.show_hud", bool(a)),
+                        )
                 # Text Color
                 with dpg.table_row():
                     with dpg.table_cell():
@@ -535,6 +553,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             "runner.hud_text_color",
             "runner.hud_meter_color",
             "runner.hud_meter_bg_color",
+            "runner.show_hud",
         }
         filtered = [d for d in descriptors if d.id not in excluded]
         # カテゴリの出現順（登録順に基づく）を保持

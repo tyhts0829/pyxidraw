@@ -80,6 +80,7 @@ import logging
 import sys
 from dataclasses import replace
 from pathlib import Path
+from queue import Empty  # 終了時のキュードレイン用
 from typing import Callable, Mapping
 
 from engine.core.geometry import Geometry
@@ -204,6 +205,15 @@ def run_sketch(
     from .sketch_runner.params import apply_initial_colors as _apply_initial_colors
     from .sketch_runner.params import make_param_snapshot_fn as _make_param_snapshot_fn
     from .sketch_runner.params import subscribe_color_changes as _subscribe_color_changes
+    from .sketch_runner.params import (
+        subscribe_hud_visibility_changes as _subscribe_hud_visibility_changes,
+    )
+
+    # pyglet ログのノイズを抑制（必要ならユーザーが上書き可能）
+    try:
+        logging.getLogger("pyglet").setLevel(logging.WARNING)
+    except Exception:
+        pass
 
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
     # ---- HUD 設定の解決（優先: show_hud 明示 > hud_config.enabled > 既定 True）----
@@ -221,12 +231,10 @@ def run_sketch(
     except Exception:  # pragma: no cover - フォールバック
         _apply_cc_snapshot = None  # type: ignore[assignment]
 
-    # メトリクス収集（HUD 用）。HUD/CACHE 無効時は None を渡す。
+    # メトリクス収集（HUD 用）。CACHE 無効時は None を渡す（HUD 可視性とは独立）。
     # 注意: macOS 等の spawn 環境では、ワーカープロセスへ渡す関数は
     # ピクル可能（トップレベル定義）である必要がある。
-    metrics_snapshot_fn = (
-        _hud_metrics_snapshot if (hud_conf.enabled and hud_conf.show_cache_status) else None
-    )
+    metrics_snapshot_fn = _hud_metrics_snapshot if (hud_conf.show_cache_status) else None
 
     # GUI の override のみを抽出するスナップショット関数
     _param_snapshot_fn = _make_param_snapshot_fn(parameter_manager, cc_snapshot_fn)
@@ -244,7 +252,7 @@ def run_sketch(
 
     # HUD: キャッシュ HIT/MISS を受け取って更新（有効時のみ）
     on_metrics_cb: Callable[[Mapping[str, str]], None] | None = None
-    if hud_conf.enabled and hud_conf.show_cache_status:
+    if hud_conf.show_cache_status:
 
         def _on_metrics(flags):  # type: ignore[no-untyped-def]
             try:
@@ -283,12 +291,17 @@ def run_sketch(
     # ----  モニタリング ----------------------------------------
     sampler: MetricSampler | None = None
     overlay: OverlayHUD | None = None
-    if hud_conf.enabled:
+    if (use_parameter_gui and not init_only) or hud_conf.enabled:
         sampler = MetricSampler(swap_buffer, config=hud_conf)
         overlay = OverlayHUD(rendering_window, sampler, config=hud_conf)
         # HUD が LazyGeometry を実体化しないよう、Renderer の実測値を参照させる
         try:
             sampler.set_counts_provider(line_renderer.get_last_counts)
+        except Exception:
+            pass
+        try:
+            # 初期可視性（明示引数/設定に基づく）。GUI 有効時はトグル可。
+            overlay.set_enabled(bool(hud_conf.enabled))
         except Exception:
             pass
         # 追加メトリクス（IBO/Indices LRU）の提供
@@ -328,6 +341,12 @@ def run_sketch(
     # ---- 初期色の復帰（Parameter GUI の保存値があれば優先） ---------
 
     _apply_initial_colors(parameter_manager, rendering_window, line_renderer, overlay)
+    # HUD 表示トグルの初期値を Store に同期（GUI 有効時のみ）。
+    if parameter_manager is not None:
+        try:
+            parameter_manager.store.set_override("runner.show_hud", bool(hud_conf.enabled))
+        except Exception:
+            pass
 
     # ---- Draw callbacks ----------------------------------
     # 品質最優先モード（Shift+V録画中）はウィンドウへは描画しない（FBO のみ）。
@@ -353,6 +372,13 @@ def run_sketch(
 
     # ---- ⑨ Parameter GUI からの色変更を監視 --------------------------
     _subscribe_color_changes(parameter_manager, overlay, line_renderer, rendering_window, pyglet)
+    # HUD 表示トグル（明示引数が None のときのみ GUI で制御）
+    _subscribe_hud_visibility_changes(
+        parameter_manager,
+        overlay,
+        pyglet,
+        lock=(show_hud is not None),
+    )
 
     # ---- ⑧ pyglet イベント -----------------------------------------
 
@@ -515,6 +541,32 @@ def run_sketch(
         _closed = getattr(on_close, "_closed", False)
         if _closed:  # type: ignore[truthy-bool]
             return
+        # --- Quiesce: ループ停止・イベント解除・例外抑止に向けた準備 ---
+        try:
+            # 通常モードのドライバを停止
+            pyglet.clock.unschedule(frame_clock.tick)
+        except Exception:
+            pass
+        try:
+            # 品質モードのドライバがあれば停止
+            if "quality_tick_cb" in locals() and quality_tick_cb is not None:
+                pyglet.clock.unschedule(quality_tick_cb)
+        except Exception:
+            pass
+        # 受信キューに残るパケットは破棄（終了時の例外を抑止）
+        try:
+            q = getattr(stream_receiver, "_q", None)
+            if q is not None:
+                while True:
+                    try:
+                        _ = q.get_nowait()
+                        del _
+                    except Empty:
+                        break
+                    except Exception:
+                        break
+        except Exception:
+            pass
         try:
             worker_pool.close()
         except Exception:
@@ -537,6 +589,11 @@ def run_sketch(
             pass
         try:
             line_renderer.release()
+        except Exception:
+            pass
+        # ModernGL コンテキストの明示解放（フェイルソフト）
+        try:
+            mgl_ctx.release()
         except Exception:
             pass
         try:
@@ -571,4 +628,52 @@ def run_sketch(
 
     rendering_window.add_draw_callback(_capture_frame)
 
-    pyglet.app.run()
+    # --- シグナル/終了フックの登録（静粛終了に集約） ---
+    try:
+        import atexit
+        import signal
+
+        def _sig_handler(_signum, _frame):  # noqa: ANN001
+            try:
+                rendering_window.close()
+            except Exception:
+                pass
+
+        for _sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)):
+            if _sig is not None:
+                try:
+                    signal.signal(_sig, _sig_handler)
+                except Exception:
+                    pass
+
+        def _at_exit():
+            try:
+                rendering_window.close()
+            except Exception:
+                pass
+
+        atexit.register(_at_exit)
+    except Exception:
+        pass
+
+    # --- KeyboardInterrupt のノイズ抑制 ---
+    _prev_excepthook = sys.excepthook
+
+    def _silent_excepthook(exc_type, exc, tb):  # noqa: ANN001
+        try:
+
+            if exc_type is KeyboardInterrupt or isinstance(exc, KeyboardInterrupt):
+                return  # 黙殺
+        except Exception:
+            pass
+        return _prev_excepthook(exc_type, exc, tb)
+
+    sys.excepthook = _silent_excepthook
+    try:
+        pyglet.app.run()
+    finally:
+        # 例外フックを復元
+        try:
+            sys.excepthook = _prev_excepthook
+        except Exception:
+            pass

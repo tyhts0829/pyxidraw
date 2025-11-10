@@ -43,6 +43,8 @@ class OverlayHUD(Tickable):
         self._color = color
         self._font = "HackGenConsoleNF-Regular"
         self.font_size = font_size
+        # 可視性（Parameter GUI からトグル可能）
+        self._enabled: bool = True
         # --- messages/progress ---
         self._messages: list[tuple[str, float, Literal["info", "warn", "error"]]] = []
         self._progress: dict[str, tuple[int, int]] = {}
@@ -260,6 +262,9 @@ class OverlayHUD(Tickable):
 
     # -------- draw --------
     def draw(self) -> None:
+        # 非表示時は描画をスキップ
+        if not self._enabled:
+            return
         # メータ（バー）を先に描画して、その上にテキストを重ねる
         if self._config.show_meters:
             for key in self._labels.keys():
@@ -427,3 +432,10 @@ class OverlayHUD(Tickable):
             self._rec_on = bool(on)
         except Exception:
             self._rec_on = False
+
+    def set_enabled(self, on: bool) -> None:
+        """HUD 全体の表示/非表示を切り替える。"""
+        try:
+            self._enabled = bool(on)
+        except Exception:
+            self._enabled = False

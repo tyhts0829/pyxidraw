@@ -211,6 +211,16 @@ class ParameterManager:
             self.store.register(hud_text_desc, hud_text_desc.default_value)
             self.store.register(hud_meter_desc, hud_meter_desc.default_value)
             self.store.register(hud_meter_bg_desc, hud_meter_bg_desc.default_value)
+            # HUD 表示トグル（Parameter GUI から操作）。既定は True（後で API 側の解決結果で上書き）。
+            show_hud_desc = ParameterDescriptor(
+                id="runner.show_hud",
+                label="Show HUD",
+                source="effect",
+                category="HUD",
+                value_type="bool",
+                default_value=True,
+            )
+            self.store.register(show_hud_desc, show_hud_desc.default_value)
         except Exception:
             pass
         # ここで Descriptor が確定しているため、GUI マウント前に override を復元

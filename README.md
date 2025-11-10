@@ -49,6 +49,11 @@ cfg = HUDConfig(show_cache_status=True, show_cpu_mem=False)
 run_sketch(user_draw, hud_config=cfg)
 ```
 
+Parameter GUI からの HUD 切替（任意）:
+
+- `use_parameter_gui=True` かつ `show_hud=None` のとき、GUI に `Show HUD`（`runner.show_hud`）が現れます。チェックで HUD の表示/非表示を動的に切り替えられます。
+- `show_hud` を明示（True/False）した場合は引数が優先され、GUI のトグルは無効（ロック）となります。
+
 独自 Shape の登録例（最小）:
 ```
 from api import shape, G

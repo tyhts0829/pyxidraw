@@ -208,4 +208,43 @@ __all__ = [
     "make_param_snapshot_fn",
     "apply_initial_colors",
     "subscribe_color_changes",
+    "subscribe_hud_visibility_changes",
 ]
+
+
+def subscribe_hud_visibility_changes(
+    parameter_manager, overlay, pyglet_mod, *, lock: bool = False
+) -> None:
+    """HUD 表示可否を Parameter GUI の変更で反映する。
+
+    - lock=True（= 明示引数で固定）の場合は購読しない。
+    - overlay/parameter_manager が None の場合は何もしない。
+    """
+
+    if lock or parameter_manager is None or overlay is None:
+        return
+
+    def _on_param_store_change(ids):  # type: ignore[no-untyped-def]
+        try:
+            # ids は Iterable[str] または Mapping[str,Any]
+            if isinstance(ids, Mapping):  # type: ignore[name-defined]
+                id_list = list(ids.keys())
+            else:
+                try:
+                    id_list = list(ids)  # type: ignore[list-item]
+                except TypeError:
+                    id_list = []
+            if "runner.show_hud" in id_list:
+                try:
+                    v = parameter_manager.store.current_value("runner.show_hud")
+                    on = bool(v) if v is not None else True
+                except Exception:
+                    on = True
+                pyglet_mod.clock.schedule_once(lambda dt, val=on: overlay.set_enabled(val), 0.0)
+        except Exception:
+            return
+
+    try:
+        parameter_manager.store.subscribe(_on_param_store_change)
+    except Exception:
+        pass

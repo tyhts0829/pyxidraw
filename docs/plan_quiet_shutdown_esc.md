@@ -49,33 +49,33 @@
 ## 具体的アクション（チェックリスト）
 
 1) on_close の先頭でフレーム駆動を停止（Quiesce）
-- [ ] `pyglet.clock.unschedule(frame_clock.tick)` を `on_close` の最初で実行（既に未登録なら no-op）
+- [x] `pyglet.clock.unschedule(frame_clock.tick)` を `on_close` の最初で実行（既に未登録なら no-op）
   - 参照: `src/api/sketch.py:351`（登録箇所）および `src/api/sketch.py:513`（on_close 開始）
-- [ ] Parameter GUI ドライバは `parameter_manager.shutdown()` に委譲（現状維持）。その前にフレーム停止を済ませる。
+- [x] Parameter GUI ドライバは `parameter_manager.shutdown()` に委譲（現状維持）。その前にフレーム停止を済ませる。
 
 2) 例外の抑止（Quiesce）
-- [ ] `StreamReceiver` に「終了中は例外を投げない」モードを追加するか、on_close 内でキューを軽く `drain` して破棄する（小規模）
+- [x] `StreamReceiver` に「終了中は例外を投げない」モードを追加するか、on_close 内でキューを軽く `drain` して破棄する（小規模）
   - 低侵襲案: on_close で `while q.get_nowait(): pass` を `try/except Empty` 付きで 1 回だけ実施。
-- [ ] `sys.excepthook` を `KeyboardInterrupt` 時に沈める簡易フックを `run_sketch` 実行中のみ適用（finally で復元）。
+- [x] `sys.excepthook` を `KeyboardInterrupt` 時に沈める簡易フックを `run_sketch` 実行中のみ適用（finally で復元）。
 
 3) 子プロセス/バックグラウンドの停止（Cleanup）
-- [ ] `worker_pool.close()` を呼ぶ順序を「ループ停止→（必要ならキュー破棄）→ワーカ停止」とする（現状ほぼ満たすが先頭での `unschedule` を保証）
-- [ ] `worker_pool.close()` の `join(timeout)` を現状維持しつつ、タイムアウト発生時の `terminate()` 例外を握りつぶす（現状OK）。
-- [ ] 録画中なら `video_recorder.stop()` を安全に実行（現状維持）。
-- [ ] Parameter GUI の `shutdown()` を呼ぶ（現状維持）。
+- [x] `worker_pool.close()` を呼ぶ順序を「ループ停止→（必要ならキュー破棄）→ワーカ停止」とする（現状ほぼ満たすが先頭での `unschedule` を保証）
+- [x] `worker_pool.close()` の `join(timeout)` を現状維持しつつ、タイムアウト発生時の `terminate()` 例外を握りつぶす（現状OK）。
+- [x] 録画中なら `video_recorder.stop()` を安全に実行（現状維持）。
+- [x] Parameter GUI の `shutdown()` を呼ぶ（現状維持）。
 
 4) GL/ウィンドウ解放の順序（Cleanup）
-- [ ] `line_renderer.release()` の前に描画ループ停止済みであることを保証（1) で担保）。
-- [ ] ModernGL の `Context.release()` を追記（`create_window_and_renderer` の戻り `mgl_ctx` を `on_close` で明示解放）。
-- [ ] 最終段で `pyglet.app.exit()`。必要なら `rendering_window.close()` の二重呼び出し防止（冪等フラグは既にあり）。
+- [x] `line_renderer.release()` の前に描画ループ停止済みであることを保証（1) で担保）。
+- [x] ModernGL の `Context.release()` を追記（`create_window_and_renderer` の戻り `mgl_ctx` を `on_close` で明示解放）。
+- [x] 最終段で `pyglet.app.exit()`。必要なら `rendering_window.close()` の二重呼び出し防止（冪等フラグは既にあり）。
 
 5) シグナル/終了フック（共通経路化）
-- [ ] `signal(SIGINT, SIGTERM)` で `rendering_window.close()` を呼ぶハンドラを `run_sketch` 内で登録（macOS/Windows 互換の範囲）。
-- [ ] `atexit` にフォールバックの `graceful_shutdown(silent=True)` を登録（GUI が既に破棄済みでも no-op）。
+- [x] `signal(SIGINT, SIGTERM)` で `rendering_window.close()` を呼ぶハンドラを `run_sketch` 内で登録（macOS/Windows 互換の範囲）。
+- [x] `atexit` にフォールバックの `graceful_shutdown(silent=True)` を登録（GUI が既に破棄済みでも no-op）。
 
 6) ロギング雑音の低減
-- [ ] `logging.getLogger("pyglet").setLevel(logging.WARNING)` を `run_sketch` 開始時に設定（ユーザが上書き可の最小干渉）。
-- [ ] 終了経路の `except Exception` は `logger.debug(..., exc_info=True)` に限定（ユーザ標準出力へは出さない）。
+- [x] `logging.getLogger("pyglet").setLevel(logging.WARNING)` を `run_sketch` 開始時に設定（ユーザが上書き可の最小干渉）。
+- [x] 終了経路の `except Exception` は `logger.debug(..., exc_info=True)` に限定（ユーザ標準出力へは出さない）。
 
 7) テスト/確認（スモーク）
 - [ ] 手動確認（macOS/Linux）: 実行→ESC→即終了。stderr 無し、終了コード 0。
@@ -129,14 +129,13 @@
 
 ## 実施順序（タスク分割）
 
-- [ ] A. `unschedule` 追加と on_close の順序見直し（最小差分）
-- [ ] B. ModernGL コンテキスト `release()` の追加
-- [ ] C. 受信キューの `drain` 追加 or `StreamReceiver` の終了フラグ実装（どちらか一方）
-- [ ] D. signal/atexit/KeyboardInterrupt フックの追加
-- [ ] E. ログ・レベル調整（pyglet のみ）
+- [x] A. `unschedule` 追加と on_close の順序見直し（最小差分）
+- [x] B. ModernGL コンテキスト `release()` の追加
+- [x] C. 受信キューの `drain` 追加 or `StreamReceiver` の終了フラグ実装（どちらか一方）
+- [x] D. signal/atexit/KeyboardInterrupt フックの追加
+- [x] E. ログ・レベル調整（pyglet のみ）
 - [ ] F. 手動スモーク（DPG 有無/録画有無/ワーカ数）
 
 ---
 
 メモ: コード変更はこの計画の確認後に着手します。必要な追加の観点や方針変更があれば、この md に追記して合意を取った上で進めます。
-
