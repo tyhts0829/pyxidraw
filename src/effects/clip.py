@@ -673,6 +673,59 @@ def _quantized_digest_for_rings(rings3d: list[np.ndarray], step: float) -> bytes
     return _quantized_digest_for_coords(coords, offsets, step)
 
 
+def _outline_digest_quantized(outline: Geometry | Sequence[Geometry], step: float) -> bytes:
+    h = hashlib.blake2b(digest_size=16)
+
+    def _one(g: Geometry) -> None:
+        c, o = g.as_arrays(copy=False)
+        dg = _quantized_digest_for_coords(c, o, step)
+        h.update(dg)
+
+    if isinstance(outline, Geometry):
+        _one(outline)
+    elif isinstance(outline, _ObjectRef):
+        obj = outline.unwrap()
+        if isinstance(obj, Geometry):
+            _one(obj)
+    else:
+        try:
+            for x in outline:  # type: ignore[assignment]
+                if isinstance(x, _ObjectRef):
+                    obj = x.unwrap()
+                    if isinstance(obj, Geometry):
+                        _one(obj)
+                elif isinstance(x, Geometry):
+                    _one(x)
+        except Exception:
+            pass
+    return h.digest()
+
+
+_MASK_RINGS_CACHE: "OrderedDict[bytes, list[np.ndarray]]" = OrderedDict()
+try:
+    _MASK_RINGS_CACHE_MAXSIZE = int(_os.getenv("PXD_CLIP_MASK_RINGS_CACHE_MAXSIZE", "32"))  # type: ignore[name-defined]
+except Exception:
+    _MASK_RINGS_CACHE_MAXSIZE = 32
+
+
+def _collect_mask_rings_cached(
+    outline: Geometry | Sequence[Geometry], *, step: float
+) -> list[np.ndarray]:
+    d = _outline_digest_quantized(outline, step)
+    v = _MASK_RINGS_CACHE.get(d)
+    if v is not None:
+        _ = _MASK_RINGS_CACHE.pop(d)
+        _MASK_RINGS_CACHE[d] = v
+        return v
+    # fallback: build once and cache
+    _coords, _offs, rings = _collect_mask_rings_from_outline(outline)
+    _MASK_RINGS_CACHE[d] = rings
+    if _MASK_RINGS_CACHE_MAXSIZE is not None and _MASK_RINGS_CACHE_MAXSIZE > 0:
+        while len(_MASK_RINGS_CACHE) > _MASK_RINGS_CACHE_MAXSIZE:
+            _MASK_RINGS_CACHE.popitem(last=False)
+    return rings
+
+
 @effect()
 def clip(
     g: Geometry,
@@ -712,7 +765,21 @@ def clip(
         return Geometry(g.coords.copy(), g.offsets.copy())
 
     tgt_coords, tgt_offs = g.as_arrays(copy=False)
-    mask_coords, mask_offs, rings3d = _collect_mask_rings_from_outline(outline)
+    # マスク収集（収集済みの再利用を試みる）
+    rings3d = _collect_mask_rings_cached(outline, step=float(_DIGEST_STEP_DEFAULT))
+    # coords/offsets は必要時のみ構築
+    if rings3d:
+        _m_coords = np.vstack([r for r in rings3d]).astype(np.float32, copy=False)
+        _offs = [0]
+        s_acc = 0
+        for r in rings3d:
+            s_acc += r.shape[0]
+            _offs.append(s_acc)
+        mask_coords = _m_coords
+        mask_offs = np.asarray(_offs, dtype=np.int32)
+    else:
+        mask_coords = np.zeros((0, 3), dtype=np.float32)
+        mask_offs = np.asarray([0], dtype=np.int32)
     if len(rings3d) == 0:
         # 有効な閉曲線が無い場合は安全側で no-op（落とさない）
         return Geometry(g.coords.copy(), g.offsets.copy())
@@ -722,7 +789,58 @@ def clip(
     mask_digest_q = _quantized_digest_for_rings(rings3d, digest_step)
     tgt_digest_q = _quantized_digest_for_coords(tgt_coords, tgt_offs, digest_step)
 
-    # 連結して共平面判定/整列
+    # モード安定化（弱ピン止め）: proj ピンの場合は choose_coplanar_frame をスキップ
+    last_mode = _MODE_PIN.get(mask_digest_q) if _MODE_STABLE_ENABLED else None
+    if last_mode == "proj":
+        mode = "proj"
+        res_key = (
+            "clip-result",
+            mode,
+            mask_digest_q,
+            tgt_digest_q,
+            bool(draw_inside),
+            bool(draw_outside),
+            bool(draw_outline),
+            bool(use_projection_fallback),
+            bool(projection_use_world_xy),
+        )
+        if _RESULT_CACHE_MAXSIZE != 0:
+            try:
+                out_cached = _RESULT_CACHE.pop(res_key)
+                _RESULT_CACHE[res_key] = out_cached
+                return out_cached
+            except KeyError:
+                pass
+        if use_projection_fallback and projection_use_world_xy:
+            digest = _mask_digest_from_rings(rings3d)
+            cache_key = (digest, "proj")
+            prep = _mask_cache_get(cache_key)
+            if prep is None:
+                prep = _prepare_projection_mask(rings3d)
+                _mask_cache_put(cache_key, prep)
+            out_lines_3d = _clip_lines_project_xy_prepared(
+                tgt_coords, tgt_offs, prep, draw_inside=draw_inside, draw_outside=draw_outside
+            )
+            out_geo = _numpy_lines_to_geometry(out_lines_3d)
+            if draw_outline:
+                out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+            if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+                _RESULT_CACHE[res_key] = out_geo
+                if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                    while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                        _RESULT_CACHE.popitem(last=False)
+            return out_geo
+        out = Geometry(g.coords.copy(), g.offsets.copy())
+        if draw_outline:
+            out = out.concat(_numpy_lines_to_geometry(rings3d))
+        if _RESULT_CACHE_MAXSIZE != 0 and out.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out
+            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                    _RESULT_CACHE.popitem(last=False)
+        return out
+
+    # ここで初めて共平面判定/整列（必要ケースのみ）
     if tgt_coords.size == 0:
         comb_coords = mask_coords
         comb_offs = mask_offs
@@ -738,16 +856,10 @@ def clip(
         comb_coords, comb_offs, eps_abs=float(eps_abs), eps_rel=float(eps_rel)
     )
 
-    # モード安定化（弱ピン止め）
-    mode_initial = "planar" if planar else "proj"
-    mode = mode_initial
-    if _MODE_STABLE_ENABLED:
-        last = _MODE_PIN.get(mask_digest_q)
-        if last in ("planar", "proj"):
-            # use last mode if available
-            mode = cast(str, last)
-        else:
-            _MODE_PIN[mask_digest_q] = mode
+    # 最終モード決定とピン更新
+    mode = "planar" if planar else "proj"
+    if _MODE_STABLE_ENABLED and last_mode not in ("planar", "proj"):
+        _MODE_PIN[mask_digest_q] = mode
 
     # 結果 LRU（ヒット時は即返す）
     res_key = (
@@ -769,8 +881,8 @@ def clip(
         except KeyError:
             pass
 
-    # 非共平面 or 安定化モードが proj の場合: 投影フォールバック or no-op（キャッシュ利用）
-    if (not planar) or (mode == "proj"):
+    # 非共平面 or 安定化モードが proj の場合: 投影フォールバック or no-op
+    if not planar or mode == "proj":
         if use_projection_fallback and projection_use_world_xy:
             # マスク前処理（内容ダイジェストで LRU）
             digest = _mask_digest_from_rings(rings3d)

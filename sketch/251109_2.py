@@ -21,16 +21,16 @@ def draw(t: float) -> Geometry:
     """
 
     # 1) マスク（リング）と対象（グリッド）を用意（同一平面・同一座標系）
-    ring = G.text().scale(20, 20, 1.0)
+    mask = G.text().scale(20, 20, 1.0)
     p1 = E.pipeline.affine().translate()
-    ring = p1(ring)
+    mask = p1(mask)
 
     # 2) 対象（グリッド）
     grid = G.grid().scale(200, 200, 1.0)
 
     # 3) clip を適用（内側保持 + マスクも描画に含める）
     # p2 = E.pipeline.affine().displace()
-    p2 = E.pipeline.affine().subdivide().displace().clip(outline=[ring])
+    p2 = E.pipeline.affine().subdivide().displace().clip(outline=[mask])
     clipped_grid = p2(grid)
     return clipped_grid
 

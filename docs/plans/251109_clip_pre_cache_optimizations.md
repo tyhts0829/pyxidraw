@@ -65,7 +65,7 @@ DoD（受け入れ）
 実装ステップ（チェックリスト）
 
 1) 収集キャッシュ
-- [ ] `outline` 内容 digest で `rings3d` を LRU 保存/再利用（収集済み生配列）。
+- [x] `outline` 内容 digest で `rings3d` を LRU 保存/再利用（収集済み生配列）。
 - [ ] WeakKeyDictionary による per-Geometry digest/memo を併用。
 
 2) ダイジェスト軽量化
@@ -74,10 +74,9 @@ DoD（受け入れ）
 - [ ] per-Geometry digest のメモ化を導入。
 
 3) 共平面判定スキップ
-- [ ] `MODE_PIN == 'proj'` の場合、`choose_coplanar_frame` をスキップ。
+- [x] `MODE_PIN == 'proj'` の場合、`choose_coplanar_frame` をスキップ。
 - [ ] z スパン cheap 判定で整列不要ケースを early return。
 - [ ] マスク基準整列（必要時のみ target を含めない）。
 
 4) 呼び出し順の整理
-- [ ] ダイジェスト→モード決定→結果 LRU 判定を整列前に確定するよう再配置。
-
+- [x] ダイジェスト→モード決定→結果 LRU 判定を整列前に確定するよう再配置（proj ピン時）。
