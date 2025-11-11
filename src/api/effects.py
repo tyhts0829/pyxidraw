@@ -128,6 +128,16 @@ class PipelineBuilder:
         def _adder(**params: Any) -> "PipelineBuilder":
             runtime = get_active_runtime()
             resolved = dict(params)
+            # ユーザー明示の bypass は最優先（後続の GUI 値より強い）
+            user_bypass_specified = False
+            user_bypass_value = False
+            if "bypass" in resolved:
+                try:
+                    user_bypass_value = bool(resolved.pop("bypass"))
+                    user_bypass_specified = True
+                except Exception:
+                    user_bypass_value = False
+                    user_bypass_specified = True
             if runtime is not None:
                 # 初回に Pipeline UID を確保
                 if self._uid is None:
@@ -147,8 +157,16 @@ class PipelineBuilder:
                     pipeline_uid=str(self._uid or ""),
                 )
                 impl = getattr(fn, "__effect_impl__", fn)
+                # ランタイムからの bypass（GUI/永続）を吸収し、明示引数を優先
+                runtime_bypass = bool(resolved.pop("bypass", False))
+                bypass_final = user_bypass_value if user_bypass_specified else runtime_bypass
+                if bypass_final:
+                    return self  # ステップを追加せずスキップ
             else:
                 impl = lambda **_: None
+                # ランタイムが無い場合でも、明示 bypass があればスキップ
+                if user_bypass_specified and user_bypass_value:
+                    return self
             params_tuple = _params_signature(impl, dict(resolved))
             self._steps.append((name, params_tuple))
             return self

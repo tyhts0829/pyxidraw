@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from engine.ui.parameters.state import (
+    ParameterDescriptor,
     ParameterLayoutConfig,
     ParameterRegistry,
     ParameterStore,
@@ -148,7 +149,7 @@ class ParameterRuntime:
         )
         if info.signature is not None and "t" in info.signature.parameters and "t" not in params:
             params = {**params, "t": self._t}
-        return self._resolver.resolve(
+        resolved_params = self._resolver.resolve(
             context=context,
             params=params,
             signature=info.signature,
@@ -156,6 +157,30 @@ class ParameterRuntime:
             param_meta=info.param_meta,
             skip={"g"},
         )
+        # ---- 共通バイパス（GUI/永続化）: 各ステップに bool パラメータを登録して解決 ----
+        try:
+            desc_id = f"{context.descriptor_prefix}.bypass"
+            label = f"{context.label_prefix}: Bypass"
+            category = (
+                context.name if context.scope == "shape" else (context.pipeline or context.scope)
+            )
+            bypass_desc = ParameterDescriptor(
+                id=desc_id,
+                label=label,
+                source="effect",
+                category=category,
+                value_type="bool",
+                default_value=False,
+                pipeline_uid=(context.pipeline or None),
+                step_index=int(context.index),
+                param_order=-1,
+            )
+            self._store.register(bypass_desc, False)
+            bypass_val = bool(self._store.resolve(desc_id, False))
+        except Exception:
+            bypass_val = False
+
+        return {**resolved_params, "bypass": bypass_val}
 
 
 def resolve_without_runtime(

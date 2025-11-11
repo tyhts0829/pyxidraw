@@ -60,6 +60,10 @@
 
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
+  - 共通バイパス: 各エフェクトは共通の `bypass: bool` を持つ。Parameter GUI からのトグル、または `E.pipeline.<effect>(..., bypass=True)` 明示引数でスキップできる。
+    - GUI 優先順位: 「明示引数 > GUI > 既定値」。
+    - 実行: `bypass=True` のステップは Pipeline に追加されず、実行負荷は発生しない。
+    - キャッシュ: `bypass` は署名生成に含めないため、キャッシュ鍵に影響しない。
   - 厳格検証（build 時の未知パラメータ検出）は行わない。実行時に関数シグネチャで自然に検出され得る。
   - 単層 LRU キャッシュ（インスタンス内）: キーは `(b"sig", lazy_signature_for(LazyGeometry))`。
     - 既定サイズは無制限。`.cache(maxsize=0)` で無効化、`.cache(maxsize=N)` で上限設定。

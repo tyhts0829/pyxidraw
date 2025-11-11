@@ -41,26 +41,26 @@
 
 実装チェックリスト（DoD）
 1) Decorator
-   [ ] デコレータが `__effect_supports_bypass__ = True` と `__effect_bypass_param__ = "bypass"` を付与する。
-   [ ] 既存の `__effect_impl__` 参照は維持。
+   [x] デコレータが `__effect_supports_bypass__ = True` と `__effect_bypass_param__ = "bypass"` を付与する。
+   [x] 既存の `__effect_impl__` 参照は維持。
 2) ParameterRuntime
-   [ ] `before_effect_call()` 内で Descriptor を生成し `ParameterStore.register()` する。
-   [ ] Descriptor: `source="effect"`、`category=pipeline_uid or "effect"`、`step_index` セット、`param_order=-1`。
-   [ ] `store.resolve(id, default=False)` の結果を `resolved["bypass"]` として返す。
+   [x] `before_effect_call()` 内で Descriptor を生成し `ParameterStore.register()` する。
+   [x] Descriptor: `source="effect"`、`category=pipeline_uid or "effect"`、`step_index` セット、`param_order=-1`。
+   [x] `store.resolve(id, default=False)` の結果を `resolved["bypass"]` として返す。
 3) PipelineBuilder
-   [ ] runtime が有効な経路で `resolved.pop("bypass", False)` を評価。
-   [ ] True なら `self._steps` に追加しない（完全スキップ）。
-   [ ] False なら従来どおり追加。
+   [x] runtime が有効な経路で `resolved.pop("bypass", False)` を評価。
+   [x] True なら `self._steps` に追加しない（完全スキップ）。
+   [x] False なら従来どおり追加。
 4) UI/永続化
-   [ ] Parameter GUI 上に各ステップの Bypass が表示され、先頭に並ぶ。
-   [ ] `save_overrides`/`load_overrides` で Bypass 状態が保存/復元される。
+   [x] Parameter GUI 上に各ステップの Bypass が表示され、先頭に並ぶ。
+   [x] `save_overrides`/`load_overrides` で Bypass 状態が保存/復元される。
 5) テスト（最小）
    [ ] Snapshot/Runtime 経由で Bypass の Descriptor 登録を検証。
    [ ] Bypass=True でステップ未追加、False で追加されることを `PipelineBuilder.build()` 経由で検証。
 6) 品質ゲート
-   [ ] 変更ファイルに対して `ruff/black/isort/mypy` を通過。
-   [ ] 変更に関連するテストが緑。
-   [ ] architecture.md を更新。
+   [x] 変更ファイルに対して `ruff/black/isort/mypy` を通過。（mypy: 変更箇所は問題なし）
+   [x] 変更に関連するテストが緑（tests/ui/parameters/test_effect_bypass.py）。
+   [x] architecture.md を更新。
 
 UI 表示と用語
 - パラメータ名: `bypass`（ラベルは「Bypass」）。
@@ -93,4 +93,3 @@ UI 表示と用語
 - 変更ファイルに対する `ruff/mypy/pytest` が成功。
 - Parameter GUI で Bypass が操作でき、True でステップがスキップされる。
 - ドキュメント（architecture.md）が実装と合致。
-

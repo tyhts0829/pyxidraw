@@ -41,6 +41,16 @@ def effect(arg: Any | None = None, /, name: str | None = None):
 
         # 元実装（純関数）をそのまま登録・返却
         orig_fn = obj
+        # バイパス対応マーカーを付与（実装は関数側をそのまま保持）
+        try:
+            if getattr(orig_fn, "__effect_impl__", None) is None:
+                setattr(orig_fn, "__effect_impl__", orig_fn)
+            # 共通バイパス（GUI/引数）対応フラグと既定パラメータ名
+            setattr(orig_fn, "__effect_supports_bypass__", True)
+            setattr(orig_fn, "__effect_bypass_param__", "bypass")
+        except Exception:
+            # 属性付与に失敗しても本体登録は継続（フェイルソフト）
+            pass
         return _effect_registry.register(resolved_name)(orig_fn)
 
     # 直付け (@effect)
