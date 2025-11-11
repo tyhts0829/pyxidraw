@@ -77,6 +77,7 @@
   - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン →`ParameterWindowController` を起動。
   - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
+  - カテゴリ別のヘッダ色（Display/HUD/shape/pipeline）は `parameter_gui.theme.categories` で個別指定可能。未指定時は `theme.colors.header*` を使用。
   - パラメータ GUI はメインスレッドで維持しつつ、ワーカ側へは GUI 値のスナップショットを渡して適用する（SnapshotRuntime）。このため GUI 有効時でも `WorkerPool` は並列実行できる。
   - 駆動方式は内部ドライバで抽象化。可能なら `pyglet.clock.schedule_interval` に統合（メインスレッドから `render_dearpygui_frame()` を実行）、未導入時はバックグラウンドスレッドで `start_dearpygui()` を実行。Dear PyGui 未導入環境では GUI を起動しない限り import は行われない（スタブは用意していないため、起動時は未導入で ImportError となる）。
 

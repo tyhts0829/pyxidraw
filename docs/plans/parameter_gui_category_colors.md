@@ -24,7 +24,7 @@
   - `dpg.collapsing_header` に対して `mvThemeCol_Header`, `mvThemeCol_HeaderHovered`, `mvThemeCol_HeaderActive` をバインド。
   - 行背景は Dear PyGui が提供する場合のみ `mvThemeCol_TableRowBg`, `mvThemeCol_TableRowBgAlt` をテーブル側にバインド（存在しない場合は無視）。
 - 選択ロジック:
-  - カテゴリ内の `ParameterDescriptor` に `source=="effect"` が1つでもあれば pipeline カテゴリとして扱う。それ以外は shape カテゴリ。
+  - カテゴリ内の `ParameterDescriptor` に `source=="effect"` が 1 つでもあれば pipeline カテゴリとして扱う。それ以外は shape カテゴリ。
   - 両者混在時は pipeline 優先（より目立たせる想定）。
 
 ## 実装方針
@@ -61,12 +61,13 @@
 
 ## 実装タスクリスト（チェックリスト）
 
-- [ ] state: `ParameterThemeConfig` に `categories` フィールド追加（デフォルト `{}`）。
-- [ ] manager: YAML から `theme.categories` を読み込み `ParameterThemeConfig(categories=...)` に渡す。
-- [ ] dpg_window: カテゴリテーマ生成ヘルパを追加し、`collapsing_header` とテーブルへテーマを条件バインド。
-- [ ] configs/default.yaml: `parameter_gui.theme.categories` のサンプル値を追記（shape/pipeline で色差が分かるもの）。
-- [ ] architecture.md: Parameter GUI のテーマ設定に「カテゴリ別ヘッダ色」を追記。
-- [ ] 変更ファイルに対して `ruff/black/isort/mypy` を通す（編集ファイル限定）。
+- [x] state: `ParameterThemeConfig` に `categories` フィールド追加（デフォルト `{}`）。
+- [x] manager: YAML から `theme.categories` を読み込み `ParameterThemeConfig(categories=...)` に渡す。
+- [x] dpg_window: カテゴリテーマ生成ヘルパを追加し、`collapsing_header` とテーブルへテーマを条件バインド。
+- [x] dpg_window: Display/HUD ヘッダにもカテゴリテーマを適用（`build_display_controls`）。
+- [x] configs/default.yaml: `parameter_gui.theme.categories` のサンプル値を追記（shape/pipeline で色差が分かるもの）。
+- [x] architecture.md: Parameter GUI のテーマ設定に「カテゴリ別ヘッダ色」を追記。
+- [x] 変更ファイルに対して `ruff/black/isort/mypy` を通す（編集ファイル限定）。
 - [ ] DPG 環境ありでの手動確認（最小）: サンプルスケッチ起動で shape/pipeline の見出し色が独立して変わること。
 
 ## 動作確認（手動）
@@ -83,10 +84,10 @@
 ## 確認事項（要回答）
 
 - 背景色の対象範囲:
-  - a) 見出し（collapsing header）のみで十分か。
-  - b) カテゴリ配下のテーブル行背景（TableRowBg/Alt）にも色を適用するか（DPG に色定義がある場合）。
+  - a) 見出し（collapsing header）のみで十分か。；はい
+  - b) カテゴリ配下のテーブル行背景（TableRowBg/Alt）にも色を適用するか（DPG に色定義がある場合）。いいえ。
 - フォールバックの希望:
-  - 未指定時は完全に「グローバル header* にフォールバック」で良いか（現行案）。
+  - 未指定時は完全に「グローバル header\* にフォールバック」で良いか（現行案）。
 - 将来的拡張の要否:
   - `general` 用のカテゴリ色（shape/effect 以外）や、カテゴリ名でのパターンマッチ適用（例: `Display`, `HUD`）も必要か。
 
@@ -94,3 +95,10 @@
 
 承認いただければ、上記チェックリストに沿って実装に着手します。加筆/修正の要望があればコメントください。
 
+## 補足: Display/HUD カテゴリ対応（追記）
+
+- `parameter_gui.theme.categories` は `Display` と `HUD` のキーも受け付ける。
+  - 例: `parameter_gui.theme.categories.Display.header`, `...Display.header_hovered`, `...Display.header_active`
+  - 例: `parameter_gui.theme.categories.HUD.header`, `...HUD.header_hovered`, `...HUD.header_active`
+- `Display`/`HUD` は `build_display_controls()` で作成する独立ヘッダに直に適用される（テーブル行背景も任意で適用）。
+- グループ化テーブル側は従来どおり shape/pipeline の 2 種を自動判定し、`categories.shape`/`categories.pipeline` を適用する（該当キーが無ければフォールバック）。

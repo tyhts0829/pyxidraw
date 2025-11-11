@@ -119,6 +119,11 @@ class ParameterManager:
             colors=dict(
                 tcfg_raw.get("colors", {}) if isinstance(tcfg_raw.get("colors"), dict) else {}
             ),
+            categories=dict(
+                tcfg_raw.get("categories", {})
+                if isinstance(tcfg_raw.get("categories"), dict)
+                else {}
+            ),
         )
 
         self.runtime = ParameterRuntime(self.store, layout=layout)

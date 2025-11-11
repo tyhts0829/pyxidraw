@@ -63,6 +63,9 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         self._visible = False
         self._driver: Any | None = None
         self._syncing: bool = False
+        # カテゴリ別テーマのキャッシュ（必要時に生成）
+        self._cat_header_theme: dict[str, Any] = {}
+        self._cat_table_theme: dict[str, Any] = {}
 
         dpg.create_context()
         self._viewport = dpg.create_viewport(
@@ -257,6 +260,96 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             # ここでは子ウィンドウを使わず、Shapes/Effects も ROOT 直下に並べる
         dpg.set_primary_window(root, True)
 
+    # ---- カテゴリ別テーマ ----
+    def _category_kind(self, items: list[ParameterDescriptor]) -> str:
+        try:
+            if any(it.source == "effect" for it in items):
+                return "pipeline"
+            return "shape"
+        except Exception:
+            return "shape"
+
+    def _get_category_header_theme(self, kind: str) -> Any | None:
+        if kind in self._cat_header_theme:
+            return self._cat_header_theme.get(kind)
+        try:
+            cfg = self._theme.categories if isinstance(self._theme, ParameterThemeConfig) else {}
+        except Exception:
+            cfg = {}
+        cat = cfg.get(kind) if isinstance(cfg, dict) else None
+        if not isinstance(cat, dict):
+            self._cat_header_theme[kind] = None
+            return None
+        # いずれかのキーがあるときだけテーマを生成
+        keys = ["header", "header_hovered", "header_active"]
+        if not any(k in cat for k in keys):
+            self._cat_header_theme[kind] = None
+            return None
+        try:
+            with dpg.theme() as th:
+                comp_target = getattr(dpg, "mvCollapsingHeader", None) or dpg.mvAll
+                with dpg.theme_component(comp_target):
+                    cmap = {
+                        "header": getattr(dpg, "mvThemeCol_Header", None),
+                        "header_hovered": getattr(dpg, "mvThemeCol_HeaderHovered", None),
+                        "header_active": getattr(dpg, "mvThemeCol_HeaderActive", None),
+                    }
+                    for k, var in cmap.items():
+                        if not var or k not in cat:
+                            continue
+                        col = self._to_dpg_color(cat[k])
+                        if col is None:
+                            continue
+                        try:
+                            dpg.add_theme_color(var, col)
+                        except Exception:
+                            continue
+            self._cat_header_theme[kind] = th
+            return th
+        except Exception:
+            self._cat_header_theme[kind] = None
+            return None
+
+    def _get_category_table_theme(self, kind: str) -> Any | None:
+        if kind in self._cat_table_theme:
+            return self._cat_table_theme.get(kind)
+        try:
+            cfg = self._theme.categories if isinstance(self._theme, ParameterThemeConfig) else {}
+        except Exception:
+            cfg = {}
+        cat = cfg.get(kind) if isinstance(cfg, dict) else None
+        if not isinstance(cat, dict):
+            self._cat_table_theme[kind] = None
+            return None
+        # 行背景（任意）
+        row_keys = ["table_row_bg", "table_row_bg_alt"]
+        if not any(k in cat for k in row_keys):
+            self._cat_table_theme[kind] = None
+            return None
+        try:
+            with dpg.theme() as th:
+                comp_target = getattr(dpg, "mvTable", None) or dpg.mvAll
+                with dpg.theme_component(comp_target):
+                    tmap = {
+                        "table_row_bg": getattr(dpg, "mvThemeCol_TableRowBg", None),
+                        "table_row_bg_alt": getattr(dpg, "mvThemeCol_TableRowBgAlt", None),
+                    }
+                    for k, var in tmap.items():
+                        if not var or k not in cat:
+                            continue
+                        col = self._to_dpg_color(cat[k])
+                        if col is None:
+                            continue
+                        try:
+                            dpg.add_theme_color(var, col)
+                        except Exception:
+                            continue
+            self._cat_table_theme[kind] = th
+            return th
+        except Exception:
+            self._cat_table_theme[kind] = None
+            return None
+
     def force_set_rgb_u8(self, tag: int | str, rgb_u8: Sequence[int]) -> None:
         if not isinstance(rgb_u8, Sequence) or len(rgb_u8) < 3:
             raise ValueError("rgb_u8 must be a sequence of length >= 3")
@@ -328,11 +421,24 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         if val is not None:
             lnf = self._safe_norm(val, lnf)
 
-        with dpg.collapsing_header(label="Display", default_open=True, parent=parent):
+        with dpg.collapsing_header(label="Display", default_open=True, parent=parent) as _disp_hdr:
+            # カテゴリテーマ（Display）適用
+            try:
+                _th = self._get_category_header_theme("Display")
+                if _th is not None:
+                    dpg.bind_item_theme(_disp_hdr, _th)
+            except Exception:
+                pass
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            with dpg.table(header_row=False, policy=table_policy):
+            with dpg.table(header_row=False, policy=table_policy) as _disp_tbl:
+                try:
+                    _tth = self._get_category_table_theme("Display")
+                    if _tth is not None:
+                        dpg.bind_item_theme(_disp_tbl, _tth)
+                except Exception:
+                    pass
                 left, right = self._label_value_ratio()
                 self._add_two_columns(left, right)
                 with dpg.table_row():
@@ -392,11 +498,24 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                         ln_picker, callback=lambda s, a, u: self.store_rgb01("runner.line_color", a)
                     )
 
-        with dpg.collapsing_header(label="HUD", default_open=True, parent=parent):
+        with dpg.collapsing_header(label="HUD", default_open=True, parent=parent) as _hud_hdr:
+            # カテゴリテーマ（HUD）適用
+            try:
+                _th = self._get_category_header_theme("HUD")
+                if _th is not None:
+                    dpg.bind_item_theme(_hud_hdr, _th)
+            except Exception:
+                pass
             hud_tbl_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            with dpg.table(header_row=False, policy=hud_tbl_policy):
+            with dpg.table(header_row=False, policy=hud_tbl_policy) as _hud_tbl:
+                try:
+                    _tth = self._get_category_table_theme("HUD")
+                    if _tth is not None:
+                        dpg.bind_item_theme(_hud_tbl, _tth)
+                except Exception:
+                    pass
                 left, right = self._label_value_ratio()
                 self._add_two_columns(left, right)
                 # Show HUD トグル（可視性）
@@ -587,11 +706,26 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             if not items or not any(it.supported for it in items):
                 return
             label = cat if cat else "General"
-            with dpg.collapsing_header(label=label, parent=parent, default_open=True):
+            kind = self._category_kind(items)
+            with dpg.collapsing_header(label=label, parent=parent, default_open=True) as header:
+                # カテゴリ（header）テーマをヘッダ直後に適用
+                try:
+                    th = self._get_category_header_theme(kind)
+                    if th is not None:
+                        dpg.bind_item_theme(header, th)
+                except Exception:
+                    pass
                 table_policy = self._dpg_policy(
                     ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
                 )
                 with dpg.table(header_row=False, policy=table_policy) as table:
+                    # カテゴリ（table 行背景）テーマ（任意）
+                    try:
+                        tth = self._get_category_table_theme(kind)
+                        if tth is not None:
+                            dpg.bind_item_theme(table, tth)
+                    except Exception:
+                        pass
                     var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
                     if var_cell_padding is not None:
                         cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))

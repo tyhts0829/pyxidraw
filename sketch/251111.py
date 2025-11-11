@@ -15,9 +15,9 @@ from engine.core.lazy_geometry import LazyGeometry
 
 def draw(t: float) -> Geometry | LazyGeometry:
     # Lazy 生成（すべて LazyGeometry）
-    a = G.polygon(n_sides=5).scale(120, 120, 1).rotate(z=0.6 * t).translate(140, 140, 0)
+    a = G.polygon().scale(120, 120, 1).rotate(z=0.6 * t).translate(140, 140, 0)
     b = G.grid(nx=10, ny=10).scale(160, 160, 1).rotate(z=-0.3 * t).translate(140, 140, 0)
-    c = G.polygon(n_sides=3).scale(90, 90, 1).rotate(z=0.9 * t).translate(140, 140, 0)
+    c = G.polygon().scale(90, 90, 1).rotate(z=0.9 * t).translate(140, 140, 0)
 
     # Lazy + Lazy のみを使用（実体化しない）
     combo = a + b + c

@@ -348,6 +348,13 @@ class ParameterThemeConfig:
 
     style: dict[str, Any] = field(default_factory=dict)
     colors: dict[str, Any] = field(default_factory=dict)
+    # カテゴリ別の色設定（shape/pipeline）。任意キー辞書とし、フェイルソフトに適用する。
+    # 例:
+    #   {
+    #       "shape": {"header": [r,g,b,a], "header_hovered": [...], "header_active": [...]},
+    #       "pipeline": {"header": [...], "header_hovered": [...], "header_active": [...]}
+    #   }
+    categories: dict[str, Any] = field(default_factory=dict)
 
 
 class ParameterRegistry:
