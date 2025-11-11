@@ -81,12 +81,27 @@ class LazyGeometry:
         start_idx = 0
 
         # ---- Prefix Cache: 最長一致プレフィックスを検索 ----
+        # 署名生成時に ObjectRef など実体参照を除外
+        def _filter_sig_params(p: dict[str, Any]) -> dict[str, Any]:
+            try:
+                from common.types import ObjectRef as _ObjectRef  # local import
+            except Exception:
+                _ObjectRef = object  # type: ignore
+            out: dict[str, Any] = {}
+            for k, v in dict(p).items():
+                if isinstance(k, str) and (k.endswith("_ref") or "_ref" in k):
+                    continue
+                if isinstance(v, _ObjectRef):
+                    continue
+                out[k] = v
+            return out
+
         if _PREFIX_CACHE_ENABLED and steps:
             effect_sigs: list[tuple[str, tuple[tuple[str, object], ...]]] = []
             for impl, eparams in steps:
                 try:
                     # 署名生成に失敗した場合は「非キャッシュ相当」として空署名を採用
-                    e_tuple = _params_signature(impl, dict(eparams))
+                    e_tuple = _params_signature(impl, _filter_sig_params(dict(eparams)))
                 except Exception:
                     e_tuple = tuple()
                 effect_sigs.append((_impl_id(impl), e_tuple))
@@ -110,7 +125,7 @@ class LazyGeometry:
         try:
             effect_sigs_all = []
             for impl, eparams in steps:
-                e_tuple = _params_signature(impl, dict(eparams))
+                e_tuple = _params_signature(impl, _filter_sig_params(dict(eparams)))
                 effect_sigs_all.append((_impl_id(impl), e_tuple))
         except Exception:
             effect_sigs_all = []
@@ -197,6 +212,38 @@ class LazyGeometry:
     def n_lines(self) -> int:
         _, o = self.as_arrays(copy=False)
         return int(o.shape[0] - 1) if o.size > 0 else 0
+
+    # ---- 演算子糖衣（Lazy 同士の連結のみ対応） ------------------------------
+    def __add__(self, other: "LazyGeometry") -> "LazyGeometry":
+        """糖衣: LazyGeometry 同士の結合を遅延で表現する。
+
+        即時実体化は行わず、末尾に結合ステップ（_fx_concat_many）を集約して追加する。
+
+        Notes
+        -----
+        - 右項が `LazyGeometry` 以外の場合は `NotImplemented` を返す（混在加算は非対応）。
+        """
+        if not isinstance(other, LazyGeometry):
+            return NotImplemented
+
+        from common.types import ObjectRef as _ObjectRef  # local import
+
+        rhs_sig = _lazy_sig_for(other)
+        rhs_ref = _ObjectRef(other)
+
+        if self.plan and self.plan[-1][0] is _fx_concat_many:
+            last_impl, last_params = self.plan[-1]
+            rhs_sig_list = tuple(last_params.get("rhs_sig_list", ())) + (rhs_sig,)  # type: ignore[assignment]
+            rhs_ref_list = list(last_params.get("rhs_ref_list", [])) + [rhs_ref]  # type: ignore[assignment]
+            new_params = {"rhs_sig_list": rhs_sig_list, "rhs_ref_list": rhs_ref_list}
+            new_plan = list(self.plan)
+            new_plan[-1] = (last_impl, new_params)
+            return LazyGeometry(self.base_kind, self.base_payload, new_plan)
+
+        params = {"rhs_sig_list": (rhs_sig,), "rhs_ref_list": [rhs_ref]}
+        return LazyGeometry(
+            self.base_kind, self.base_payload, self.plan + [(_fx_concat_many, params)]
+        )
 
 
 # ---- 形状結果 LRU（プロセス内共有） -----------------------------------------
@@ -297,3 +344,117 @@ def _fx_rotate(
 
 
 # 末尾にあった安全取得ユーティリティは共通化（common.func_id.impl_id を使用）
+
+
+def _fx_concat_many(
+    g: Geometry,
+    *,
+    rhs_sig_list: tuple[object, ...] | tuple = tuple(),
+    rhs_ref_list: list[object] | tuple = tuple(),
+) -> Geometry:
+    """Lazy 結合の終端: 複数の LazyGeometry を一括実体化して連結する。
+
+    - 署名は `rhs_sig_list` のみ使用（`rhs_ref_list` はキャッシュキーから除外）。
+    - 1 パスで coords/offsets を構築して O(totalN)。
+    """
+    try:
+        import numpy as np
+    except Exception:  # pragma: no cover - 環境依存
+        # フォールバック: Geometry.concat 逐次（性能は低下するが安全）
+        out = g
+        for ref in rhs_ref_list:
+            try:
+                obj = getattr(ref, "unwrap", lambda: getattr(ref, "obj", ref))()
+            except Exception:
+                obj = getattr(ref, "obj", ref)
+            if isinstance(obj, LazyGeometry):
+                obj = obj.realize()
+            if isinstance(obj, Geometry):
+                out = out.concat(obj)
+        return out
+
+    # 正規化: 右項を Geometry にそろえる
+    geoms: list[Geometry] = [g]
+    for ref in list(rhs_ref_list):
+        try:
+            obj = getattr(ref, "unwrap", lambda: getattr(ref, "obj", ref))()
+        except Exception:
+            obj = getattr(ref, "obj", ref)
+        if isinstance(obj, LazyGeometry):
+            geoms.append(obj.realize())
+        elif isinstance(obj, Geometry):
+            geoms.append(obj)
+        else:
+            raise TypeError("rhs_ref_list には LazyGeometry/Geometry のみを指定してください")
+
+    # 総量見積り
+    total_n = 0
+    total_m = 0
+    for gg in geoms:
+        total_n += int(gg.coords.shape[0])
+        total_m += max(int(gg.offsets.shape[0]) - 1, 0)
+
+    if total_m == 0:
+        # すべて空線集合
+        return Geometry(g.coords.copy(), g.offsets.copy())
+
+    coords = np.empty((total_n, 3), dtype=np.float32)
+    offsets = np.empty((total_m + 1,), dtype=np.int32)
+    offsets[0] = 0
+    v_cursor = 0
+    o_cursor = 1
+    for gg in geoms:
+        n = int(gg.coords.shape[0])
+        m = max(int(gg.offsets.shape[0]) - 1, 0)
+        if n:
+            coords[v_cursor : v_cursor + n] = gg.coords
+        if m:
+            offsets[o_cursor : o_cursor + m] = gg.offsets[1:] + v_cursor
+            o_cursor += m
+        v_cursor += n
+    offsets[-1] = v_cursor
+    return Geometry(coords, offsets)
+
+
+def _filter_sig_params_global(p: dict[str, Any]) -> dict[str, Any]:
+    """署名用に、ObjectRef 等の実体参照を除外したパラメータ dict を返す。"""
+    try:
+        from common.types import ObjectRef as _ObjectRef  # local import
+    except Exception:
+        _ObjectRef = object  # type: ignore
+    out: dict[str, Any] = {}
+    for k, v in dict(p).items():
+        if isinstance(k, str) and (k.endswith("_ref") or "_ref" in k):
+            continue
+        if isinstance(v, _ObjectRef):
+            continue
+        out[k] = v
+    return out
+
+
+def _lazy_sig_for(lg: "LazyGeometry") -> object:
+    """LazyGeometry の自己完結的な署名タプルを生成する（Core 内のみの依存）。"""
+    from common.param_utils import params_signature as _params_signature  # local import
+
+    # base
+    if lg.base_kind == "geometry":
+        g = lg.base_payload
+        base_sig: Any = ("geom-id", id(g))
+    else:
+        shape_impl, params = lg.base_payload
+        try:
+            params_tuple = _params_signature(shape_impl, dict(params))
+            base_sig = ("shape", _impl_id(shape_impl), params_tuple)
+        except Exception:
+            base_sig = ("shape", id(shape_impl))
+
+    # plan
+    step_sigs: list[tuple[str, tuple[tuple[str, object], ...]]] = []
+    for impl, eparams in lg.plan:
+        try:
+            e_tuple = _params_signature(impl, _filter_sig_params_global(dict(eparams)))
+        except Exception:
+            e_tuple = tuple()
+        step_sigs.append((_impl_id(impl), e_tuple))
+
+    return (base_sig, tuple(step_sigs))
