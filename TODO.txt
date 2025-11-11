@@ -5,4 +5,3 @@ render scaleとかもguiから動かしたい
 partitionのランダム性解除
 スプライン曲線
 mirror3d phi0_degをradiansに。引数についてもう一度検証
-displace, freq変えてもnoise positiionは変わらないようにしたい
