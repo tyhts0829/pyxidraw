@@ -1,15 +1,8 @@
 dashify線の重なり除去
-windowを閉じるときのエラー対策
 重なり描画を軽く、Gcode化のときは生データ処理
 textでひらがなを打てるように
 render scaleとかもguiから動かしたい
 partitionのランダム性解除
-font indexエラー
-ミラーリングエフェクト
-エフェクト キャッシュ途中まで
-線の色をgeometryごとに選べるようにする
 スプライン曲線
-窓で切り抜きエフェクト fillの閉曲線検知と同じ方式で effectの引数にgeometryを取る
 mirror3d phi0_degをradiansに。引数についてもう一度検証
 displace, freq変えてもnoise positiionは変わらないようにしたい
-lazy geometryの+演算子実装
