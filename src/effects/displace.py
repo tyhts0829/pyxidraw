@@ -26,6 +26,11 @@ from util.constants import NOISE_CONST
 
 from .registry import effect
 
+# ノイズ位相進行の係数（freq と独立）
+# 目的: noise(pos * freq + phase) の phase を time 起因で滑らかに進行させる。
+PHASE_SPEED: float = 10.0
+PHASE_SEED: float = 1000.0
+
 
 @njit(fastmath=True, cache=True)
 def fade(t):
@@ -122,9 +127,16 @@ def perlin_noise_3d(x, y, z, perm_table, grad3_array):
 
 @njit(fastmath=True, cache=True)
 def perlin_core(
-    vertices: np.ndarray, frequency: tuple, perm_table: np.ndarray, grad3_array: np.ndarray
+    vertices: np.ndarray,
+    frequency: tuple,
+    phase: tuple,
+    perm_table: np.ndarray,
+    grad3_array: np.ndarray,
 ):
-    """コア Perlin ノイズ計算（3次元頂点専用）"""
+    """コア Perlin ノイズ計算（3次元頂点専用）
+
+    入力空間変換は noise(pos * freq + phase)。phase は freq に非依存。
+    """
     n = vertices.shape[0]
 
     if n == 0:
@@ -132,11 +144,10 @@ def perlin_core(
 
     result = np.zeros((n, 3), dtype=np.float32)
     for i in range(n):
-        x, y, z = (
-            vertices[i, 0] * frequency[0],
-            vertices[i, 1] * frequency[1],
-            vertices[i, 2] * frequency[2],
-        )
+        # スケーリング後に位相を加算（freq と位相を分離）
+        x = vertices[i, 0] * frequency[0] + phase[0]
+        y = vertices[i, 1] * frequency[1] + phase[1]
+        z = vertices[i, 2] * frequency[2] + phase[2]
         # 3成分のノイズをオフセットを変えて生成
         nx = perlin_noise_3d(x, y, z, perm_table, grad3_array)
         ny = perlin_noise_3d(x + 100.0, y + 100.0, z + 100.0, perm_table, grad3_array)
@@ -157,18 +168,20 @@ def _apply_noise_to_coords(
     perm_table: np.ndarray,
     grad3_array: np.ndarray,
 ) -> np.ndarray:
-    """座標配列にPerlinノイズを適用します。"""
+    """座標配列にPerlinノイズを適用します。
+
+    入力は noise(pos * freq + phase) によって評価され、phase は time に依存し、freq には非依存。
+    これにより、spatial_freq 変更時の位相ジャンプを抑制する。
+    """
     if coords.size == 0 or not intensity:
         return coords.copy()
 
-    # 係数調整（提案5: 強度の意図的な倍率を廃止して素直に反映）
-    t_offset = np.float32(time * 10 + 1000.0)
+    # 位相は周波数に依存させず、スケーリング後に加算する
+    phase0 = np.float32(time * PHASE_SPEED + PHASE_SEED)
+    phase_tuple = (phase0, phase0, phase0)
 
-    # オフセット付き頂点を作成
-    offset_coords = coords + t_offset
-
-    # Perlinノイズ計算
-    noise_offset = perlin_core(offset_coords, frequency, perm_table, grad3_array)
+    # Perlinノイズ計算（pos * freq + phase）
+    noise_offset = perlin_core(coords, frequency, phase_tuple, perm_table, grad3_array)
 
     return coords + noise_offset * np.float32(intensity)
 

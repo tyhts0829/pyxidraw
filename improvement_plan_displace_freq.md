@@ -55,12 +55,12 @@
 - Test（目視 or 局所）: `pytest -q -k displace`
 
 ## 作業手順チェックリスト
-- [ ] `perlin_core` に `phase` 引数を追加し、スケール後に加算
-- [ ] `_apply_noise_to_coords` の前段オフセット加算を削除
-- [ ] `phase0`（`t_sec` 由来）の導入と `perlin_core` への受け渡し
-- [ ] ドキュストリングとコメント更新（変換順の明記）
-- [ ] 既存のチャンネル分離（+100/+200）維持の確認
-- [ ] 変更ファイルに限定した `ruff/black/isort/mypy` 緑
+- [x] `perlin_core` に `phase` 引数を追加し、スケール後に加算
+- [x] `_apply_noise_to_coords` の前段オフセット加算を削除
+- [x] `phase0`（`t_sec` 由来）の導入と `perlin_core` への受け渡し
+- [x] ドキュストリングとコメント更新（変換順の明記）
+- [x] 既存のチャンネル分離（+100/+200）維持の確認
+- [x] 変更ファイルに限定した `ruff/black/isort/mypy` 緑
 - [ ] 動作確認（freq スイープの連続性、t_sec の独立性）
 
 オプション（別途）
