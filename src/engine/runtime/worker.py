@@ -169,7 +169,9 @@ class _WorkerProcess(mp.Process):
         self,
         task_q: mp.Queue,
         result_q: mp.Queue,
-        draw_callback: Callable[[float], Geometry],
+        draw_callback: Callable[
+            [float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]
+        ],
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
         apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None,
         metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None,
@@ -206,7 +208,9 @@ class WorkerPool(Tickable):
     def __init__(
         self,
         fps: int,
-        draw_callback: Callable[[float], Geometry],
+        draw_callback: Callable[
+            [float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]
+        ],
         cc_snapshot,
         num_workers: int = 4,
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None = None,
@@ -374,7 +378,7 @@ def _execute_draw_to_packet(
             after = None
 
         # HIT/MISS の二値判定（MISS 優先）
-        flags = None
+        flags: dict[str, str] | None = None
         if isinstance(before, dict) and isinstance(after, dict):
             try:
                 e_hits_after = int(after.get("effect", {}).get("hits", 0))

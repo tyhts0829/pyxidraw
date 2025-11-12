@@ -1,6 +1,7 @@
 """
 どこで: `api.sketch`（実行ランナー）。
-何を: ユーザの `user_draw(t)->Geometry` をワーカで駆動し、GL でレンダ・HUD 表示・MIDI 入力を統合。
+何を: ユーザの `user_draw(t) -> Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]` を
+      ワーカで駆動し、GL でレンダ・HUD 表示・MIDI 入力を統合。
 なぜ: 少ない記述で対話的なスケッチ実行と計測を可能にするため（UI/MIDI は任意で自動フォールバック）。
 
 api.sketch — スケッチ実行・描画ランナー（リアルタイム UI + MIDI 入力）
@@ -11,8 +12,8 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 
 主エントリポイント:
 - `run_sketch(user_draw, *, canvas_size="A5", render_scale=4, fps=None, ... )`:
-  - `user_draw(t: float) -> Geometry` を一定レートで呼び出し、
-    返された `Geometry` を GPU でレンダリングする。
+  - `user_draw(t: float) -> Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]`
+    を一定レートで呼び出し、返された結果を正規化して GPU でレンダリングする。
   - ウィンドウは `pyglet`、描画は `ModernGL` を用いたラインレンダラにより行う。
   - バックグラウンド側で `WorkerPool` が `user_draw` を実行し、`SwapBuffer` 経由で
     フレームを主スレッドに受け渡す（`StreamReceiver`）。
@@ -32,7 +33,8 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
    `ESC` でウィンドウを閉じ、ワーカー停止・MIDI 保存・GL リソース解放を行う。
 
 引数の意味（要点）:
-- `user_draw`: 時刻 `t` [sec] と CC 値辞書（0–127 → 0.0–1.0）を受け取り `Geometry` を返す純関数。
+- `user_draw`: 時刻 `t` [sec] と CC 値辞書（0–127 → 0.0–1.0）を受け取り
+   `Geometry` または `LazyGeometry`、もしくはそれらの列（レイヤー描画）を返す純関数。
 - `canvas_size`: `"A4"/"A5"/...` などのプリセット名、または `(width_mm, height_mm)` タプル。
 - `render_scale`: mm→画素のスケーリング（px/mm, float 可）。見た目の解像度とアンチエイリアス品質に影響。
 - `fps`: 描画更新レート。`None` で設定ファイルから解決、未設定時は 60。
@@ -81,7 +83,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from queue import Empty  # 終了時のキュードレイン用
-from typing import Callable, Mapping
+from typing import TYPE_CHECKING, Callable, Mapping, Sequence, cast
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
@@ -102,9 +104,12 @@ logger = logging.getLogger(__name__)
 `api.sketch_runner.utils` へ移設（トップレベルの純粋関数）。
 """
 
+if TYPE_CHECKING:  # 型チェック専用（実行時の循環/依存コストを避ける）
+    from engine.core.lazy_geometry import LazyGeometry
+
 
 def run_sketch(
-    user_draw: Callable[[float], Geometry],
+    user_draw: Callable[[float], "Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]"],
     *,
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: float = 4.0,
@@ -123,8 +128,9 @@ def run_sketch(
 
     Parameters
     ----------
-    user_draw : Callable[[float], Geometry]
-        時刻 `t` [sec] を受け取り `Geometry` を返す純関数。
+    user_draw : Callable[[float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]]
+        時刻 `t` [sec] を受け取り `Geometry` または `LazyGeometry`、
+        もしくはそれらの列（レイヤー描画）を返す純関数。
         CC は `from api import cc; cc[i]` で参照する。
     canvas_size : str | tuple[int, int], default "A5"
         プリセット（例: "A4", "A5"）または `(width_mm, height_mm)`。
@@ -176,7 +182,8 @@ def run_sketch(
     draw_callable = user_draw
     worker_count = max(0, int(workers))
     if use_parameter_gui and not init_only:
-        parameter_manager = ParameterManager(user_draw)
+        # ParameterManager は型注釈上 Geometry 戻り値を要求するため、最小キャストで適合させる
+        parameter_manager = ParameterManager(cast(Callable[[float], Geometry], user_draw))
         parameter_manager.initialize()
         # ワーカへは生の user_draw を渡し、GUI 値はスナップショットで適用する
 
