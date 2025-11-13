@@ -229,18 +229,18 @@ parameter_gui:
         # table_row_bg: [48, 48, 48, 255]
         # table_row_bg_alt: [44, 44, 44, 255]
       HUD:
-        header: [68, 60, 40, 255]
-        header_hovered: [86, 76, 52, 255]
-        header_active: [102, 90, 60, 255]
-        # table_row_bg: [54, 48, 34, 255]
-        # table_row_bg_alt: [50, 44, 30, 255]
-      shape:
         header: [62, 62, 62, 255]
         header_hovered: [76, 76, 76, 255]
         header_active: [92, 92, 92, 255]
         # 行背景は Dear PyGui の TableRowBg/Alt が利用可能な場合のみ適用
         # table_row_bg: [48, 48, 48, 255]
         # table_row_bg_alt: [44, 44, 44, 255]
+      shape:
+        header: [81, 62, 62, 255]
+        header_hovered: [122, 92, 92, 255]
+        header_active: [166, 125, 125, 255]
+        # table_row_bg: [54, 48, 34, 255]
+        # table_row_bg_alt: [50, 44, 30, 255]
       pipeline:
         header: [50, 68, 92, 255]
         header_hovered: [60, 82, 110, 255]
