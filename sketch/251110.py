@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from api import E, G, lfo, run
-from engine.core.geometry import Geometry
 
 # PXD_DEBUG_PREFIX_CACHEをTrueに
 CANVAS_SIZE = 400
@@ -9,7 +8,7 @@ CANVAS_SIZE = 400
 osc = lfo(wave="sine", freq=0.1, octaves=4, persistence=0.5, lacunarity=2.0)
 
 
-def draw(t: float) -> Geometry:
+def draw(t: float):
     """clip エフェクトの最小使用例。
 
     - マスク: 閉曲線（ここでは 64 辺の多角形）

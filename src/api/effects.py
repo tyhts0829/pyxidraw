@@ -23,19 +23,10 @@ from engine.ui.parameters import get_active_runtime
 
 from .lazy_signature import lazy_signature_for
 
-_GLOBAL_PIPELINES: "weakref.WeakSet[Pipeline]"  # forward decl
-_GLOBAL_COMPILED: "OrderedDict[tuple, Pipeline]"  # forward compiled cache
-import os as _os  # 局所 import（環境既定のフォールバック用）
-
-_GLOBAL_COMPILED_MAXSIZE_ENV = _os.getenv("PXD_COMPILED_CACHE_MAXSIZE")
-try:
-    _GLOBAL_COMPILED_MAXSIZE: int | None = (
-        int(_GLOBAL_COMPILED_MAXSIZE_ENV) if _GLOBAL_COMPILED_MAXSIZE_ENV is not None else 128
-    )
-    if _GLOBAL_COMPILED_MAXSIZE is not None and _GLOBAL_COMPILED_MAXSIZE < 0:
-        _GLOBAL_COMPILED_MAXSIZE = 0
-except Exception:
-    _GLOBAL_COMPILED_MAXSIZE = 128
+# forward decl（実体はモジュール末尾の単一ブロックで初期化）
+_GLOBAL_PIPELINES: "weakref.WeakSet[Pipeline]"
+_GLOBAL_COMPILED: "OrderedDict[tuple, Pipeline]"
+_GLOBAL_COMPILED_MAXSIZE: int | None
 
 
 @dataclass
@@ -261,14 +252,36 @@ def global_cache_counters() -> dict[str, int]:
     }
 
 
-try:
+# ---- Global caches initialization (single place) ---------------------------
+# 目的: 初期化順序を明確化し、重複初期化を避ける。
+try:  # WeakSet/OrderedDict は失敗しにくいが、安全のためガード
     _GLOBAL_PIPELINES = weakref.WeakSet()
 except Exception:  # pragma: no cover
     _GLOBAL_PIPELINES = weakref.WeakSet()  # type: ignore[assignment]
+
 try:
     _GLOBAL_COMPILED = OrderedDict()
 except Exception:  # pragma: no cover
     _GLOBAL_COMPILED = OrderedDict()  # type: ignore[assignment]
+
+# COMPILED の LRU 最大数は settings 優先、失敗時は環境変数、最後に既定 128。
+try:
+    from common.settings import get as _get_settings
+
+    _val = _get_settings().COMPILED_CACHE_MAXSIZE
+    _GLOBAL_COMPILED_MAXSIZE = int(_val) if _val is not None else 128
+    if _GLOBAL_COMPILED_MAXSIZE is not None and _GLOBAL_COMPILED_MAXSIZE < 0:
+        _GLOBAL_COMPILED_MAXSIZE = 0
+except Exception:
+    try:
+        import os as _os
+
+        _raw = _os.getenv("PXD_COMPILED_CACHE_MAXSIZE")
+        _GLOBAL_COMPILED_MAXSIZE = int(_raw) if _raw is not None else 128
+        if _GLOBAL_COMPILED_MAXSIZE is not None and _GLOBAL_COMPILED_MAXSIZE < 0:
+            _GLOBAL_COMPILED_MAXSIZE = 0
+    except Exception:
+        _GLOBAL_COMPILED_MAXSIZE = 128
 
 
 def _is_json_like(obj: object) -> bool:
