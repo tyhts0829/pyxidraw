@@ -63,6 +63,8 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         self._visible = False
         self._driver: Any | None = None
         self._syncing: bool = False
+        self._closing: bool = False
+        self._store_listener: Any | None = None
         # カテゴリ別テーマのキャッシュ（必要時に生成）
         self._cat_header_theme: dict[str, Any] = {}
         self._cat_table_theme: dict[str, Any] = {}
@@ -94,7 +96,9 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             except Exception:
                 logger.exception("store change handling failed")
 
-        self._store.subscribe(_on_store_change_wrapper)
+        # 後で unsubscribe できるように保持
+        self._store_listener = _on_store_change_wrapper
+        self._store.subscribe(self._store_listener)
 
         # 表示 + ドライバ
         if auto_show:
@@ -113,8 +117,25 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             self._stop_driver()
 
     def close(self) -> None:
+        # 閉鎖フラグを最初に立て、以降の _tick を無害化
+        self._closing = True
+        # 先に購読解除して、destroy 後の dpg.* 呼び出し経路を断つ
+        try:
+            if self._store_listener is not None:
+                self._store.unsubscribe(self._store_listener)
+        except Exception:
+            pass
+        # ドライバ停止 → ビューポート非表示 → コンテキスト破棄（順序厳守）
         self._stop_driver()
-        dpg.destroy_context()
+        try:
+            # 表示中であれば先に閉じる（GLFW 側の後処理を安定化）
+            dpg.hide_viewport()
+        except Exception:
+            pass
+        try:
+            dpg.destroy_context()
+        except Exception:
+            pass
 
     def mount(self, descriptors: list[ParameterDescriptor]) -> None:
         # ルート直下にセクション（Shapes/Effects）を配置し、Display/HUD と同レベルにする
@@ -1548,6 +1569,19 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
 
     # ---- internal: drivers ----
     def _tick(self, _dt: float) -> None:  # noqa: ANN001
+        if self._closing:
+            return
+        # DPG 実行可否のガード（destroy 後の呼び出しを抑止）
+        try:
+            is_run = getattr(dpg, "is_dearpygui_running", None)
+            if callable(is_run) and not bool(is_run()):
+                return
+            is_vp_ok = getattr(dpg, "is_viewport_ok", None)
+            if callable(is_vp_ok) and not bool(is_vp_ok()):
+                return
+        except Exception:
+            # 確認に失敗した場合は続行（後段 try で保護）
+            pass
         try:
             dpg.render_dearpygui_frame()
         except Exception:

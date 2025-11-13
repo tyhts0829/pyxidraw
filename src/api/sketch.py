@@ -548,7 +548,13 @@ def run_sketch(
         _closed = getattr(on_close, "_closed", False)
         if _closed:  # type: ignore[truthy-bool]
             return
-        # --- Quiesce: ループ停止・イベント解除・例外抑止に向けた準備 ---
+        # --- Quiesce: まず Dear PyGui（GLFW）を停止して以降のフレームから外す ---
+        try:
+            if parameter_manager is not None:
+                parameter_manager.shutdown()
+        except Exception:
+            pass
+        # --- ループ停止・イベント解除・例外抑止に向けた準備 ---
         try:
             # 通常モードのドライバを停止
             pyglet.clock.unschedule(frame_clock.tick)
@@ -601,11 +607,6 @@ def run_sketch(
         # ModernGL コンテキストの明示解放（フェイルソフト）
         try:
             mgl_ctx.release()
-        except Exception:
-            pass
-        try:
-            if parameter_manager is not None:
-                parameter_manager.shutdown()
         except Exception:
             pass
         setattr(on_close, "_closed", True)
