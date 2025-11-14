@@ -250,5 +250,5 @@ displace.__param_meta__ = {
         "min": (0.0, 0.0, 0.0),
         "max": (0.1, 0.1, 0.1),
     },
-    "t_sec": {"type": "number", "min": 0.0, "max": 60.0},
+    "t_sec": {"type": "number", "min": 0.0, "max": 10.0},
 }

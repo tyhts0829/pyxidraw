@@ -63,7 +63,7 @@
   - クリーンパス（overlay なし・高解像度・透過対応）: ModernGL のオフスクリーン FBO を作成し、`LineRenderer.draw()` だけを描画 → `fbo.read(components="RGBA")` → `pyglet.image.ImageData.save(path)`。
   - 依存追加なし（Pillow 不要）。
 - G-code 実装（非ブロッキング）
-  - スナップショット: `SwapBuffer.get_front()` の `coords/offsets` を C 連続配列に即時コピー（UI ブロックを最小化）。
+  - スナップショット: `SwapBuffer.get_front()` から最新フレームのジオメトリを取得し、必要に応じてレイヤー（`StyledLayer[]`）を 1 つの `Geometry` にマージしたうえで `coords/offsets` を C 連続配列に即時コピー（UI ブロックを最小化）。
   - ExportService: 専用スレッド＋ジョブキュー（同時 1 件）。API:
     - `submit_gcode_job(snapshot, params) -> job_id`
     - `cancel(job_id)`（`Shift+G` で発火）
@@ -84,7 +84,7 @@
 ## 設定値と既定
 - 既定ディレクトリ: PNG は `data/screenshot/`、G-code は `data/gcode/`。
 - PNG 既定: `scale=1.0`、`include_overlay=True`、`transparent=False`。
-- G-code 既定: `travel_feed=3000.0`、`draw_feed=1500.0`、`z_up=5.0`、`z_down=0.2`、`y_down=False`、`origin=(0.0,0.0)`。
+- G-code 既定: `travel_feed=3000.0`、`draw_feed=1500.0`、`z_up=5.0`、`z_down=0.2`、`y_down=True`、`origin=(0.0,0.0)`。
 - 上限/警告: `scale>4.0` は GPU メモリ次第で失敗し得るため HUD で警告。
 
 ## 互換性 / 影響範囲

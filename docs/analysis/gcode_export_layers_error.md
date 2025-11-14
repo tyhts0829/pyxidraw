@@ -62,10 +62,9 @@
 - 将来 `SwapBuffer` に別種のペイロードが増えた場合も、正規化ヘルパ `_normalize_front_to_geometry` を 1 箇所拡張するだけで G-code 側の対応が完結する。
 
 実装タスク（チェックリスト）
-- [ ] `src/api/sketch_runner/export.py` に `SwapBuffer.get_front()` の戻り値を `Geometry` ベースに正規化するヘルパ `_normalize_front_to_geometry(front)` を追加する
-- [ ] `_start()` から `front.is_empty` / `front.as_arrays()` の直接呼び出しをやめ、ヘルパ経由で `Geometry | LazyGeometry | None` を扱うように変更する
+- [x] `src/api/sketch_runner/export.py` に `SwapBuffer.get_front()` の戻り値を `Geometry` ベースに正規化するヘルパ `_normalize_front_to_geometry(front)` を追加する
+- [x] `_start()` から `front.is_empty` / `front.as_arrays()` の直接呼び出しをやめ、ヘルパ経由で `Geometry | LazyGeometry | None` を扱うように変更する
 - [ ] `draw(t)` がレイヤー列（`Sequence[Geometry | LazyGeometry]`）を返すスケッチで G キーを押しても例外が発生せず、「対象なし」か正常に G-code 保存されることを確認する
-- [ ] `docs/spec/export_image_spec.md` の「G-code 実装」セクションを、現状の実装（レイヤー経由の Snapshot 化・`y_down=True` 既定など）に合わせて更新する
+- [x] `docs/spec/export_image_spec.md` の「G-code 実装」セクションを、現状の実装（レイヤー経由の Snapshot 化・`y_down=True` 既定など）に合わせて更新する
 - [ ] 可能であればユニットテストを追加し、擬似 `SwapBuffer` に `StyledLayer[]` を詰めた状態で `_start()` を呼んだときに `ExportService.submit_gcode_job()` が呼ばれること、また対象なしの場合は呼ばれないことを検証する
 - [ ] 変更対象ファイルに対して `ruff/black/isort/mypy` を実行し、G-code 関連のスモークテスト（または手動確認）を含めてテストを緑にする
-

@@ -7,14 +7,64 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
+from engine.core.geometry import Geometry
+from engine.core.lazy_geometry import LazyGeometry
+from engine.render.types import StyledLayer
 from engine.export.gcode import GCodeParams
 
 if TYPE_CHECKING:  # 実行時依存を避けるための型ヒントのみ
     from engine.export.service import ExportService
     from engine.runtime.buffer import SwapBuffer
     from engine.ui.hud.overlay import OverlayHUD
+
+
+def _normalize_front_to_geometry(
+    front: object,
+) -> Geometry | LazyGeometry | None:
+    """SwapBuffer.get_front() の戻り値を Geometry ベースに正規化する。
+
+    - Geometry / LazyGeometry: そのまま返す。
+    - StyledLayer の列: 各レイヤーの geometry を実体 Geometry に揃え、concat して 1 つにまとめる。
+    - それ以外/空: None を返す。
+    """
+    if front is None:
+        return None
+
+    if isinstance(front, (Geometry, LazyGeometry)):
+        return front
+
+    if isinstance(front, Sequence) and front:
+        fst = front[0]
+        if isinstance(fst, StyledLayer) or (
+            hasattr(fst, "geometry") and hasattr(fst, "color") and hasattr(fst, "thickness")
+        ):
+            geoms: list[Geometry] = []
+            for layer in front:
+                try:
+                    g_obj = getattr(layer, "geometry", None)
+                except Exception:
+                    g_obj = None
+                if g_obj is None:
+                    continue
+                if isinstance(g_obj, LazyGeometry):
+                    try:
+                        g_obj = g_obj.realize()
+                    except Exception:
+                        continue
+                if isinstance(g_obj, Geometry):
+                    if g_obj.is_empty:
+                        continue
+                    geoms.append(g_obj)
+            if not geoms:
+                return None
+            base = geoms[0]
+            for g in geoms[1:]:
+                base = base.concat(g)
+            return base
+
+    return None
 
 
 def make_gcode_export_handlers(
@@ -39,13 +89,14 @@ def make_gcode_export_handlers(
                 overlay.show_message("G-code エクスポート実行中", level="warn")
             return
         front = swap_buffer.get_front()
-        if front is None or front.is_empty:
+        geom = _normalize_front_to_geometry(front)
+        if geom is None or geom.is_empty:
             if overlay is not None:
                 overlay.show_message(
                     "G-code エクスポート対象なし（ジオメトリ未生成）", level="warn"
                 )
             return
-        coords, offsets = front.as_arrays(copy=True)
+        coords, offsets = geom.as_arrays(copy=True)
         try:
             gparams = GCodeParams(
                 y_down=True,
