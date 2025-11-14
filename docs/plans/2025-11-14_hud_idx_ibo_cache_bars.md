@@ -1,5 +1,5 @@
 どこで: `engine.ui.hud`（HUD サンプラ/オーバレイ）と `engine.render.renderer`（IBO/Indices キャッシュ統計）、`api.sketch`（HUD へのメトリクス配線）  
-何を: HUD 上の `IBO` / `IDX` について、Effect/Shape の `E_CACHE` / `S_CACHE` と同様に Hit/Miss を検知し、「MISS=1, HIT=0」の二値バーで可視化する実装改善計画  
+何を: HUD に `IBO_CACHE` / `IDX_CACHE` という専用ラベル行を追加し、Effect/Shape の `E_CACHE` / `S_CACHE` と同様に IBO/Indices キャッシュの Hit/Miss を検知し、「MISS=1, HIT=0」の二値バーで可視化する実装改善計画  
 なぜ: IBO/Indices キャッシュの効き具合を HUD から直感的に把握できるようにし、キャッシュ設定や描画パイプライン調整のフィードバックを取りやすくするため
 
 # 背景 / 現状
@@ -25,15 +25,15 @@
 
 # 目標（Goal）
 
-- HUD 上の IBO / IDX についても「Hit/Miss の有無」を横棒メータで可視化する。
-- Effect/Shape の `S_CACHE` / `E_CACHE` と同様、「MISS が 1 回でもあったサンプルではバー=1.0、それ以外は 0.0」という二値表現を維持する。
-- 実装は既存のメトリクス経路（`MetricSampler` / `OverlayHUD` / `HUDConfig`）を拡張する形に留め、キャッシュ本体の挙動や API 仕様は変えない。
+- HUD 上に IBO/IDX キャッシュ専用の `IBO_CACHE` / `IDX_CACHE` 行を追加し、「Hit/Miss の有無」を横棒メータで可視化する。
+- 既存の `IBO` / `IDX` 行における R/U/B や H/M/S/E/Z といった文字表示と、それに紐づく Hit/Miss 検知に関与しない古い累積カウンタ表示/ロジックを HUD から取り除き、IBO/IDX のキャッシュ状態は `IBO_CACHE` / `IDX_CACHE` 行のバーに一本化する。
+- Effect/Shape の `S_CACHE` / `E_CACHE` と同様、「MISS が 1 回でもあったサンプルではバー=1.0、それ以外は 0.0」という二値表現を維持しつつ、実装は既存のメトリクス経路（`MetricSampler` / `OverlayHUD` / `HUDConfig`）を拡張する形に留め、キャッシュ本体の挙動や API 仕様は変えない。
 
 # 非目標（Non‑Goals）
 
 - Indices LRU や IBO 固定化ロジックそのもののアルゴリズム/ポリシー変更。
 - キャッシュカウンタのリセット/永続化インターフェースの追加。
-- HUD 全体のレイアウト/項目構成の大幅な見直し（必要最小限の項目追加に留める）。
+- HUD 全体のレイアウト/項目構成の大幅な見直し（`IBO_CACHE` / `IDX_CACHE` 行の追加と旧 `IBO` / `IDX` 行の整理に留める）。
 
 # 設計方針
 
@@ -47,7 +47,7 @@
     - `renderer.get_indices_cache_counters()` が返す累計 `hits` / `misses`（+ `stores` / `evicts` / `size`）を利用。
   - IBO:
     - `LineRenderer.get_ibo_stats()` が返す累計 `reused` / `uploaded` / `indices_built` を利用。
-  - いずれも既に `_extra_metrics()` → `MetricSampler.set_extra_metrics_provider()` 経由で HUD から参照できているため、新たな依存や API 追加は行わない。
+  - いずれも既に `_extra_metrics()` → `MetricSampler.set_extra_metrics_provider()` 経由で HUD から参照できているため、新たな依存や API 追加は行わない。IBO/IDX の生の累計カウンタは HUD のラベル行としては用いず、`IBO_CACHE` / `IDX_CACHE` の Hit/Miss 判定用の内部入力としてのみ利用する。
 
 ## 2. IBO / IDX の Hit/Miss 判定ロジック（二値・MISS 優先）
 
@@ -79,19 +79,19 @@
     - 例: `_prev_idx_hits`, `_prev_idx_misses`, `_prev_ibo_reused`, `_prev_ibo_uploaded`, `_prev_indices_built` など。
   - `tick()` 内の「追加メトリクス（キャッシュ統計など、テキストのみ）」ブロックを拡張し:
     - 現在値と前回値から `dh` / `dm`、`dr` / `dm_ibo` を計算し、上記ルールに従って `value_idx` / `value_ibo` を 0.0 または 1.0 に決定。
-    - 正常に計算できた場合のみ `self.values["IDX"]` / `self.values["IBO"]` に 0.0/1.0 の値として格納。
+    - 正常に計算できた場合のみ `self.values["IDX_CACHE"]` / `self.values["IBO_CACHE"]` に 0.0/1.0 の値として格納。
     - カウンタ取得に失敗・不正値・逆転（負の差分）の場合は、そのサイクルでは値更新をスキップし、前回値を維持または削除。
-  - 既存の `self.data["IBO"]` / `self.data["IDX"]` 文字列フォーマットはそのまま維持（互換性重視）。
+  - `self.data` 側には `self.data.setdefault("IBO_CACHE", "IBO_CACHE")`、`self.data.setdefault("IDX_CACHE", "IDX_CACHE")` のような専用ラベル行のみを用意し、従来の `self.data["IBO"]` / `self.data["IDX"]` における `R: U: B:` / `H: M: S: E: Z:` 形式の文字列は HUD から削除する。
 - `OverlayHUD._normalized_ratio()` 側
   - 既存ロジック:
     - `S_CACHE` / `E_CACHE` の文字列を直接解釈して 0/1 に変換。
     - それ以外は `sampler.values[key]` を取得し、`CPU`/`MEM`/`FPS`/`VERTEX`/`LINE` について個別に 0..1 に正規化し、その他のキーは `None`（バー無し）。
   - 変更案:
     - `key in ("S_CACHE", "E_CACHE")` の分岐はそのまま維持。
-    - それ以外のキーで `sampler.values.get(key)` が 0.0 または 1.0 の二値として格納されているケース（今回の `"IBO"` / `"IDX"`）については:
+    - それ以外のキーで `sampler.values.get(key)` が 0.0 または 1.0 の二値として格納されているケース（今回の `"IBO_CACHE"` / `"IDX_CACHE"`）については:
       - `v = self.sampler.values.get(key)` が `None` でなければ `return max(0.0, min(1.0, float(v)))` として汎用的に扱う（二値だが 0..1 の範囲という点では互換）。
       - 既存の `CPU`/`MEM` 等の個別分岐はこれまで通り（優先）。
-    - これにより、`values` 側で 0.0/1.0 を用いる IBO/IDX だけでなく、将来的に 0..1 正規化済みの追加メトリクスをバー表示する場合にも同じ仕組みを使える。
+    - これにより、`values` 側で 0.0/1.0 を用いる `IBO_CACHE` / `IDX_CACHE` だけでなく、将来的に 0..1 正規化済みの追加メトリクスをバー表示する場合にも同じ仕組みを使える。
 - 視覚表現
   - `value_idx` / `value_ibo` は「このサンプル区間に MISS が発生したかどうか」を表す二値（1.0=MISS あり, 0.0=MISS なし）とする。
   - Effect/Shape と同様に「MISS を強調する」方向性を維持し、IBO/IDX でも「MISS が出たフレームでバーが一杯に塗られる」挙動に揃える。
@@ -99,14 +99,14 @@
 ## 4. 設定・表示仕様
 
 - `HUDConfig.show_cache_status`
-  - 現状どおり「Effect/Shape キャッシュステータス + IBO/IDX 統計」のまとめフラグとし、追加のフラグは導入しない（シンプルさ優先）。
-  - IBO/IDX のバー表示も `show_cache_status=True` のときのみ有効。
+  - 現状どおり「Effect/Shape キャッシュステータス + IBO/IDX キャッシュステータス」のまとめフラグとし、追加のフラグは導入しない（シンプルさ優先）。
+  - IBO/IDX のバー表示（`IBO_CACHE` / `IDX_CACHE` 行）も `show_cache_status=True` のときのみ有効。
 - 項目順
   - `HUDConfig.resolved_order()` はこれまで通り `E_CACHE` → `S_CACHE` を既定順に含める。
-  - IBO/IDX は `MetricSampler` の `data` にのみ現れるキーとして、現状通り「未知キーを末尾に追加」ロジックで表示順を決定（追加の order 設定は導入しない）。
+  - `IBO_CACHE` / `IDX_CACHE` は `MetricSampler` の `data` に現れる追加キーとして、現状通り「未知キーを末尾に追加」ロジックで表示順を決定（追加の order 設定は導入しない）。
 - テキストフォーマット
-  - `IBO` の `R: U: B:`、`IDX` の `H: M: S: E: Z:` 形式は維持し、バーはその右側に重ねて表示される。
-  - 必要であれば、今後別計画として簡易ラベル（例: `IBO_CACHE` / `IDX_CACHE`）行を追加する可能性はあるが、本計画では scope 外。
+  - 既存の `IBO` の `R: U: B:`、`IDX` の `H: M: S: E: Z:` 形式のテキスト表示は HUD から削除する。
+  - `IBO_CACHE` / `IDX_CACHE` 行はシンプルなラベル文字列（例: `"IBO_CACHE"` / `"IDX_CACHE"`）のみを表示し、Hit/Miss の状態はバー（0.0/1.0）のみで表現する。
 
 # 実装タスク（チェックリスト）
 
