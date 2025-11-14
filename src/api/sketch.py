@@ -316,21 +316,15 @@ def run_sketch(
             from engine.render.renderer import get_indices_cache_counters as _idx_counters
 
             def _extra_metrics():  # type: ignore[no-redef]
-                d = {}
+                d: dict[str, int] = {}
                 try:
                     s = line_renderer.get_ibo_stats()
-                    d["ibo_reused"] = int(s.get("reused", 0))
                     d["ibo_uploaded"] = int(s.get("uploaded", 0))
-                    d["indices_built"] = int(s.get("indices_built", 0))
                 except Exception:
                     pass
                 try:
                     c = _idx_counters()
-                    d["idx_hits"] = int(c.get("hits", 0))
                     d["idx_misses"] = int(c.get("misses", 0))
-                    d["idx_stores"] = int(c.get("stores", 0))
-                    d["idx_evicts"] = int(c.get("evicts", 0))
-                    d["idx_size"] = int(c.get("size", 0))
                 except Exception:
                     pass
                 return d

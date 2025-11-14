@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Optional, Callable
+from typing import Callable, Mapping, Optional
 
 from engine.core.lazy_geometry import LazyGeometry
 
@@ -99,6 +99,9 @@ class MetricSampler(Tickable):
         self._counts_provider: Optional[Callable[[], tuple[int, int]]] = None
         # 追加メトリクス（IBO/Indices LRU など）を取得するプロバイダ
         self._extra_metrics_provider: Optional[Callable[[], Mapping[str, int]]] = None
+        # IBO/IDX キャッシュ用の前回カウンタ（MISS/HIT 判定に使用）
+        self._prev_idx_misses: int | None = None
+        self._prev_ibo_uploaded: int | None = None
 
     # -------- Tickable --------
     def tick(self, dt: float) -> None:
@@ -170,28 +173,67 @@ class MetricSampler(Tickable):
             self.values.pop(CPU, None)
             self.values.pop(MEM, None)
 
-        # 追加メトリクス（キャッシュ統計など、テキストのみ）
+        # 追加メトリクス（キャッシュ統計）
         if self._config.show_cache_status and self._extra_metrics_provider is not None:
             try:
                 extra = self._extra_metrics_provider()
             except Exception:
                 extra = None
             if isinstance(extra, dict):
-                # IBO stats (reused/uploaded/indices_built)
-                r = int(extra.get("ibo_reused", 0))
-                u = int(extra.get("ibo_uploaded", 0))
-                b = int(extra.get("indices_built", 0))
-                self.data["IBO"] = f"R:{r} U:{u} B:{b}"
-                # Indices cache stats (hits/misses/stores/evicts/size)
-                ih = int(extra.get("idx_hits", 0))
-                im = int(extra.get("idx_misses", 0))
-                is_ = int(extra.get("idx_stores", 0))
-                ie = int(extra.get("idx_evicts", 0))
-                iz = int(extra.get("idx_size", 0))
-                self.data["IDX"] = f"H:{ih} M:{im} S:{is_} E:{ie} Z:{iz}"
+                # IBO_CACHE: IBO のアップロードが発生したサンプルを MISS として強調
+                try:
+                    uploaded_now = int(extra.get("ibo_uploaded", 0))
+                    prev_uploaded = self._prev_ibo_uploaded
+                    if prev_uploaded is None:
+                        # 初回サンプルは「直近コストなし」とみなして HIT 扱い
+                        value_ibo = 0.0
+                    else:
+                        du = uploaded_now - prev_uploaded
+                        if du < 0:
+                            # カウンタが巻き戻った場合は前回値を維持
+                            value_ibo = float(self.values.get("IBO_CACHE", 0.0))
+                        elif du > 0:
+                            value_ibo = 1.0
+                        else:
+                            value_ibo = 0.0
+                    self._prev_ibo_uploaded = uploaded_now
+                    self.data.setdefault("IBO_CACHE", "")
+                    self.values["IBO_CACHE"] = float(value_ibo)
+                except Exception:
+                    # 取得に失敗した場合は値を更新しない（前回値維持）
+                    pass
+
+                # IDX_CACHE: Indices LRU の MISS が発生したサンプルを MISS として強調
+                try:
+                    misses_now = int(extra.get("idx_misses", 0))
+                    prev_misses = self._prev_idx_misses
+                    if prev_misses is None:
+                        value_idx = 0.0
+                    else:
+                        dm = misses_now - prev_misses
+                        if dm < 0:
+                            value_idx = float(self.values.get("IDX_CACHE", 0.0))
+                        elif dm > 0:
+                            value_idx = 1.0
+                        else:
+                            value_idx = 0.0
+                    self._prev_idx_misses = misses_now
+                    self.data.setdefault("IDX_CACHE", "")
+                    self.values["IDX_CACHE"] = float(value_idx)
+                except Exception:
+                    pass
             else:
-                self.data.pop("IBO", None)
-                self.data.pop("IDX", None)
+                # プロバイダが有効でない場合は IBO/IDX 行をクリーンアップ
+                self.data.pop("IBO_CACHE", None)
+                self.data.pop("IDX_CACHE", None)
+                self.values.pop("IBO_CACHE", None)
+                self.values.pop("IDX_CACHE", None)
+        else:
+            # キャッシュ表示自体が無効な場合もクリーンアップ
+            self.data.pop("IBO_CACHE", None)
+            self.data.pop("IDX_CACHE", None)
+            self.values.pop("IBO_CACHE", None)
+            self.values.pop("IDX_CACHE", None)
 
     # -------- helpers --------
     @staticmethod
@@ -241,11 +283,17 @@ class MetricSampler(Tickable):
         except Exception:
             pass
         try:
-            return geometry.n_lines
+            n_lines = getattr(geometry, "n_lines")
+            return int(n_lines)
         except Exception:
             # 念のためのフォールバック
             try:
-                return int(geometry.offsets.shape[0] - 1) if geometry.offsets.size > 0 else 0
+                offsets = getattr(geometry, "offsets")
+                size = int(getattr(offsets, "size", 0))
+                if size > 0:
+                    shape0 = int(getattr(offsets, "shape", (0,))[0])
+                    return max(0, shape0 - 1)
+                return 0
             except Exception:
                 return 0
 

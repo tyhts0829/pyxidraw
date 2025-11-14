@@ -377,7 +377,12 @@ class OverlayHUD(Tickable):
         if key == "LINE":
             denom = float(max(1, self.sampler.line_max()))
             return max(0.0, min(1.0, float(v) / denom))
-        return None
+        # それ以外のキーは 0..1 正規化済み値としてそのまま扱う（IBO_CACHE/IDX_CACHE など）
+        try:
+            fv = float(v)
+        except Exception:
+            return None
+        return max(0.0, min(1.0, fv))
 
     # ---- public helpers ----
     def show_message(

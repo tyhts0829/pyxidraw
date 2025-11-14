@@ -106,21 +106,21 @@
 
 - [x] 現状調査: IBO/IDX メトリクス経路（`get_ibo_stats` / `get_indices_cache_counters` → `_extra_metrics` → `MetricSampler` → `OverlayHUD`）の把握
 - [x] Effect/Shape キャッシュ表示の Hit/Miss 判定経路（`hud_metrics_snapshot` / `metrics_snapshot` / `cache_flags` / `S_CACHE` / `E_CACHE`）の把握
-- [ ] `MetricSampler` に IBO/IDX の前回カウンタ保持用フィールドを追加（初期値は取得時の現在値 or 0）
-- [ ] `MetricSampler.tick()` の追加メトリクス処理を拡張し、IBO/IDX の差分から二値の `value_ibo` / `value_idx` を計算して `self.values["IBO"]` / `["IDX"]` に格納
-- [ ] 差分が取得できないケース（例外・型不整合・差分が負）でのフォールバック挙動を定義（値更新スキップ + 直近値維持 or None）
-- [ ] `OverlayHUD._normalized_ratio()` を拡張し、「`S_CACHE` / `E_CACHE` 以外のキーでも `values` に 0.0/1.0 が入っていればそのままバーとして扱う」汎用ロジックを追加
+- [x] `MetricSampler` に IBO/IDX の前回カウンタ保持用フィールドを追加（初期値は取得時の現在値 or 0）
+- [x] `MetricSampler.tick()` の追加メトリクス処理を拡張し、IBO/IDX の差分から二値の `value_ibo` / `value_idx` を計算して `self.values["IBO_CACHE"]` / `["IDX_CACHE"]` に格納
+- [x] 差分が取得できないケース（例外・型不整合・差分が負）でのフォールバック挙動を定義（値更新スキップ + 直近値維持 or None）
+- [x] `OverlayHUD._normalized_ratio()` を拡張し、「`S_CACHE` / `E_CACHE` 以外のキーでも `values` に 0.0/1.0 が入っていればそのままバーとして扱う」汎用ロジックを追加
 - [ ] 必要に応じて `architecture.md`（HUD/キャッシュ可視化セクション）に IBO/IDX のバー表示仕様を追記
-- [ ] 変更ファイル（`sampler.py` / `overlay.py` / `architecture.md` など）に対して `ruff` / `black` / `isort` / `mypy` を実行
+- [x] 変更ファイル（`sampler.py` / `overlay.py` / `architecture.md` など）に対して `ruff` / `black` / `isort` / `mypy` を実行
 - [ ] 動作確認: 簡単なスケッチで Indices LRU と IBO 固定化を有効にし、キャッシュヒット/ミスが発生しているケースで IBO/IDX のバーが期待通りに二値で変化することを目視確認
 
 # 検証（Acceptance Criteria）
 
-- [ ] HUD 上で `IBO` / `IDX` 行に横棒メータが表示され、サンプル区間内に MISS が 1 回でもあればバーがフル（1.0）、MISS がなく HIT のみのときは 0.0 になる（Effect/Shape の `S_CACHE` / `E_CACHE` と同じ二値挙動）。
-- [ ] キャッシュアクセスがほぼ完全にヒットする状況では、`IBO` / `IDX` のバーが 0.0 の状態を維持する。
+- [ ] HUD 上で `IBO_CACHE` / `IDX_CACHE` 行に横棒メータが表示され、サンプル区間内に MISS が 1 回でもあればバーがフル（1.0）、MISS がなく HIT のみのときは 0.0 になる（Effect/Shape の `S_CACHE` / `E_CACHE` と同じ二値挙動）。
+- [ ] キャッシュアクセスがほぼ完全にヒットする状況では、`IBO_CACHE` / `IDX_CACHE` のバーが 0.0 の状態を維持する。
 - [ ] キャッシュが一切使われていない状況（Hits/Misses ともに増えない）でも HUD が例外を出さず、表示が破綻しない。
 - [ ] 既存の `S_CACHE` / `E_CACHE` の Hit/Miss 表示とバー挙動に回 regress がない（従来通り MISS=塗りつぶし、HIT=空）。
-- [ ] `HUDConfig.show_cache_status=False` のとき、IBO/IDX のテキストおよびバーが表示されない。
+- [ ] `HUDConfig.show_cache_status=False` のとき、`IBO_CACHE` / `IDX_CACHE` のテキストおよびバーが表示されない。
 
 # オープンな確認事項（要オーナー確認）
 

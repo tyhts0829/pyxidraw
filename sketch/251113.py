@@ -11,7 +11,7 @@ def draw(t: float):
     p4 = E.pipeline.label(uid="Text_Small").translate().affine()
 
     g1 = G.polygon().scale(10, 10, 1)
-    p1 = E.pipeline.label(uid="Sphere_Small").affine().fill().clip(outline=p4(g4))
+    p1 = E.pipeline.label(uid="Sphere_Small").affine().fill()
 
     g5 = G.text().scale(2, 2, 1)
     p5 = E.pipeline.label(uid="Text_Mid").translate().affine().fill()

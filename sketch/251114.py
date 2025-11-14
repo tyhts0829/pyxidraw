@@ -6,14 +6,8 @@ A5 = (148, 210)
 
 
 def draw(t: float):
-    WHITE_SPACE = 0.1
-    g1 = (
-        G.polygon()
-        .rotate(z=-np.pi / 4, center=(0, 0, 0))
-        .scale(A5[0] - WHITE_SPACE * 2, A5[1] - WHITE_SPACE * 2, 1)
-        .translate(A5[0] / 2, A5[1] / 2, 0)
-    )
-    p1 = E.pipeline.affine()
+    g1 = G.polygon().rotate(z=-np.pi / 4, center=(0, 0, 0)).scale(sx=50)
+    p1 = E.pipeline.label(uid="Frame").translate(delta=(A5[0] / 2, A5[1] / 2, 0)).scale()
     return p1(g1)
 
 
