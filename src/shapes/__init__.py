@@ -11,6 +11,7 @@ from . import capsule as _register_capsule  # noqa: F401
 from . import cone as _register_cone  # noqa: F401
 from . import cylinder as _register_cylinder  # noqa: F401
 from . import grid as _register_grid  # noqa: F401
+from . import line as _register_line  # noqa: F401
 from . import lissajous as _register_lissajous  # noqa: F401
 from . import polygon as _register_polygon  # noqa: F401
 from . import polyhedron as _register_polyhedron  # noqa: F401

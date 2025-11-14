@@ -26,10 +26,27 @@
 
 ## 1. 現状構造の整理
 
-- [ ] `dpg_window.py` 内のクラス/関数/主要なプライベートメソッドを一覧化し、ざっくり役割をメモする
-- [ ] 「ウィンドウライフサイクル」「フォント/テーマ」「レイアウト構築」「ストア購読/同期」「ドライバスレッド」の各責務ごとに関数/メソッドをグルーピングする
-- [ ] 依存関係（`ParameterStore` / `ParameterDescriptor` / Dear PyGui / `util.*` / 設定ファイル）の方向を確認する
-- [ ] 既存テスト（`tests/ui/parameters/test_dpg_mount_smoke.py` など）で `dpg_window` に直接依存している箇所を洗い出す
+- [x] `dpg_window.py` 内のクラス/関数/主要なプライベートメソッドを一覧化し、ざっくり役割をメモする  
+      - クラス: `ParameterWindowBase`（インタフェース）、`ParameterWindow`（実装）
+      - 主な公開メソッド: `__init__`（DPGコンテキスト生成・フォント登録・テーマ適用・マウント・購読登録）、`set_visible`（viewport表示切替とドライバ開始/停止）、`close`（購読解除・ドライバ停止・viewport非表示・context破棄）、`mount`（Descriptor群からのUI再構築）
+      - 主なプライベートメソッド群:
+        - フォント/テーマ: `_setup_fonts`, `_category_kind`, `_get_category_header_theme`, `_get_category_table_theme`, `_to_dpg_color`, `_safe_norm`, `_setup_theme`
+        - レイアウト構築: `_build_root_window`, `build_display_controls`, `_build_grouped_table`, `_build_section`, `_build_param_row`, `_build_param_widget_*` 系（スライダー・チェックボックス・カラー・コンボ等）
+        - Store同期/購読: `_on_store_change`, `sync_display_from_store`, `store_rgb01` など
+        - ドライバ/ライフサイクル: `_start_driver`, `_stop_driver`, `_tick`（pyglet があればスケジューラ、なければ自前ループ）
+- [x] 「ウィンドウライフサイクル」「フォント/テーマ」「レイアウト構築」「ストア購読/同期」「ドライバスレッド」の各責務ごとに関数/メソッドをグルーピングする  
+      - ウィンドウライフサイクル: `__init__`, `set_visible`, `close`, `_build_root_window`
+      - フォント/テーマ: `_setup_fonts`, `_category_kind`, `_get_category_header_theme`, `_get_category_table_theme`, `_to_dpg_color`, `_setup_theme`
+      - レイアウト構築: `build_display_controls`, `_build_grouped_table`, `_build_section`, `_build_param_row`, 各種 `_build_param_widget_*`
+      - ストア購読/同期: `_on_store_change`, `sync_display_from_store`, `store_rgb01`, `_store_listener` ラッパ
+      - ドライバスレッド/フレーム駆動: `_start_driver`, `_stop_driver`, `_tick`（pyglet 利用時は `pyglet.clock.schedule_interval`、それ以外は `Thread` ベース）
+- [x] 依存関係（`ParameterStore` / `ParameterDescriptor` / Dear PyGui / `util.*` / 設定ファイル）の方向を確認する  
+      - 直接依存: `dearpygui.dearpygui`（トップレベルimport）、`ParameterStore` / `ParameterDescriptor` / `ParameterLayoutConfig` / `ParameterThemeConfig`（同パッケージ `state`）、設定取得: `util.utils.load_config`、フォント探索: `util.fonts.glob_font_files` / `resolve_search_dirs`
+      - 設定構造: `parameter_gui.layout`, `hud`, `fonts.search_dirs` などのキーに依存
+      - pyglet との関係: `_start_driver` が `pyglet` が存在する場合はメインスレッドスケジューラを用い、存在しない場合はバックグラウンドスレッドで `dpg.render_dearpygui_frame` をループ
+- [x] 既存テスト（`tests/ui/parameters/test_dpg_mount_smoke.py` など）で `dpg_window` に直接依存している箇所を洗い出す  
+      - 直接 import: `tests/ui/parameters/test_dpg_mount_smoke.py` で `ParameterWindow` を生成し、`set_visible(True/False)` と `close()` が例外なく動くことのみを検証
+      - 間接依存: `engine.ui.parameters.controller` が `from .dpg_window import ParameterWindow` で利用（ランタイムからの起動経路）
 
 ## 2. インタフェースの最小化・明確化
 
@@ -90,4 +107,3 @@
 
 - リファクタリング作業中に発見した「仕様の曖昧さ」「別モジュールとの責務境界の不整合」「追加で検討すべき改善案」は、このファイル末尾に項目を追加していく
 - 各チェックボックスの進捗（[ ] → [x]）も本ファイル上で更新し、「何が完了していて何が未完了か」を常に可視化する
-
