@@ -1,5 +1,5 @@
 どこで: `engine.ui.hud`（HUD サンプラ/オーバレイ）と `engine.render.renderer`（IBO/Indices キャッシュ統計）、`api.sketch`（HUD へのメトリクス配線）  
-何を: HUD 上の `IBO` / `IDX` について、Effect/Shape の `E_CACHE` / `S_CACHE` と同様に Hit/Miss を検知し、バー表示でキャッシュ効率を可視化する実装改善計画  
+何を: HUD 上の `IBO` / `IDX` について、Effect/Shape の `E_CACHE` / `S_CACHE` と同様に Hit/Miss を検知し、「MISS=1, HIT=0」の二値バーで可視化する実装改善計画  
 なぜ: IBO/Indices キャッシュの効き具合を HUD から直感的に把握できるようにし、キャッシュ設定や描画パイプライン調整のフィードバックを取りやすくするため
 
 # 背景 / 現状
@@ -25,8 +25,8 @@
 
 # 目標（Goal）
 
-- HUD 上の IBO / IDX についても「Hit/Miss の有無とバランス」を横棒メータで可視化する。
-- Effect/Shape の `S_CACHE` / `E_CACHE` と同様、「MISS のときバーが大きくなる」直感的な表現を維持する。
+- HUD 上の IBO / IDX についても「Hit/Miss の有無」を横棒メータで可視化する。
+- Effect/Shape の `S_CACHE` / `E_CACHE` と同様、「MISS が 1 回でもあったサンプルではバー=1.0、それ以外は 0.0」という二値表現を維持する。
 - 実装は既存のメトリクス経路（`MetricSampler` / `OverlayHUD` / `HUDConfig`）を拡張する形に留め、キャッシュ本体の挙動や API 仕様は変えない。
 
 # 非目標（Non‑Goals）
@@ -49,29 +49,28 @@
     - `LineRenderer.get_ibo_stats()` が返す累計 `reused` / `uploaded` / `indices_built` を利用。
   - いずれも既に `_extra_metrics()` → `MetricSampler.set_extra_metrics_provider()` 経由で HUD から参照できているため、新たな依存や API 追加は行わない。
 
-## 2. IBO / IDX の Hit/Miss 判定ロジック
+## 2. IBO / IDX の Hit/Miss 判定ロジック（二値・MISS 優先）
 
 - Indices LRU（IDX）
   - 各 HUD サンプルで、前回サンプル時点の `hits` / `misses` を保持し、今回値との差分を取る:
     - `dh = hits_now - hits_prev`
     - `dm = misses_now - misses_prev`
-  - 判定ルール（Effect/Shape と同じく MISS 優先）:
-    - `dm > 0` かつ `dh + dm > 0` のとき:
-      - 状態テキスト: 「MISS（dm ヒット / dh ミス）」等は HUD では直接は出さず、既存の `H:.. M:..` テキストを維持。
-      - バー用の比率: `ratio_idx = dm / (dh + dm)`（0..1、1 に近いほど MISS 偏重）。
+  - 判定ルール（Effect/Shape と同じく MISS 優先の二値）:
+    - `dm > 0` のとき:
+      - 「このサンプル間に MISS が 1 回以上あった」とみなし、バー値 `value_idx = 1.0`。
     - `dm == 0` かつ `dh > 0` のとき:
-      - `ratio_idx = 0.0`（「このサンプル間は MISS なし、全て HIT」）。
+      - 「このサンプル間はすべて HIT」とみなし、バー値 `value_idx = 0.0`。
     - `dh == 0` かつ `dm == 0` のとき:
-      - 直近の `ratio_idx` を維持するか、`None`（バー非表示）とするかは後述のオープンクエスチョン。
+      - 「このサンプル間はアクセスなし」とみなし、バー値は直近値維持または 0.0 とする（フォールバックで定義）。
 - IBO
   - IBO 固定化は「既存 IBO を再利用できたか」が重要であり、以下のように解釈する:
     - Hit: `reused` の増分（`dr = reused_now - reused_prev`）。
     - Miss: 新規アップロード/構築の増分（`du = uploaded_now - uploaded_prev` と `db = indices_built_now - indices_built_prev` の合計）。
       - `dm_ibo = du + db`
-  - 判定ルール:
-    - `dm_ibo > 0` かつ `dr + dm_ibo > 0` のとき `ratio_ibo = dm_ibo / (dr + dm_ibo)`。
-    - `dm_ibo == 0` かつ `dr > 0` のとき `ratio_ibo = 0.0`。
-    - `dr == 0` かつ `dm_ibo == 0` のときは IDX 同様、前回値維持 or 非表示（後述）。
+  - 判定ルール（二値、MISS 優先）:
+    - `dm_ibo > 0` のとき `value_ibo = 1.0`（このサンプル間に再利用できず、新規アップロード/構築が発生）。
+    - `dm_ibo == 0` かつ `dr > 0` のとき `value_ibo = 0.0`（このサンプル間は再利用のみ）。
+    - `dr == 0` かつ `dm_ibo == 0` のときは IDX 同様、アクセスなしとしてフォールバック扱い。
 
 ## 3. HUD メータへのマッピング
 
@@ -79,9 +78,9 @@
   - IBO/IDX の累計カウンタについて、前回値を保持するプライベートフィールドを追加:
     - 例: `_prev_idx_hits`, `_prev_idx_misses`, `_prev_ibo_reused`, `_prev_ibo_uploaded`, `_prev_indices_built` など。
   - `tick()` 内の「追加メトリクス（キャッシュ統計など、テキストのみ）」ブロックを拡張し:
-    - 現在値と前回値から `ratio_idx` / `ratio_ibo` を計算。
-    - 正常に計算できた場合のみ `self.values["IDX"]` / `self.values["IBO"]` に 0..1 の値として格納。
-    - カウンタ取得に失敗・不正値・逆転（負の差分）の場合は、そのサイクルでは比率更新をスキップし、前回値を維持または削除。
+    - 現在値と前回値から `dh` / `dm`、`dr` / `dm_ibo` を計算し、上記ルールに従って `value_idx` / `value_ibo` を 0.0 または 1.0 に決定。
+    - 正常に計算できた場合のみ `self.values["IDX"]` / `self.values["IBO"]` に 0.0/1.0 の値として格納。
+    - カウンタ取得に失敗・不正値・逆転（負の差分）の場合は、そのサイクルでは値更新をスキップし、前回値を維持または削除。
   - 既存の `self.data["IBO"]` / `self.data["IDX"]` 文字列フォーマットはそのまま維持（互換性重視）。
 - `OverlayHUD._normalized_ratio()` 側
   - 既存ロジック:
@@ -89,13 +88,13 @@
     - それ以外は `sampler.values[key]` を取得し、`CPU`/`MEM`/`FPS`/`VERTEX`/`LINE` について個別に 0..1 に正規化し、その他のキーは `None`（バー無し）。
   - 変更案:
     - `key in ("S_CACHE", "E_CACHE")` の分岐はそのまま維持。
-    - それ以外のキーで `sampler.values.get(key)` が 0..1 の正規化済み値として格納されているケース（今回の `"IBO"` / `"IDX"`）については:
-      - `v = self.sampler.values.get(key)` が `None` でなければ `return max(0.0, min(1.0, float(v)))` として汎用的に扱う。
+    - それ以外のキーで `sampler.values.get(key)` が 0.0 または 1.0 の二値として格納されているケース（今回の `"IBO"` / `"IDX"`）については:
+      - `v = self.sampler.values.get(key)` が `None` でなければ `return max(0.0, min(1.0, float(v)))` として汎用的に扱う（二値だが 0..1 の範囲という点では互換）。
       - 既存の `CPU`/`MEM` 等の個別分岐はこれまで通り（優先）。
-    - これにより、`values` 側で 0..1 に正規化しておけば、今後も追加メトリクス（例: G-code バッファ使用率など）を同じ仕組みでバー表示できる。
+    - これにより、`values` 側で 0.0/1.0 を用いる IBO/IDX だけでなく、将来的に 0..1 正規化済みの追加メトリクスをバー表示する場合にも同じ仕組みを使える。
 - 視覚表現
-  - `ratio_idx` / `ratio_ibo` は「MISS 割合」として解釈し、1.0 に近づくほどバーが右方向に伸びる（MISS 多い）。
-  - Effect/Shape と同様に「MISS を強調する」方向性を維持しつつ、IBO/IDX では 0..1 の連続値で「どれくらい MISS が多いか」も読めるようにする。
+  - `value_idx` / `value_ibo` は「このサンプル区間に MISS が発生したかどうか」を表す二値（1.0=MISS あり, 0.0=MISS なし）とする。
+  - Effect/Shape と同様に「MISS を強調する」方向性を維持し、IBO/IDX でも「MISS が出たフレームでバーが一杯に塗られる」挙動に揃える。
 
 ## 4. 設定・表示仕様
 
@@ -114,30 +113,31 @@
 - [x] 現状調査: IBO/IDX メトリクス経路（`get_ibo_stats` / `get_indices_cache_counters` → `_extra_metrics` → `MetricSampler` → `OverlayHUD`）の把握
 - [x] Effect/Shape キャッシュ表示の Hit/Miss 判定経路（`hud_metrics_snapshot` / `metrics_snapshot` / `cache_flags` / `S_CACHE` / `E_CACHE`）の把握
 - [ ] `MetricSampler` に IBO/IDX の前回カウンタ保持用フィールドを追加（初期値は取得時の現在値 or 0）
-- [ ] `MetricSampler.tick()` の追加メトリクス処理を拡張し、IBO/IDX の差分から `ratio_ibo` / `ratio_idx` を計算して `self.values["IBO"]` / `["IDX"]` に格納
-- [ ] 差分が取得できないケース（例外・型不整合・差分が負）でのフォールバック挙動を定義（比率更新スキップ + 直近比率維持 or None）
-- [ ] `OverlayHUD._normalized_ratio()` を拡張し、「`S_CACHE` / `E_CACHE` 以外のキーでも `values` に 0..1 が入っていればそのままバーとして扱う」汎用ロジックを追加
+- [ ] `MetricSampler.tick()` の追加メトリクス処理を拡張し、IBO/IDX の差分から二値の `value_ibo` / `value_idx` を計算して `self.values["IBO"]` / `["IDX"]` に格納
+- [ ] 差分が取得できないケース（例外・型不整合・差分が負）でのフォールバック挙動を定義（値更新スキップ + 直近値維持 or None）
+- [ ] `OverlayHUD._normalized_ratio()` を拡張し、「`S_CACHE` / `E_CACHE` 以外のキーでも `values` に 0.0/1.0 が入っていればそのままバーとして扱う」汎用ロジックを追加
 - [ ] 必要に応じて `architecture.md`（HUD/キャッシュ可視化セクション）に IBO/IDX のバー表示仕様を追記
 - [ ] 変更ファイル（`sampler.py` / `overlay.py` / `architecture.md` など）に対して `ruff` / `black` / `isort` / `mypy` を実行
-- [ ] 動作確認: 簡単なスケッチで Indices LRU と IBO 固定化を有効にし、キャッシュヒット/ミスが発生しているケースで IBO/IDX のバーが期待通りに変化することを目視確認
+- [ ] 動作確認: 簡単なスケッチで Indices LRU と IBO 固定化を有効にし、キャッシュヒット/ミスが発生しているケースで IBO/IDX のバーが期待通りに二値で変化することを目視確認
 
 # 検証（Acceptance Criteria）
 
-- [ ] HUD 上で `IBO` / `IDX` 行に横棒メータが表示され、MISS が多いときほどバーが長くなる（MISS 割合が 0..1 で反映される）。
-- [ ] キャッシュアクセスがほぼ完全にヒットする状況では、`IBO` / `IDX` のバーが 0 に近い状態を維持する。
+- [ ] HUD 上で `IBO` / `IDX` 行に横棒メータが表示され、サンプル区間内に MISS が 1 回でもあればバーがフル（1.0）、MISS がなく HIT のみのときは 0.0 になる（Effect/Shape の `S_CACHE` / `E_CACHE` と同じ二値挙動）。
+- [ ] キャッシュアクセスがほぼ完全にヒットする状況では、`IBO` / `IDX` のバーが 0.0 の状態を維持する。
 - [ ] キャッシュが一切使われていない状況（Hits/Misses ともに増えない）でも HUD が例外を出さず、表示が破綻しない。
 - [ ] 既存の `S_CACHE` / `E_CACHE` の Hit/Miss 表示とバー挙動に回 regress がない（従来通り MISS=塗りつぶし、HIT=空）。
 - [ ] `HUDConfig.show_cache_status=False` のとき、IBO/IDX のテキストおよびバーが表示されない。
 
 # オープンな確認事項（要オーナー確認）
 
-- [ ] IBO/IDX のバーは「サンプル区間内の MISS 割合（0..1）」でよいか  
-      - 代案: Effect/Shape と完全に揃えて「MISS が 1 件以上あれば 1.0、それ以外は 0.0」の二値バーとする案もあり。
-- [ ] IBO の Hit/Miss 解釈として「`reused` を Hit、`uploaded + indices_built` を Miss とみなす」定義で問題ないか  
-      - 代案: `indices_built` のみを Miss と見なし、`uploaded` は別指標として扱うなど。
-- [ ] カウンタ差分が 0（活動なし）の場合、バーは「前回比率を保持」か「非表示（0 または None）」のどちらが好ましいか  
-      - 現状案: 前回値維持（HUD 上で急にバーが消えるのを避ける）。
-- [ ] IBO/IDX 用に専用ラベル行（例: `IBO_CACHE` / `IDX_CACHE`）を追加するか、それとも既存の `IBO` / `IDX` 行にバーを重ねるだけに留めるか（現計画では後者を想定）。
+- [x] IBO/IDX のバーは Effect/Shape と同様「MISS が 1 件以上あれば 1.0、それ以外は 0.0」の二値バーとする  
+      - 決定: 連続値の「MISS 割合」ではなく、`S_CACHE` / `E_CACHE` と同じ二値挙動に揃える。
+- [x] IBO の Hit/Miss 解釈として「IBO を再利用したフレーム（`reused` 増加）を Hit、IBO を再構築したフレーム（`indices_built` 増加）を Miss」とみなす  
+      - 補足: 実質的に「IBO を再利用したか／再計算してアップロードしたか」の 2 状態のみを MISS/HIT で表現する。`uploaded` は「IBO を GPU に送った回数」として別メトリクスで扱い、Hit/Miss 判定には含めない。
+- [x] カウンタ差分が 0（活動なし）の場合、バーは「前回値を保持」か「非表示（0 または None）」のどちらが好ましいか  
+      - 決定: `S_CACHE` / `E_CACHE` と同様に「前回値維持」とする（活動なし区間でバーが急に消えないようにする）。IBO/IDX も同じポリシーで扱う。
+- [x] IBO/IDX 用に専用ラベル行（例: `IBO_CACHE` / `IDX_CACHE`）を追加するか、それとも既存の `IBO` / `IDX` 行にバーを重ねるだけに留めるか（現計画では後者を想定）。
+      - 決定: HUD に `IBO_CACHE` / `IDX_CACHE` という専用ラベル行を追加し、そこで IBO/IDX の HIT/MISS バーを表示する。既存の `IBO` / `IDX` 行における R/U/B などの文字表示は廃止し、HIT/MISS 検知に関与しない古いカウンタや表示ロジックは実装から削除してクリーンな構成にする。
 
 # 開発メモ / 実行コマンド（編集ファイル限定）
 
@@ -147,4 +147,3 @@
 - Test: `pytest -q -k "hud or indices_cache or ibo"`（既存テストが無ければ、最小限の HUD 関連テスト追加を検討）
 
 以上、この計画内容で問題なければ、次のステップとして実装に進みます。
-
