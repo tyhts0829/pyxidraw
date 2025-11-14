@@ -111,6 +111,7 @@ class ParameterRuntime:
         fn: Any,
         params: Mapping[str, Any],
         pipeline_uid: str = "",
+        pipeline_label: str | None = None,
     ) -> Mapping[str, Any]:
         info = self._introspector.resolve(kind="effect", name=effect_name, fn=fn)
 
@@ -145,7 +146,11 @@ class ParameterRuntime:
 
         params = {k: _materialize(v) for k, v in dict(params).items()}
         context = ParameterContext(
-            scope="effect", name=effect_name, index=step_index, pipeline=str(pipeline_uid or "")
+            scope="effect",
+            name=effect_name,
+            index=step_index,
+            pipeline=str(pipeline_uid or ""),
+            pipeline_label=str(pipeline_label or ""),
         )
         if info.signature is not None and "t" in info.signature.parameters and "t" not in params:
             params = {**params, "t": self._t}
@@ -162,7 +167,9 @@ class ParameterRuntime:
             desc_id = f"{context.descriptor_prefix}.bypass"
             label = f"{context.label_prefix}: Bypass"
             category = (
-                context.name if context.scope == "shape" else (context.pipeline or context.scope)
+                context.name
+                if context.scope == "shape"
+                else (context.pipeline_label or context.pipeline or context.scope)
             )
             bypass_desc = ParameterDescriptor(
                 id=desc_id,

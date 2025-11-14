@@ -48,8 +48,8 @@ from .registry import effect
 
 # 塗りつぶし線の最大密度（最大本数）
 MAX_FILL_LINES = 400
-NONPLANAR_EPS_ABS = 1e-4
-NONPLANAR_EPS_REL = 1e-3
+NONPLANAR_EPS_ABS = 1e-6
+NONPLANAR_EPS_REL = 1e-5
 
 
 def _generate_line_fill(

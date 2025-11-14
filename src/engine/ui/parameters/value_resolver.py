@@ -45,6 +45,8 @@ class ParameterContext:
     name: str
     index: int
     pipeline: str = ""
+    # GUI 表示用のカテゴリ名（任意）。空の場合は pipeline → scope を使用。
+    pipeline_label: str = ""
 
     @property
     def descriptor_prefix(self) -> str:
@@ -163,8 +165,12 @@ class ParameterValueResolver:
         has_default: bool,
         param_order: int | None,
     ) -> Any:
-        # グルーピング: shape は形状名、effect はパイプライン UID（未指定時は従来の scope 名）
-        category = context.name if context.scope == "shape" else (context.pipeline or context.scope)
+        # グルーピング: shape は形状名、effect は表示ラベル→UID→scope の優先でカテゴリ決定
+        category = (
+            context.name
+            if context.scope == "shape"
+            else (context.pipeline_label or context.pipeline or context.scope)
+        )
         if source == "default":
             hint = self._range_hint_from_meta(
                 value_type=value_type,
@@ -221,7 +227,11 @@ class ParameterValueResolver:
         default_tuple = tuple(default_values[:dim])  # type: ignore[assignment]
 
         vector_hint = self._vector_range_hint_from_meta(meta_entry, dim)
-        category = context.name if context.scope == "shape" else (context.pipeline or context.scope)
+        category = (
+            context.name
+            if context.scope == "shape"
+            else (context.pipeline_label or context.pipeline or context.scope)
+        )
         descriptor = ParameterDescriptor(
             id=descriptor_id,
             label=f"{context.label_prefix}: {param_name}",
@@ -328,7 +338,9 @@ class ParameterValueResolver:
                 height = None
 
             category = (
-                context.name if context.scope == "shape" else (context.pipeline or context.scope)
+                context.name
+                if context.scope == "shape"
+                else (context.pipeline_label or context.pipeline or context.scope)
             )
             descriptor = ParameterDescriptor(
                 id=descriptor_id,

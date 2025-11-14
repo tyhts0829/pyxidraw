@@ -66,7 +66,7 @@ def affine(
     *,
     auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
-    angles_rad: Vec3 = (np.pi / 4, np.pi / 4, np.pi / 4),
+    angles_rad: Vec3 = (0, 0, 0),
     scale: Vec3 = (0.5, 0.5, 0.5),
     delta: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
@@ -133,7 +133,7 @@ affine.__param_meta__ = {
     "scale": {"type": "vec3", "min": (0.25, 0.25, 0.25), "max": (4.0, 4.0, 4.0)},
     "delta": {
         "type": "vec3",
-        "min": (-500.0, -500.0, -500.0),
-        "max": (500.0, 500.0, 500.0),
+        "min": (-200, -200, -200),
+        "max": (200.0, 200.0, 200.0),
     },
 }

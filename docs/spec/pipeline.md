@@ -8,6 +8,7 @@
 
 - ビルダー開始: `E.pipeline`
 - ステップ追加: `E.pipeline.<effect>(..., **params)`
+- 表示ラベル: `.label(uid: str)`（Parameter GUI のカテゴリ名を指定。内部 UID は維持）
 - ビルド: `.build() -> Pipeline`
 - 実行: `Pipeline(g: Geometry) -> Geometry`
 - キャッシュ: `.cache(maxsize: int | None)`（既定 無制限 / 0 で無効）
@@ -26,6 +27,11 @@ pipe = (
 out = pipe(base)
 ```
 
+注記（label）
+- `.label(uid)` はパイプラインの「表示ラベル」を設定する。GUI のカテゴリ見出しに用いられる。
+- 内部のパイプライン UID（例: `p0`, `p1`）は保持し、Parameter ID/キャッシュ鍵/署名には影響しない。
+- 重複ラベルは許容（カテゴリ見出しは同名でまとめて表示され得る）。
+
 ## パラメータ検証
 - ビルド時の厳格検証は行わない（未知キーは許容）。実行時にエフェクト関数のシグネチャで自然に TypeError となり得る。
 - `effects` は `__param_meta__` を任意で公開可能（型/範囲/choices）。
@@ -35,8 +41,11 @@ out = pipe(base)
 - パイプラインを JSON/ファイルに保存・復元する API は提供しない（縮減方針）。
 
 ## パフォーマンスとキャッシュ
-- キーは「入力 `Geometry.digest` × パイプライン定義ハッシュ」。
-- 不変パラメータのパイプラインは再利用で高速化。`.cache(maxsize=N)` で上限制御。
+- キーは `api.lazy_signature.lazy_signature_for(LazyGeometry)` に基づく 128bit 署名。
+  - base が実体 `Geometry` の場合はオブジェクト同一性（`("geom-id", id(g))`）を用い、内容ダイジェストは計算しない。
+  - base が shape の場合は `impl_id(shape)` と `params_signature` を用いる。
+  - plan（effect 列）は各ステップの `impl_id(effect)` と `params_signature` を順に積んで署名に反映する。
+- 不変パラメータのパイプラインは再利用で高速化。`.cache(maxsize=N)` で上限制御（`None` は無制限、`0` は無効）。
 - `PXD_PIPELINE_CACHE_MAXSIZE` で既定値を上書き可能。
 
 ### 量子化と鍵の安定化（重要）

@@ -49,7 +49,7 @@ class _PipelineBuilder(Protocol):
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     # meta: angles_rad (type=vec3, range=[(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)])
     # meta: scale (type=vec3, range=[(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)])
-    # meta: delta (type=vec3, range=[(-500.0, -500.0, -500.0), (500.0, 500.0, 500.0)])
+    # meta: delta (type=vec3, range=[(-200, -200, -200), (200.0, 200.0, 200.0)])
     def affine(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         スケール→回転→平行移動を適用（合成アフィン）。
@@ -59,7 +59,7 @@ class _PipelineBuilder(Protocol):
             pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
             angles_rad: vec3, range [(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)]
             scale: vec3, range [(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)]
-            delta: vec3, range [(-500.0, -500.0, -500.0), (500.0, 500.0, 500.0)]
+            delta: vec3, range [(-200, -200, -200), (200.0, 200.0, 200.0)]
         """
         ...
     # meta: boldness (type=number, range=[0.0, 10.0])

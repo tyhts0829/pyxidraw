@@ -58,14 +58,14 @@
 - `README.md`: 簡単な使用例を追加（任意）。
 
 実装タスク（チェックリスト）
-- [ ] PipelineBuilder: `_label_display` を追加し `label(uid)` 実装（steps には影響しない）
-- [ ] PipelineBuilder: ランタイム呼び出しに `pipeline_label` を付与
-- [ ] ParameterRuntime: `before_effect_call` に `pipeline_label` を追加しカテゴリ決定を変更
-- [ ] SnapshotRuntime: 同上
-- [ ] 既存呼び出し箇所のシグネチャ更新（型/スタブへの影響なし）
+- [x] PipelineBuilder: `_label_display` を追加し `label(uid)` 実装（steps には影響しない）
+- [x] PipelineBuilder: ランタイム呼び出しに `pipeline_label` を付与
+- [x] ParameterRuntime: `before_effect_call` に `pipeline_label` を追加しカテゴリ決定を変更
+- [x] SnapshotRuntime: 同上
+- [x] 既存呼び出し箇所のシグネチャ更新（型/スタブへの影響なし）
 - [ ] テスト: 新規 `tests/ui/parameters/test_pipeline_label.py` を追加
-- [ ] ドキュメント更新（spec/architecture/README の該当箇所）
-- [ ] 変更ファイルに対して ruff/black/isort/mypy を通す
+- [x] ドキュメント更新（spec/architecture/README の該当箇所）
+- [x] 変更ファイルに対して ruff/black/isort/mypy を通す
 
 リスクと対応
 - 同名ラベルを多数使うと GUI 上で同一ヘッダーに集約される（意図通り）。ID は `pipeline_uid` ベースで衝突しない。
@@ -84,9 +84,8 @@
 - Type: `mypy {changed_files}`
 - Test: `pytest -q -k pipeline_label`（ユニットのみに限定）
 
-質問/確認事項
-- 表示ラベルの重複は許容でよいか（ID 衝突はしない設計）。
-- `label` をパラメータ GUI 以外（HUD 等）で参照する用途は想定するか（現状スコープ外）。
+質問/確認事項（確定）
+- 表示ラベルの重複は許容: yes（ID は `pipeline_uid` ベースで衝突しない）
+- `label` を HUD 等で参照: No（現状スコープ外）
 
 以上、問題なければこの計画に沿って実装を進めます。
-

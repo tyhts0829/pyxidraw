@@ -88,10 +88,10 @@ class Pipeline:
         key = (b"sig", lazy_signature_for(lg))
         if self._cache_maxsize != 0:  # 有効（None または 正）
             if key in self._cache:
-                out = self._cache.pop(key)
-                self._cache[key] = out
+                out_cached = self._cache.pop(key)
+                self._cache[key] = out_cached
                 self._hits += 1
-                return out
+                return out_cached
         out: Geometry | LazyGeometry = lg.realize() if self._realize_on_call else lg
         if self._cache_maxsize != 0:
             self._cache[key] = out
@@ -114,11 +114,13 @@ class PipelineBuilder:
         self._steps: list[tuple[str, tuple[tuple[str, object], ...]]] = []
         self._cache_maxsize: int | None = None
         self._uid: str | None = None
+        # Parameter GUI 表示用のラベル（内部 UID とは分離）
+        self._label_display: str | None = None
 
     def __getattr__(self, name: str) -> Callable[..., "PipelineBuilder"]:
         def _adder(**params: Any) -> "PipelineBuilder":
             runtime = get_active_runtime()
-            resolved = dict(params)
+            resolved: dict[str, Any] = dict(params)
             # ユーザー明示の bypass は最優先（後続の GUI 値より強い）
             user_bypass_specified = False
             user_bypass_value = False
@@ -140,13 +142,15 @@ class PipelineBuilder:
                 from effects.registry import get_effect as _get_effect  # local import
 
                 fn = _get_effect(name)
-                resolved = runtime.before_effect_call(
+                resolved_map = runtime.before_effect_call(
                     step_index=len(self._steps),
                     effect_name=name,
                     fn=fn,
                     params=resolved,
                     pipeline_uid=str(self._uid or ""),
+                    pipeline_label=self._label_display,
                 )
+                resolved = dict(resolved_map)
                 impl = getattr(fn, "__effect_impl__", fn)
                 # ランタイムからの bypass（GUI/永続）を吸収し、明示引数を優先
                 runtime_bypass = bool(resolved.pop("bypass", False))
@@ -212,6 +216,15 @@ class PipelineBuilder:
     # キャッシュ設定
     def cache(self, *, maxsize: int | None) -> "PipelineBuilder":
         self._cache_maxsize = maxsize
+        return self
+
+    # 表示ラベル（GUI のカテゴリ名）を設定
+    def label(self, uid: str) -> "PipelineBuilder":
+        try:
+            text = str(uid).strip()
+        except Exception:
+            text = ""
+        self._label_display = text or None
         return self
 
 

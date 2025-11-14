@@ -223,6 +223,7 @@ class SnapshotRuntime:
         fn: Any,
         params: Mapping[str, Any],
         pipeline_uid: str = "",
+        pipeline_label: str | None = None,
     ) -> Mapping[str, Any]:
         # ParameterRuntime 互換: pipeline_uid があれば ID に含める
         if pipeline_uid:

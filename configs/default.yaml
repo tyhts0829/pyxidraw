@@ -189,7 +189,7 @@ parameter_gui:
     # Dear PyGui のフォント名（fonts.search_dirs から登録済みのものを推奨）
     font_name: "HackGen Console NF"
     font_size: 12
-    value_precision: 3
+    value_precision: 6
     # ラベル列の比率（0.1..0.9）。残りは Bars:CC で配分
     label_column_ratio: 0.3
     # 残り領域に対する Bars:CC の比率（Bars 側の割合）
