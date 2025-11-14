@@ -1,9 +1,19 @@
+import numpy as np
+
 from api import E, G, run
+
+A5 = (148, 210)
 
 
 def draw(t: float):
-    g1 = G.polygon().scale(100, 100, 1)
-    p1 = E.pipeline.affine().fill().dash().subdivide().displace().offset().fill()
+    WHITE_SPACE = 0.1
+    g1 = (
+        G.polygon()
+        .rotate(z=-np.pi / 4, center=(0, 0, 0))
+        .scale(A5[0] - WHITE_SPACE * 2, A5[1] - WHITE_SPACE * 2, 1)
+        .translate(A5[0] / 2, A5[1] / 2, 0)
+    )
+    p1 = E.pipeline.affine()
     return p1(g1)
 
 
