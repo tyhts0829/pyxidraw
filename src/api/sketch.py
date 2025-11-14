@@ -384,7 +384,7 @@ def run_sketch(
         parameter_manager,
         overlay,
         pyglet,
-        lock=(show_hud is not None),
+        lock=not use_parameter_gui,
     )
 
     # ---- ⑧ pyglet イベント -----------------------------------------

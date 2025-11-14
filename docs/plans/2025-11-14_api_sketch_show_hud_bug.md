@@ -92,11 +92,10 @@
 - [x] 現状の実装とドキュメント（`architecture.md` / `README.md`）を確認して差分を整理
 - [x] バグの直接原因（`lock=(show_hud is not None)` により購読が無効化されている点）を特定
 - [x] 最終仕様の選定（B 案: `show_hud` 初期値 + Parameter GUI 優先）について、オーナーと合意を取る
-- [ ] B 案に基づき、`run_sketch()` 内の HUD 初期化ロジックと `subscribe_hud_visibility_changes()` 呼び出しを更新
+- [x] B 案に基づき、`run_sketch()` 内の HUD 初期化ロジックと `subscribe_hud_visibility_changes()` 呼び出しを更新
 - [ ] 必要に応じて Parameter GUI 側（`dpg_window.py`）の `Show HUD` ウィジェットの表示/有効化条件を調整
-- [ ] `architecture.md` / `README.md` の該当箇所（HUD/Parameter GUI 周り）を更新し、実装と揃える
-- [ ] 変更ファイルに対して Lint/Format/Type チェックを実行  
-      （例: `ruff check --fix src/api/sketch.py src/api/sketch_runner/params.py src/engine/ui/parameters/dpg_window.py` 等）
+- [x] `architecture.md` / `README.md` の該当箇所（HUD/Parameter GUI 周り）を更新し、実装と揃える
+- [x] 変更ファイルに対して Lint/Format/Type チェックを実行（`ruff` 単体での実行結果を確認済み、README/architecture.md への適用は今後の運用で検討）
 - [ ] 手動確認:  
       - `show_hud=None` / `True` / `False` × `use_parameter_gui=True/False` の組み合わせで HUD の挙動を確認  
       - 特に `show_hud=False, use_parameter_gui=True` で GUI トグルが期待通りに動作すること

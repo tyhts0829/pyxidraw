@@ -51,8 +51,8 @@ run_sketch(user_draw, hud_config=cfg)
 
 Parameter GUI からの HUD 切替（任意）:
 
-- `use_parameter_gui=True` かつ `show_hud=None` のとき、GUI に `Show HUD`（`runner.show_hud`）が現れます。チェックで HUD の表示/非表示を動的に切り替えられます。
-- `show_hud` を明示（True/False）した場合は引数が優先され、GUI のトグルは無効（ロック）となります。
+- `use_parameter_gui=True` のとき、GUI に `Show HUD`（`runner.show_hud`）が現れます。チェックで HUD の表示/非表示を動的に切り替えられます。
+- `show_hud` は起動時の HUD 初期値として扱われ、Parameter GUI が有効な間は GUI のトグルが最終的な可視性を決めます（`use_parameter_gui=False` のときのみ、`show_hud` または `hud_config.enabled` が HUD の有効/無効を固定します）。
 
 独自 Shape の登録例（最小）:
 ```
