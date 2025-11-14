@@ -51,34 +51,28 @@
 
 ## 2. IBO / IDX の Hit/Miss 判定ロジック（二値・MISS 優先）
 
-- Indices LRU（IDX）
-  - 各 HUD サンプルで、前回サンプル時点の `hits` / `misses` を保持し、今回値との差分を取る:
-    - `dh = hits_now - hits_prev`
+- Indices LRU（IDX_CACHE）
+  - HUD では「Indices LRU の MISS が発生したサンプルだけを MISS として強調したい」ため、`misses` の差分のみを見るシンプルな定義とする:
     - `dm = misses_now - misses_prev`
-  - 判定ルール（Effect/Shape と同じく MISS 優先の二値）:
-    - `dm > 0` のとき:
-      - 「このサンプル間に MISS が 1 回以上あった」とみなし、バー値 `value_idx = 1.0`。
-    - `dm == 0` かつ `dh > 0` のとき:
-      - 「このサンプル間はすべて HIT」とみなし、バー値 `value_idx = 0.0`。
-    - `dh == 0` かつ `dm == 0` のとき:
-      - 「このサンプル間はアクセスなし」とみなし、バー値は直近値維持または 0.0 とする（フォールバックで定義）。
-- IBO
-  - IBO 固定化は「既存 IBO を再利用できたか」が重要であり、以下のように解釈する:
-    - Hit: `reused` の増分（`dr = reused_now - reused_prev`）。
-    - Miss: 新規アップロード/構築の増分（`du = uploaded_now - uploaded_prev` と `db = indices_built_now - indices_built_prev` の合計）。
-      - `dm_ibo = du + db`
   - 判定ルール（二値、MISS 優先）:
-    - `dm_ibo > 0` のとき `value_ibo = 1.0`（このサンプル間に再利用できず、新規アップロード/構築が発生）。
-    - `dm_ibo == 0` かつ `dr > 0` のとき `value_ibo = 0.0`（このサンプル間は再利用のみ）。
-    - `dr == 0` かつ `dm_ibo == 0` のときは IDX 同様、アクセスなしとしてフォールバック扱い。
+    - `dm > 0` のとき `value_idx = 1.0`（このサンプル間に LRU ミスが 1 回以上発生した＝MISS 扱い）。
+    - `dm == 0` のとき `value_idx = 0.0`（このサンプル間には LRU ミスが発生していない＝HIT 扱い）。
+    - `misses` 差分の取得に失敗した場合は前回値維持などのフォールバック扱い。
+- IBO（IBO_CACHE）
+    - HUD では「IBO をアップロードしたフレームだけを MISS として強調したい」ため、`uploaded` の差分のみを見るシンプルな定義とする:
+      - `du = uploaded_now - uploaded_prev`
+    - 判定ルール（二値、MISS 優先）:
+      - `du > 0` のとき `value_ibo = 1.0`（このサンプル間に IBO のアップロードが発生した＝コストを払ったフレームとして MISS 扱い）。
+      - `du == 0` のとき `value_ibo = 0.0`（このサンプル間に IBO のアップロードは発生しておらず、少なくとも「IBO を張り替えるコスト」は払っていない＝HIT 扱い）。
+      - `uploaded` 差分の取得に失敗した場合は IDX 同様、前回値維持などのフォールバック扱い。
 
 ## 3. HUD メータへのマッピング
 
 - `MetricSampler` 側
   - IBO/IDX の累計カウンタについて、前回値を保持するプライベートフィールドを追加:
-    - 例: `_prev_idx_hits`, `_prev_idx_misses`, `_prev_ibo_reused`, `_prev_ibo_uploaded`, `_prev_indices_built` など。
+    - 例: `_prev_idx_misses`, `_prev_ibo_uploaded` など。
   - `tick()` 内の「追加メトリクス（キャッシュ統計など、テキストのみ）」ブロックを拡張し:
-    - 現在値と前回値から `dh` / `dm`、`dr` / `dm_ibo` を計算し、上記ルールに従って `value_idx` / `value_ibo` を 0.0 または 1.0 に決定。
+    - 現在値と前回値から `dm` / `du` を計算し、上記ルールに従って `value_idx` / `value_ibo` を 0.0 または 1.0 に決定。
     - 正常に計算できた場合のみ `self.values["IDX_CACHE"]` / `self.values["IBO_CACHE"]` に 0.0/1.0 の値として格納。
     - カウンタ取得に失敗・不正値・逆転（負の差分）の場合は、そのサイクルでは値更新をスキップし、前回値を維持または削除。
   - `self.data` 側には `self.data.setdefault("IBO_CACHE", "IBO_CACHE")`、`self.data.setdefault("IDX_CACHE", "IDX_CACHE")` のような専用ラベル行のみを用意し、従来の `self.data["IBO"]` / `self.data["IDX"]` における `R: U: B:` / `H: M: S: E: Z:` 形式の文字列は HUD から削除する。
