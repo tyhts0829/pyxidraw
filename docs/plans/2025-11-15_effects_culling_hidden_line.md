@@ -2,6 +2,7 @@
 
 目的
 
+- ユーザーは `sketch/251115.py` のように `E.pipeline.culling(geos=[p1(g1), p2(g2), p3(g3)])` と書くだけで、複数 Geometry 間の隠線処理結果を得られるようにする（この UX を前提とした設計とする）。
 - `Geometry | LazyGeometry` の Sequence を Z 座標に基づいて奥 → 手前の関係で解釈し、手前オブジェクトに隠れる線分を奥側からクリップする単一エフェクトを提供する。
 - Shapely による 2.5D 的な隠線処理で、ペンプロッタ描画でも奥行き表現をしやすくする。
 
@@ -15,6 +16,7 @@
 
 - スコープ
   - 入力: `Sequence[Geometry | LazyGeometry]`（= レイヤー列の想定）。
+    - ユーザー視点では `E.pipeline.culling(geos=[p1(g1), p2(g2), p3(g3)])` の `geos` 引数として渡す Geometry 列をこの Sequence とみなす。
   - 各要素は「ほぼ一定の Z（平行平面上）」に乗っていると仮定し、その代表値（例: 平均 Z）で奥行きを決める。
   - Z 軸は「値が大きいほど奥」という前提で扱い、デフォルトでは Z が小さいレイヤーほど手前にあると見なす。
   - 画面は XY 平面、Z はビュー方向の奥行き指標としてのみ使用する（投影自体は既に XY に済んでいる前提）。
@@ -26,8 +28,31 @@
 
 インターフェース案
 
-- モジュール配置: `src/effects/culling.py`（通常のエフェクトモジュール）。
-- エフェクト関数
+- ユーザー向け API
+
+  ```python
+  from api import E, G
+
+
+  def draw(t: float):
+      g1 = G.polyhedron().scale(40, 40, 40)
+      p1 = E.pipeline.affine()
+      g2 = G.polyhedron().scale(30, 30, 30)
+      p2 = E.pipeline.affine()
+      g3 = G.polyhedron().scale(20, 20, 20)
+      p3 = E.pipeline.affine()
+      # geos には Geometry | LazyGeometry の列を渡す
+      geos = [p1(g1), p2(g2), p3(g3)]
+      return E.pipeline.culling(
+          geos=geos,
+          thickness_mm=0.3,
+          z_metric="mean",
+          front_is_larger_z=False,
+      )
+  ```
+
+- 内部実装モジュール: `src/effects/culling.py`（通常のエフェクトモジュール）。
+- コア関数（Sequence を受け取る純関数エフェクト）
 
   ```python
   from collections.abc import Sequence
@@ -39,7 +64,7 @@
 
   @effect()
   def culling(
-      layers: Sequence[Geometry | LazyGeometry],
+      geos: Sequence[Geometry | LazyGeometry],
       *,
       thickness_mm: float = 0.3,
       z_metric: str = "mean",           # "mean" | "min" | "max"
@@ -49,9 +74,9 @@
   ```
 
 - 振る舞い
-  - `layers` を Z 指標（`z_metric`）でスカラー化し、`front_is_larger_z` に応じて手前 → 奥順にソートする。
+  - `geos` を Z 指標（`z_metric`）でスカラー化し、`front_is_larger_z` に応じて手前 → 奥順にソートする。
     - 既定値 `front_is_larger_z=False` の場合は「Z が小さいほど手前」として扱う。
-  - `layers` 内の `Geometry` / `LazyGeometry` をそのまま受け取り、必要最小限の実体化で処理する（Lazy を最大限活かす）。
+  - `geos` 内の `Geometry` / `LazyGeometry` をそのまま受け取り、必要最小限の実体化で処理する（Lazy を最大限活かす）。
   - 手前レイヤーの「占有領域」（buffer で膨らませた MultiLineString）を union しつつ奥側の線分に対して `difference` を取り、隠れた部分を削除する。
   - 出力は元の入力順（インデックス順）で並べ替えて返す（Z ソートは内部処理のみに使用）。
 
@@ -59,7 +84,7 @@
 
 ### 1. 入力正規化（Lazy を活かす）
 
-- シグネチャで `Sequence[Geometry | LazyGeometry]` を受け取り、内部では以下の構造に正規化する。
+- シグネチャで `Sequence[Geometry | LazyGeometry]`（ユーザー引数名 `geos`）を受け取り、内部では以下の構造に正規化する。
 
   ```python
   @dataclass
@@ -70,7 +95,7 @@
   ```
 
 - 処理
-  - `layers` を列挙し、`Geometry` はそのまま、`LazyGeometry` は「Z 推定のためにだけ」軽量実体化する方針を採用する。
+  - `geos` を列挙し、`Geometry` はそのまま、`LazyGeometry` は「Z 推定のためにだけ」軽量実体化する方針を採用する。
     - 第 1 フェーズでは単純に `LazyGeometry.realize()` を呼び、以後の処理でそのキャッシュを再利用する。
     - `LazyGeometry.realize()` 自体が shape/prefix キャッシュを持つため、フレーム間で同一 `LazyGeometry` を再利用する限り、重い計算は 1 度だけで済む想定。
     - 後続の最適化として「Z 代表値だけを推定する専用ヘルパ」を `LazyGeometry` 側に追加する余地がある（本計画では非スコープ）。
@@ -156,6 +181,8 @@
     - 非常に小さい thickness ではほぼノーカット、大きい thickness ではかなり手前の領域まで削られることを確認。
   - LazyGeometry 入力
     - `G.cube(...).rotate(...).translate(...).pipe(...)` のような LazyGeometry を複数作り、Sequence で渡したときに例外なく実行されること。
+  - sketch/UX パターン
+    - `sketch/251115.py` と同形式で `E.pipeline.affine()` から 3 つの Geometry を作り、`E.pipeline.culling(geos=[...])` が例外なく動作し、期待通りの隠線結果を返すこと。
   - エッジケース
     - 空の Sequence（`[]`）で空リストを返す。
     - 単一要素のみの Sequence では入力と同じ形状が返る。
@@ -206,7 +233,7 @@
 
 - [x] Z の向き: 「Z が大きいほど奥」という前提を採用（既定は `front_is_larger_z=False`）。
 - [ ] thickness の既定値: 0.3mm 程度で良いか、それとももう少し大きめ/小さめが良いか。
-- [ ] 出力型: `list[Geometry]` のみに正規化してよいか（Lazy に戻さない設計で問題ないか）。
-- [ ] API 露出: 当面は `effects.culling.culling` としてモジュール直 import で使う想定でよいか（`api` の公開シンボルに追加するかは後続タスクとする）。
+- [x] 出力型: `list[Geometry]` のみに正規化してよいか（Lazy に戻さない設計で問題ないか）。
+- [x] API 露出: ユーザーは `E.pipeline.culling(geos=[...])` を主入口として利用し、`effects.culling.culling` は内部実装用の関数とする。
 
 以上、特に問題なければこの計画に沿って実装を進めます（上記チェックリストを順次埋めていきます）。
