@@ -157,7 +157,7 @@ hud:
     meter_alpha_bg: 120
     meter_color_fg: [50, 50, 50]
     # 左端からの余白（inline_below 固定時のバー X 開始位置）
-    meter_left_margin_px: 130
+    meter_left_margin_px: 150
     # 値の平滑化（EMA）
     smoothing_alpha: 0.5
 

@@ -100,7 +100,7 @@
   - `IBO_CACHE` / `IDX_CACHE` は `MetricSampler` の `data` に現れる追加キーとして、現状通り「未知キーを末尾に追加」ロジックで表示順を決定（追加の order 設定は導入しない）。
 - テキストフォーマット
   - 既存の `IBO` の `R: U: B:`、`IDX` の `H: M: S: E: Z:` 形式のテキスト表示は HUD から削除する。
-  - `IBO_CACHE` / `IDX_CACHE` 行はシンプルなラベル文字列（例: `"IBO_CACHE"` / `"IDX_CACHE"`）のみを表示し、Hit/Miss の状態はバー（0.0/1.0）のみで表現する。
+  - `IBO_CACHE` / `IDX_CACHE` 行は `E_CACHE` / `S_CACHE` と同様に `HIT` / `MISS` を文字列として表示し、ラベル行は `IBO_CACHE: HIT|MISS` / `IDX_CACHE: HIT|MISS` の形式となる（バーは 0.0/1.0 の二値で同じ状態を表現する）。
 
 # 実装タスク（チェックリスト）
 

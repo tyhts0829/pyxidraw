@@ -185,8 +185,8 @@ class MetricSampler(Tickable):
                     uploaded_now = int(extra.get("ibo_uploaded", 0))
                     prev_uploaded = self._prev_ibo_uploaded
                     if prev_uploaded is None:
-                        # 初回サンプルは「直近コストなし」とみなして HIT 扱い
-                        value_ibo = 0.0
+                        # 初回サンプルは「直近コストなし」とみなし、前回値があればそれを維持
+                        value_ibo = float(self.values.get("IBO_CACHE", 0.0))
                     else:
                         du = uploaded_now - prev_uploaded
                         if du < 0:
@@ -197,7 +197,8 @@ class MetricSampler(Tickable):
                         else:
                             value_ibo = 0.0
                     self._prev_ibo_uploaded = uploaded_now
-                    self.data.setdefault("IBO_CACHE", "")
+                    status_ibo = "MISS" if value_ibo >= 0.5 else "HIT"
+                    self.data["IBO_CACHE"] = status_ibo
                     self.values["IBO_CACHE"] = float(value_ibo)
                 except Exception:
                     # 取得に失敗した場合は値を更新しない（前回値維持）
@@ -208,7 +209,7 @@ class MetricSampler(Tickable):
                     misses_now = int(extra.get("idx_misses", 0))
                     prev_misses = self._prev_idx_misses
                     if prev_misses is None:
-                        value_idx = 0.0
+                        value_idx = float(self.values.get("IDX_CACHE", 0.0))
                     else:
                         dm = misses_now - prev_misses
                         if dm < 0:
@@ -218,7 +219,8 @@ class MetricSampler(Tickable):
                         else:
                             value_idx = 0.0
                     self._prev_idx_misses = misses_now
-                    self.data.setdefault("IDX_CACHE", "")
+                    status_idx = "MISS" if value_idx >= 0.5 else "HIT"
+                    self.data["IDX_CACHE"] = status_idx
                     self.values["IDX_CACHE"] = float(value_idx)
                 except Exception:
                     pass

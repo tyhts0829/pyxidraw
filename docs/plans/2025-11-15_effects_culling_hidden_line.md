@@ -201,21 +201,21 @@
 実装タスク（チェックリスト / TDD プロセス込み）
 
 - 仕様・設計
-  - [ ] コア仕様の確定（thickness 既定値・LazyGeometry の扱いの細部）
-  - [ ] テストケースの具体化（テスト計画セクションから入力/期待結果を明文化）
+  - [x] コア仕様の確定（thickness 既定値・LazyGeometry の扱いの細部）
+  - [x] テストケースの具体化（テスト計画セクションから入力/期待結果を明文化）
 - TDD サイクル（1 スライスごとに繰り返し）
-  - [ ] 失敗するテストを追加（`tests/effects/test_culling_hidden_line.py`）
-  - [ ] 最小限の実装を追加/変更してテストを緑にする
-  - [ ] 実装とテストのリファクタリング（重複削減・分割）＋テスト再実行で緑を確認
+  - [x] 失敗するテストを追加（`tests/effects/test_culling_hidden_line.py`）
+  - [x] 最小限の実装を追加/変更してテストを緑にする
+  - [x] 実装とテストのリファクタリング（重複削減・分割）＋テスト再実行で緑を確認
 - 実装
-  - [ ] `src/effects/culling.py`: モジュール追加 + ヘッダ docstring
-  - [ ] `src/effects/culling.py`: `_geometry_to_multiline` / Shapely→ndarray 変換ヘルパ実装
-  - [ ] `src/effects/culling.py`: `culling(...)` 本体実装
+  - [x] `src/effects/culling.py`: モジュール追加 + ヘッダ docstring
+  - [x] `src/effects/culling.py`: `_geometry_to_multiline` / Shapely→ndarray 変換ヘルパ実装
+  - [x] `src/effects/culling.py`: `culling(...)` 本体実装
   - [ ] `src/effects/culling.py`: 必要に応じて簡易結果キャッシュ（layers 署名 + thickness など）を追加
 - ドキュメント / 品質
   - [ ] `architecture.md` / `docs/spec` の関連箇所更新
-  - [ ] 変更ファイルに対する `ruff/black/isort/mypy` 実行
-  - [ ] テスト: `pytest -q tests/effects/test_culling_hidden_line.py`
+  - [x] 変更ファイルに対する `ruff/black/isort/mypy` 実行
+  - [x] テスト: `pytest -q tests/effects/test_culling_hidden_line.py`
 
 リスクと対応
 

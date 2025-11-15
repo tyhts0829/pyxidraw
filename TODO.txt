@@ -9,3 +9,5 @@ collapse 散らばりのグラデーション
 ランダム/一定間隔/徐々に　面や線を削除
 キーワード引数以外のときのガード/警告
 描画ウィンドウとguiを常に前面に
+dropエフェクト, min_length, max_length, interval = [1, 3, 2] | 1
+dashify retio = [0.3, 2.1, ...] matplotlibの指定の仕方参考に
