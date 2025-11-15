@@ -123,8 +123,8 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: interval (type=integer, range=[1, 100])
     # meta: offset (type=integer, range=[0, 100])
-    # meta: min_length (type=number, range=[0.0, 1000.0])
-    # meta: max_length (type=number, range=[0.0, 1000.0])
+    # meta: min_length (type=number, range=[0.0, 200.0])
+    # meta: max_length (type=number, range=[0.0, 200.0])
     # meta: probability (type=number, range=[0.0, 1.0])
     # choices: by in ['line', 'face']
     # meta: seed (type=integer, range=[0, 2147483647])
@@ -136,8 +136,8 @@ class _PipelineBuilder(Protocol):
         引数:
             interval: integer, range [1, 100]
             offset: integer, range [0, 100]
-            min_length: number, range [0.0, 1000.0]
-            max_length: number, range [0.0, 1000.0]
+            min_length: number, range [0.0, 200.0]
+            max_length: number, range [0.0, 200.0]
             probability: number, range [0.0, 1.0]
             by: choices { 'line', 'face' }
             seed: integer, range [0, 2147483647]

@@ -169,8 +169,8 @@ def drop(
 drop.__param_meta__ = {
     "interval": {"type": "integer", "min": 1, "max": 100, "step": 1},
     "offset": {"type": "integer", "min": 0, "max": 100, "step": 1},
-    "min_length": {"type": "number", "min": 0.0, "max": 1000.0, "step": 0.1},
-    "max_length": {"type": "number", "min": 0.0, "max": 1000.0, "step": 0.1},
+    "min_length": {"type": "number", "min": 0.0, "max": 200.0, "step": 0.1},
+    "max_length": {"type": "number", "min": 0.0, "max": 200.0, "step": 0.1},
     "probability": {"type": "number", "min": 0.0, "max": 1.0, "step": 0.01},
     "by": {"choices": ["line", "face"]},
     "keep_mode": {"choices": ["keep", "drop"]},
