@@ -52,7 +52,7 @@ g2 = pipe(g1)
 
 ### 1. インデックス間引き（interval / offset）
 
-- `interval: int | None`  
+- `interval: int | None`
   - `interval=2` なら「線インデックスを 0,1,2,3,... としたときに、2 本ごとに 1 本を drop」する。
   - 具体例（`offset=0` のとき）:
     - 線 0: keep
@@ -63,18 +63,18 @@ g2 = pipe(g1)
   - 実際のルール例:
     - `"keep"` モード: `(i - offset) % interval == 0` の線だけ残す。
     - `"drop"` モード: `(i - offset) % interval == 0` の線だけ捨てる。
-- `offset: int`  
+- `offset: int`
   - どの線インデックスからカウントを始めるかをずらす。
-  - 例: `interval=3, offset=1, keep_mode="drop"`  
+  - 例: `interval=3, offset=1, keep_mode="drop"`
     - `(i - 1) % 3 == 0` の線（1,4,7,...) を drop。
 
 ### 2. 長さ条件（min_length / max_length）
 
-- `min_length: float | None`  
+- `min_length: float | None`
   - 指定した場合、線長 `L` が `L <= min_length` の線を drop する（または `"keep"` モードなら逆に「その線だけ残す」）。
-  - 例: `min_length=2.0, keep_mode="drop"`  
+  - 例: `min_length=2.0, keep_mode="drop"`
     - 2 以下の短い線をすべて削除し、細かいノイズ線を掃除する。
-- `max_length: float | None`  
+- `max_length: float | None`
   - 指定した場合、`L >= max_length` の長い線を drop する。
   - 長い輪郭線だけ落として、細かいディテール線のみ残すといった使い方を想定。
 - 長さの定義:
@@ -82,12 +82,12 @@ g2 = pipe(g1)
 
 ### 3. 確率的 drop（probability / seed）
 
-- `probability: float`  
+- `probability: float`
   - `0.0`〜`1.0` の範囲で、各線を drop する確率を指定。
-  - 例: `probability=0.3`  
+  - 例: `probability=0.3`
     - 各線ごとに独立に 30% の確率で削除される。
   - `interval` や `min_length` と組み合わせて、「一定パターン＋ランダム崩し」を作る。
-- `seed: int | None`  
+- `seed: int | None`
   - None の場合は内部既定 seed で決定的に動作。
   - 同じ入力 Geometry と同じパラメータなら、常に同じ線が drop される。
 

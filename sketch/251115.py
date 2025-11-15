@@ -1,16 +1,23 @@
-from api import E, G, run
+from api import E, G, cc, run
 
 A5 = (148, 210)
 
 
 def draw(t: float):
-    g1 = G.polyhedron().scale(40, 40, 40)
-    p1 = E.pipeline.affine()
-    g2 = G.polyhedron().scale(30, 30, 30)
-    p2 = E.pipeline.affine()
-    g3 = G.polyhedron().scale(20, 20, 20)
-    p3 = E.pipeline.affine().subdivide().displace()
-    return p1(g1) + p2(g2) + p3(g3)
+    g1 = G.polygon().scale(40, 40, 40).translate(A5[0] / 2, A5[1] / 2, 0)
+    p1 = (
+        E.pipeline.affine()
+        .fill()
+        .dash(
+            dash_length=[cc[1] * 10, cc[2] * 10, cc[3] * 10],
+            gap_length=[cc[4] * 10, cc[5] * 10, cc[6] * 10],
+            offset=[cc[7] * 10, cc[8] * 10, cc[9] * 10],
+        )
+        .drop()
+        .offset()
+        .fill()
+    )
+    return p1(g1)
 
 
 if __name__ == "__main__":

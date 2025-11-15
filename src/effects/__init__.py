@@ -10,6 +10,7 @@ from . import boldify  # noqa: F401
 from . import clip  # noqa: F401
 from . import collapse  # noqa: F401
 from . import dash  # noqa: F401
+from . import drop  # noqa: F401
 from . import displace  # noqa: F401
 from . import explode  # noqa: F401
 from . import extrude  # noqa: F401

@@ -97,13 +97,15 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: dash_length (type=number, range=[0.0, 100.0])
     # meta: gap_length (type=number, range=[0.0, 100.0])
-    def dash(self, *, dash_length: float = ..., gap_length: float = ..., **_params: Any) -> _PipelineBuilder:
+    # meta: offset (type=number, range=[0.0, 100.0])
+    def dash(self, *, dash_length: float | list[float] | tuple[float, ...] = ..., gap_length: float | list[float] | tuple[float, ...] = ..., offset: float | list[float] | tuple[float, ...] = ..., **_params: Any) -> _PipelineBuilder:
         """
         連続線を破線に変換。
 
         引数:
             dash_length: number, range [0.0, 100.0]
             gap_length: number, range [0.0, 100.0]
+            offset: number, range [0.0, 100.0]
         """
         ...
     # meta: amplitude_mm (type=number, range=[0.0, 50.0])
@@ -117,6 +119,29 @@ class _PipelineBuilder(Protocol):
             amplitude_mm: number, range [0.0, 50.0]
             spatial_freq: number, range [(0.0, 0.0, 0.0), (0.1, 0.1, 0.1)]
             t_sec: number, range [0.0, 10.0]
+        """
+        ...
+    # meta: interval (type=integer, range=[1, 100])
+    # meta: offset (type=integer, range=[0, 100])
+    # meta: min_length (type=number, range=[0.0, 1000.0])
+    # meta: max_length (type=number, range=[0.0, 1000.0])
+    # meta: probability (type=number, range=[0.0, 1.0])
+    # choices: by in ['line', 'face']
+    # meta: seed (type=integer, range=[0, 2147483647])
+    # choices: keep_mode in ['keep', 'drop']
+    def drop(self, *, interval: int | None = ..., offset: int = ..., min_length: float | None = ..., max_length: float | None = ..., probability: float = ..., by: str = ..., seed: int | None = ..., keep_mode: str = ..., **_params: Any) -> _PipelineBuilder:
+        """
+        線や面を条件で間引く。
+
+        引数:
+            interval: integer, range [1, 100]
+            offset: integer, range [0, 100]
+            min_length: number, range [0.0, 1000.0]
+            max_length: number, range [0.0, 1000.0]
+            probability: number, range [0.0, 1.0]
+            by: choices { 'line', 'face' }
+            seed: integer, range [0, 2147483647]
+            keep_mode: choices { 'keep', 'drop' }
         """
         ...
     # meta: factor (type=number, range=[0.0, 50.0])

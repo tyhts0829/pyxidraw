@@ -51,8 +51,9 @@
 - 戻り値: `Geometry`
 - 引数:
   - `g`: `Geometry`
-  - `dash_length`: `float`
-  - `gap_length`: `float`
+  - `dash_length`: `float | list[float] | tuple[float, ...]`
+  - `gap_length`: `float | list[float] | tuple[float, ...]`
+  - `offset`: `float | list[float] | tuple[float, ...]`
 
 ## displace
 - モジュール: `src/effects/displace.py`
@@ -197,6 +198,20 @@
   - `start_param`: `float`
   - `end_param`: `float`
 
+## drop
+- モジュール: `src/effects/drop.py`
+- 戻り値: `Geometry`
+- 引数:
+  - `g`: `Geometry`
+  - `interval`: `int | None`
+  - `offset`: `int`
+  - `min_length`: `float | None`
+  - `max_length`: `float | None`
+  - `probability`: `float`
+  - `by`: `Literal['line', 'face']`
+  - `seed`: `int | None`
+  - `keep_mode`: `Literal['keep', 'drop']`
+
 ## twist
 - モジュール: `src/effects/twist.py`
 - 戻り値: `Geometry`
@@ -222,4 +237,3 @@
   - `amplitude`: `float`
   - `frequency`: `float | Vec3`
   - `phase`: `float`
-
