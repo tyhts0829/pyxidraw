@@ -22,6 +22,11 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+PARAM_META = {
+    "angle_rad": {"type": "number", "min": 0.0, "max": 2 * math.pi},
+    "axis": {"choices": ["x", "y", "z"]},
+}
+
 
 @effect()
 def twist(g: Geometry, *, angle_rad: float = math.pi / 3, axis: str = "y") -> Geometry:
@@ -86,7 +91,4 @@ def twist(g: Geometry, *, angle_rad: float = math.pi / 3, axis: str = "y") -> Ge
     return Geometry(out, offsets.copy())
 
 
-twist.__param_meta__ = {
-    "angle_rad": {"type": "number", "min": 0.0, "max": 2 * math.pi},
-    "axis": {"choices": ["x", "y", "z"]},
-}
+twist.__param_meta__ = PARAM_META

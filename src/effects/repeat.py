@@ -32,50 +32,27 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
-
-@njit(fastmath=True, cache=True)
-def _apply_transform_to_coords(
-    coords: np.ndarray,
-    center: np.ndarray,
-    scale: np.ndarray,
-    rotate: np.ndarray,
-    offset: np.ndarray,
-) -> np.ndarray:
-    """座標に変換を適用します（中心移動 -> スケール -> 回転 -> オフセット -> 中心に戻す）。"""
-    # 回転行列を計算
-    sx, sy, sz = np.sin(rotate)
-    cx, cy, cz = np.cos(rotate)
-
-    # Z * Y * X の結合行列
-    R = np.empty((3, 3), dtype=np.float32)
-    R[0, 0] = cy * cz
-    R[0, 1] = sx * sy * cz - cx * sz
-    R[0, 2] = cx * sy * cz + sx * sz
-    R[1, 0] = cy * sz
-    R[1, 1] = sx * sy * sz + cx * cz
-    R[1, 2] = cx * sy * sz - sx * cz
-    R[2, 0] = -sy
-    R[2, 1] = sx * cy
-    R[2, 2] = cx * cy
-
-    # 中心を原点に移動
-    centered = coords - center
-    # スケール適用
-    scaled = centered * scale
-    # 回転適用
-    rotated = scaled @ R.T
-    # オフセット適用
-    offset_applied = rotated + offset
-    # 中心に戻す
-    transformed = offset_applied + center
-
-    return transformed
-
-
-@njit(fastmath=True, cache=True)
-def _update_scale(current_scale: np.ndarray, scale: np.ndarray) -> np.ndarray:
-    """スケール値を更新します。"""
-    return current_scale * scale
+PARAM_META = {
+    "auto_center": {"type": "bool"},
+    "cumulative": {"type": "bool"},
+    "count": {"type": "integer", "min": 0, "max": 100, "step": 1},
+    "offset": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
+    "angles_rad_step": {
+        "type": "vec3",
+        "min": (-math.pi, -math.pi, -math.pi),
+        "max": (math.pi, math.pi, math.pi),
+    },
+    "scale": {"type": "vec3", "min": (0.5, 0.5, 0.5), "max": (1.5, 1.5, 1.5)},
+    "pivot": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
+}
 
 
 @effect()
@@ -167,27 +144,49 @@ def repeat(
 
 
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
-repeat.__param_meta__ = {
-    "auto_center": {"type": "bool"},
-    "cumulative": {"type": "bool"},
-    "count": {"type": "integer", "min": 0, "max": 100, "step": 1},
-    "offset": {
-        "type": "vec3",
-        "min": (-300.0, -300.0, -300.0),
-        "max": (300.0, 300.0, 300.0),
-    },
-    "angles_rad_step": {
-        "type": "vec3",
-        "min": (-math.pi, -math.pi, -math.pi),
-        "max": (math.pi, math.pi, math.pi),
-    },
-    "scale": {"type": "vec3", "min": (0.5, 0.5, 0.5), "max": (1.5, 1.5, 1.5)},
-    "pivot": {
-        "type": "vec3",
-        "min": (-300.0, -300.0, -300.0),
-        "max": (300.0, 300.0, 300.0),
-    },
-}
+repeat.__param_meta__ = PARAM_META
 
 
-# 後方互換クラスは廃止（関数APIのみ）
+@njit(fastmath=True, cache=True)
+def _apply_transform_to_coords(
+    coords: np.ndarray,
+    center: np.ndarray,
+    scale: np.ndarray,
+    rotate: np.ndarray,
+    offset: np.ndarray,
+) -> np.ndarray:
+    """座標に変換を適用します（中心移動 -> スケール -> 回転 -> オフセット -> 中心に戻す）。"""
+    # 回転行列を計算
+    sx, sy, sz = np.sin(rotate)
+    cx, cy, cz = np.cos(rotate)
+
+    # Z * Y * X の結合行列
+    R = np.empty((3, 3), dtype=np.float32)
+    R[0, 0] = cy * cz
+    R[0, 1] = sx * sy * cz - cx * sz
+    R[0, 2] = cx * sy * cz + sx * sz
+    R[1, 0] = cy * sz
+    R[1, 1] = sx * sy * sz + cx * cz
+    R[1, 2] = cx * sy * sz - sx * cz
+    R[2, 0] = -sy
+    R[2, 1] = sx * cy
+    R[2, 2] = cx * cy
+
+    # 中心を原点に移動
+    centered = coords - center
+    # スケール適用
+    scaled = centered * scale
+    # 回転適用
+    rotated = scaled @ R.T
+    # オフセット適用
+    offset_applied = rotated + offset
+    # 中心に戻す
+    transformed = offset_applied + center
+
+    return transformed
+
+
+@njit(fastmath=True, cache=True)
+def _update_scale(current_scale: np.ndarray, scale: np.ndarray) -> np.ndarray:
+    """スケール値を更新します。"""
+    return current_scale * scale

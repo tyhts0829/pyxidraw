@@ -38,6 +38,9 @@ MIN_SEG_LEN = 0.01
 MIN_SEG_LEN_SQ = float(MIN_SEG_LEN * MIN_SEG_LEN)
 # 出力合計頂点数の上限（ガード）
 MAX_TOTAL_VERTICES = 10_000_000
+PARAM_META = {
+    "subdivisions": {"type": "integer", "min": 0, "max": MAX_SUBDIVISIONS, "step": 1},
+}
 
 
 @effect()
@@ -78,9 +81,7 @@ def subdivide(g: Geometry, *, subdivisions: int = 0) -> Geometry:
     return Geometry.from_lines(result)
 
 
-subdivide.__param_meta__ = {
-    "subdivisions": {"type": "integer", "min": 0, "max": MAX_SUBDIVISIONS, "step": 1},
-}
+subdivide.__param_meta__ = PARAM_META
 
 
 @njit(fastmath=True, cache=True)

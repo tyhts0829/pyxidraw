@@ -19,6 +19,20 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+PARAM_META = {
+    "auto_center": {"type": "bool"},
+    "pivot": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
+    "angles_rad": {
+        "type": "vec3",
+        "min": (-np.pi, -np.pi, -np.pi),
+        "max": (np.pi, np.pi, np.pi),
+    },
+}
+
 
 @effect()
 def rotate(
@@ -58,17 +72,4 @@ def rotate(
     return g.rotate(x=rx, y=ry, z=rz, center=center)
 
 
-# 後方互換クラスは廃止（関数APIのみ）
-rotate.__param_meta__ = {
-    "auto_center": {"type": "bool"},
-    "pivot": {
-        "type": "vec3",
-        "min": (-300.0, -300.0, -300.0),
-        "max": (300.0, 300.0, 300.0),
-    },
-    "angles_rad": {
-        "type": "vec3",
-        "min": (-np.pi, -np.pi, -np.pi),
-        "max": (np.pi, np.pi, np.pi),
-    },
-}
+rotate.__param_meta__ = PARAM_META

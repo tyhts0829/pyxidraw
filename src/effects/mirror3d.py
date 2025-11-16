@@ -28,248 +28,19 @@ from .registry import effect
 # 固定許容誤差と境界ポリシー
 EPS: float = 1e-6
 INCLUDE_BOUNDARY: bool = True
-
-
-def _unit(v: np.ndarray) -> np.ndarray:
-    n = float(np.linalg.norm(v))
-    if n == 0.0:
-        return v.astype(np.float32)
-    return (v / n).astype(np.float32)
-
-
-def _rotate_around_axis(
-    points: np.ndarray, axis: np.ndarray, angle: float, center: np.ndarray
-) -> np.ndarray:
-    if points.shape[0] == 0:
-        return points
-    k = _unit(axis)
-    c = float(np.cos(angle))
-    s = float(np.sin(angle))
-    # ロドリゲスの回転公式: v' = v c + (k×v) s + k (k·v)(1-c)
-    p = points.copy()
-    p[:, 0] -= center[0]
-    p[:, 1] -= center[1]
-    p[:, 2] -= center[2]
-    v = p
-    kv = np.cross(k, v)
-    kdotv = np.dot(v, k)
-    v_rot = v * c + kv * s + np.outer(kdotv, k) * (1.0 - c)
-    v_rot[:, 0] += center[0]
-    v_rot[:, 1] += center[1]
-    v_rot[:, 2] += center[2]
-    return v_rot.astype(np.float32)
-
-
-def _reflect_across_plane(points: np.ndarray, normal: np.ndarray, center: np.ndarray) -> np.ndarray:
-    n = _unit(normal)
-    p = points.copy()
-    p[:, 0] -= center[0]
-    p[:, 1] -= center[1]
-    p[:, 2] -= center[2]
-    proj = np.dot(p, n).reshape(-1, 1)  # (N,1)
-    p_ref = p - 2.0 * proj * n
-    p_ref[:, 0] += center[0]
-    p_ref[:, 1] += center[1]
-    p_ref[:, 2] += center[2]
-    return p_ref.astype(np.float32)
-
-
-def _reflect_matrix(normal: np.ndarray) -> np.ndarray:
-    """平面法線 `n` による 3×3 の反射行列（原点基準）。"""
-    n = _unit(normal).reshape(3, 1).astype(np.float32)
-    I = np.eye(3, dtype=np.float32)
-    return (I - 2.0 * (n @ n.T)).astype(np.float32)
-
-
-def _clip_polyline_halfspace_3d(
-    vertices: np.ndarray, *, normal: np.ndarray, center: np.ndarray
-) -> list[np.ndarray]:
-    """3D 半空間でクリップ（内側: n·(p-c) >= -EPS）。"""
-    nrm = _unit(normal)
-    n = vertices.shape[0]
-    if n == 0:
-        return []
-    if n == 1:
-        s = float(np.dot(vertices[0] - center, nrm))
-        ok = s >= (-EPS if INCLUDE_BOUNDARY else EPS)
-        return [vertices.copy()] if ok else []
-
-    out: list[np.ndarray] = []
-    cur: list[np.ndarray] = []
-    a = vertices[0].astype(np.float32)
-    sA = float(np.dot(a - center, nrm))
-    inA = sA >= (-EPS if INCLUDE_BOUNDARY else EPS)
-    if inA:
-        cur.append(a)
-    for i in range(1, n):
-        b = vertices[i].astype(np.float32)
-        sB = float(np.dot(b - center, nrm))
-        inB = sB >= (-EPS if INCLUDE_BOUNDARY else EPS)
-        if inA and inB:
-            cur.append(b)
-        elif inA and not inB:
-            denom = sA - sB
-            t = 0.0 if abs(denom) < 1e-20 else sA / (sA - sB)
-            t = min(max(t, 0.0), 1.0)
-            p = a + (b - a) * np.float32(t)
-            if len(cur) == 0 or not np.allclose(cur[-1], p, atol=EPS):
-                cur.append(p)
-            if len(cur) >= 1:
-                out.append(np.vstack(cur).astype(np.float32))
-            cur = []
-        elif (not inA) and inB:
-            denom = sA - sB
-            t = 0.0 if abs(denom) < 1e-20 else sA / (sA - sB)
-            t = min(max(t, 0.0), 1.0)
-            p = a + (b - a) * np.float32(t)
-            cur = [p, b]
-        else:
-            pass
-        a, sA, inA = b, sB, inB
-    if cur:
-        out.append(np.vstack(cur).astype(np.float32))
-    return out
-
-
-def _basis_perp_axis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    a = _unit(axis)
-    # 任意の基準ベクトル（軸とほぼ平行を避ける）
-    ref = np.array([1.0, 0.0, 0.0], dtype=np.float32)
-    if abs(float(np.dot(a, ref))) > 0.95:
-        ref = np.array([0.0, 1.0, 0.0], dtype=np.float32)
-    b0 = _unit(np.cross(a, ref))
-    b1 = _unit(np.cross(a, b0))
-    return b0, b1
-
-
-def _compute_azimuth_plane_normals(
-    n_azimuth: int, axis: np.ndarray, phi0: float
-) -> tuple[np.ndarray, np.ndarray]:
-    delta = np.pi / float(n_azimuth)
-    b0, b1 = _basis_perp_axis(axis)
-    u0 = np.cos(phi0) * b0 + np.sin(phi0) * b1
-    u1 = np.cos(phi0 + delta) * b0 + np.sin(phi0 + delta) * b1
-    n0 = _unit(np.cross(axis, u0))
-    n1 = _unit(np.cross(axis, u1))
-    return n0, n1
-
-
-def _equator_normal(axis: np.ndarray) -> np.ndarray:
-    """赤道面（軸に垂直な平面）の法線。軸そのものを単位化して返す。"""
-    return _unit(axis)
-
-
-def _clip_polyline_wedge(
-    vertices: np.ndarray,
-    *,
-    n0: np.ndarray,
-    n1: np.ndarray,
-    center: np.ndarray,
-) -> list[np.ndarray]:
-    """2 枚の境界面（n0 と n1 の大円）で挟まれたくさび領域でクリップ。"""
-    pieces = _clip_polyline_halfspace_3d(vertices, normal=n0, center=center)
-    res: list[np.ndarray] = []
-    for p in pieces:
-        res.extend(_clip_polyline_halfspace_3d(p, normal=-n1, center=center))
-    return res
-
-
-def _clip_polyhedron_triangle(
-    vertices: np.ndarray, normals: tuple[np.ndarray, np.ndarray, np.ndarray], center: np.ndarray
-) -> list[np.ndarray]:
-    """3 半空間（n1,n2,n3 の AND）でクリップして三角領域内の断片を返す。"""
-    n1, n2, n3 = normals
-    pieces = _clip_polyline_halfspace_3d(vertices, normal=n1, center=center)
-    tmp: list[np.ndarray] = []
-    for p in pieces:
-        tmp.extend(_clip_polyline_halfspace_3d(p, normal=n2, center=center))
-    res: list[np.ndarray] = []
-    for p in tmp:
-        res.extend(_clip_polyline_halfspace_3d(p, normal=n3, center=center))
-    return res
-
-
-def _coxeter_m_ij(group: str) -> tuple[int, int, int]:
-    g = group.upper()
-    if g == "T":  # A3
-        return 3, 3, 2
-    if g == "O":  # B3
-        return 3, 4, 2
-    if g == "I":  # H3
-        return 3, 5, 2
-    raise ValueError(f"未知の group: {group}")
-
-
-def _coxeter_normals(group: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """コクセター角から 3 平面の法線（単位）を構成（連鎖 1-2-3 を仮定）。"""
-    m12, m23, m13 = _coxeter_m_ij(group)
-    th12 = np.pi / float(m12)
-    th23 = np.pi / float(m23)
-    th13 = np.pi / float(m13)
-    c12, s12 = float(np.cos(th12)), float(np.sin(th12))
-    c23 = float(np.cos(th23))
-    c13 = float(np.cos(th13))
-    # n1=[1,0,0], n2=[c12,s12,0], n3=[a,b,c] を解く
-    a = c13
-    if abs(s12) < 1e-12:
-        raise ValueError("無効なコクセター角（s12=0）")
-    b = (c23 - a * c12) / s12
-    c_sq = 1.0 - a * a - b * b
-    if c_sq < -1e-6:
-        raise ValueError("法線構成に失敗（c^2<0）")
-    c = float(np.sqrt(max(0.0, c_sq)))
-    n1 = _unit(np.array([1.0, 0.0, 0.0], dtype=np.float32))
-    n2 = _unit(np.array([c12, s12, 0.0], dtype=np.float32))
-    n3 = _unit(np.array([a, b, c], dtype=np.float32))
-    return n1, n2, n3
-
-
-def _generate_reflection_group(
-    normals: tuple[np.ndarray, np.ndarray, np.ndarray], *, use_reflection: bool
-) -> list[np.ndarray]:
-    """反射生成元から有限群（A3/B3/H3）を BFS で構成し行列集合を返す。"""
-    n1, n2, n3 = normals
-    gens = [_reflect_matrix(n1), _reflect_matrix(n2), _reflect_matrix(n3)]
-    I = np.eye(3, dtype=np.float32)
-    seen: dict[tuple, np.ndarray] = {}
-    frontier: list[np.ndarray] = [I]
-    keyI = tuple(np.rint(I.flatten() * (1.0 / EPS)).astype(np.int64).tolist())
-    seen[keyI] = I
-    # BFS で右から生成子を掛けて閉包
-    while frontier:
-        cur = frontier.pop()
-        for G in gens:
-            M = (cur @ G).astype(np.float32)
-            key = tuple(np.rint(M.flatten() * (1.0 / EPS)).astype(np.int64).tolist())
-            if key in seen:
-                continue
-            seen[key] = M
-            frontier.append(M)
-            # 安全弁（過剰ループ防止）
-            if len(seen) > 128:  # H3 の 120 + α 程度
-                break
-        if len(seen) > 128:
-            break
-    mats = list(seen.values())
-    if not use_reflection:
-        mats = [M for M in mats if float(np.linalg.det(M)) > 0.0]
-    return mats
-
-
-def _dedup_lines(lines: Iterable[np.ndarray]) -> list[np.ndarray]:
-    seen: set[tuple] = set()
-    out: list[np.ndarray] = []
-    inv = 1.0 / EPS if EPS > 0 else 1e6
-    for ln in lines:
-        if ln.shape[0] == 0:
-            continue
-        q = np.rint(ln * inv).astype(np.int64)
-        key = (q.shape[0],) + tuple(q.flatten().tolist())
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(ln.astype(np.float32))
-    return out
+PARAM_META = {
+    "n_azimuth": {"min": 1, "max": 64, "step": 1},
+    "cx": {"min": 0.0, "max": 1000.0},
+    "cy": {"min": 0.0, "max": 1000.0},
+    "cz": {"min": 0.0, "max": 1000.0},
+    "phi0_deg": {"min": -180.0, "max": 180.0, "step": 1.0},
+    # 追加（polyhedral モード向け）
+    "mode": {"choices": ["azimuth", "polyhedral"]},
+    "group": {"choices": ["T", "O", "I"]},
+    "use_reflection": {"type": "bool"},
+    "axis": {"type": "vec3", "min": (-1.0, -1.0, -1.0), "max": (1.0, 1.0, 1.0)},
+    "show_planes": {"type": "bool"},
+}
 
 
 @effect(name="mirror3d")
@@ -578,16 +349,246 @@ def mirror3d(
 __all__ = ["mirror3d"]
 
 
-mirror3d.__param_meta__ = {
-    "n_azimuth": {"min": 1, "max": 64, "step": 1},
-    "cx": {"min": 0.0, "max": 1000.0},
-    "cy": {"min": 0.0, "max": 1000.0},
-    "cz": {"min": 0.0, "max": 1000.0},
-    "phi0_deg": {"min": -180.0, "max": 180.0, "step": 1.0},
-    # 追加（polyhedral モード向け）
-    "mode": {"choices": ["azimuth", "polyhedral"]},
-    "group": {"choices": ["T", "O", "I"]},
-    "use_reflection": {"type": "bool"},
-    "axis": {"type": "vec3", "min": (-1.0, -1.0, -1.0), "max": (1.0, 1.0, 1.0)},
-    "show_planes": {"type": "bool"},
-}
+mirror3d.__param_meta__ = PARAM_META
+
+
+def _unit(v: np.ndarray) -> np.ndarray:
+    n = float(np.linalg.norm(v))
+    if n == 0.0:
+        return v.astype(np.float32)
+    return (v / n).astype(np.float32)
+
+
+def _rotate_around_axis(
+    points: np.ndarray, axis: np.ndarray, angle: float, center: np.ndarray
+) -> np.ndarray:
+    if points.shape[0] == 0:
+        return points
+    k = _unit(axis)
+    c = float(np.cos(angle))
+    s = float(np.sin(angle))
+    # ロドリゲスの回転公式: v' = v c + (k×v) s + k (k·v)(1-c)
+    p = points.copy()
+    p[:, 0] -= center[0]
+    p[:, 1] -= center[1]
+    p[:, 2] -= center[2]
+    v = p
+    kv = np.cross(k, v)
+    kdotv = np.dot(v, k)
+    v_rot = v * c + kv * s + np.outer(kdotv, k) * (1.0 - c)
+    v_rot[:, 0] += center[0]
+    v_rot[:, 1] += center[1]
+    v_rot[:, 2] += center[2]
+    return v_rot.astype(np.float32)
+
+
+def _reflect_across_plane(points: np.ndarray, normal: np.ndarray, center: np.ndarray) -> np.ndarray:
+    n = _unit(normal)
+    p = points.copy()
+    p[:, 0] -= center[0]
+    p[:, 1] -= center[1]
+    p[:, 2] -= center[2]
+    proj = np.dot(p, n).reshape(-1, 1)  # (N,1)
+    p_ref = p - 2.0 * proj * n
+    p_ref[:, 0] += center[0]
+    p_ref[:, 1] += center[1]
+    p_ref[:, 2] += center[2]
+    return p_ref.astype(np.float32)
+
+
+def _reflect_matrix(normal: np.ndarray) -> np.ndarray:
+    """平面法線 `n` による 3×3 の反射行列（原点基準）。"""
+    n = _unit(normal).reshape(3, 1).astype(np.float32)
+    I = np.eye(3, dtype=np.float32)
+    return (I - 2.0 * (n @ n.T)).astype(np.float32)
+
+
+def _clip_polyline_halfspace_3d(
+    vertices: np.ndarray, *, normal: np.ndarray, center: np.ndarray
+) -> list[np.ndarray]:
+    """3D 半空間でクリップ（内側: n·(p-c) >= -EPS）。"""
+    nrm = _unit(normal)
+    n = vertices.shape[0]
+    if n == 0:
+        return []
+    if n == 1:
+        s = float(np.dot(vertices[0] - center, nrm))
+        ok = s >= (-EPS if INCLUDE_BOUNDARY else EPS)
+        return [vertices.copy()] if ok else []
+
+    out: list[np.ndarray] = []
+    cur: list[np.ndarray] = []
+    a = vertices[0].astype(np.float32)
+    sA = float(np.dot(a - center, nrm))
+    inA = sA >= (-EPS if INCLUDE_BOUNDARY else EPS)
+    if inA:
+        cur.append(a)
+    for i in range(1, n):
+        b = vertices[i].astype(np.float32)
+        sB = float(np.dot(b - center, nrm))
+        inB = sB >= (-EPS if INCLUDE_BOUNDARY else EPS)
+        if inA and inB:
+            cur.append(b)
+        elif inA and not inB:
+            denom = sA - sB
+            t = 0.0 if abs(denom) < 1e-20 else sA / (sA - sB)
+            t = min(max(t, 0.0), 1.0)
+            p = a + (b - a) * np.float32(t)
+            if len(cur) == 0 or not np.allclose(cur[-1], p, atol=EPS):
+                cur.append(p)
+            if len(cur) >= 1:
+                out.append(np.vstack(cur).astype(np.float32))
+            cur = []
+        elif (not inA) and inB:
+            denom = sA - sB
+            t = 0.0 if abs(denom) < 1e-20 else sA / (sA - sB)
+            t = min(max(t, 0.0), 1.0)
+            p = a + (b - a) * np.float32(t)
+            cur = [p, b]
+        else:
+            pass
+        a, sA, inA = b, sB, inB
+    if cur:
+        out.append(np.vstack(cur).astype(np.float32))
+    return out
+
+
+def _basis_perp_axis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    a = _unit(axis)
+    # 任意の基準ベクトル（軸とほぼ平行を避ける）
+    ref = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+    if abs(float(np.dot(a, ref))) > 0.95:
+        ref = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    b0 = _unit(np.cross(a, ref))
+    b1 = _unit(np.cross(a, b0))
+    return b0, b1
+
+
+def _compute_azimuth_plane_normals(
+    n_azimuth: int, axis: np.ndarray, phi0: float
+) -> tuple[np.ndarray, np.ndarray]:
+    delta = np.pi / float(n_azimuth)
+    b0, b1 = _basis_perp_axis(axis)
+    u0 = np.cos(phi0) * b0 + np.sin(phi0) * b1
+    u1 = np.cos(phi0 + delta) * b0 + np.sin(phi0 + delta) * b1
+    n0 = _unit(np.cross(axis, u0))
+    n1 = _unit(np.cross(axis, u1))
+    return n0, n1
+
+
+def _equator_normal(axis: np.ndarray) -> np.ndarray:
+    """赤道面（軸に垂直な平面）の法線。軸そのものを単位化して返す。"""
+    return _unit(axis)
+
+
+def _clip_polyline_wedge(
+    vertices: np.ndarray,
+    *,
+    n0: np.ndarray,
+    n1: np.ndarray,
+    center: np.ndarray,
+) -> list[np.ndarray]:
+    """2 枚の境界面（n0 と n1 の大円）で挟まれたくさび領域でクリップ。"""
+    pieces = _clip_polyline_halfspace_3d(vertices, normal=n0, center=center)
+    res: list[np.ndarray] = []
+    for p in pieces:
+        res.extend(_clip_polyline_halfspace_3d(p, normal=-n1, center=center))
+    return res
+
+
+def _clip_polyhedron_triangle(
+    vertices: np.ndarray, normals: tuple[np.ndarray, np.ndarray, np.ndarray], center: np.ndarray
+) -> list[np.ndarray]:
+    """3 半空間（n1,n2,n3 の AND）でクリップして三角領域内の断片を返す。"""
+    n1, n2, n3 = normals
+    pieces = _clip_polyline_halfspace_3d(vertices, normal=n1, center=center)
+    tmp: list[np.ndarray] = []
+    for p in pieces:
+        tmp.extend(_clip_polyline_halfspace_3d(p, normal=n2, center=center))
+    res: list[np.ndarray] = []
+    for p in tmp:
+        res.extend(_clip_polyline_halfspace_3d(p, normal=n3, center=center))
+    return res
+
+
+def _coxeter_m_ij(group: str) -> tuple[int, int, int]:
+    g = group.upper()
+    if g == "T":  # A3
+        return 3, 3, 2
+    if g == "O":  # B3
+        return 3, 4, 2
+    if g == "I":  # H3
+        return 3, 5, 2
+    raise ValueError(f"未知の group: {group}")
+
+
+def _coxeter_normals(group: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """コクセター角から 3 平面の法線（単位）を構成（連鎖 1-2-3 を仮定）。"""
+    m12, m23, m13 = _coxeter_m_ij(group)
+    th12 = np.pi / float(m12)
+    th23 = np.pi / float(m23)
+    th13 = np.pi / float(m13)
+    c12, s12 = float(np.cos(th12)), float(np.sin(th12))
+    c23 = float(np.cos(th23))
+    c13 = float(np.cos(th13))
+    # n1=[1,0,0], n2=[c12,s12,0], n3=[a,b,c] を解く
+    a = c13
+    if abs(s12) < 1e-12:
+        raise ValueError("無効なコクセター角（s12=0）")
+    b = (c23 - a * c12) / s12
+    c_sq = 1.0 - a * a - b * b
+    if c_sq < -1e-6:
+        raise ValueError("法線構成に失敗（c^2<0）")
+    c = float(np.sqrt(max(0.0, c_sq)))
+    n1 = _unit(np.array([1.0, 0.0, 0.0], dtype=np.float32))
+    n2 = _unit(np.array([c12, s12, 0.0], dtype=np.float32))
+    n3 = _unit(np.array([a, b, c], dtype=np.float32))
+    return n1, n2, n3
+
+
+def _generate_reflection_group(
+    normals: tuple[np.ndarray, np.ndarray, np.ndarray], *, use_reflection: bool
+) -> list[np.ndarray]:
+    """反射生成元から有限群（A3/B3/H3）を BFS で構成し行列集合を返す。"""
+    n1, n2, n3 = normals
+    gens = [_reflect_matrix(n1), _reflect_matrix(n2), _reflect_matrix(n3)]
+    I = np.eye(3, dtype=np.float32)
+    seen: dict[tuple, np.ndarray] = {}
+    frontier: list[np.ndarray] = [I]
+    keyI = tuple(np.rint(I.flatten() * (1.0 / EPS)).astype(np.int64).tolist())
+    seen[keyI] = I
+    # BFS で右から生成子を掛けて閉包
+    while frontier:
+        cur = frontier.pop()
+        for G in gens:
+            M = (cur @ G).astype(np.float32)
+            key = tuple(np.rint(M.flatten() * (1.0 / EPS)).astype(np.int64).tolist())
+            if key in seen:
+                continue
+            seen[key] = M
+            frontier.append(M)
+            # 安全弁（過剰ループ防止）
+            if len(seen) > 128:  # H3 の 120 + α 程度
+                break
+        if len(seen) > 128:
+            break
+    mats = list(seen.values())
+    if not use_reflection:
+        mats = [M for M in mats if float(np.linalg.det(M)) > 0.0]
+    return mats
+
+
+def _dedup_lines(lines: Iterable[np.ndarray]) -> list[np.ndarray]:
+    seen: set[tuple] = set()
+    out: list[np.ndarray] = []
+    inv = 1.0 / EPS if EPS > 0 else 1e6
+    for ln in lines:
+        if ln.shape[0] == 0:
+            continue
+        q = np.rint(ln * inv).astype(np.int64)
+        key = (q.shape[0],) + tuple(q.flatten().tolist())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(ln.astype(np.float32))
+    return out

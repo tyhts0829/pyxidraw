@@ -20,6 +20,47 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+PARAM_META = {
+    "start_param": {"type": "number", "min": 0.0, "max": 1.0},
+    "end_param": {"type": "number", "min": 0.0, "max": 1.0},
+}
+
+
+@effect()
+def trim(g: Geometry, *, start_param: float = 0.1, end_param: float = 0.5) -> Geometry:
+    """ポリラインの一部区間だけを残す。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。
+    start_param : float, default 0.1
+        開始位置（0.0–1.0）。
+    end_param : float, default 0.5
+        終了位置（0.0–1.0）。`start_param` より大きい値を指定。
+    """
+    start_param = clamp01(float(start_param))
+    end_param = clamp01(float(end_param))
+    coords, offsets = g.as_arrays(copy=False)
+    if start_param >= end_param or len(coords) == 0:
+        return Geometry(coords.copy(), offsets.copy())
+    results: list[np.ndarray] = []
+    for i in range(len(offsets) - 1):
+        line = coords[offsets[i] : offsets[i + 1]]
+        if len(line) < 2:
+            results.append(line)
+            continue
+        trimmed = _trim_path(line, start_param, end_param)
+        if trimmed is not None and len(trimmed) >= 2:
+            results.append(trimmed)
+    if not results:
+        return Geometry(coords.copy(), offsets.copy())
+    return Geometry.from_lines(results)
+
+
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
+trim.__param_meta__ = PARAM_META
+
 
 def _interpolate_at_distance(
     vertices: np.ndarray, distances: list[float], target_dist: float
@@ -65,42 +106,3 @@ def _trim_path(vertices: np.ndarray, start_param: float, end_param: float) -> np
     ):
         trimmed_vertices.append(end_point)
     return np.array(trimmed_vertices) if len(trimmed_vertices) >= 2 else None
-
-
-@effect()
-def trim(g: Geometry, *, start_param: float = 0.1, end_param: float = 0.5) -> Geometry:
-    """ポリラインの一部区間だけを残す。
-
-    Parameters
-    ----------
-    g : Geometry
-        入力ジオメトリ。
-    start_param : float, default 0.1
-        開始位置（0.0–1.0）。
-    end_param : float, default 0.5
-        終了位置（0.0–1.0）。`start_param` より大きい値を指定。
-    """
-    start_param = clamp01(float(start_param))
-    end_param = clamp01(float(end_param))
-    coords, offsets = g.as_arrays(copy=False)
-    if start_param >= end_param or len(coords) == 0:
-        return Geometry(coords.copy(), offsets.copy())
-    results: list[np.ndarray] = []
-    for i in range(len(offsets) - 1):
-        line = coords[offsets[i] : offsets[i + 1]]
-        if len(line) < 2:
-            results.append(line)
-            continue
-        trimmed = _trim_path(line, start_param, end_param)
-        if trimmed is not None and len(trimmed) >= 2:
-            results.append(trimmed)
-    if not results:
-        return Geometry(coords.copy(), offsets.copy())
-    return Geometry.from_lines(results)
-
-
-# UI 表示のためのメタ情報（RangeHint 構築に使用）
-trim.__param_meta__ = {
-    "start_param": {"type": "number", "min": 0.0, "max": 1.0},
-    "end_param": {"type": "number", "min": 0.0, "max": 1.0},
-}

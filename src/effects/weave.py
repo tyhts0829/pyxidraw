@@ -19,6 +19,12 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
+PARAM_META = {
+    "num_candidate_lines": {"type": "integer", "min": 0, "max": 500, "step": 1},
+    "relaxation_iterations": {"type": "integer", "min": 0, "max": 50, "step": 1},
+    "step": {"type": "number", "min": 0.0, "max": 0.5},
+}
+
 
 @effect()
 def weave(
@@ -77,11 +83,7 @@ def weave(
     return Geometry.from_lines(result_lines)
 
 
-weave.__param_meta__ = {
-    "num_candidate_lines": {"type": "integer", "min": 0, "max": 500, "step": 1},
-    "relaxation_iterations": {"type": "integer", "min": 0, "max": 50, "step": 1},
-    "step": {"type": "number", "min": 0.0, "max": 0.5},
-}
+weave.__param_meta__ = PARAM_META
 
 
 def _webify_single_polygon(

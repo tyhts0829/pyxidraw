@@ -30,7 +30,133 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
+PARAM_META = {
+    "site_count": {"type": "integer", "min": 12, "max": 500, "step": 1},
+    "seed": {"type": "integer", "min": 0, "max": 2_147_483_647, "step": 1},
+}
 # ── 幾何ヘルパ ──────────────────────────────────────────────────────────────
+
+
+@effect()
+def partition(
+    g: Geometry,
+    *,
+    site_count: int = 12,
+    seed: int = 0,
+) -> Geometry:
+    """平面内の領域（偶奇規則）を Voronoi で分割し閉ループ群を返す（Shapely 必須）。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ（各行が 1 本のポリライン）。
+    site_count : int, default 12
+        サイト数（Voronoi 用）。
+    seed : int, default 0
+        乱数シード（再現性）。
+    """
+    coords, offsets = g.as_arrays(copy=False)
+    if offsets.size <= 1:
+        return Geometry(coords.copy(), offsets.copy())
+
+    rng = np.random.default_rng(int(seed))
+
+    # 共平面なら全体を XY に整列して処理（傾き下でも有効）
+    planar, v2d_all, R_all, z_all, _ref_h = choose_coplanar_frame(coords, offsets)
+    shapely_ok = False
+    if planar:
+        # Shapely があれば Voronoi ベース、無ければ偶奇三角分割でフォールバック
+        try:
+            from shapely.geometry import MultiPoint  # type: ignore
+            from shapely.geometry import Polygon  # type: ignore
+            from shapely.geometry import Point as _SPoint  # type: ignore
+            from shapely.ops import voronoi_diagram as _voronoi_diagram  # type: ignore
+
+            shapely_ok = True
+        except Exception:
+            shapely_ok = False
+
+    if planar and shapely_ok:
+        rings_xy: list[np.ndarray] = []
+        for i in range(len(offsets) - 1):
+            ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
+            if ring.shape[0] < 3:
+                continue
+            ring = _ensure_closed(ring)
+            rings_xy.append(ring[:, :2])
+
+        # 偶奇規則の領域（XOR）
+        region = None
+        for ring2d in rings_xy:
+            try:
+                poly = Polygon(ring2d)
+                if not poly.is_valid:
+                    poly = poly.buffer(0)
+            except Exception:
+                continue
+            region = poly if region is None else region.symmetric_difference(poly)
+        if region is None or region.is_empty:
+            return Geometry(coords.copy(), offsets.copy())
+
+        # サイト生成（random のみ）
+        minx, miny, maxx, maxy = region.bounds
+        pts: list[tuple[float, float]] = []
+        trials = max(100, int(site_count) * 20)
+        target = max(1, int(site_count))
+        while len(pts) < target and trials > 0:
+            rx = float(minx) + float(rng.random()) * float(maxx - minx)
+            ry = float(miny) + float(rng.random()) * float(maxy - miny)
+            if region.contains(_SPoint(rx, ry)):
+                pts.append((rx, ry))
+            trials -= 1
+        if not pts:
+            try:
+                c = region.representative_point()
+                pts = [(float(c.x), float(c.y))]
+            except Exception:
+                return Geometry(coords.copy(), offsets.copy())
+        pts2d = np.asarray(pts, dtype=np.float32)
+
+        # Voronoi → 交差 → 外周抽出 → 3D 復元
+        mp = MultiPoint(pts2d)
+        vd = _voronoi_diagram(mp, envelope=region.envelope, edges=False)  # type: ignore[arg-type]
+        out_lines: list[np.ndarray] = []
+        for cell in getattr(vd, "geoms", []):  # type: ignore[attr-defined]
+            try:
+                inter = cell.intersection(region)
+                if inter.is_empty:
+                    continue
+            except Exception:
+                continue
+            loops = _collect_polygon_exteriors(inter)
+            for loop in loops:
+                # XY → 元姿勢へ戻す
+                out_lines.append(transform_back(loop.astype(np.float32), R_all, z_all))
+        return _numpy_lines_to_geometry(out_lines)
+
+    # フォールバック（非平面 or Shapely 無）
+    if planar and not shapely_ok:
+        # Shapely 無時は偶奇三角分割で近似 → 3D 復元
+        rings_fallback_xy: list[np.ndarray] = []
+        for i in range(len(offsets) - 1):
+            ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
+            if ring.shape[0] < 3:
+                continue
+            ring = _ensure_closed(ring)
+            rings_fallback_xy.append(ring)
+        tris = _triangulate_evenodd_region_xy_without_shapely(rings_fallback_xy)
+        if not tris:
+            return Geometry(coords.copy(), offsets.copy())
+        out_lines = [transform_back(t.astype(np.float32), R_all, z_all) for t in tris]
+        return _numpy_lines_to_geometry(out_lines)
+    if not planar:
+        return Geometry(coords.copy(), offsets.copy())
+    # 冪等フォールバック（到達しない想定）
+    return Geometry(coords.copy(), offsets.copy())
+
+
+# UI RangeHint（量子化粒度は step を設定）
+cast(Any, partition).__param_meta__ = PARAM_META
 
 
 def _ensure_closed(loop: np.ndarray, eps: float = 1e-6) -> np.ndarray:
@@ -284,128 +410,3 @@ def _collect_polygon_exteriors(geom) -> list[np.ndarray]:  # type: ignore[no-unt
     for g in getattr(geom, "geoms", []):  # type: ignore[attr-defined]
         arrs.extend(_collect_polygon_exteriors(g))
     return arrs
-
-
-@effect()
-def partition(
-    g: Geometry,
-    *,
-    site_count: int = 12,
-    seed: int = 0,
-) -> Geometry:
-    """平面内の領域（偶奇規則）を Voronoi で分割し閉ループ群を返す（Shapely 必須）。
-
-    Parameters
-    ----------
-    g : Geometry
-        入力ジオメトリ（各行が 1 本のポリライン）。
-    site_count : int, default 12
-        サイト数（Voronoi 用）。
-    seed : int, default 0
-        乱数シード（再現性）。
-    """
-    coords, offsets = g.as_arrays(copy=False)
-    if offsets.size <= 1:
-        return Geometry(coords.copy(), offsets.copy())
-
-    rng = np.random.default_rng(int(seed))
-
-    # 共平面なら全体を XY に整列して処理（傾き下でも有効）
-    planar, v2d_all, R_all, z_all, _ref_h = choose_coplanar_frame(coords, offsets)
-    shapely_ok = False
-    if planar:
-        # Shapely があれば Voronoi ベース、無ければ偶奇三角分割でフォールバック
-        try:
-            from shapely.geometry import MultiPoint  # type: ignore
-            from shapely.geometry import Polygon  # type: ignore
-            from shapely.geometry import Point as _SPoint  # type: ignore
-            from shapely.ops import voronoi_diagram as _voronoi_diagram  # type: ignore
-
-            shapely_ok = True
-        except Exception:
-            shapely_ok = False
-
-    if planar and shapely_ok:
-        rings_xy: list[np.ndarray] = []
-        for i in range(len(offsets) - 1):
-            ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
-            if ring.shape[0] < 3:
-                continue
-            ring = _ensure_closed(ring)
-            rings_xy.append(ring[:, :2])
-
-        # 偶奇規則の領域（XOR）
-        region = None
-        for ring2d in rings_xy:
-            try:
-                poly = Polygon(ring2d)
-                if not poly.is_valid:
-                    poly = poly.buffer(0)
-            except Exception:
-                continue
-            region = poly if region is None else region.symmetric_difference(poly)
-        if region is None or region.is_empty:
-            return Geometry(coords.copy(), offsets.copy())
-
-        # サイト生成（random のみ）
-        minx, miny, maxx, maxy = region.bounds
-        pts: list[tuple[float, float]] = []
-        trials = max(100, int(site_count) * 20)
-        target = max(1, int(site_count))
-        while len(pts) < target and trials > 0:
-            rx = float(minx) + float(rng.random()) * float(maxx - minx)
-            ry = float(miny) + float(rng.random()) * float(maxy - miny)
-            if region.contains(_SPoint(rx, ry)):
-                pts.append((rx, ry))
-            trials -= 1
-        if not pts:
-            try:
-                c = region.representative_point()
-                pts = [(float(c.x), float(c.y))]
-            except Exception:
-                return Geometry(coords.copy(), offsets.copy())
-        pts2d = np.asarray(pts, dtype=np.float32)
-
-        # Voronoi → 交差 → 外周抽出 → 3D 復元
-        mp = MultiPoint(pts2d)
-        vd = _voronoi_diagram(mp, envelope=region.envelope, edges=False)  # type: ignore[arg-type]
-        out_lines: list[np.ndarray] = []
-        for cell in getattr(vd, "geoms", []):  # type: ignore[attr-defined]
-            try:
-                inter = cell.intersection(region)
-                if inter.is_empty:
-                    continue
-            except Exception:
-                continue
-            loops = _collect_polygon_exteriors(inter)
-            for loop in loops:
-                # XY → 元姿勢へ戻す
-                out_lines.append(transform_back(loop.astype(np.float32), R_all, z_all))
-        return _numpy_lines_to_geometry(out_lines)
-
-    # フォールバック（非平面 or Shapely 無）
-    if planar and not shapely_ok:
-        # Shapely 無時は偶奇三角分割で近似 → 3D 復元
-        rings_fallback_xy: list[np.ndarray] = []
-        for i in range(len(offsets) - 1):
-            ring = v2d_all[offsets[i] : offsets[i + 1]].astype(np.float32, copy=False)
-            if ring.shape[0] < 3:
-                continue
-            ring = _ensure_closed(ring)
-            rings_fallback_xy.append(ring)
-        tris = _triangulate_evenodd_region_xy_without_shapely(rings_fallback_xy)
-        if not tris:
-            return Geometry(coords.copy(), offsets.copy())
-        out_lines = [transform_back(t.astype(np.float32), R_all, z_all) for t in tris]
-        return _numpy_lines_to_geometry(out_lines)
-    if not planar:
-        return Geometry(coords.copy(), offsets.copy())
-    # 冪等フォールバック（到達しない想定）
-    return Geometry(coords.copy(), offsets.copy())
-
-
-# UI RangeHint（量子化粒度は step を設定）
-cast(Any, partition).__param_meta__ = {
-    "site_count": {"type": "integer", "min": 12, "max": 500, "step": 1},
-    "seed": {"type": "integer", "min": 0, "max": 2_147_483_647, "step": 1},
-}

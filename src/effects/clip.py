@@ -40,6 +40,366 @@ from .registry import effect
 # 平面性判定の内部定数（従来デフォルトと同値）
 _PLANAR_EPS_ABS = 1e-5
 _PLANAR_EPS_REL = 1e-4
+PARAM_META = {
+    "draw_outline": {"type": "boolean"},
+    "draw_inside": {"type": "boolean"},
+}
+
+
+@effect()
+def clip(
+    g: Geometry,
+    *,
+    outline: Geometry | Sequence[Geometry],
+    draw_outline: bool = False,
+    draw_inside: bool = True,
+) -> Geometry:
+    """閉曲線マスクで対象をクリップ（純関数）。
+
+    Parameters
+    ----------
+    g : Geometry
+        対象ジオメトリ（クリップされる側）。
+    outline : Geometry | Sequence[Geometry]
+        マスク輪郭（閉曲線）。複数指定可。偶奇規則で内外を決定。
+    draw_outline : bool, default False
+        出力にマスク輪郭も含める。
+    draw_inside : bool, default True
+        マスク内側を出力に含める。
+    非共平面の場合は常に XY 投影でクリップする（フォールバックの切替は不可）。
+    平面時は Shapely が利用可能な場合に Polygon の対称差で偶奇領域を構成してクリップする。
+    平面性判定のしきい値（abs/rel）は内部定数で管理する。
+
+    Notes
+    -----
+    - on-edge の扱いは Shapely 経路とフォールバック経路で差があり得る（中点評価/半開区間条件）。
+    - モード安定化（_MODE_PIN）はマスク内容ごとに初回決定モードを弱く固定する（仕様変更は要検討）。
+    """
+    # `draw_inside` のみで内外を切替（none/both は廃止）。
+
+    tgt_coords, tgt_offs = g.as_arrays(copy=False)
+    # マスク収集（収集済みの再利用を試みる）
+    rings3d = _collect_mask_rings_cached(outline, step=float(_DIGEST_STEP_DEFAULT))
+    # coords/offsets は必要時のみ構築
+    if rings3d:
+        _m_coords = np.vstack([r for r in rings3d]).astype(np.float32, copy=False)
+        _offs = [0]
+        s_acc = 0
+        for r in rings3d:
+            s_acc += r.shape[0]
+            _offs.append(s_acc)
+        mask_coords = _m_coords
+        mask_offs = np.asarray(_offs, dtype=np.int32)
+    else:
+        mask_coords = np.zeros((0, 3), dtype=np.float32)
+        mask_offs = np.asarray([0], dtype=np.int32)
+    if len(rings3d) == 0:
+        # 有効な閉曲線が無い場合は安全側で no-op（落とさない）
+        return Geometry(g.coords.copy(), g.offsets.copy())
+
+    # 結果キャッシュのための digest（量子化ステップ）
+    digest_step = float(_DIGEST_STEP_DEFAULT)
+    mask_digest_q = _quantized_digest_for_rings(
+        rings3d,
+        digest_step,
+        stride=_DIGEST_STRIDE_DEFAULT,
+        use_float32=_DIGEST_USE_FLOAT32,
+        chunk_rows=_DIGEST_CHUNK_ROWS,
+    )
+    tgt_digest_q = _quantized_digest_for_coords(
+        tgt_coords,
+        tgt_offs,
+        digest_step,
+        stride=_DIGEST_STRIDE_DEFAULT,
+        use_float32=_DIGEST_USE_FLOAT32,
+        chunk_rows=_DIGEST_CHUNK_ROWS,
+    )
+
+    # モード安定化（弱ピン止め）: proj ピンの場合は choose_coplanar_frame をスキップ
+    last_mode = _MODE_PIN.get(mask_digest_q) if _MODE_STABLE_ENABLED else None
+    if last_mode == "proj":
+        mode = "proj"
+        res_key = (
+            "clip-result",
+            mode,
+            mask_digest_q,
+            tgt_digest_q,
+            bool(draw_inside),
+            bool(draw_outline),
+        )
+        if _RESULT_CACHE_MAXSIZE != 0:
+            try:
+                out_cached = _RESULT_CACHE.pop(res_key)
+                _RESULT_CACHE[res_key] = out_cached
+                return out_cached
+            except KeyError:
+                pass
+        # 常に XY 投影でクリップ
+        digest = _mask_digest_from_rings(rings3d)
+        cache_key = (digest, "proj")
+        prep = _mask_cache_get(cache_key)
+        if prep is None:
+            prep = _prepare_projection_mask(rings3d)
+            _mask_cache_put(cache_key, prep)
+        out_lines_3d = _clip_lines_project_xy_prepared(
+            tgt_coords, tgt_offs, prep, draw_inside=draw_inside
+        )
+        out_geo = _numpy_lines_to_geometry(out_lines_3d)
+        if draw_outline:
+            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out_geo
+            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                    _RESULT_CACHE.popitem(last=False)
+        return out_geo
+
+    # ここで初めて共平面判定/整列（必要ケースのみ）
+    if tgt_coords.size == 0:
+        comb_coords = mask_coords
+        comb_offs = mask_offs
+    elif mask_coords.size == 0:
+        comb_coords = tgt_coords
+        comb_offs = tgt_offs
+    else:
+        comb_coords = np.vstack([tgt_coords, mask_coords]).astype(np.float32, copy=False)
+        comb_offs = np.hstack([tgt_offs, (mask_offs[1:] + tgt_coords.shape[0]).astype(np.int32)])
+        comb_offs = comb_offs.astype(np.int32, copy=False)
+
+    planar, v2d_all, R_all, z_all, _ref_h = choose_coplanar_frame(
+        comb_coords, comb_offs, eps_abs=float(_PLANAR_EPS_ABS), eps_rel=float(_PLANAR_EPS_REL)
+    )
+
+    # 最終モード決定とピン更新
+    mode = "planar" if planar else "proj"
+    if _MODE_STABLE_ENABLED and last_mode not in ("planar", "proj"):
+        _MODE_PIN[mask_digest_q] = mode
+
+    # 結果 LRU（ヒット時は即返す）
+    res_key = (
+        "clip-result",
+        mode,
+        mask_digest_q,
+        tgt_digest_q,
+        bool(draw_inside),
+        bool(draw_outline),
+    )
+    if _RESULT_CACHE_MAXSIZE != 0:
+        try:
+            out_cached = _RESULT_CACHE.pop(res_key)
+            _RESULT_CACHE[res_key] = out_cached
+            return out_cached
+        except KeyError:
+            pass
+
+    # 非共平面 or 安定化モードが proj の場合: 投影フォールバック or no-op
+    if not planar or mode == "proj":
+        # マスク前処理（内容ダイジェストで LRU）
+        digest = _mask_digest_from_rings(rings3d)
+        cache_key = (digest, "proj")
+        prep = _mask_cache_get(cache_key)
+        if prep is None:
+            prep = _prepare_projection_mask(rings3d)
+            _mask_cache_put(cache_key, prep)
+        # XY 投影でクリップし、3D は元線分で復元
+        out_lines_3d = _clip_lines_project_xy_prepared(
+            tgt_coords, tgt_offs, prep, draw_inside=draw_inside
+        )
+        out_geo = _numpy_lines_to_geometry(out_lines_3d)
+        if draw_outline:
+            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+        # 結果を保存
+        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out_geo
+            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                    _RESULT_CACHE.popitem(last=False)
+        return out_geo
+
+    # XY 座標に分離
+    n_t = tgt_coords.shape[0]
+    tgt_xy_all = v2d_all[:n_t]
+    mask_xy_all = v2d_all[n_t:]
+
+    # Mask region（Shapely 優先）
+    shapely_ok = False
+    try:
+        from shapely.geometry import LineString, Polygon  # type: ignore
+
+        shapely_ok = True
+    except Exception:
+        shapely_ok = False
+
+    if shapely_ok and (mode == "planar"):
+        from shapely.geometry import Polygon  # type: ignore
+
+        # マスク領域（偶奇合成）を内容ダイジェストで LRU
+        digest = _mask_digest_from_rings(rings3d)
+        cache_key = (digest, "planar")
+        cached = _mask_cache_get(cache_key)
+        prepared_region = None
+        if cached is not None:
+            region_obj = cached.get("region")
+            region_bounds = cached.get("bounds", None)
+            prepared_region = cached.get("prepared")
+        else:
+            region_obj = None
+            for i in range(len(mask_offs) - 1):
+                s, e = int(mask_offs[i]), int(mask_offs[i + 1])
+                ring = mask_xy_all[s:e, :2].astype(np.float32, copy=False)
+                ring = (
+                    ring if ring.shape[0] < 2 or not np.allclose(ring[0], ring[-1]) else ring[:-1]
+                )
+                if ring.shape[0] < 3:
+                    continue
+                try:
+                    pg = Polygon(ring)
+                    if not pg.is_valid:
+                        pg = pg.buffer(0)
+                except Exception:
+                    continue
+                region_obj = pg if region_obj is None else region_obj.symmetric_difference(pg)
+            if region_obj is None or region_obj.is_empty:
+                out = Geometry(g.coords.copy(), g.offsets.copy())
+                if draw_outline:
+                    out = out.concat(_numpy_lines_to_geometry(rings3d))
+                return out
+            region_bounds = getattr(region_obj, "bounds", None)
+            try:
+                from shapely.prepared import prep as _prep  # type: ignore
+
+                prepared_region = _prep(region_obj)
+            except Exception:
+                prepared_region = None
+            _mask_cache_put(
+                cache_key,
+                {"region": region_obj, "bounds": region_bounds, "prepared": prepared_region},
+            )
+
+        if region_obj is None or getattr(region_obj, "is_empty", False):
+            out = Geometry(g.coords.copy(), g.offsets.copy())
+            if draw_outline:
+                out = out.concat(_numpy_lines_to_geometry(rings3d))
+            return out
+
+        # 対象ラインをクリップ（prepared 早期分岐 + バルク処理）
+        out_lines_xy: list[np.ndarray] = []
+        bulk_lines: list[np.ndarray] = []
+        for i in range(len(tgt_offs) - 1):
+            s, e = int(tgt_offs[i]), int(tgt_offs[i + 1])
+            pl = tgt_xy_all[s:e, :2].astype(np.float32, copy=False)
+            if pl.shape[0] < 2:
+                continue
+            try:
+                ls = LineString(pl)
+            except Exception:
+                continue
+            # 早期除外（bounds ベース）
+            if region_bounds is not None:
+                pminx, pminy, pmaxx, pmaxy = _aabb2d(pl)
+                rb = region_bounds
+                if not _aabb_overlap(
+                    pminx,
+                    pminy,
+                    pmaxx,
+                    pmaxy,
+                    float(rb[0]),
+                    float(rb[1]),
+                    float(rb[2]),
+                    float(rb[3]),
+                ):
+                    if not draw_inside:
+                        # Z=0 列を付与して (N,3) に正規化
+                        pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
+                        out_lines_xy.append(pl3)
+                    # inside のみならスキップ
+                    continue
+            # prepared による完全内外の早期分岐
+            if prepared_region is not None:
+                try:
+                    if prepared_region.disjoint(ls):
+                        if not draw_inside:
+                            pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
+                            out_lines_xy.append(pl3)
+                        continue
+                    if prepared_region.contains(ls):
+                        if draw_inside:
+                            pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
+                            out_lines_xy.append(pl3)
+                        continue
+                except Exception:
+                    pass
+            # バルクへ回す
+            bulk_lines.append(pl)
+
+        if bulk_lines:
+            try:
+                from shapely.geometry import MultiLineString  # type: ignore
+
+                mls = MultiLineString(bulk_lines)
+                if draw_inside:
+                    gi = mls.intersection(region_obj)
+                    out_lines_xy.extend(_to_lines_from_shapely(gi))
+                else:
+                    go = mls.difference(region_obj)
+                    out_lines_xy.extend(_to_lines_from_shapely(go))
+            except Exception:
+                # フォールバック: per-line
+                for pl in bulk_lines:
+                    try:
+                        ls = LineString(pl)
+                        if draw_inside:
+                            gi = ls.intersection(region_obj)
+                            out_lines_xy.extend(_to_lines_from_shapely(gi))
+                        else:
+                            go = ls.difference(region_obj)
+                            out_lines_xy.extend(_to_lines_from_shapely(go))
+                    except Exception:
+                        continue
+
+        # XY → 3D
+        out_lines = [transform_back(arr.astype(np.float32), R_all, z_all) for arr in out_lines_xy]
+        out_geo = _numpy_lines_to_geometry(out_lines)
+        if draw_outline:
+            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+        # 結果保存
+        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+            _RESULT_CACHE[res_key] = out_geo
+            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                    _RESULT_CACHE.popitem(last=False)
+        return out_geo
+
+    # ---- フォールバック（Shapely 無） -------------------------------------
+    # マスクリング（XY）を収集
+    mask_rings_xy: list[np.ndarray] = []
+    for i in range(len(mask_offs) - 1):
+        s, e = int(mask_offs[i]), int(mask_offs[i + 1])
+        ring = mask_xy_all[s:e, :2].astype(np.float32, copy=False)
+        ring2d = _ensure_closed2d(ring)
+        mask_rings_xy.append(ring2d)
+
+    lines_xy = _clip_lines_without_shapely(
+        tgt_xy_all.astype(np.float32, copy=False),
+        tgt_offs,
+        mask_rings_xy,
+        draw_inside=draw_inside,
+    )
+    lines_3d = [transform_back(l.astype(np.float32), R_all, z_all) for l in lines_xy]
+    out_geo = _numpy_lines_to_geometry(lines_3d)
+    if draw_outline:
+        out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
+    # 結果保存
+    if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
+        _RESULT_CACHE[res_key] = out_geo
+        if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
+            while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
+                _RESULT_CACHE.popitem(last=False)
+    return out_geo
+
+
+# UI RangeHint（量子化粒度は step を設定。outline は GUI 対象外）
+cast(Any, clip).__param_meta__ = PARAM_META
 
 
 def _ensure_closed(loop: np.ndarray, eps: float = 1e-6) -> np.ndarray:
@@ -800,362 +1160,3 @@ def _collect_mask_rings_cached(
         while len(_MASK_RINGS_CACHE) > _MASK_RINGS_CACHE_MAXSIZE:
             _MASK_RINGS_CACHE.popitem(last=False)
     return rings
-
-
-@effect()
-def clip(
-    g: Geometry,
-    *,
-    outline: Geometry | Sequence[Geometry],
-    draw_outline: bool = False,
-    draw_inside: bool = True,
-) -> Geometry:
-    """閉曲線マスクで対象をクリップ（純関数）。
-
-    Parameters
-    ----------
-    g : Geometry
-        対象ジオメトリ（クリップされる側）。
-    outline : Geometry | Sequence[Geometry]
-        マスク輪郭（閉曲線）。複数指定可。偶奇規則で内外を決定。
-    draw_outline : bool, default False
-        出力にマスク輪郭も含める。
-    draw_inside : bool, default True
-        マスク内側を出力に含める。
-    非共平面の場合は常に XY 投影でクリップする（フォールバックの切替は不可）。
-    平面時は Shapely が利用可能な場合に Polygon の対称差で偶奇領域を構成してクリップする。
-    平面性判定のしきい値（abs/rel）は内部定数で管理する。
-
-    Notes
-    -----
-    - on-edge の扱いは Shapely 経路とフォールバック経路で差があり得る（中点評価/半開区間条件）。
-    - モード安定化（_MODE_PIN）はマスク内容ごとに初回決定モードを弱く固定する（仕様変更は要検討）。
-    """
-    # `draw_inside` のみで内外を切替（none/both は廃止）。
-
-    tgt_coords, tgt_offs = g.as_arrays(copy=False)
-    # マスク収集（収集済みの再利用を試みる）
-    rings3d = _collect_mask_rings_cached(outline, step=float(_DIGEST_STEP_DEFAULT))
-    # coords/offsets は必要時のみ構築
-    if rings3d:
-        _m_coords = np.vstack([r for r in rings3d]).astype(np.float32, copy=False)
-        _offs = [0]
-        s_acc = 0
-        for r in rings3d:
-            s_acc += r.shape[0]
-            _offs.append(s_acc)
-        mask_coords = _m_coords
-        mask_offs = np.asarray(_offs, dtype=np.int32)
-    else:
-        mask_coords = np.zeros((0, 3), dtype=np.float32)
-        mask_offs = np.asarray([0], dtype=np.int32)
-    if len(rings3d) == 0:
-        # 有効な閉曲線が無い場合は安全側で no-op（落とさない）
-        return Geometry(g.coords.copy(), g.offsets.copy())
-
-    # 結果キャッシュのための digest（量子化ステップ）
-    digest_step = float(_DIGEST_STEP_DEFAULT)
-    mask_digest_q = _quantized_digest_for_rings(
-        rings3d,
-        digest_step,
-        stride=_DIGEST_STRIDE_DEFAULT,
-        use_float32=_DIGEST_USE_FLOAT32,
-        chunk_rows=_DIGEST_CHUNK_ROWS,
-    )
-    tgt_digest_q = _quantized_digest_for_coords(
-        tgt_coords,
-        tgt_offs,
-        digest_step,
-        stride=_DIGEST_STRIDE_DEFAULT,
-        use_float32=_DIGEST_USE_FLOAT32,
-        chunk_rows=_DIGEST_CHUNK_ROWS,
-    )
-
-    # モード安定化（弱ピン止め）: proj ピンの場合は choose_coplanar_frame をスキップ
-    last_mode = _MODE_PIN.get(mask_digest_q) if _MODE_STABLE_ENABLED else None
-    if last_mode == "proj":
-        mode = "proj"
-        res_key = (
-            "clip-result",
-            mode,
-            mask_digest_q,
-            tgt_digest_q,
-            bool(draw_inside),
-            bool(draw_outline),
-        )
-        if _RESULT_CACHE_MAXSIZE != 0:
-            try:
-                out_cached = _RESULT_CACHE.pop(res_key)
-                _RESULT_CACHE[res_key] = out_cached
-                return out_cached
-            except KeyError:
-                pass
-        # 常に XY 投影でクリップ
-        digest = _mask_digest_from_rings(rings3d)
-        cache_key = (digest, "proj")
-        prep = _mask_cache_get(cache_key)
-        if prep is None:
-            prep = _prepare_projection_mask(rings3d)
-            _mask_cache_put(cache_key, prep)
-        out_lines_3d = _clip_lines_project_xy_prepared(
-            tgt_coords, tgt_offs, prep, draw_inside=draw_inside
-        )
-        out_geo = _numpy_lines_to_geometry(out_lines_3d)
-        if draw_outline:
-            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
-        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-            _RESULT_CACHE[res_key] = out_geo
-            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
-                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
-                    _RESULT_CACHE.popitem(last=False)
-        return out_geo
-
-    # ここで初めて共平面判定/整列（必要ケースのみ）
-    if tgt_coords.size == 0:
-        comb_coords = mask_coords
-        comb_offs = mask_offs
-    elif mask_coords.size == 0:
-        comb_coords = tgt_coords
-        comb_offs = tgt_offs
-    else:
-        comb_coords = np.vstack([tgt_coords, mask_coords]).astype(np.float32, copy=False)
-        comb_offs = np.hstack([tgt_offs, (mask_offs[1:] + tgt_coords.shape[0]).astype(np.int32)])
-        comb_offs = comb_offs.astype(np.int32, copy=False)
-
-    planar, v2d_all, R_all, z_all, _ref_h = choose_coplanar_frame(
-        comb_coords, comb_offs, eps_abs=float(_PLANAR_EPS_ABS), eps_rel=float(_PLANAR_EPS_REL)
-    )
-
-    # 最終モード決定とピン更新
-    mode = "planar" if planar else "proj"
-    if _MODE_STABLE_ENABLED and last_mode not in ("planar", "proj"):
-        _MODE_PIN[mask_digest_q] = mode
-
-    # 結果 LRU（ヒット時は即返す）
-    res_key = (
-        "clip-result",
-        mode,
-        mask_digest_q,
-        tgt_digest_q,
-        bool(draw_inside),
-        bool(draw_outline),
-    )
-    if _RESULT_CACHE_MAXSIZE != 0:
-        try:
-            out_cached = _RESULT_CACHE.pop(res_key)
-            _RESULT_CACHE[res_key] = out_cached
-            return out_cached
-        except KeyError:
-            pass
-
-    # 非共平面 or 安定化モードが proj の場合: 投影フォールバック or no-op
-    if not planar or mode == "proj":
-        # マスク前処理（内容ダイジェストで LRU）
-        digest = _mask_digest_from_rings(rings3d)
-        cache_key = (digest, "proj")
-        prep = _mask_cache_get(cache_key)
-        if prep is None:
-            prep = _prepare_projection_mask(rings3d)
-            _mask_cache_put(cache_key, prep)
-        # XY 投影でクリップし、3D は元線分で復元
-        out_lines_3d = _clip_lines_project_xy_prepared(
-            tgt_coords, tgt_offs, prep, draw_inside=draw_inside
-        )
-        out_geo = _numpy_lines_to_geometry(out_lines_3d)
-        if draw_outline:
-            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
-        # 結果を保存
-        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-            _RESULT_CACHE[res_key] = out_geo
-            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
-                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
-                    _RESULT_CACHE.popitem(last=False)
-        return out_geo
-
-    # XY 座標に分離
-    n_t = tgt_coords.shape[0]
-    tgt_xy_all = v2d_all[:n_t]
-    mask_xy_all = v2d_all[n_t:]
-
-    # Mask region（Shapely 優先）
-    shapely_ok = False
-    try:
-        from shapely.geometry import LineString, Polygon  # type: ignore
-
-        shapely_ok = True
-    except Exception:
-        shapely_ok = False
-
-    if shapely_ok and (mode == "planar"):
-        from shapely.geometry import Polygon  # type: ignore
-
-        # マスク領域（偶奇合成）を内容ダイジェストで LRU
-        digest = _mask_digest_from_rings(rings3d)
-        cache_key = (digest, "planar")
-        cached = _mask_cache_get(cache_key)
-        prepared_region = None
-        if cached is not None:
-            region_obj = cached.get("region")
-            region_bounds = cached.get("bounds", None)
-            prepared_region = cached.get("prepared")
-        else:
-            region_obj = None
-            for i in range(len(mask_offs) - 1):
-                s, e = int(mask_offs[i]), int(mask_offs[i + 1])
-                ring = mask_xy_all[s:e, :2].astype(np.float32, copy=False)
-                ring = (
-                    ring if ring.shape[0] < 2 or not np.allclose(ring[0], ring[-1]) else ring[:-1]
-                )
-                if ring.shape[0] < 3:
-                    continue
-                try:
-                    pg = Polygon(ring)
-                    if not pg.is_valid:
-                        pg = pg.buffer(0)
-                except Exception:
-                    continue
-                region_obj = pg if region_obj is None else region_obj.symmetric_difference(pg)
-            if region_obj is None or region_obj.is_empty:
-                out = Geometry(g.coords.copy(), g.offsets.copy())
-                if draw_outline:
-                    out = out.concat(_numpy_lines_to_geometry(rings3d))
-                return out
-            region_bounds = getattr(region_obj, "bounds", None)
-            try:
-                from shapely.prepared import prep as _prep  # type: ignore
-
-                prepared_region = _prep(region_obj)
-            except Exception:
-                prepared_region = None
-            _mask_cache_put(
-                cache_key,
-                {"region": region_obj, "bounds": region_bounds, "prepared": prepared_region},
-            )
-
-        if region_obj is None or getattr(region_obj, "is_empty", False):
-            out = Geometry(g.coords.copy(), g.offsets.copy())
-            if draw_outline:
-                out = out.concat(_numpy_lines_to_geometry(rings3d))
-            return out
-
-        # 対象ラインをクリップ（prepared 早期分岐 + バルク処理）
-        out_lines_xy: list[np.ndarray] = []
-        bulk_lines: list[np.ndarray] = []
-        for i in range(len(tgt_offs) - 1):
-            s, e = int(tgt_offs[i]), int(tgt_offs[i + 1])
-            pl = tgt_xy_all[s:e, :2].astype(np.float32, copy=False)
-            if pl.shape[0] < 2:
-                continue
-            try:
-                ls = LineString(pl)
-            except Exception:
-                continue
-            # 早期除外（bounds ベース）
-            if region_bounds is not None:
-                pminx, pminy, pmaxx, pmaxy = _aabb2d(pl)
-                rb = region_bounds
-                if not _aabb_overlap(
-                    pminx,
-                    pminy,
-                    pmaxx,
-                    pmaxy,
-                    float(rb[0]),
-                    float(rb[1]),
-                    float(rb[2]),
-                    float(rb[3]),
-                ):
-                    if not draw_inside:
-                        # Z=0 列を付与して (N,3) に正規化
-                        pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
-                        out_lines_xy.append(pl3)
-                    # inside のみならスキップ
-                    continue
-            # prepared による完全内外の早期分岐
-            if prepared_region is not None:
-                try:
-                    if prepared_region.disjoint(ls):
-                        if not draw_inside:
-                            pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
-                            out_lines_xy.append(pl3)
-                        continue
-                    if prepared_region.contains(ls):
-                        if draw_inside:
-                            pl3 = np.hstack([pl, np.zeros((pl.shape[0], 1), dtype=np.float32)])
-                            out_lines_xy.append(pl3)
-                        continue
-                except Exception:
-                    pass
-            # バルクへ回す
-            bulk_lines.append(pl)
-
-        if bulk_lines:
-            try:
-                from shapely.geometry import MultiLineString  # type: ignore
-
-                mls = MultiLineString(bulk_lines)
-                if draw_inside:
-                    gi = mls.intersection(region_obj)
-                    out_lines_xy.extend(_to_lines_from_shapely(gi))
-                else:
-                    go = mls.difference(region_obj)
-                    out_lines_xy.extend(_to_lines_from_shapely(go))
-            except Exception:
-                # フォールバック: per-line
-                for pl in bulk_lines:
-                    try:
-                        ls = LineString(pl)
-                        if draw_inside:
-                            gi = ls.intersection(region_obj)
-                            out_lines_xy.extend(_to_lines_from_shapely(gi))
-                        else:
-                            go = ls.difference(region_obj)
-                            out_lines_xy.extend(_to_lines_from_shapely(go))
-                    except Exception:
-                        continue
-
-        # XY → 3D
-        out_lines = [transform_back(arr.astype(np.float32), R_all, z_all) for arr in out_lines_xy]
-        out_geo = _numpy_lines_to_geometry(out_lines)
-        if draw_outline:
-            out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
-        # 結果保存
-        if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-            _RESULT_CACHE[res_key] = out_geo
-            if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
-                while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
-                    _RESULT_CACHE.popitem(last=False)
-        return out_geo
-
-    # ---- フォールバック（Shapely 無） -------------------------------------
-    # マスクリング（XY）を収集
-    mask_rings_xy: list[np.ndarray] = []
-    for i in range(len(mask_offs) - 1):
-        s, e = int(mask_offs[i]), int(mask_offs[i + 1])
-        ring = mask_xy_all[s:e, :2].astype(np.float32, copy=False)
-        ring2d = _ensure_closed2d(ring)
-        mask_rings_xy.append(ring2d)
-
-    lines_xy = _clip_lines_without_shapely(
-        tgt_xy_all.astype(np.float32, copy=False),
-        tgt_offs,
-        mask_rings_xy,
-        draw_inside=draw_inside,
-    )
-    lines_3d = [transform_back(l.astype(np.float32), R_all, z_all) for l in lines_xy]
-    out_geo = _numpy_lines_to_geometry(lines_3d)
-    if draw_outline:
-        out_geo = out_geo.concat(_numpy_lines_to_geometry(rings3d))
-    # 結果保存
-    if _RESULT_CACHE_MAXSIZE != 0 and out_geo.n_vertices <= _RESULT_CACHE_MAX_VERTS:
-        _RESULT_CACHE[res_key] = out_geo
-        if _RESULT_CACHE_MAXSIZE is not None and _RESULT_CACHE_MAXSIZE > 0:
-            while len(_RESULT_CACHE) > _RESULT_CACHE_MAXSIZE:
-                _RESULT_CACHE.popitem(last=False)
-    return out_geo
-
-
-# UI RangeHint（量子化粒度は step を設定。outline は GUI 対象外）
-cast(Any, clip).__param_meta__ = {
-    "draw_outline": {"type": "boolean"},
-    "draw_inside": {"type": "boolean"},
-}

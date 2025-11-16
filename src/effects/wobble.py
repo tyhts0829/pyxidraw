@@ -18,34 +18,15 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
-
-def _wobble_vertices(
-    vertices_list: list[np.ndarray], amplitude: float, frequency: Vec3, phase: float
-) -> list[np.ndarray]:
-    """各頂点に対してサイン波によるゆらぎ（wobble）を加える内部関数。"""
-    new_vertices_list = []
-    for vertices in vertices_list:
-        if len(vertices) == 0:
-            new_vertices_list.append(vertices)
-            continue
-
-        new_vertices = vertices.astype(np.float32).copy()
-        # ベクトル化された計算
-        # x軸方向のゆらぎ
-        new_vertices[:, 0] += amplitude * np.sin(
-            2 * np.pi * frequency[0] * new_vertices[:, 0] + phase
-        )
-        # y軸方向のゆらぎ
-        new_vertices[:, 1] += amplitude * np.sin(
-            2 * np.pi * frequency[1] * new_vertices[:, 1] + phase
-        )
-        # z軸方向のゆらぎ（2D の場合は 0 のまま）
-        if new_vertices.shape[1] > 2:
-            new_vertices[:, 2] += amplitude * np.sin(
-                2 * np.pi * frequency[2] * new_vertices[:, 2] + phase
-            )
-        new_vertices_list.append(new_vertices)
-    return new_vertices_list
+PARAM_META = {
+    "amplitude": {"type": "number", "min": 0.0, "max": 20.0},
+    "frequency": {
+        "type": "number",
+        "min": (0.0, 0.0, 0.0),
+        "max": (0.2, 0.2, 0.2),
+    },
+    "phase": {"type": "number", "min": 0.0, "max": 2 * np.pi},
+}
 
 
 @effect()
@@ -89,12 +70,33 @@ def wobble(
     return Geometry.from_lines(wobbled_vertices)
 
 
-wobble.__param_meta__ = {
-    "amplitude": {"type": "number", "min": 0.0, "max": 20.0},
-    "frequency": {
-        "type": "number",
-        "min": (0.0, 0.0, 0.0),
-        "max": (0.2, 0.2, 0.2),
-    },
-    "phase": {"type": "number", "min": 0.0, "max": 2 * np.pi},
-}
+wobble.__param_meta__ = PARAM_META
+
+
+def _wobble_vertices(
+    vertices_list: list[np.ndarray], amplitude: float, frequency: Vec3, phase: float
+) -> list[np.ndarray]:
+    """各頂点に対してサイン波によるゆらぎ（wobble）を加える内部関数。"""
+    new_vertices_list = []
+    for vertices in vertices_list:
+        if len(vertices) == 0:
+            new_vertices_list.append(vertices)
+            continue
+
+        new_vertices = vertices.astype(np.float32).copy()
+        # ベクトル化された計算
+        # x軸方向のゆらぎ
+        new_vertices[:, 0] += amplitude * np.sin(
+            2 * np.pi * frequency[0] * new_vertices[:, 0] + phase
+        )
+        # y軸方向のゆらぎ
+        new_vertices[:, 1] += amplitude * np.sin(
+            2 * np.pi * frequency[1] * new_vertices[:, 1] + phase
+        )
+        # z軸方向のゆらぎ（2D の場合は 0 のまま）
+        if new_vertices.shape[1] > 2:
+            new_vertices[:, 2] += amplitude * np.sin(
+                2 * np.pi * frequency[2] * new_vertices[:, 2] + phase
+            )
+        new_vertices_list.append(new_vertices)
+    return new_vertices_list

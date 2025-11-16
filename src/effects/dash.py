@@ -28,6 +28,118 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+PARAM_META = {
+    "dash_length": {"type": "number", "min": 0.0, "max": 100.0},
+    "gap_length": {"type": "number", "min": 0.0, "max": 100.0},
+    "offset": {"type": "number", "min": 0.0, "max": 100.0},
+}
+
+
+@effect()
+def dash(
+    g: Geometry,
+    *,
+    dash_length: float | list[float] | tuple[float, ...] = 6.0,
+    gap_length: float | list[float] | tuple[float, ...] = 3.0,
+    offset: float | list[float] | tuple[float, ...] = 0.0,
+) -> Geometry:
+    """連続線を破線に変換。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    dash_length : float | list[float] | tuple[float, ...], default 6.0
+        ダッシュ（描画区間）の長さ。配列指定時は `(dash[i], gap[i])` を順番に適用し、末尾まで行ったら先頭へ戻る。
+    gap_length : float | list[float] | tuple[float, ...], default 3.0
+        ギャップ（非描画区間）の長さ。配列指定時は `dash_length` と同様にサイクル適用する。
+    offset : float | list[float] | tuple[float, ...], default 0.0
+        パターンの開始位置オフセット [mm]。0.0 で常に実線から開始し、正の値でパターンを前方へシフトする。
+    """
+    coords, offsets = g.as_arrays(copy=False)
+    if coords.shape[0] == 0:
+        return Geometry(coords.copy(), offsets.copy())
+
+    def _as_float_seq(x: float | list[float] | tuple[float, ...], name: str) -> list[float]:
+        if isinstance(x, (int, float, np.floating)):
+            return [float(x)]
+        if isinstance(x, (list, tuple)):
+            if not x:
+                raise ValueError(f"{name} に空の list/tuple は指定できません")
+            return [float(v) for v in x]
+        raise TypeError(f"{name} は float または list/tuple[float] を指定してください")
+
+    dash_seq = _as_float_seq(dash_length, "dash_length")
+    gap_seq = _as_float_seq(gap_length, "gap_length")
+    offset_seq = _as_float_seq(offset, "offset")
+
+    dash_arr = np.asarray(dash_seq, dtype=np.float64)
+    gap_arr = np.asarray(gap_seq, dtype=np.float64)
+    offset_arr = np.asarray(offset_seq, dtype=np.float64)
+
+    n_dash = dash_arr.shape[0]
+    n_gap = gap_arr.shape[0]
+    n_off = offset_arr.shape[0]
+    if n_dash == 0 or n_gap == 0 or n_off == 0:
+        return Geometry(coords.copy(), offsets.copy())
+
+    # 全パターンが有限かつ pattern=d+g>0 であることを事前検証（1つでも不正なら no-op）
+    max_len = max(n_dash, n_gap)
+    for i in range(max_len):
+        d = float(dash_arr[i % n_dash])
+        g = float(gap_arr[i % n_gap])
+        pattern = d + g
+        if not np.isfinite(pattern) or pattern <= 0.0:
+            return Geometry(coords.copy(), offsets.copy())
+
+    # offset は負値・非有限値を 0 にクランプ
+    offset_arr = np.where(np.isfinite(offset_arr), offset_arr, 0.0)
+    offset_arr = np.maximum(offset_arr, 0.0)
+
+    # ---- JIT/Python 共通の 2 パス実装（count → fill） -----------------------
+    # 第1パス（行数・頂点数をカウント）
+    total_out_vertices = 0
+    total_out_lines = 0
+    n_lines = len(offsets) - 1
+    for li in range(n_lines):
+        v = coords[offsets[li] : offsets[li + 1]]
+        off = float(offset_arr[li % n_off])
+        tv, tl = _count_line(
+            v.astype(np.float32, copy=False),
+            dash_arr,
+            gap_arr,
+            off,
+        )  # type: ignore[arg-type]
+        total_out_vertices += int(tv)
+        total_out_lines += int(tl)
+    if total_out_lines == 0:
+        return Geometry(coords.copy(), offsets.copy())
+    out_coords = np.empty((total_out_vertices, 3), dtype=np.float32)
+    out_offsets = np.empty((total_out_lines + 1,), dtype=np.int32)
+    out_offsets[0] = 0
+    vc = 0
+    oc = 1
+    # 第2パス（書き込み）
+    for li in range(n_lines):
+        v = coords[offsets[li] : offsets[li + 1]]
+        off = float(offset_arr[li % n_off])
+        vc, oc = _fill_line(  # type: ignore[arg-type]
+            v.astype(np.float32, copy=False),
+            dash_arr,
+            gap_arr,
+            off,
+            out_coords,
+            out_offsets,
+            vc,
+            oc,
+        )
+    if oc < out_offsets.shape[0]:
+        out_offsets[oc:] = vc
+    return Geometry(out_coords, out_offsets)
+
+
+dash.__param_meta__ = PARAM_META
+
 
 # ── Kernels（numba があれば JIT、無ければそのまま Python 実行）──────────────
 @njit(cache=True, fastmath=True)  # type: ignore[misc]
@@ -262,113 +374,3 @@ def _fill_line(
         return _copy_original_line(v, out_c, out_o, vc, oc)
 
     return vc, oc
-
-
-@effect()
-def dash(
-    g: Geometry,
-    *,
-    dash_length: float | list[float] | tuple[float, ...] = 6.0,
-    gap_length: float | list[float] | tuple[float, ...] = 3.0,
-    offset: float | list[float] | tuple[float, ...] = 0.0,
-) -> Geometry:
-    """連続線を破線に変換。
-
-    Parameters
-    ----------
-    g : Geometry
-        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
-    dash_length : float | list[float] | tuple[float, ...], default 6.0
-        ダッシュ（描画区間）の長さ。配列指定時は `(dash[i], gap[i])` を順番に適用し、末尾まで行ったら先頭へ戻る。
-    gap_length : float | list[float] | tuple[float, ...], default 3.0
-        ギャップ（非描画区間）の長さ。配列指定時は `dash_length` と同様にサイクル適用する。
-    offset : float | list[float] | tuple[float, ...], default 0.0
-        パターンの開始位置オフセット [mm]。0.0 で常に実線から開始し、正の値でパターンを前方へシフトする。
-    """
-    coords, offsets = g.as_arrays(copy=False)
-    if coords.shape[0] == 0:
-        return Geometry(coords.copy(), offsets.copy())
-
-    def _as_float_seq(x: float | list[float] | tuple[float, ...], name: str) -> list[float]:
-        if isinstance(x, (int, float, np.floating)):
-            return [float(x)]
-        if isinstance(x, (list, tuple)):
-            if not x:
-                raise ValueError(f"{name} に空の list/tuple は指定できません")
-            return [float(v) for v in x]
-        raise TypeError(f"{name} は float または list/tuple[float] を指定してください")
-
-    dash_seq = _as_float_seq(dash_length, "dash_length")
-    gap_seq = _as_float_seq(gap_length, "gap_length")
-    offset_seq = _as_float_seq(offset, "offset")
-
-    dash_arr = np.asarray(dash_seq, dtype=np.float64)
-    gap_arr = np.asarray(gap_seq, dtype=np.float64)
-    offset_arr = np.asarray(offset_seq, dtype=np.float64)
-
-    n_dash = dash_arr.shape[0]
-    n_gap = gap_arr.shape[0]
-    n_off = offset_arr.shape[0]
-    if n_dash == 0 or n_gap == 0 or n_off == 0:
-        return Geometry(coords.copy(), offsets.copy())
-
-    # 全パターンが有限かつ pattern=d+g>0 であることを事前検証（1つでも不正なら no-op）
-    max_len = max(n_dash, n_gap)
-    for i in range(max_len):
-        d = float(dash_arr[i % n_dash])
-        g = float(gap_arr[i % n_gap])
-        pattern = d + g
-        if not np.isfinite(pattern) or pattern <= 0.0:
-            return Geometry(coords.copy(), offsets.copy())
-
-    # offset は負値・非有限値を 0 にクランプ
-    offset_arr = np.where(np.isfinite(offset_arr), offset_arr, 0.0)
-    offset_arr = np.maximum(offset_arr, 0.0)
-
-    # ---- JIT/Python 共通の 2 パス実装（count → fill） -----------------------
-    # 第1パス（行数・頂点数をカウント）
-    total_out_vertices = 0
-    total_out_lines = 0
-    n_lines = len(offsets) - 1
-    for li in range(n_lines):
-        v = coords[offsets[li] : offsets[li + 1]]
-        off = float(offset_arr[li % n_off])
-        tv, tl = _count_line(
-            v.astype(np.float32, copy=False),
-            dash_arr,
-            gap_arr,
-            off,
-        )  # type: ignore[arg-type]
-        total_out_vertices += int(tv)
-        total_out_lines += int(tl)
-    if total_out_lines == 0:
-        return Geometry(coords.copy(), offsets.copy())
-    out_coords = np.empty((total_out_vertices, 3), dtype=np.float32)
-    out_offsets = np.empty((total_out_lines + 1,), dtype=np.int32)
-    out_offsets[0] = 0
-    vc = 0
-    oc = 1
-    # 第2パス（書き込み）
-    for li in range(n_lines):
-        v = coords[offsets[li] : offsets[li + 1]]
-        off = float(offset_arr[li % n_off])
-        vc, oc = _fill_line(  # type: ignore[arg-type]
-            v.astype(np.float32, copy=False),
-            dash_arr,
-            gap_arr,
-            off,
-            out_coords,
-            out_offsets,
-            vc,
-            oc,
-        )
-    if oc < out_offsets.shape[0]:
-        out_offsets[oc:] = vc
-    return Geometry(out_coords, out_offsets)
-
-
-dash.__param_meta__ = {
-    "dash_length": {"type": "number", "min": 0.0, "max": 100.0},
-    "gap_length": {"type": "number", "min": 0.0, "max": 100.0},
-    "offset": {"type": "number", "min": 0.0, "max": 100.0},
-}

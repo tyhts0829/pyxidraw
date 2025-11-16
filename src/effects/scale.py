@@ -19,6 +19,16 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+PARAM_META = {
+    "auto_center": {"type": "bool"},
+    "pivot": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
+    "scale": {"type": "vec3", "min": (0.1, 0.1, 0.1), "max": (5.0, 5.0, 5.0)},
+}
+
 
 @effect()
 def scale(
@@ -57,12 +67,4 @@ def scale(
 
 
 # 後方互換クラスは廃止（関数APIのみ）
-scale.__param_meta__ = {
-    "auto_center": {"type": "bool"},
-    "pivot": {
-        "type": "vec3",
-        "min": (-300.0, -300.0, -300.0),
-        "max": (300.0, 300.0, 300.0),
-    },
-    "scale": {"type": "vec3", "min": (0.1, 0.1, 0.1), "max": (5.0, 5.0, 5.0)},
-}
+scale.__param_meta__ = PARAM_META

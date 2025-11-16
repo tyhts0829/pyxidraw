@@ -21,6 +21,10 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+PARAM_META = {
+    "factor": {"type": "number", "min": 0.0, "max": 50.0},
+}
+
 
 @effect()
 def explode(g: Geometry, *, factor: float = 25.0) -> Geometry:
@@ -152,6 +156,4 @@ def explode(g: Geometry, *, factor: float = 25.0) -> Geometry:
     return Geometry(out_coords, out_offsets)
 
 
-explode.__param_meta__ = {
-    "factor": {"type": "number", "min": 0.0, "max": 50.0},
-}
+explode.__param_meta__ = PARAM_META

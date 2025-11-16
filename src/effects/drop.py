@@ -20,22 +20,16 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
-
-def _compute_line_lengths(coords: np.ndarray, offsets: np.ndarray) -> np.ndarray:
-    """各ポリラインの長さを返す。"""
-    n_lines = max(0, offsets.size - 1)
-    lengths = np.zeros(n_lines, dtype=np.float64)
-    for i in range(n_lines):
-        start = int(offsets[i])
-        end = int(offsets[i + 1])
-        if end - start <= 1:
-            lengths[i] = 0.0
-            continue
-        v = coords[start:end].astype(np.float64, copy=False)
-        diff = v[1:] - v[:-1]
-        seg_len = np.sqrt(np.sum(diff * diff, axis=1))
-        lengths[i] = float(seg_len.sum())
-    return lengths
+PARAM_META = {
+    "interval": {"type": "integer", "min": 1, "max": 100, "step": 1},
+    "offset": {"type": "integer", "min": 0, "max": 100, "step": 1},
+    "min_length": {"type": "number", "min": 0.0, "max": 200.0, "step": 0.1},
+    "max_length": {"type": "number", "min": 0.0, "max": 200.0, "step": 0.1},
+    "probability": {"type": "number", "min": 0.0, "max": 1.0, "step": 0.01},
+    "by": {"choices": ["line", "face"]},
+    "keep_mode": {"choices": ["keep", "drop"]},
+    "seed": {"type": "integer", "min": 0, "max": 2**31 - 1, "step": 1},
+}
 
 
 @effect()
@@ -166,13 +160,21 @@ def drop(
     return Geometry(out_coords, out_offsets)
 
 
-drop.__param_meta__ = {
-    "interval": {"type": "integer", "min": 1, "max": 100, "step": 1},
-    "offset": {"type": "integer", "min": 0, "max": 100, "step": 1},
-    "min_length": {"type": "number", "min": 0.0, "max": 200.0, "step": 0.1},
-    "max_length": {"type": "number", "min": 0.0, "max": 200.0, "step": 0.1},
-    "probability": {"type": "number", "min": 0.0, "max": 1.0, "step": 0.01},
-    "by": {"choices": ["line", "face"]},
-    "keep_mode": {"choices": ["keep", "drop"]},
-    "seed": {"type": "integer", "min": 0, "max": 2**31 - 1, "step": 1},
-}
+drop.__param_meta__ = PARAM_META
+
+
+def _compute_line_lengths(coords: np.ndarray, offsets: np.ndarray) -> np.ndarray:
+    """各ポリラインの長さを返す。"""
+    n_lines = max(0, offsets.size - 1)
+    lengths = np.zeros(n_lines, dtype=np.float64)
+    for i in range(n_lines):
+        start = int(offsets[i])
+        end = int(offsets[i + 1])
+        if end - start <= 1:
+            lengths[i] = 0.0
+            continue
+        v = coords[start:end].astype(np.float64, copy=False)
+        diff = v[1:] - v[:-1]
+        seg_len = np.sqrt(np.sum(diff * diff, axis=1))
+        lengths[i] = float(seg_len.sum())
+    return lengths

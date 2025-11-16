@@ -29,6 +29,12 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 
 from .registry import effect
 
+PARAM_META = {
+    "distance": {"type": "number", "min": 0.0, "max": 25.0},
+    "join": {"choices": ["mitre", "round", "bevel"]},
+    "segments_per_circle": {"type": "integer", "min": 1, "max": 100},
+}
+
 
 @effect()
 def offset(
@@ -83,6 +89,10 @@ def offset(
         new_offsets.append(acc)
 
     return Geometry(all_coords, np.array(new_offsets, dtype=np.int32))
+
+
+# UI 表示のためのメタ情報（RangeHint 構築に使用）
+offset.__param_meta__ = PARAM_META
 
 
 def _buffer(
@@ -277,11 +287,3 @@ def _scaling(vertices_list: list[np.ndarray], scale_factor: float) -> list[np.nd
         scaled_vertices = (vertices - centroid) * scale_factor + centroid
         scaled_vertices_list.append(scaled_vertices)
     return scaled_vertices_list
-
-
-# UI 表示のためのメタ情報（RangeHint 構築に使用）
-offset.__param_meta__ = {
-    "distance": {"type": "number", "min": 0.0, "max": 25.0},
-    "join": {"choices": ["mitre", "round", "bevel"]},
-    "segments_per_circle": {"type": "integer", "min": 1, "max": 100},
-}

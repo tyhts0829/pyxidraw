@@ -24,40 +24,25 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
-
-@njit(fastmath=True, cache=True)
-def _apply_combined_transform(
-    vertices: np.ndarray,
-    center: np.ndarray,
-    scale: np.ndarray,
-    rotate: np.ndarray,
-    translate: np.ndarray,
-) -> np.ndarray:
-    """頂点に組み合わせ変換を適用します。"""
-    # 回転行列を一度だけ計算
-    sx, sy, sz = np.sin(rotate)
-    cx, cy, cz = np.cos(rotate)
-
-    # Z * Y * X の結合行列を直接計算
-    R = np.empty((3, 3), dtype=np.float32)
-    R[0, 0] = cy * cz
-    R[0, 1] = sx * sy * cz - cx * sz
-    R[0, 2] = cx * sy * cz + sx * sz
-    R[1, 0] = cy * sz
-    R[1, 1] = sx * sy * sz + cx * cz
-    R[1, 2] = cx * sy * sz - sx * cz
-    R[2, 0] = -sy
-    R[2, 1] = sx * cy
-    R[2, 2] = cx * cy
-
-    # 全頂点に変換を一度に適用
-    # 手順: 中心へ移動 -> スケール -> 回転 -> 中心へ戻す -> 平行移動
-    centered = vertices - center
-    scaled = centered * scale
-    rotated = scaled @ R.T
-    transformed = rotated + center + translate
-
-    return transformed
+PARAM_META = {
+    "auto_center": {"type": "bool"},
+    "pivot": {
+        "type": "vec3",
+        "min": (-300.0, -300.0, -300.0),
+        "max": (300.0, 300.0, 300.0),
+    },
+    "angles_rad": {
+        "type": "vec3",
+        "min": (0, 0, 0),
+        "max": (2 * np.pi, 2 * np.pi, 2 * np.pi),
+    },
+    "scale": {"type": "vec3", "min": (0.25, 0.25, 0.25), "max": (4.0, 4.0, 4.0)},
+    "delta": {
+        "type": "vec3",
+        "min": (-200, -200, -200),
+        "max": (200.0, 200.0, 200.0),
+    },
+}
 
 
 @effect()
@@ -118,22 +103,39 @@ def affine(
 
 
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
-affine.__param_meta__ = {
-    "auto_center": {"type": "bool"},
-    "pivot": {
-        "type": "vec3",
-        "min": (-300.0, -300.0, -300.0),
-        "max": (300.0, 300.0, 300.0),
-    },
-    "angles_rad": {
-        "type": "vec3",
-        "min": (0, 0, 0),
-        "max": (2 * np.pi, 2 * np.pi, 2 * np.pi),
-    },
-    "scale": {"type": "vec3", "min": (0.25, 0.25, 0.25), "max": (4.0, 4.0, 4.0)},
-    "delta": {
-        "type": "vec3",
-        "min": (-200, -200, -200),
-        "max": (200.0, 200.0, 200.0),
-    },
-}
+affine.__param_meta__ = PARAM_META
+
+
+@njit(fastmath=True, cache=True)
+def _apply_combined_transform(
+    vertices: np.ndarray,
+    center: np.ndarray,
+    scale: np.ndarray,
+    rotate: np.ndarray,
+    translate: np.ndarray,
+) -> np.ndarray:
+    """頂点に組み合わせ変換を適用します。"""
+    # 回転行列を一度だけ計算
+    sx, sy, sz = np.sin(rotate)
+    cx, cy, cz = np.cos(rotate)
+
+    # Z * Y * X の結合行列を直接計算
+    R = np.empty((3, 3), dtype=np.float32)
+    R[0, 0] = cy * cz
+    R[0, 1] = sx * sy * cz - cx * sz
+    R[0, 2] = cx * sy * cz + sx * sz
+    R[1, 0] = cy * sz
+    R[1, 1] = sx * sy * sz + cx * cz
+    R[1, 2] = cx * sy * sz - sx * cz
+    R[2, 0] = -sy
+    R[2, 1] = sx * cy
+    R[2, 2] = cx * cy
+
+    # 全頂点に変換を一度に適用
+    # 手順: 中心へ移動 -> スケール -> 回転 -> 中心へ戻す -> 平行移動
+    centered = vertices - center
+    scaled = centered * scale
+    rotated = scaled @ R.T
+    transformed = rotated + center + translate
+
+    return transformed

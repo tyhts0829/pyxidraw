@@ -29,6 +29,52 @@ from engine.core.geometry import Geometry
 from .registry import effect
 
 EPS = 1e-12
+PARAM_META = {
+    "intensity": {"type": "number", "min": 0.0, "max": 10.0},
+    "subdivisions": {"type": "integer", "min": 0, "max": 10, "step": 1},
+}
+
+
+@effect()
+def collapse(
+    g: Geometry,
+    *,
+    intensity: float = 5.0,
+    subdivisions: int = 6,
+) -> Geometry:
+    """線分を細分化してノイズで変形。
+
+    Parameters
+    ----------
+    g : Geometry
+        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
+    intensity : float, default 5.0
+        変位量（mm 相当）。0 で no-op。
+    subdivisions : int, default 6
+        細分回数（0 で no-op, 10 にクランプ）。
+    """
+    coords, offsets = g.as_arrays(copy=False)
+    if coords.shape[0] == 0 or intensity == 0.0 or subdivisions <= 0:
+        return Geometry(coords.copy(), offsets.copy())
+    divisions = max(1, int(subdivisions))
+
+    # Numba の使用可否（環境変数で無効化可能）
+    try:
+        from common.settings import get as _get_settings
+
+        use_numba = bool(_get_settings().USE_NUMBA)
+    except Exception:
+        use_numba_env = os.environ.get("PYX_USE_NUMBA", "1")
+        use_numba = use_numba_env not in {"0", "false", "False"}
+
+    if use_numba:
+        new_coords, new_offsets = _collapse_numba(coords, offsets, float(intensity), divisions)
+    else:
+        new_coords, new_offsets = _collapse_numpy_v2(coords, offsets, float(intensity), divisions)
+    return Geometry(new_coords, new_offsets)
+
+
+collapse.__param_meta__ = PARAM_META
 
 
 def _collapse_numpy_v2(
@@ -361,48 +407,3 @@ def _collapse_numba(
         out_offsets,
     )
     return out_coords, out_offsets
-
-
-@effect()
-def collapse(
-    g: Geometry,
-    *,
-    intensity: float = 5.0,
-    subdivisions: int = 6,
-) -> Geometry:
-    """線分を細分化してノイズで変形。
-
-    Parameters
-    ----------
-    g : Geometry
-        入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
-    intensity : float, default 5.0
-        変位量（mm 相当）。0 で no-op。
-    subdivisions : int, default 6
-        細分回数（0 で no-op, 10 にクランプ）。
-    """
-    coords, offsets = g.as_arrays(copy=False)
-    if coords.shape[0] == 0 or intensity == 0.0 or subdivisions <= 0:
-        return Geometry(coords.copy(), offsets.copy())
-    divisions = max(1, int(subdivisions))
-
-    # Numba の使用可否（環境変数で無効化可能）
-    try:
-        from common.settings import get as _get_settings
-
-        use_numba = bool(_get_settings().USE_NUMBA)
-    except Exception:
-        use_numba_env = os.environ.get("PYX_USE_NUMBA", "1")
-        use_numba = use_numba_env not in {"0", "false", "False"}
-
-    if use_numba:
-        new_coords, new_offsets = _collapse_numba(coords, offsets, float(intensity), divisions)
-    else:
-        new_coords, new_offsets = _collapse_numpy_v2(coords, offsets, float(intensity), divisions)
-    return Geometry(new_coords, new_offsets)
-
-
-collapse.__param_meta__ = {
-    "intensity": {"type": "number", "min": 0.0, "max": 10.0},
-    "subdivisions": {"type": "integer", "min": 0, "max": 10, "step": 1},
-}

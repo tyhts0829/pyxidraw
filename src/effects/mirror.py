@@ -28,133 +28,12 @@ from .registry import effect
 # 固定許容誤差と境界ポリシー
 EPS: float = 1e-6
 INCLUDE_BOUNDARY: bool = True
-
-
-def _normalize_source_side(n_mirror: int, source_side: bool | Sequence[bool]) -> list[int]:
-    """bool/シーケンスを ±1 に正規化（True→+1, False→-1）。"""
-    if isinstance(source_side, (bool, np.bool_)):
-        sign = 1 if bool(source_side) else -1
-        return [sign for _ in range(n_mirror)]
-    seq = list(source_side)
-    out: list[int] = []
-    for i in range(n_mirror):
-        v = bool(seq[i % len(seq)])
-        out.append(1 if v else -1)
-    return out
-
-
-def _is_inside(val: float, thresh: float, side: int) -> bool:
-    d = side * (val - thresh)
-    return d >= (-EPS if INCLUDE_BOUNDARY else EPS)
-
-
-def _intersect_axis(a: np.ndarray, b: np.ndarray, axis: int, thresh: float) -> np.ndarray:
-    # a,b: (3,), 直線分 a->b と座標平面 axis=thresh の交点
-    da = float(a[axis])
-    db = float(b[axis])
-    denom = db - da
-    if denom == 0.0:
-        # 平行: a を返す（呼び出し元で扱うためのフォールバック）。
-        return a.astype(np.float32)
-    t = (thresh - da) / denom
-    t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-    p = a + (b - a) * np.float32(t)
-    p[axis] = np.float32(thresh)
-    return p.astype(np.float32)
-
-
-def _clip_polyline_halfspace(
-    vertices: np.ndarray,
-    *,
-    axis: int,
-    thresh: float,
-    side: int,
-) -> list[np.ndarray]:
-    """1 本のポリラインを軸整列半空間でクリップして部分線リストを返す。"""
-    n = vertices.shape[0]
-    if n == 0:
-        return []
-    if n == 1:
-        v = vertices[0]
-        return [vertices.copy()] if _is_inside(float(v[axis]), thresh, side) else []
-
-    out: list[np.ndarray] = []
-    cur: list[np.ndarray] = []
-    prev = vertices[0].astype(np.float32)
-    prev_in = _is_inside(float(prev[axis]), thresh, side)
-    if prev_in:
-        cur.append(prev)
-    for i in range(1, n):
-        pt = vertices[i].astype(np.float32)
-        now_in = _is_inside(float(pt[axis]), thresh, side)
-        if prev_in and now_in:
-            # 内→内: そのまま追加
-            cur.append(pt)
-        elif prev_in and not now_in:
-            # 内→外: 境界でクリップして閉じる
-            ip = _intersect_axis(prev, pt, axis, thresh)
-            if len(cur) == 0 or not np.allclose(cur[-1], ip, atol=EPS):
-                cur.append(ip)
-            if len(cur) >= 1:
-                out.append(np.vstack(cur).astype(np.float32))
-            cur = []
-        elif (not prev_in) and now_in:
-            # 外→内: 境界から開始
-            ip = _intersect_axis(prev, pt, axis, thresh)
-            cur = [ip, pt]
-        else:
-            # 外→外: 交差の可能性（スキップ）
-            pass
-        prev, prev_in = pt, now_in
-
-    if cur:
-        out.append(np.vstack(cur).astype(np.float32))
-    return out
-
-
-def _clip_polyline_quadrant(
-    vertices: np.ndarray,
-    *,
-    cx: float,
-    cy: float,
-    sx: int,
-    sy: int,
-) -> list[np.ndarray]:
-    # 2 つの半空間の共通部分でクリップ（順次適用）
-    pieces = _clip_polyline_halfspace(vertices, axis=0, thresh=cx, side=sx)
-    res: list[np.ndarray] = []
-    for p in pieces:
-        res.extend(_clip_polyline_halfspace(p, axis=1, thresh=cy, side=sy))
-    return res
-
-
-def _reflect_x(vertices: np.ndarray, cx: float) -> np.ndarray:
-    r = vertices.copy()
-    r[:, 0] = np.float32(2 * cx) - r[:, 0]
-    return r
-
-
-def _reflect_y(vertices: np.ndarray, cy: float) -> np.ndarray:
-    r = vertices.copy()
-    r[:, 1] = np.float32(2 * cy) - r[:, 1]
-    return r
-
-
-def _dedup_lines(lines: Iterable[np.ndarray]) -> list[np.ndarray]:
-    """量子化ハッシュで重複ポリラインを除去。"""
-    seen: set[tuple] = set()
-    out: list[np.ndarray] = []
-    inv = 1.0 / EPS if EPS > 0 else 1e6
-    for ln in lines:
-        if ln.shape[0] == 0:
-            continue
-        q = np.rint(ln * inv).astype(np.int64)
-        key = (q.shape[0],) + tuple(q.flatten().tolist())
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(ln.astype(np.float32))
-    return out
+PARAM_META = {
+    "n_mirror": {"min": 1, "max": 8, "step": 1},
+    "cx": {"min": 0, "max": 1000.0, "step": 0.1},
+    "cy": {"min": 0, "max": 1000.0, "step": 0.1},
+    "show_planes": {"type": "bool"},
+}
 
 
 @effect(name="mirror")
@@ -419,9 +298,131 @@ __all__ = ["mirror"]
 
 
 # GUI/量子化向けの RangeHint（float のみ量子化対象）
-mirror.__param_meta__ = {
-    "n_mirror": {"min": 1, "max": 8, "step": 1},
-    "cx": {"min": 0, "max": 1000.0, "step": 0.1},
-    "cy": {"min": 0, "max": 1000.0, "step": 0.1},
-    "show_planes": {"type": "bool"},
-}
+mirror.__param_meta__ = PARAM_META
+
+
+def _normalize_source_side(n_mirror: int, source_side: bool | Sequence[bool]) -> list[int]:
+    """bool/シーケンスを ±1 に正規化（True→+1, False→-1）。"""
+    if isinstance(source_side, (bool, np.bool_)):
+        sign = 1 if bool(source_side) else -1
+        return [sign for _ in range(n_mirror)]
+    seq = list(source_side)
+    out: list[int] = []
+    for i in range(n_mirror):
+        v = bool(seq[i % len(seq)])
+        out.append(1 if v else -1)
+    return out
+
+
+def _is_inside(val: float, thresh: float, side: int) -> bool:
+    d = side * (val - thresh)
+    return d >= (-EPS if INCLUDE_BOUNDARY else EPS)
+
+
+def _intersect_axis(a: np.ndarray, b: np.ndarray, axis: int, thresh: float) -> np.ndarray:
+    # a,b: (3,), 直線分 a->b と座標平面 axis=thresh の交点
+    da = float(a[axis])
+    db = float(b[axis])
+    denom = db - da
+    if denom == 0.0:
+        # 平行: a を返す（呼び出し元で扱うためのフォールバック）。
+        return a.astype(np.float32)
+    t = (thresh - da) / denom
+    t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+    p = a + (b - a) * np.float32(t)
+    p[axis] = np.float32(thresh)
+    return p.astype(np.float32)
+
+
+def _clip_polyline_halfspace(
+    vertices: np.ndarray,
+    *,
+    axis: int,
+    thresh: float,
+    side: int,
+) -> list[np.ndarray]:
+    """1 本のポリラインを軸整列半空間でクリップして部分線リストを返す。"""
+    n = vertices.shape[0]
+    if n == 0:
+        return []
+    if n == 1:
+        v = vertices[0]
+        return [vertices.copy()] if _is_inside(float(v[axis]), thresh, side) else []
+
+    out: list[np.ndarray] = []
+    cur: list[np.ndarray] = []
+    prev = vertices[0].astype(np.float32)
+    prev_in = _is_inside(float(prev[axis]), thresh, side)
+    if prev_in:
+        cur.append(prev)
+    for i in range(1, n):
+        pt = vertices[i].astype(np.float32)
+        now_in = _is_inside(float(pt[axis]), thresh, side)
+        if prev_in and now_in:
+            # 内→内: そのまま追加
+            cur.append(pt)
+        elif prev_in and not now_in:
+            # 内→外: 境界でクリップして閉じる
+            ip = _intersect_axis(prev, pt, axis, thresh)
+            if len(cur) == 0 or not np.allclose(cur[-1], ip, atol=EPS):
+                cur.append(ip)
+            if len(cur) >= 1:
+                out.append(np.vstack(cur).astype(np.float32))
+            cur = []
+        elif (not prev_in) and now_in:
+            # 外→内: 境界から開始
+            ip = _intersect_axis(prev, pt, axis, thresh)
+            cur = [ip, pt]
+        else:
+            # 外→外: 交差の可能性（スキップ）
+            pass
+        prev, prev_in = pt, now_in
+
+    if cur:
+        out.append(np.vstack(cur).astype(np.float32))
+    return out
+
+
+def _clip_polyline_quadrant(
+    vertices: np.ndarray,
+    *,
+    cx: float,
+    cy: float,
+    sx: int,
+    sy: int,
+) -> list[np.ndarray]:
+    # 2 つの半空間の共通部分でクリップ（順次適用）
+    pieces = _clip_polyline_halfspace(vertices, axis=0, thresh=cx, side=sx)
+    res: list[np.ndarray] = []
+    for p in pieces:
+        res.extend(_clip_polyline_halfspace(p, axis=1, thresh=cy, side=sy))
+    return res
+
+
+def _reflect_x(vertices: np.ndarray, cx: float) -> np.ndarray:
+    r = vertices.copy()
+    r[:, 0] = np.float32(2 * cx) - r[:, 0]
+    return r
+
+
+def _reflect_y(vertices: np.ndarray, cy: float) -> np.ndarray:
+    r = vertices.copy()
+    r[:, 1] = np.float32(2 * cy) - r[:, 1]
+    return r
+
+
+def _dedup_lines(lines: Iterable[np.ndarray]) -> list[np.ndarray]:
+    """量子化ハッシュで重複ポリラインを除去。"""
+    seen: set[tuple] = set()
+    out: list[np.ndarray] = []
+    inv = 1.0 / EPS if EPS > 0 else 1e6
+    for ln in lines:
+        if ln.shape[0] == 0:
+            continue
+        q = np.rint(ln * inv).astype(np.int64)
+        key = (q.shape[0],) + tuple(q.flatten().tolist())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(ln.astype(np.float32))
+    return out

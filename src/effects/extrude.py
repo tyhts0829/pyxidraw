@@ -31,6 +31,14 @@ MAX_DISTANCE = 200.0
 MAX_SCALE = 3.0
 MAX_SUBDIVISIONS = 8
 
+PARAM_META = {
+    "direction": {"type": "vec3"},
+    "distance": {"type": "number", "min": 0.0, "max": MAX_DISTANCE},
+    "scale": {"type": "number", "min": 0.0, "max": MAX_SCALE},
+    "subdivisions": {"type": "integer", "min": 0, "max": MAX_SUBDIVISIONS, "step": 1},
+    "center_mode": {"choices": ["origin", "auto"]},
+}
+
 
 @effect()
 def extrude(
@@ -137,10 +145,4 @@ def extrude(
 
 
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
-extrude.__param_meta__ = {
-    "direction": {"type": "vec3"},
-    "distance": {"type": "number", "min": 0.0, "max": MAX_DISTANCE},
-    "scale": {"type": "number", "min": 0.0, "max": MAX_SCALE},
-    "subdivisions": {"type": "integer", "min": 0, "max": MAX_SUBDIVISIONS, "step": 1},
-    "center_mode": {"choices": ["origin", "auto"]},
-}
+extrude.__param_meta__ = PARAM_META

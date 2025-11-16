@@ -15,6 +15,14 @@ from engine.core.geometry import Geometry
 
 from .registry import effect
 
+PARAM_META = {
+    "delta": {
+        "type": "vec3",
+        "min": (-500.0, -500.0, -500.0),
+        "max": (500.0, 500.0, 500.0),
+    },
+}
+
 
 @effect()
 def translate(
@@ -38,12 +46,6 @@ def translate(
     return g.translate(ox, oy, oz)
 
 
-translate.__param_meta__ = {
-    "delta": {
-        "type": "vec3",
-        "min": (-500.0, -500.0, -500.0),
-        "max": (500.0, 500.0, 500.0),
-    },
-}
+translate.__param_meta__ = PARAM_META
 
 # 後方互換クラスは廃止（関数APIのみ）

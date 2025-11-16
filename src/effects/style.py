@@ -12,8 +12,19 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from engine.core.geometry import Geometry
 from effects.registry import effect
+from engine.core.geometry import Geometry
+
+PARAM_META = {
+    "color": {
+        "type": "vec3",
+        "min": (0.0, 0.0, 0.0),
+        "max": (1.0, 1.0, 1.0),
+        # 0-255 UI と揃えた量子化（キャッシュ署名向け）
+        "step": (1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0),
+    },
+    "thickness": {"type": "number", "min": 1.0, "max": 10.0, "step": 0.01},
+}
 
 
 @effect()
@@ -34,17 +45,7 @@ def style(
     return g
 
 
-# Parameter GUI 向けメタ（RangeHint）
-style.__param_meta__ = {
-    "color": {
-        "type": "vec3",
-        "min": (0.0, 0.0, 0.0),
-        "max": (1.0, 1.0, 1.0),
-        # 0-255 UI と揃えた量子化（キャッシュ署名向け）
-        "step": (1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0),
-    },
-    "thickness": {"type": "number", "min": 1.0, "max": 10.0, "step": 0.01},
-}
+style.__param_meta__ = PARAM_META
 
 # ランタイム検出用のマーカー
 style.__effect_kind__ = "style"
