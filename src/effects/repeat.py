@@ -78,14 +78,12 @@ def _update_scale(current_scale: np.ndarray, scale: np.ndarray) -> np.ndarray:
     return current_scale * scale
 
 
-MAX_DUPLICATES = 25
-
-
 @effect()
 def repeat(
     g: Geometry,
     *,
     count: int = 3,
+    cumulative: bool = True,
     offset: Vec3 = (0.0, 0.0, 0.0),
     angles_rad_step: Vec3 = (0.1, 0.1, 0.1),
     scale: Vec3 = (0.8, 0.8, 0.8),
@@ -100,6 +98,8 @@ def repeat(
         入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
     count : int, default 3
         複製回数。0 で変化なし（no-op）。上限は `MAX_DUPLICATES`。
+    cumulative : bool, default True
+        True のときスケール・回転・平行移動を累積適用。False のときスケールのみ累積し、回転と平行移動は元ジオメトリからの相対量で適用。
     offset : tuple[float, float, float], default (0.0, 0.0, 0.0)
         各ステップの平行移動量 [mm]。
     angles_rad_step : tuple[float, float, float], default (0.1, 0.1, 0.1)
@@ -133,21 +133,35 @@ def repeat(
     for i in range(len(offsets) - 1):
         lines.append(coords[offsets[i] : offsets[i + 1]].copy())
 
-    current_coords = coords.copy()
     current_scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
-    for n in range(n_int):
-        current_scale = _update_scale(current_scale, scale_np)
-        current_coords = _apply_transform_to_coords(
-            current_coords,
-            center_np,
-            current_scale,
-            rotate_radians * (n + 1),
-            offset_np * (n + 1),
-        )
-        # 複製後の各線を追加
-        for i in range(len(offsets) - 1):
-            lines.append(current_coords[offsets[i] : offsets[i + 1]].copy())
+    if cumulative:
+        current_coords = coords.copy()
+        for n in range(n_int):
+            current_scale = _update_scale(current_scale, scale_np)
+            current_coords = _apply_transform_to_coords(
+                current_coords,
+                center_np,
+                current_scale,
+                rotate_radians * (n + 1),
+                offset_np * (n + 1),
+            )
+            # 複製後の各線を追加
+            for i in range(len(offsets) - 1):
+                lines.append(current_coords[offsets[i] : offsets[i + 1]].copy())
+    else:
+        base_coords = coords.copy()
+        for n in range(n_int):
+            current_scale = _update_scale(current_scale, scale_np)
+            transformed_coords = _apply_transform_to_coords(
+                base_coords,
+                center_np,
+                current_scale,
+                rotate_radians * (n + 1),
+                offset_np * (n + 1),
+            )
+            for i in range(len(offsets) - 1):
+                lines.append(transformed_coords[offsets[i] : offsets[i + 1]].copy())
 
     return Geometry.from_lines(lines)
 
@@ -155,7 +169,8 @@ def repeat(
 # UI 表示のためのメタ情報（RangeHint 構築に使用）
 repeat.__param_meta__ = {
     "auto_center": {"type": "bool"},
-    "count": {"type": "integer", "min": 0, "max": MAX_DUPLICATES, "step": 1},
+    "cumulative": {"type": "bool"},
+    "count": {"type": "integer", "min": 0, "max": 100, "step": 1},
     "offset": {
         "type": "vec3",
         "min": (-300.0, -300.0, -300.0),
