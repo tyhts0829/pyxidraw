@@ -18,6 +18,7 @@ from typing import Any, Callable, Iterable, Literal, Mapping
 
 ValueType = Literal["float", "int", "bool", "enum", "vector", "string"]
 SourceType = Literal["shape", "effect"]
+CategoryKind = Literal["shape", "pipeline", "hud", "display"]
 OverrideSource = Literal["gui"]
 
 
@@ -58,6 +59,8 @@ class ParameterDescriptor:
     category: str
     value_type: ValueType
     default_value: Any
+    # カテゴリ種別（ヘッダ/テーマ決定用）。既定は shape。
+    category_kind: CategoryKind = "shape"
     range_hint: RangeHint | None = None
     help_text: str | None = None
     vector_hint: VectorRangeHint | None = None
@@ -348,11 +351,14 @@ class ParameterThemeConfig:
 
     style: dict[str, Any] = field(default_factory=dict)
     colors: dict[str, Any] = field(default_factory=dict)
-    # カテゴリ別の色設定（shape/pipeline）。任意キー辞書とし、フェイルソフトに適用する。
+    # カテゴリ種別ごとの色設定（category_kind: shape/pipeline/hud/display 等）。
+    # 任意キー辞書とし、存在するものだけをフェイルソフトに適用する。
     # 例:
     #   {
     #       "shape": {"header": [r,g,b,a], "header_hovered": [...], "header_active": [...]},
-    #       "pipeline": {"header": [...], "header_hovered": [...], "header_active": [...]}
+    #       "pipeline": {"header": [...], "header_hovered": [...], "header_active": [...]},
+    #       "hud": {...},
+    #       "display": {...},
     #   }
     categories: dict[str, Any] = field(default_factory=dict)
 

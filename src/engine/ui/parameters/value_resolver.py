@@ -171,6 +171,7 @@ class ParameterValueResolver:
             if context.scope == "shape"
             else (context.pipeline_label or context.pipeline or context.scope)
         )
+        category_kind = "shape" if context.scope == "shape" else "pipeline"
         if source == "default":
             hint = self._range_hint_from_meta(
                 value_type=value_type,
@@ -183,6 +184,7 @@ class ParameterValueResolver:
                 label=f"{context.label_prefix}: {param_name}",
                 source=context.scope,
                 category=category,
+                category_kind=category_kind,
                 value_type=value_type,
                 default_value=default_actual,
                 range_hint=hint,
@@ -232,11 +234,13 @@ class ParameterValueResolver:
             if context.scope == "shape"
             else (context.pipeline_label or context.pipeline or context.scope)
         )
+        category_kind = "shape" if context.scope == "shape" else "pipeline"
         descriptor = ParameterDescriptor(
             id=descriptor_id,
             label=f"{context.label_prefix}: {param_name}",
             source=context.scope,
             category=category,
+            category_kind=category_kind,
             value_type="vector",
             default_value=default_tuple,
             range_hint=None,
@@ -342,11 +346,13 @@ class ParameterValueResolver:
                 if context.scope == "shape"
                 else (context.pipeline_label or context.pipeline or context.scope)
             )
+            category_kind = "shape" if context.scope == "shape" else "pipeline"
             descriptor = ParameterDescriptor(
                 id=descriptor_id,
                 label=f"{context.label_prefix}: {param_name}",
                 source=context.scope,
                 category=category,
+                category_kind=category_kind,
                 value_type=value_type,
                 default_value=default_value,
                 range_hint=None,

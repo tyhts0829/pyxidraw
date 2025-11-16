@@ -283,12 +283,31 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
 
     # ---- カテゴリ別テーマ ----
     def _category_kind(self, items: list[ParameterDescriptor]) -> str:
+        """カテゴリ種別（theme key）を決定する。
+
+        - Descriptor.category_kind を信頼し、先頭要素の値を採用する。
+        - 混在があればログだけ出し、最初の値を優先する。
+        """
+        if not items:
+            return "shape"
         try:
-            if any(it.source == "effect" for it in items):
-                return "pipeline"
-            return "shape"
+            first = items[0].category_kind
         except Exception:
-            return "shape"
+            # 後方互換: source に基づく従来ロジックへフォールバック
+            try:
+                if any(it.source == "effect" for it in items):
+                    return "pipeline"
+                return "shape"
+            except Exception:
+                return "shape"
+        # 一貫性チェック（混在はログのみ）
+        try:
+            kinds = {getattr(it, "category_kind", first) for it in items}
+            if len(kinds) > 1:
+                logger.debug("mixed category_kind in group: %s", kinds)
+        except Exception:
+            pass
+        return first
 
     def _get_category_header_theme(self, kind: str) -> Any | None:
         if kind in self._cat_header_theme:
@@ -696,16 +715,23 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             "runner.show_hud",
         }
         filtered = [d for d in descriptors if d.id not in excluded]
-        # カテゴリの出現順（登録順に基づく）を保持
-        cat_items: dict[str | None, list[ParameterDescriptor]] = {}
-        cat_order: list[str | None] = []
+        # カテゴリの出現順（登録順に基づく）を保持。
+        # key は (category_kind, category) とし、shape/text と pipeline/text を分離する。
+        cat_items: dict[tuple[str, str | None], list[ParameterDescriptor]] = {}
+        cat_order: list[tuple[str, str | None]] = []
         for d in filtered:
             cat = d.category if d.category else None
-            if cat not in cat_items:
-                cat_items[cat] = [d]
-                cat_order.append(cat)
+            try:
+                kind = d.category_kind
+            except Exception:
+                # 後方互換: source に基づき推定
+                kind = "pipeline" if d.source == "effect" else "shape"
+            key = (kind, cat)
+            if key not in cat_items:
+                cat_items[key] = [d]
+                cat_order.append(key)
             else:
-                cat_items[cat].append(d)
+                cat_items[key].append(d)
 
         def _sort_items(items: list[ParameterDescriptor]) -> list[ParameterDescriptor]:
             if not items:
@@ -723,9 +749,10 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             # それ以外は従来どおり id で安定ソート
             return sorted(items, key=lambda x: x.id)
 
-        def flush(cat: str | None, items: list[ParameterDescriptor]) -> None:
+        def flush(key: tuple[str, str | None], items: list[ParameterDescriptor]) -> None:
             if not items or not any(it.supported for it in items):
                 return
+            _kind, cat = key
             label = cat if cat else "General"
             kind = self._category_kind(items)
             with dpg.collapsing_header(label=label, parent=parent, default_open=True) as header:
@@ -785,9 +812,9 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
                             continue
                         self._create_row_3cols(table, it)
 
-        for cat in cat_order:
-            items = cat_items.get(cat, [])
-            flush(cat, items)
+        for key in cat_order:
+            items = cat_items.get(key, [])
+            flush(key, items)
 
     def _label_value_ratio(self) -> tuple[float, float]:
         left = 0.5

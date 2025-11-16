@@ -176,6 +176,7 @@ class ParameterRuntime:
                 label=label,
                 source="effect",
                 category=category,
+                category_kind="pipeline",
                 value_type="bool",
                 default_value=False,
                 pipeline_uid=(context.pipeline or None),

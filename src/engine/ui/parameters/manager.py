@@ -158,6 +158,7 @@ class ParameterManager:
                 label="Background",
                 source="effect",
                 category="Display",
+                category_kind="display",
                 value_type="vector",
                 default_value=(float(bg[0]), float(bg[1]), float(bg[2]), float(bg[3])),
             )
@@ -166,6 +167,7 @@ class ParameterManager:
                 label="Line Color",
                 source="effect",
                 category="Display",
+                category_kind="display",
                 value_type="vector",
                 default_value=(float(ln[0]), float(ln[1]), float(ln[2]), float(ln[3])),
             )
@@ -189,6 +191,7 @@ class ParameterManager:
                 label="HUD Text",
                 source="effect",
                 category="HUD",
+                category_kind="hud",
                 value_type="vector",
                 default_value=(
                     float(hud_text[0]),
@@ -202,6 +205,7 @@ class ParameterManager:
                 label="HUD Meter",
                 source="effect",
                 category="HUD",
+                category_kind="hud",
                 value_type="vector",
                 default_value=(float(mr), float(mg), float(mb), 1.0),
             )
@@ -210,6 +214,7 @@ class ParameterManager:
                 label="HUD Meter BG",
                 source="effect",
                 category="HUD",
+                category_kind="hud",
                 value_type="vector",
                 default_value=(0.196, 0.196, 0.196, 1.0),
             )
@@ -222,6 +227,7 @@ class ParameterManager:
                 label="Show HUD",
                 source="effect",
                 category="HUD",
+                category_kind="hud",
                 value_type="bool",
                 default_value=True,
             )

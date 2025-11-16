@@ -19,10 +19,13 @@ def draw(t: float):
         .fill()
     )
     g2 = G.text().scale(5, 5, 1)
-    p2 = E.pipeline.label(uid="text").affine().fill()
+    p2 = E.pipeline.label(uid="text_p2").affine().fill()
     g3 = G.line().scale(40)
-    p3 = E.pipeline.label(uid="line").affine()
-    return p1(g1), p2(g2), p3(g3)
+    p3 = E.pipeline.label(uid="line_p3").affine()
+
+    p_all = E.pipeline.label(uid="all").affine()
+
+    return p_all(p1(g1) + p2(g2) + p3(g3))
 
 
 if __name__ == "__main__":
