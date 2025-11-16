@@ -85,8 +85,8 @@ def repeat(
     count: int = 3,
     cumulative: bool = True,
     offset: Vec3 = (0.0, 0.0, 0.0),
-    angles_rad_step: Vec3 = (0.1, 0.1, 0.1),
-    scale: Vec3 = (0.8, 0.8, 0.8),
+    angles_rad_step: Vec3 = (0.0, 0.0, 0.0),
+    scale: Vec3 = (1.0, 1.0, 1.0),
     auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
