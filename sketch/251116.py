@@ -7,9 +7,7 @@ def draw(t: float):
     g1 = G.polygon().scale(40, 40, 40).translate(A5[0] / 2, A5[1] / 2, 0)
     p1 = (
         E.affine()
-        .fill()
-        .subdivide()
-        .wobble()
+        .repeat()
         .dash(
             dash_length=[cc[1] * 10, cc[2] * 10, cc[3] * 10],
             gap_length=[cc[4] * 10, cc[5] * 10, cc[6] * 10],
@@ -18,14 +16,7 @@ def draw(t: float):
         .offset()
         .fill()
     )
-    g2 = G.text().scale(5, 5, 1)
-    p2 = E.label(uid="text_p2").affine().fill()
-    g3 = G.line().scale(40)
-    p3 = E.label(uid="line_p3").affine()
-
-    p_all = E.label(uid="all").affine()
-
-    return p_all(p1(g1) + p2(g2) + p3(g3))
+    return p1(g1)
 
 
 if __name__ == "__main__":
