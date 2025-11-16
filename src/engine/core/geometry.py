@@ -2,7 +2,7 @@
 統合 Geometry 型（プロジェクト中核モジュール）
 
 本モジュールは、プロジェクト全体で使用する唯一の幾何表現 `Geometry` を提供する。
-`architecture.md` の方針に基づき、生成（Shapes/G）、変換（Geometry）、加工（Effects/E.pipeline）
+`architecture.md` の方針に基づき、生成（Shapes/G）、変換（Geometry）、加工（Effects/E）
 を明確に分離し、GPU 転送までの境界摩擦を最小化する。
 
 データモデル（不変条件）:
@@ -55,7 +55,7 @@ API 方針（ADR 準拠）:
 使用例:
     from api import G, E
     g = G.grid(nx=10, ny=10).scale(50, 50, 1).translate(100, 100, 0)
-    pipe = (E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.5)).build())
+    pipe = (E.rotate(angles_rad=(0.0, 0.0, 0.5)).build())
     out = pipe(g)  # Geometry -> Geometry
 """
 
@@ -109,7 +109,7 @@ class Geometry:
     - digest は廃止（同一性/キャッシュは LazySignature へ移行）。
 
     設計意図:
-    - 表現を 1 種に統一し、Shapes/E.pipeline/Renderer 間の境界を単純化する。
+    - 表現を 1 種に統一し、Shapes/E/Renderer 間の境界を単純化する。
     - 変換はインスタンスを複製する純関数（テスト容易・キャッシュ容易）。
     - 生成時に dtype/形状を検証し、正規化済み状態だけを許容する。
     """

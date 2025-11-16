@@ -293,6 +293,7 @@ def _render_pipeline_protocol(effect_names: Iterable[str]) -> tuple[str, list[st
     """
     extra_imports: set[str] = set()
     lines: list[str] = []
+    effects_method_lines: list[str] = []
 
     # ビルダ Protocol
     lines.append("class _PipelineBuilder(Protocol):\n")
@@ -365,6 +366,11 @@ def _render_pipeline_protocol(effect_names: Iterable[str]) -> tuple[str, list[st
             else:
                 paramlist = "**_params: Any"
 
+            # E.<effect>(...) 用の簡易 Protocol（docstring なし）
+            effects_method_lines.append(
+                f"    def {name}(self, {paramlist}) -> _PipelineBuilder: ...\n"
+            )
+
             # docstring 本文を持てるようブロック形式で定義開始
             lines.append(f"    def {name}(self, {paramlist}) -> _PipelineBuilder:\n")
 
@@ -435,6 +441,9 @@ def _render_pipeline_protocol(effect_names: Iterable[str]) -> tuple[str, list[st
             lines.append("        ...\n")
         except Exception:
             lines.append(f"    def {name}(self, **_params: Any) -> _PipelineBuilder: ...\n")
+            effects_method_lines.append(
+                f"    def {name}(self, **_params: Any) -> _PipelineBuilder: ...\n"
+            )
 
     # ビルダの共通ユーティリティ
     lines.append("    def build(self) -> Pipeline: ...\n")
@@ -448,7 +457,11 @@ def _render_pipeline_protocol(effect_names: Iterable[str]) -> tuple[str, list[st
     # Effects ホルダー
     lines.append("class _Effects(Protocol):\n")
     lines.append("    @property\n")
-    lines.append("    def pipeline(self) -> _PipelineBuilder: ...\n\n")
+    lines.append("    def pipeline(self) -> _PipelineBuilder: ...\n")
+    lines.append("    def label(self, uid: str) -> _PipelineBuilder: ...\n")
+    for m in effects_method_lines:
+        lines.append(m)
+    lines.append("\n")
 
     return "".join(lines), sorted(extra_imports)
 

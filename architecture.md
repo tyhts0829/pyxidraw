@@ -53,14 +53,14 @@
   - `realize()`: `base` を実行して `Geometry` を得た後、`plan` を順次適用。engine.core は registries を参照せず、API 層が注入した関数参照のみを用いる。
 - ファクトリとレジストリ
   - Shapes: `shapes/` + `@shape` で登録。`G.<name>(...)` は既定で `LazyGeometry`（spec）を返し、終端で `realize()` して `Geometry` を得る。
-- Effects: `effects/` + `@effect` で登録。`E.pipeline.<name>(...)` でチェーンし、`LazyGeometry` の plan にエフェクト実装（関数参照）を積む。
+- Effects: `effects/` + `@effect` で登録。`E.<name>(...)` でチェーンし、`LazyGeometry` の plan にエフェクト実装（関数参照）を積む（`E.pipeline.<name>(...)` も後方互換として利用可能）。
   - 例: `mirror`（2D 放射状/直交の軽量版）、`mirror3d`（真の 3D 放射状: 球面くさび・大円境界）。
 
 ### Effects 概要
 
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
-  - 共通バイパス: 各エフェクトは共通の `bypass: bool` を持つ。Parameter GUI からのトグル、または `E.pipeline.<effect>(..., bypass=True)` 明示引数でスキップできる。
+  - 共通バイパス: 各エフェクトは共通の `bypass: bool` を持つ。Parameter GUI からのトグル、または `E.<effect>(..., bypass=True)` 明示引数でスキップできる（`E.pipeline.<effect>` も同様）。
     - GUI 優先順位: 「明示引数 > GUI > 既定値」。
     - 実行: `bypass=True` のステップは Pipeline に追加されず、実行負荷は発生しない。
     - キャッシュ: `bypass` は署名生成に含めないため、キャッシュ鍵に影響しない。
@@ -85,7 +85,7 @@
 ## データフロー（概略）
 
 ```
-G.<shape>() --> Geometry --(E.pipeline.*.build())--> Pipeline(Geometry->Geometry)
+G.<shape>() --> Geometry --(E.<effect>...build())--> Pipeline(Geometry->Geometry)
        \
         +---> translate/scale/rotate (Geometry API) ------------------+
 

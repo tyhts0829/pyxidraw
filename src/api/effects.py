@@ -233,6 +233,19 @@ class _EffectsAPI:
     def pipeline(self) -> PipelineBuilder:
         return PipelineBuilder()
 
+    def label(self, uid: str) -> PipelineBuilder:
+        builder = PipelineBuilder()
+        return builder.label(uid)
+
+    def __getattr__(self, name: str) -> Callable[..., PipelineBuilder]:
+        def _starter(**params: Any) -> PipelineBuilder:
+            builder = PipelineBuilder()
+            adder = getattr(builder, name)
+            return adder(**params)
+
+        _starter.__name__ = name
+        return _starter
+
 
 E = _EffectsAPI()
 

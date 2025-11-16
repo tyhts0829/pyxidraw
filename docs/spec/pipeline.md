@@ -6,8 +6,8 @@
 
 ## 基本API
 
-- ビルダー開始: `E.pipeline`
-- ステップ追加: `E.pipeline.<effect>(..., **params)`
+- ビルダー開始: `E.<effect>(..., **params)` または `E.pipeline`
+- ステップ追加: `E.<effect>(..., **params)` をメソッドチェーンで連ねる（`E.pipeline.<effect>(..., **params)` も利用可能）
 - 表示ラベル: `.label(uid: str)`（Parameter GUI のカテゴリ名を指定。内部 UID は維持）
 - ビルド: `.build() -> Pipeline`
 - 実行: `Pipeline(g: Geometry) -> Geometry`
@@ -19,8 +19,7 @@ from api import G, E
 # 形状 → エフェクト合成 → 実行
 base = G.polygon(n_sides=6)
 pipe = (
-    E.pipeline
-     .rotate(pivot=(200, 200, 0), angles_rad=(0, 0, 0.5))
+    E.rotate(pivot=(200, 200, 0), angles_rad=(0, 0, 0.5))
      .fill(angle_sets=1, angle_rad=0.0, density=0.6)
      .build()
 )
@@ -58,7 +57,7 @@ out = pipe(base)
 
 ## スタブと IDE 補助
 - `api/__init__.pyi` は `tools/gen_g_stubs.py` により自動生成。
-- 形状 `G` とエフェクト `E.pipeline` のメソッドには引数の短い説明を含む。
+- 形状 `G` とエフェクト `E.<effect>`/`E.pipeline.<effect>` のメソッドには引数の短い説明を含む。
 - スタブは CI で同期検証（`tests/test_g_stub_sync.py`）。
 
 ## 関連ユーティリティ

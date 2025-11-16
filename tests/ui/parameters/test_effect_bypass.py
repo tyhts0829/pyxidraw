@@ -20,6 +20,15 @@ def test_pipeline_builder_bypass_explicit_no_runtime() -> None:
 
 
 @pytest.mark.smoke
+def test_pipeline_builder_bypass_explicit_no_runtime_from_E_direct() -> None:
+    # E.<effect>(..., bypass=True) 形式でも同様の挙動になる
+    deactivate_runtime()
+    b = E.scale(bypass=True)
+    p = b.build()
+    assert len(p.steps) == 0
+
+
+@pytest.mark.smoke
 def test_pipeline_builder_bypass_via_gui_runtime() -> None:
     # ランタイム有効時、ParameterStore の override により bypass=True を適用できる
     store = ParameterStore()
@@ -35,6 +44,25 @@ def test_pipeline_builder_bypass_via_gui_runtime() -> None:
         p = b.build()
         assert len(p.steps) == 0
         # Descriptor の登録も行われている（id の存在確認）
+        ids = {d.id for d in store.descriptors()}
+        assert "effect@p0.scale#0.bypass" in ids
+    finally:
+        deactivate_runtime()
+
+
+@pytest.mark.smoke
+def test_pipeline_builder_bypass_via_gui_runtime_from_E_direct() -> None:
+    # E.<effect>() 形式でも GUI からの bypass が適用される
+    store = ParameterStore()
+    rt = ParameterRuntime(store)
+    activate_runtime(rt)
+    try:
+        rt.begin_frame()
+        rt.set_inputs(0.0)
+        store.set_override("effect@p0.scale#0.bypass", True)
+        b = E.scale()
+        p = b.build()
+        assert len(p.steps) == 0
         ids = {d.id for d in store.descriptors()}
         assert "effect@p0.scale#0.bypass" in ids
     finally:
