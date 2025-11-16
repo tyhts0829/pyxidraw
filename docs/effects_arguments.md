@@ -60,7 +60,7 @@
 - 戻り値: `Geometry`
 - 引数:
   - `g`: `Geometry`
-  - `amplitude_mm`: `float`
+  - `amplitude_mm`: `float | Vec3`
   - `spatial_freq`: `float | Vec3`
   - `t_sec`: `float`
 

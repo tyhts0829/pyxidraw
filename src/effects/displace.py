@@ -162,7 +162,7 @@ def perlin_core(
 @njit(fastmath=True, cache=True)
 def _apply_noise_to_coords(
     coords: np.ndarray,
-    intensity: float,
+    amplitude: tuple,
     frequency: tuple,
     time: float,
     perm_table: np.ndarray,
@@ -173,7 +173,14 @@ def _apply_noise_to_coords(
     入力は noise(pos * freq + phase) によって評価され、phase は time に依存し、freq には非依存。
     これにより、spatial_freq 変更時の位相ジャンプを抑制する。
     """
-    if coords.size == 0 or not intensity:
+    if coords.size == 0:
+        return coords.copy()
+
+    ax = np.float32(amplitude[0])
+    ay = np.float32(amplitude[1])
+    az = np.float32(amplitude[2])
+
+    if ax == 0.0 and ay == 0.0 and az == 0.0:
         return coords.copy()
 
     # 位相は周波数に依存させず、スケーリング後に加算する
@@ -183,7 +190,14 @@ def _apply_noise_to_coords(
     # Perlinノイズ計算（pos * freq + phase）
     noise_offset = perlin_core(coords, frequency, phase_tuple, perm_table, grad3_array)
 
-    return coords + noise_offset * np.float32(intensity)
+    n = coords.shape[0]
+    result = np.empty_like(coords, dtype=np.float32)
+    for i in range(n):
+        result[i, 0] = coords[i, 0] + noise_offset[i, 0] * ax
+        result[i, 1] = coords[i, 1] + noise_offset[i, 1] * ay
+        result[i, 2] = coords[i, 2] + noise_offset[i, 2] * az
+
+    return result
 
 
 # Perlinノイズ用のPermutationテーブルを作成
@@ -201,7 +215,7 @@ NOISE_GRADIENTS_3D = np.array(NOISE_CONST["GRAD3"], dtype=np.float32)
 def displace(
     g: Geometry,
     *,
-    amplitude_mm: float = 8.0,
+    amplitude_mm: float | Vec3 = (8.0, 8.0, 8.0),
     spatial_freq: float | Vec3 = (0.04, 0.04, 0.04),
     t_sec: float = 0.0,
 ) -> Geometry:
@@ -211,8 +225,8 @@ def displace(
     ----------
     g : Geometry
         入力ジオメトリ。
-    amplitude_mm : float, default 8.0
-        変位量 [mm]。0 で no-op。
+    amplitude_mm : float | tuple[float, float, float], default (8.0, 8.0, 8.0)
+        変位量 [mm]。float なら等方、Vec3 なら各軸別。0 または (0,0,0) で no-op。
     spatial_freq : float | tuple[float, float, float], default (0.04,0.04,0.04)
         空間周波数（float は等方、Vec3 で各軸別）。
     t_sec : float, default 0.0
@@ -221,9 +235,16 @@ def displace(
     coords, offsets = g.as_arrays(copy=False)
 
     # パラメータ解決（新形式のみ）
-    amp = float(amplitude_mm)
+    amp_val = amplitude_mm
     freq_val = spatial_freq
     ti = float(t_sec)
+
+    # 振幅の整形（float | Vec3 → Vec3）。単一値は全成分に拡張。
+    if isinstance(amp_val, (int, float)):
+        ax = ay = az = float(amp_val)
+    else:
+        ax, ay, az = ensure_vec3(tuple(float(x) for x in amp_val))  # type: ignore[arg-type]
+    amp_tuple: tuple[float, float, float] = (ax, ay, az)
 
     # 周波数の整形（float | Vec3 → Vec3）。単一値は全成分に拡張。
     if isinstance(freq_val, (int, float)):
@@ -234,7 +255,7 @@ def displace(
 
     new_coords = _apply_noise_to_coords(
         coords,
-        amp,
+        amp_tuple,
         freq_tuple,
         ti,
         NOISE_PERMUTATION_TABLE,
@@ -244,7 +265,11 @@ def displace(
 
 
 displace.__param_meta__ = {
-    "amplitude_mm": {"type": "number", "min": 0.0, "max": 50.0},
+    "amplitude_mm": {
+        "type": "number",
+        "min": (0.0, 0.0, 0.0),
+        "max": (50.0, 50.0, 50.0),
+    },
     "spatial_freq": {
         "type": "number",
         "min": (0.0, 0.0, 0.0),
