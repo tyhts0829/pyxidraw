@@ -11,3 +11,5 @@ collapse 散らばりのグラデーション
 描画ウィンドウとguiを常に前面に
 dropエフェクト, min_length, max_length, interval = [1, 3, 2] | 1
 dashify retio = [0.3, 2.1, ...] matplotlibの指定の仕方参考に
+cullのclipもあってもいいかも
+pipeline要らない

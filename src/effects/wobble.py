@@ -53,7 +53,7 @@ def wobble(
     g: Geometry,
     *,
     amplitude: float = 2.0,
-    frequency: float | Vec3 = 0.1,
+    frequency: float | Vec3 = (0.1, 0.1, 0.1),
     phase: float = 0.0,
 ) -> Geometry:
     """線にウォブル/波の歪みを追加（純関数）。
