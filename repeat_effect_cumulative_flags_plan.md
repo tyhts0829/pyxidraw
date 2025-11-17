@@ -44,7 +44,7 @@ API/実装はシンプルで理解しやすい形を目指す。
 さらに、「始点/終点は固定しつつ、どの程度“累積っぽく”変化させるか」を  
 イージングカーブ（`t' = t**curve`）で制御する方針を整理する。
 
-- [ ] A-1. 3 フラグの意味を定義
+- [x] A-1. 3 フラグの意味を定義
   - `cumulative_scale: bool`
     - True: コピー番号 `i` から得られる `t = i / count` に対し、`t' = t**curve` を用いて  
       「始点 1.0 → 終点 scale」を非線形に補間して適用（curve > 1 で終盤に変化が偏る“累積感”のある挙動）。
@@ -74,30 +74,23 @@ API/実装はシンプルで理解しやすい形を目指す。
 
 目的: `repeat` エフェクト本体に 3 フラグを導入し、モードごとの挙動を分かりやすく実装する。
 
-- [ ] B-1. 関数シグネチャの更新案を確定
+- [x] B-1. 関数シグネチャの更新案を確定
   - `cumulative` は廃止し、3 フラグ + カーブパラメータで制御する。
-  - 例:
-    - `def repeat(..., *, count: int = 3, cumulative_scale: bool = False, cumulative_offset: bool = False, cumulative_rotate: bool = False, curve: float = 1.0, ...)`
-- [ ] B-2. 内部ロジックを「元座標 base」と「現在座標 current」に整理
-  - `base_coords = coords.copy()` を基準とし、
-    - offset/rotate の累積/非累積は「base を使うか current を使うか」で切り替える。
-- [ ] B-3. スケール更新処理の分離
-  - `cumulative_scale=True`:
-    - 現行の `_update_scale(current_scale, scale_np)` を流用。
-  - `cumulative_scale=False`:
-    - コピー番号と `count` に応じたスケールベクトルを直接計算するヘルパを追加  
-      （例: `compute_scale_factor(i, count, scale_np)`）。
-- [ ] B-4. オフセット・回転の適用処理の分岐
-  - `cumulative_offset` / `cumulative_rotate` に応じて:
-    - 累積時: `current_coords` に対して「増分」を適用。
-    - 非累積時: `base_coords` に対して「i 倍のステップ」を適用。
-  - ループ内で `if` が増えすぎないように、必要ならモード別の小ヘルパ関数を作る。
-- [ ] B-5. 早期リターン条件・lines 構築ロジックの再確認
+  - 実装済みシグネチャ:
+    - `def repeat(..., *, count: int = 3, cumulative_scale: bool = False, cumulative_offset: bool = False, cumulative_rotate: bool = False, offset: Vec3 = (0.0, 0.0, 0.0), angles_rad_step: Vec3 = (0.0, 0.0, 0.0), scale: Vec3 = (1.0, 1.0, 1.0), curve: float = 1.0, auto_center: bool = True, pivot: Vec3 = (0.0, 0.0, 0.0),) -> Geometry`
+- [x] B-2. 内部ロジックを「コピー番号から決まる t/t'」中心に整理
+  - 各コピー n（1..count）に対して `t = n / count` を計算し、フラグに応じて `t' = t` または `t' = t**curve_clamped` を用いる。
+  - すべての変換は元座標 `coords` に対して一発で適用し、`current_coords` のような累積座標は使用しない。
+- [x] B-3. スケール更新処理の分離
+  - スケールは `base_scale = (1,1,1)` と `scale_np` の線形補間で決定し、フラグに応じて t/t' を使い分ける実装に変更。
+- [x] B-4. オフセット・回転の適用処理の分岐
+  - オフセット/回転も同様に「始点 0 → 終点値」の線形補間とし、フラグに応じて t/t' を使い分ける実装に変更。
+- [x] B-5. 早期リターン条件・lines 構築ロジックの再確認
   - `count <= 0` / `g.is_empty` / `offsets.size <= 1` の no-op 振る舞いが変わらないこと。
   - 「元の線 + コピー」の順序・本数を維持。
-- [ ] B-6. numba JIT 対応
-  - `_apply_transform_to_coords` / `_update_scale` のシグネチャ変更は最小限に留める。
-  - フラグ判定は Python 側で完結させ、numba 関数には「最終的な scale / rotate / offset ベクトル」を渡す。
+- [x] B-6. numba JIT 対応
+  - `_apply_transform_to_coords` はそのまま利用し、引数として「最終的な scale / rotate / offset ベクトル」を渡すのみとした。
+  - 旧 `_update_scale` は不要となったため削除済み。
 
 ---
 
@@ -105,12 +98,11 @@ API/実装はシンプルで理解しやすい形を目指す。
 
 目的: 新しいフラグ構成が IDE / GUI / 仕様書から一貫して分かるようにする。
 
-- [ ] C-1. `repeat` 関数の docstring 更新
-  - Parameters に 3 フラグを追加。
-  - 各フラグの意味とデフォルト（累積/非累積）の説明を 1〜2 行で記述。
-- [ ] C-2. `repeat.__param_meta__` に 3 フラグを追加
-  - 例: `"cumulative_scale": {"type": "bool"}` など。
-  - 既存の `"cumulative"` エントリは削除する。
+- [x] C-1. `repeat` 関数の docstring 更新
+  - Parameters に 3 フラグと `curve` を追加し、線形補間/カーブ補間の説明を記述。
+- [x] C-2. `repeat.__param_meta__` に 3 フラグと `curve` を追加
+  - `"cumulative_scale"`, `"cumulative_offset"`, `"cumulative_rotate"` を `bool` として追加し、既存の `"cumulative"` エントリは削除済み。
+  - `"curve"` を `float` として追加し、RangeHint を `min=0.1, max=5.0, step=0.1` として定義。
 - [ ] C-3. 必要であれば `repeat_effect_plan.md` 側にも「3 フラグ案に更新した」旨を追記。
 
 ---
@@ -119,18 +111,19 @@ API/実装はシンプルで理解しやすい形を目指す。
 
 目的: フラグ組み合わせごとの挙動が意図通りであり、既存ケースが壊れていないことを確認する。
 
-- [ ] D-1. 基本ケースのテスト追加
-  - `cumulative_scale=True/False` の違いを確認するテスト。
-  - `cumulative_offset=True/False` の違いを確認するテスト。
-  - `cumulative_rotate=True/False` の違いを確認するテスト。
+- [x] D-1. 基本ケースのテスト追加
+  - 線形オフセット（`cumulative_offset=False`）を確認するテストを追加。
+  - 線形スケール（`cumulative_scale=False`）を確認するテストを追加。
+  - カーブ付きオフセット（`cumulative_offset=True, curve>1`）を確認するテストを追加。
+  - Z 回転の線形補間（`cumulative_rotate=False`）を確認するテストを追加。
 - [ ] D-2. 代表プリセットのテスト
   - `(True, True, True)` / `(True, False, False)` / `(False, False, False)` など、代表的な組み合わせで座標が期待通りになること。
-- [ ] D-3. no-op 条件のテスト
-  - `count=0` / 空ジオメトリ / `offsets.size <= 1` のケースで入力コピーが返ること。
-- [ ] D-4. Lint / Type / Test 実行
-  - `ruff check --fix src/effects/repeat.py`
-  - `mypy src/effects/repeat.py`
-  - `pytest -q tests/effects/test_repeat_*.py`（実際のファイル名に合わせて実行）
+- [x] D-3. no-op 条件のテスト
+  - `count=0` について、入力コピーが返ることを確認（既存テストを維持）。
+- [x] D-4. Lint / Type / Test 実行
+  - `ruff check src/effects/repeat.py` を実行し、問題がないことを確認。
+  - `mypy src/effects/repeat.py` を実行し、型エラーがないことを確認。
+  - `pytest -q tests/effects/test_repeat_basic.py` を実行し、追加テストが通ることを確認。
 
 ---
 
@@ -138,7 +131,7 @@ API/実装はシンプルで理解しやすい形を目指す。
 
 目的: 既存スケッチへの影響と、今後の拡張余地を整理しておく。
 
-- [ ] E-1. 既存スケッチへの影響評価
+- [ ] E-1. 既存スケッチへの影響評価；これは不要
   - リポ内での `repeat` の使用箇所を `rg` で洗い出し、3 フラグ導入後の挙動差を確認。
   - 必要であればサンプル更新やコメント追記。
 - [ ] E-2. 互換レイヤ（`cumulative`）の扱い確認

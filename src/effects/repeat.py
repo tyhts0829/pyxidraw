@@ -1,23 +1,28 @@
 """
 repeat エフェクト（配列複製）
 
-- 入力のポリライン群を複製して規則的な配列を作ります。
+- 入力のポリライン群を複製して規則的な配列を作る。
 - 各複製に対して、ピボット基準のスケール、XYZ 回転（ラジアン）、平行移動を
-  「ステップごとに累積」適用します（n 回目には (n+1) 倍の回転/オフセット）。
-- 実装は numba 最適化した行列計算で一括変換し、元の線も結果に残します。
+  「始点/終点 + カーブ（t**curve）」で決定する。
+- スケール・平行移動・回転ごとに、線形補間のみ（完全非累積）かカーブ付き補間かを
+  個別のフラグで制御する。
 
 主なパラメータ:
-- count: 複製回数。0 で変化なし。上限は MAX_DUPLICATES(=10)。
-- offset: 各ステップの並進量 [mm]。n 回目には (n+1) 倍が適用。
-- angles_rad_step: 各ステップの回転量 [rad]。Z→Y→X の順（合成行列）。
-- scale: 各ステップのスケール。累積乗算。
-- pivot: 変換の中心。
+- count: 複製回数。0 で変化なし。
+- offset: 終点オフセット [mm]。始点 0 から offset までを補間。
+- angles_rad_step: 終点角度 [rad]。始点 0 から angles_rad_step までを補間（Z→Y→X の順で回転）。
+- scale: 終点スケール。始点 1 から scale までを補間。
+- cumulative_scale / cumulative_offset / cumulative_rotate:
+  - False のとき線形補間（t = i / count）。
+  - True のときイージングカーブ（t' = t**curve）で「累積感」のある変化を出す。
+- curve: カーブの形状を決める実数。1 で線形、1 より大きいと終盤に変化が集中。
+- pivot/auto_center: 変換の中心。
 
 注意:
 - `Geometry.from_lines` で offsets を再構築するため、複数線でも安全。
-- 複製数やスケール・回転を大きくすると頂点数が増え描画コストが上がります。
+- 複製数やスケール・回転を大きくすると頂点数が増え描画コストが上がる。
 
-使用例: `(E.pipeline.repeat(count=4, offset=(12,0,0)).build())(g)`
+使用例: `(E.pipeline.repeat(count=4, offset=(30, 0, 0)).build())(g)`
 """
 
 from __future__ import annotations
@@ -34,7 +39,9 @@ from .registry import effect
 
 PARAM_META = {
     "auto_center": {"type": "bool"},
-    "cumulative": {"type": "bool"},
+    "cumulative_scale": {"type": "bool"},
+    "cumulative_offset": {"type": "bool"},
+    "cumulative_rotate": {"type": "bool"},
     "count": {"type": "integer", "min": 0, "max": 100, "step": 1},
     "offset": {
         "type": "vec3",
@@ -47,6 +54,7 @@ PARAM_META = {
         "max": (math.pi, math.pi, math.pi),
     },
     "scale": {"type": "vec3", "min": (0.5, 0.5, 0.5), "max": (1.5, 1.5, 1.5)},
+    "curve": {"type": "float", "min": 0.1, "max": 5.0, "step": 0.1},
     "pivot": {
         "type": "vec3",
         "min": (-300.0, -300.0, -300.0),
@@ -60,10 +68,13 @@ def repeat(
     g: Geometry,
     *,
     count: int = 3,
-    cumulative: bool = True,
+    cumulative_scale: bool = False,
+    cumulative_offset: bool = False,
+    cumulative_rotate: bool = False,
     offset: Vec3 = (0.0, 0.0, 0.0),
     angles_rad_step: Vec3 = (0.0, 0.0, 0.0),
     scale: Vec3 = (1.0, 1.0, 1.0),
+    curve: float = 1.0,
     auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
@@ -75,14 +86,20 @@ def repeat(
         入力ジオメトリ。各行が 1 本のポリラインを表す（`offsets` で区切る）。
     count : int, default 3
         複製回数。0 で変化なし（no-op）。上限は `MAX_DUPLICATES`。
-    cumulative : bool, default True
-        True のときスケール・回転・平行移動を累積適用。False のときスケールのみ累積し、回転と平行移動は元ジオメトリからの相対量で適用。
+    cumulative_scale : bool, default False
+        True のときスケール補間にカーブ（t' = t**curve）を用いる。False のとき 1→scale を線形補間する。
+    cumulative_offset : bool, default False
+        True のときオフセット補間にカーブ（t' = t**curve）を用いる。False のとき 0→offset を線形補間する。
+    cumulative_rotate : bool, default False
+        True のとき回転補間にカーブ（t' = t**curve）を用いる。False のとき 0→angles_rad_step を線形補間する。
     offset : tuple[float, float, float], default (0.0, 0.0, 0.0)
-        各ステップの平行移動量 [mm]。
+        終点オフセット [mm]。始点 0 から offset までを補間する。
     angles_rad_step : tuple[float, float, float], default (0.1, 0.1, 0.1)
-        各ステップの回転角 [rad]（X, Y, Z）。
+        終点回転角 [rad]（X, Y, Z）。始点 0 から angles_rad_step までを補間する。
     scale : tuple[float, float, float], default (0.8, 0.8, 0.8)
-        各ステップのスケール倍率（X, Y, Z）。
+        終点スケール倍率（X, Y, Z）。始点 1 から scale までを補間する。
+    curve : float, default 1.0
+        カーブの形状。1.0 で線形。1 より大きいと終盤に変化が集中し“累積感”が強くなる。
     auto_center : bool, default True
         True のとき形状の平均座標を中心に使用。False のとき `pivot` を使用。
     pivot : tuple[float, float, float], default (0.0, 0.0, 0.0)
@@ -110,35 +127,42 @@ def repeat(
     for i in range(len(offsets) - 1):
         lines.append(coords[offsets[i] : offsets[i + 1]].copy())
 
-    current_scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+    # curve は 0 付近で不安定になるため、最小値をクランプ
+    curve_clamped = float(max(curve, 0.1))
 
-    if cumulative:
-        current_coords = coords.copy()
-        for n in range(n_int):
-            current_scale = _update_scale(current_scale, scale_np)
-            current_coords = _apply_transform_to_coords(
-                current_coords,
-                center_np,
-                current_scale,
-                rotate_radians * (n + 1),
-                offset_np * (n + 1),
-            )
-            # 複製後の各線を追加
-            for i in range(len(offsets) - 1):
-                lines.append(current_coords[offsets[i] : offsets[i + 1]].copy())
-    else:
-        base_coords = coords.copy()
-        for n in range(n_int):
-            current_scale = _update_scale(current_scale, scale_np)
-            transformed_coords = _apply_transform_to_coords(
-                base_coords,
-                center_np,
-                current_scale,
-                rotate_radians * (n + 1),
-                offset_np * (n + 1),
-            )
-            for i in range(len(offsets) - 1):
-                lines.append(transformed_coords[offsets[i] : offsets[i + 1]].copy())
+    base_scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+
+    for n in range(1, n_int + 1):
+        t = n / float(n_int)
+
+        if cumulative_scale:
+            t_scale = t**curve_clamped
+        else:
+            t_scale = t
+
+        if cumulative_offset:
+            t_offset = t**curve_clamped
+        else:
+            t_offset = t
+
+        if cumulative_rotate:
+            t_rotate = t**curve_clamped
+        else:
+            t_rotate = t
+
+        scale_step = base_scale + (scale_np - base_scale) * t_scale
+        offset_step = offset_np * t_offset
+        rotate_step = rotate_radians * t_rotate
+
+        transformed_coords = _apply_transform_to_coords(
+            coords,
+            center_np,
+            scale_step.astype(np.float32),
+            rotate_step.astype(np.float32),
+            offset_step.astype(np.float32),
+        )
+        for i in range(len(offsets) - 1):
+            lines.append(transformed_coords[offsets[i] : offsets[i + 1]].copy())
 
     return Geometry.from_lines(lines)
 
@@ -184,9 +208,3 @@ def _apply_transform_to_coords(
     transformed = offset_applied + center
 
     return transformed
-
-
-@njit(fastmath=True, cache=True)
-def _update_scale(current_scale: np.ndarray, scale: np.ndarray) -> np.ndarray:
-    """スケール値を更新します。"""
-    return current_scale * scale

@@ -7,9 +7,9 @@ A5 = (148, 210)
 
 def draw(t: float):
     g1 = G.polygon().scale(40, 40, 40).translate(A5[0] / 2, A5[1] / 2, 0)
-    p1 = E.affine(angles_rad=(0, 0, np.pi / 4)).repeat().repeat().fill()
+    p1 = E.label(uid="polygons").affine(angles_rad=(0, 0, np.pi / 4)).repeat().repeat().fill()
     g2 = G.text()
-    p2 = E.affine().fill()
+    p2 = E.affine().fill().label(uid="texts")
     return p1(g1), p2(g2)
 
 
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size="A5",
-        render_scale=10,
+        render_scale=6,
         use_midi=True,
         use_parameter_gui=True,
         workers=4,

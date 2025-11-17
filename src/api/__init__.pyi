@@ -252,22 +252,28 @@ class _PipelineBuilder(Protocol):
         """
         ...
     # meta: count (type=integer, range=[0, 100])
-    # meta: cumulative (type=bool)
+    # meta: cumulative_scale (type=bool)
+    # meta: cumulative_offset (type=bool)
+    # meta: cumulative_rotate (type=bool)
     # meta: offset (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
     # meta: angles_rad_step (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
     # meta: scale (type=vec3, range=[(0.5, 0.5, 0.5), (1.5, 1.5, 1.5)])
+    # meta: curve (type=float, range=[0.1, 5.0])
     # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
-    def repeat(self, *, count: int = ..., cumulative: bool = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    def repeat(self, *, count: int = ..., cumulative_scale: bool = ..., cumulative_offset: bool = ..., cumulative_rotate: bool = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., curve: float = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         入力のコピーを配列状に生成。
 
         引数:
             count: integer, range [0, 100]
-            cumulative: bool
+            cumulative_scale: bool
+            cumulative_offset: bool
+            cumulative_rotate: bool
             offset: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
             angles_rad_step: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
             scale: vec3, range [(0.5, 0.5, 0.5), (1.5, 1.5, 1.5)]
+            curve: float, range [0.1, 5.0]
             auto_center: bool
             pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
         """
@@ -400,7 +406,7 @@ class _Effects(Protocol):
     def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., show_planes: bool = ..., **_params: Any) -> _PipelineBuilder: ...
     def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., **_params: Any) -> _PipelineBuilder: ...
     def partition(self, *, site_count: int = ..., seed: int = ..., **_params: Any) -> _PipelineBuilder: ...
-    def repeat(self, *, count: int = ..., cumulative: bool = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
+    def repeat(self, *, count: int = ..., cumulative_scale: bool = ..., cumulative_offset: bool = ..., cumulative_rotate: bool = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., curve: float = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def rotate(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def scale(self, *, auto_center: bool = ..., pivot: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def style(self, *, color: Vec3 | Iterable[float] | None = ..., thickness: float = ..., **_params: Any) -> _PipelineBuilder: ...

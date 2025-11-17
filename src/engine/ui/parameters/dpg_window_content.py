@@ -44,47 +44,29 @@ class ParameterWindowContentBuilder:
 
     def build_display_controls(self, parent: int | str) -> None:
         """Display/HUD 用のコントロール群を構築し、Store と初期同期する。"""
-        try:
-            from util.utils import load_config as _load_cfg
-        except Exception:
-            _load_cfg = lambda: {}
-
-        cfg = _load_cfg() or {}
-        canvas = cfg.get("canvas", {}) if isinstance(cfg, dict) else {}
-        bg_raw = canvas.get("background_color", (1.0, 1.0, 1.0, 1.0))
-        ln_raw = canvas.get("line_color", (0.0, 0.0, 0.0, 1.0))
-        bgf = self._safe_norm(bg_raw, (1.0, 1.0, 1.0, 1.0))
-        lnf = self._safe_norm(ln_raw, (0.0, 0.0, 0.0, 1.0))
-
-        val = self._store.current_value("runner.background") or self._store.original_value(
+        bgf, lnf = self._resolve_canvas_colors()
+        bg_override = self._store.current_value("runner.background") or self._store.original_value(
             "runner.background"
         )
-        if val is not None:
-            bgf = self._safe_norm(val, bgf)
-        val = self._store.current_value("runner.line_color") or self._store.original_value(
+        if bg_override is not None:
+            bgf = self._safe_norm(bg_override, bgf)
+        ln_override = self._store.current_value("runner.line_color") or self._store.original_value(
             "runner.line_color"
         )
-        if val is not None:
-            lnf = self._safe_norm(val, lnf)
+        if ln_override is not None:
+            lnf = self._safe_norm(ln_override, lnf)
 
         with dpg.collapsing_header(label="Display", default_open=True, parent=parent) as disp_hdr:
-            try:
-                th = self._theme_mgr.get_category_header_theme("Display")
-                if th is not None:
-                    dpg.bind_item_theme(disp_hdr, th)
-            except Exception:
-                pass
+            th = self._theme_mgr.get_category_header_theme("Display")
+            if th is not None:
+                dpg.bind_item_theme(disp_hdr, th)
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            policy_int = int(table_policy) if table_policy is not None else 0
-            with dpg.table(header_row=False, policy=policy_int) as disp_tbl:
-                try:
-                    tth = self._theme_mgr.get_category_table_theme("Display")
-                    if tth is not None:
-                        dpg.bind_item_theme(disp_tbl, tth)
-                except Exception:
-                    pass
+            with dpg.table(header_row=False, policy=table_policy) as disp_tbl:
+                tth = self._theme_mgr.get_category_table_theme("Display")
+                if tth is not None:
+                    dpg.bind_item_theme(disp_tbl, tth)
                 left, right = self._label_value_ratio()
                 self._add_two_columns(left, right)
                 with dpg.table_row():
@@ -145,23 +127,16 @@ class ParameterWindowContentBuilder:
                     )
 
         with dpg.collapsing_header(label="HUD", default_open=False, parent=parent) as hud_hdr:
-            try:
-                th = self._theme_mgr.get_category_header_theme("HUD")
-                if th is not None:
-                    dpg.bind_item_theme(hud_hdr, th)
-            except Exception:
-                pass
+            th = self._theme_mgr.get_category_header_theme("HUD")
+            if th is not None:
+                dpg.bind_item_theme(hud_hdr, th)
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            policy_int = int(table_policy) if table_policy is not None else 0
-            with dpg.table(header_row=False, policy=policy_int) as hud_tbl:
-                try:
-                    tth = self._theme_mgr.get_category_table_theme("HUD")
-                    if tth is not None:
-                        dpg.bind_item_theme(hud_tbl, tth)
-                except Exception:
-                    pass
+            with dpg.table(header_row=False, policy=table_policy) as hud_tbl:
+                tth = self._theme_mgr.get_category_table_theme("HUD")
+                if tth is not None:
+                    dpg.bind_item_theme(hud_tbl, tth)
                 left, right = self._label_value_ratio()
                 self._add_two_columns(left, right)
 
@@ -313,10 +288,7 @@ class ParameterWindowContentBuilder:
         cat_order: list[tuple[Any, str | None]] = []
         for d in filtered:
             cat = d.category if d.category else None
-            try:
-                kind = d.category_kind
-            except Exception:
-                kind = "pipeline" if d.source == "effect" else "shape"
+            kind = d.category_kind
             key = (kind, cat)
             if key not in cat_items:
                 cat_items[key] = [d]
@@ -354,23 +326,16 @@ class ParameterWindowContentBuilder:
         label = cat if cat else "General"
         kind = self._category_kind(items)
         with dpg.collapsing_header(label=label, parent=parent, default_open=True) as header:
-            try:
-                th = self._theme_mgr.get_category_header_theme(kind)
-                if th is not None:
-                    dpg.bind_item_theme(header, th)
-            except Exception:
-                pass
+            th = self._theme_mgr.get_category_header_theme(kind)
+            if th is not None:
+                dpg.bind_item_theme(header, th)
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            policy_int = int(table_policy) if table_policy is not None else 0
-            with dpg.table(header_row=False, policy=policy_int) as table:
-                try:
-                    tth = self._theme_mgr.get_category_table_theme(kind)
-                    if tth is not None:
-                        dpg.bind_item_theme(table, tth)
-                except Exception:
-                    pass
+            with dpg.table(header_row=False, policy=table_policy) as table:
+                tth = self._theme_mgr.get_category_table_theme(kind)
+                if tth is not None:
+                    dpg.bind_item_theme(table, tth)
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
                 if var_cell_padding is not None:
                     cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
@@ -417,21 +382,10 @@ class ParameterWindowContentBuilder:
         """グループ内の Descriptor からカテゴリ種別を決定する。"""
         if not items:
             return "shape"
-        try:
-            first = items[0].category_kind
-        except Exception:
-            try:
-                if any(it.source == "effect" for it in items):
-                    return "pipeline"
-                return "shape"
-            except Exception:
-                return "shape"
-        try:
-            kinds = {getattr(it, "category_kind", first) for it in items}
-            if len(kinds) > 1:
-                logger.debug("mixed category_kind in group: %s", kinds)
-        except Exception:
-            pass
+        first = items[0].category_kind
+        kinds = {it.category_kind for it in items}
+        if len(kinds) > 1:
+            logger.debug("mixed category_kind in group: %s", kinds)
         return first
 
     def _label_value_ratio(self) -> tuple[float, float]:
@@ -440,6 +394,23 @@ class ParameterWindowContentBuilder:
         left = 0.1 if left < 0.1 else (0.9 if left > 0.9 else left)
         right = max(0.1, 1.0 - left)
         return left, right
+
+    def _resolve_canvas_colors(
+        self,
+    ) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float]]:
+        """config.yaml から Display 用の背景色とライン色の既定値を解決する。"""
+        try:
+            from util.utils import load_config as _load_cfg
+
+            cfg = _load_cfg() or {}
+        except Exception:
+            cfg = {}
+        canvas = cfg.get("canvas", {}) if isinstance(cfg, dict) else {}
+        bg_raw = canvas.get("background_color", (1.0, 1.0, 1.0, 1.0))
+        ln_raw = canvas.get("line_color", (0.0, 0.0, 0.0, 1.0))
+        bgf = self._safe_norm(bg_raw, (1.0, 1.0, 1.0, 1.0))
+        lnf = self._safe_norm(ln_raw, (0.0, 0.0, 0.0, 1.0))
+        return bgf, lnf
 
     def _add_two_columns(self, left: float, right: float) -> None:
         """ラベル列と値列の 2 列テーブルヘッダを追加する。"""
@@ -481,7 +452,7 @@ class ParameterWindowContentBuilder:
             with dpg.table(
                 parent=parent,
                 header_row=False,
-                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as bars_tbl:
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
                 if var_cell_padding is not None:
@@ -522,7 +493,7 @@ class ParameterWindowContentBuilder:
             with dpg.table(
                 parent=parent,
                 header_row=False,
-                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as bars_tbl:
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
                 if var_cell_padding is not None:
@@ -576,7 +547,7 @@ class ParameterWindowContentBuilder:
             with dpg.table(
                 parent=parent,
                 header_row=False,
-                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as cc_tbl:
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
                 cc_theme = None
@@ -602,7 +573,7 @@ class ParameterWindowContentBuilder:
             with dpg.table(
                 parent=parent,
                 header_row=False,
-                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as cc_tbl:
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
                 cc_theme = None
@@ -675,7 +646,7 @@ class ParameterWindowContentBuilder:
             with dpg.table(
                 parent=parent,
                 header_row=False,
-                policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+                policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as vec_tbl:
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
                 if var_cell_padding is not None:
@@ -728,7 +699,7 @@ class ParameterWindowContentBuilder:
         with dpg.table(
             parent=parent,
             header_row=False,
-            policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+            policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
         ) as tbl:
             var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
             if var_cell_padding is not None:
@@ -766,7 +737,7 @@ class ParameterWindowContentBuilder:
         with dpg.table(
             parent=parent,
             header_row=False,
-            policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
+            policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
         ) as tbl:
             var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
             if var_cell_padding is not None:
@@ -896,8 +867,9 @@ class ParameterWindowContentBuilder:
                 try:
                     desc = self._store.get_descriptor(pid)
                 except KeyError:
-                    desc = None
-                if desc is None or desc.value_type != "vector":
+                    logger.debug("store notified unknown id (no descriptor): %s", pid)
+                    continue
+                if desc.value_type != "vector":
                     continue
                 value = self._store.current_value(pid)
                 if value is None:
@@ -914,7 +886,12 @@ class ParameterWindowContentBuilder:
             self._syncing = False
 
     def _on_cc_binding_change(self, sender: int, app_data: Any, user_data: Any) -> None:
-        """CC 番号入力の変更を CC バインディングへ反映する。"""
+        """CC 番号入力の変更を CC バインディングへ反映する。
+
+        - 空文字列: バインディング解除（Store から削除し、UI は現状維持）。
+        - 数値以外/パース失敗: バインディング解除し、対応する入力テキストを空文字に戻す。
+        - 数値: int(float(...)) で解釈し、0..127 にクランプしてバインドする。
+        """
         try:
             pid = str(user_data)
             text = str(app_data).strip()
@@ -943,11 +920,7 @@ class ParameterWindowContentBuilder:
         self, parent: int | str | None, desc: ParameterDescriptor
     ) -> int | str:
         """スカラーパラメータ用の CC 番号入力テキストを追加する。"""
-        try:
-            current = self._store.cc_binding(desc.id)
-        except Exception:
-            current = None
-        default_text = "" if current is None else str(int(current))
+        default_text = self._cc_binding_text(desc.id)
         kwargs: dict[str, Any] = {
             "tag": f"{desc.id}::cc",
             "default_value": default_text,
@@ -975,11 +948,7 @@ class ParameterWindowContentBuilder:
         """ベクトル成分ごとの CC 番号入力テキストを追加する。"""
         suffix = ("x", "y", "z", "w")[idx]
         pid_comp = f"{desc.id}::{suffix}"
-        try:
-            current = self._store.cc_binding(pid_comp)
-        except Exception:
-            current = None
-        default_text = "" if current is None else str(int(current))
+        default_text = self._cc_binding_text(pid_comp)
         kwargs: dict[str, Any] = {
             "tag": f"{pid_comp}::cc",
             "default_value": default_text,
@@ -998,6 +967,14 @@ class ParameterWindowContentBuilder:
             pass
         return box
 
+    def _cc_binding_text(self, param_id: str) -> str:
+        """現在の CC バインディングから入力テキスト用の文字列を返す。"""
+        try:
+            current = self._store.cc_binding(param_id)
+        except Exception:
+            return ""
+        return "" if current is None else str(int(current))
+
     def force_set_rgb_u8(self, tag: int | str, rgb_u8: Sequence[int]) -> None:
         """0–255 RGB 値を DPG カラーピッカーに設定する。"""
         if not isinstance(rgb_u8, Sequence) or len(rgb_u8) < 3:
@@ -1008,12 +985,18 @@ class ParameterWindowContentBuilder:
         dpg.set_value(tag, [r, g, b])
 
     def store_rgb01(self, pid: str, app_data: Any) -> None:
-        """DPG カラー入力を 0..1 RGBA（または vec3）に正規化して Store に保存する。"""
+        """DPG カラー入力を 0..1 RGBA（または vec3）に正規化して Store に保存する。
+
+        - 一般パラメータ: RGBA (0..1) のタプルとして保存する。
+        - style.color: HUD と同様の 0–255 相当入力を前提とし、vec3 (RGB 0..1) として保存する。
+        - 正規化に失敗した場合は Store を更新せず、例外ログを出力する。
+        """
         try:
             from util.color import normalize_color as _norm
 
             rgba = _norm(app_data)
             if isinstance(pid, str) and pid.endswith(".color") and ".style#" in pid:
+                # style.color は vec3 保存（HUD など他の GUI と色の扱いを揃える）
                 value_tuple: tuple[float, ...] = (
                     float(rgba[0]),
                     float(rgba[1]),
@@ -1035,7 +1018,7 @@ class ParameterWindowContentBuilder:
         value: Any,
         default: tuple[float, float, float, float],
     ) -> tuple[float, float, float, float]:
-        """カラー値を正規化し、失敗時は既定値を返す。"""
+        """カラー値を RGBA (0..1) に正規化し、失敗時は既定値を返す。"""
         try:
             from util.color import normalize_color as _norm
 
@@ -1044,10 +1027,14 @@ class ParameterWindowContentBuilder:
         except Exception:
             return default
 
-    def _dpg_policy(self, names: Sequence[str]) -> Any | None:
-        """Dear PyGui テーブル policy 定数を名前の候補リストから解決する。"""
+    def _dpg_policy(self, names: Sequence[str]) -> int:
+        """Dear PyGui テーブル policy 定数を候補名から解決し、安全な int に変換して返す。"""
         for n in names:
             var = getattr(dpg, n, None)
-            if var is not None:
-                return var
-        return None
+            if var is None:
+                continue
+            try:
+                return int(var)
+            except Exception:
+                continue
+        return 0

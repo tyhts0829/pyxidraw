@@ -15,3 +15,4 @@ fillのdensityが面が傾くと発散する問題
 特定の面を取り出すエフェクト
 clip debugmode
 step定義していない場合はdrug guiにする
+angles radの引数名統一
