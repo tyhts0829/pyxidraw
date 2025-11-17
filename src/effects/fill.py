@@ -160,16 +160,14 @@ def fill(
             base_ang = angle_seq[gi % len(angle_seq)]
             k_i = angle_sets_seq[gi % len(angle_sets_seq)]
             k_i = int(k_i) if int(k_i) > 0 else 1
-            # 角度ごとのスキャン方向スパンから本数→間隔を決定（各グループで共通の“見かけ密度”）
+            # 全体の参照高さと density から共通間隔を決定（各グループで共通の“見かけ密度”）
+            base_spacing = _spacing_from_height(ref_height_global, float(d))
+            if base_spacing <= 0.0:
+                continue
             for i in range(k_i):
                 ang_i = float(base_ang) + (np.pi / k_i) * i
-                # 全体（XY 整列済み）座標に基づくスキャンスパン
-                scan_h = _scan_span_for_angle_xy(v2d_all[:, :2], ang_i)
-                spacing_glob = _spacing_from_height(scan_h, float(d)) if scan_h > 0.0 else 0.0
-                if spacing_glob <= 0.0:
-                    continue
                 segs_xy = _generate_line_fill_evenodd_multi(
-                    g_coords, g_offsets, d, ang_i, spacing_override=spacing_glob
+                    g_coords, g_offsets, d, ang_i, spacing_override=base_spacing
                 )
                 for seg in segs_xy:
                     results.append(transform_back(seg, R_all, z_all))
