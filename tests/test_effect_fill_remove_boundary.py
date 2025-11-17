@@ -45,3 +45,48 @@ def test_fill_noop_when_density_zero():
     out_coords, out_offsets = out.as_arrays(copy=False)
     assert np.array_equal(in_coords, out_coords)
     assert np.array_equal(in_offsets, out_offsets)
+
+
+def test_fill_evenodd_excludes_inner_hole_square():
+    # 外環と内環からなるドーナツ形状に対して、穴内部には塗り線が入らない
+    outer_s = 2.0
+    inner_s = 0.5
+    outer = np.array(
+        [
+            [-outer_s, -outer_s, 0.0],
+            [outer_s, -outer_s, 0.0],
+            [outer_s, outer_s, 0.0],
+            [-outer_s, outer_s, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    inner = np.array(
+        [
+            [-inner_s, -inner_s, 0.0],
+            [inner_s, -inner_s, 0.0],
+            [inner_s, inner_s, 0.0],
+            [-inner_s, inner_s, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    from engine.core.geometry import Geometry
+
+    g = Geometry.from_lines([outer, inner])
+    pipe = E.pipeline.fill(angle_sets=1, angle_rad=0.0, density=20.0, remove_boundary=True).build()
+    out = pipe(g)
+
+    coords, offsets = out.as_arrays(copy=False)
+    inside_hole = 0
+    in_ring = 0
+    for i in range(len(offsets) - 1):
+        seg = coords[offsets[i] : offsets[i + 1]]
+        mid = np.mean(seg[:, :2], axis=0)
+        mx, my = float(mid[0]), float(mid[1])
+        r_inf = max(abs(mx), abs(my))
+        if r_inf < inner_s - 1e-3:
+            inside_hole += 1
+        if inner_s - 1e-3 <= r_inf <= outer_s + 1e-3:
+            in_ring += 1
+
+    assert in_ring > 0
+    assert inside_hole == 0
