@@ -7,7 +7,11 @@ def draw(t: float):
     N = int(cc[1] * 10) + 1
     geos = []
     for i in range(N):
-        g = G.polygon().scale(4 * i, 4 * i, 4 * i).translate(A5[0] / 2, A5[1] / 2, 0)
+        g = (
+            G.polygon()
+            .scale(4 * (i + 1), 4 * (i + 1), 4 * (i + 1))
+            .translate(A5[0] / 2, A5[1] / 2, 0)
+        )
         p = E.label(uid="polygons").affine().fill()
         geos.append(p(g))
     return geos

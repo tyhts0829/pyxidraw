@@ -16,3 +16,4 @@ fillのdensityが面が傾くと発散する問題
 clip debugmode
 step定義していない場合はdrug guiにする
 angles radの引数名統一
+labelエフェクトがE.の直後じゃないと効かないのをwarningする/どこでも効くようにする。
