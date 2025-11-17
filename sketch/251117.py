@@ -7,15 +7,17 @@ A5 = (148, 210)
 
 def draw(t: float):
     g1 = G.polygon().scale(40, 40, 40).translate(A5[0] / 2, A5[1] / 2, 0)
-    p1 = E.affine(angles_rad=(0, 0, np.pi / 4)).repeat().repeat()
-    return p1(g1)
+    p1 = E.affine(angles_rad=(0, 0, np.pi / 4)).repeat().repeat().fill()
+    g2 = G.text()
+    p2 = E.affine().fill()
+    return p1(g1), p2(g2)
 
 
 if __name__ == "__main__":
     run(
         draw,
         canvas_size="A5",
-        render_scale=6,
+        render_scale=10,
         use_midi=True,
         use_parameter_gui=True,
         workers=4,

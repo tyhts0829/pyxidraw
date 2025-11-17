@@ -8,6 +8,9 @@
 - runtime.py: Shapes/Effects 呼び出しフック（ParameterRuntime）。Introspector/Resolver を束ねる
 - manager.py: `user_draw` をラップして Runtime/Window を起動・寿命管理
 - controller.py/window.py: GUI 層（ParameterStore の内容を表示・編集）
+- dpg_window.py: 公開エントリ（ParameterWindow 本体・DPG ドライバ制御）
+- dpg_window_theme.py: テーマ/フォント管理（ParameterWindowThemeManager）
+- dpg_window_content.py: Dear PyGui レイアウトと値連携（ParameterWindowContentBuilder）
 
 ## フロー（最短要約）
 1) Runtime が関数メタを `Introspector` で取得（doc/signature/param_meta）

@@ -59,3 +59,11 @@ def test_fill_line_count_tilt_invariant_square_xy():
         ry = np.deg2rad(deg)
         n = _count_lines(0.0, ry)
         assert abs(n - base_count) <= 1
+
+    # X/Y の組み合わせチルト
+    combos = [(15, 15), (30, 15), (30, 30), (45, 30), (60, 45), (75, 60)]
+    for rx_deg, ry_deg in combos:
+        rx = np.deg2rad(rx_deg)
+        ry = np.deg2rad(ry_deg)
+        n = _count_lines(rx, ry)
+        assert abs(n - base_count) <= 1

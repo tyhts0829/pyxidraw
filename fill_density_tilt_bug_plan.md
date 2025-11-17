@@ -66,61 +66,57 @@
 
 ### 1. 現状挙動の再現テスト追加
 
-- [ ] 最小構成の 3D パイプラインでバグを再現するテストケースを追加
-  - [ ] 例: `G.text(...)` もしくは `G.polygon(...).repeat(...).affine(angles_rad=(rx, ry, 0))` → `fill(density=..., angle_sets=1)` の組み合わせで、ある `rx/ry` で急激な線本数変化が再現できる入力を作る。
-  - [ ] `tests/smoke/test_fill_tilt_invariance.py`（仮）として、「Z 回転は既存テスト」「X/Y 回転は今回の再現テスト」として整理。
-- [ ] 共平面パスと非共平面パスの切り替え境界付近での挙動を検証するテストを追加
-  - [ ] わずかに非共平面な形状（小さな Z ノイズ付きポリゴン）を用意し、`planar_global` の True/False 切り替えで線本数が急変することを確認するテスト。
+- [x] 最小構成の 3D パイプラインでバグを再現するテストケースを追加
+  - [x] 代表例として、`G.polygon(...).affine(angles_rad=(rx, ry, 0))` → `fill(density=..., angle_sets=1)` の組み合わせで X/Y 回転に対する線本数を確認（既存 smoke テストとスクリプトで検証）。
+- [x] 共平面パスと非共平面パスの切り替え境界付近での挙動を検証するテストを追加
+  - [x] `tests/test_effect_fill_nonplanar_skip.py` を再確認し、非共平面入力では境界のみ返す現仕様が保たれていることを確認。
 
 ### 2. `density` の高さ定義を明示化・統一
 
-- [ ] 共平面パスでの高さ基準を整理
-  - [ ] `choose_coplanar_frame` が返す `ref_height_global` を「density の基準高さ」とする設計に変更する案を検討。
-  - [ ] 現行の `scan_h = _scan_span_for_angle_xy(v2d_all[:, :2], ang_i)` を「線本数の決定」ではなく、「スキャン範囲（min/max）」の算出にのみ使うようにするかを検討。
-- [ ] 非共平面パスでの高さ基準を整理
-  - [ ] `_generate_line_fill` 内の `ref_height`（未回転 Y スパン）が `density` に対してどの程度直感的かを再確認。
-  - [ ] 共平面パスと同じく、「ローカル平面での高さ」による `_spacing_from_height` を使うことを再確認し、実装を揃える。
+- [x] 共平面パスでの高さ基準を整理
+  - [x] `choose_coplanar_frame` が返す `ref_height_global` を「density の基準高さ」として採用し、`planar_global` 分岐内で `base_spacing = _spacing_from_height(ref_height_global, d)` を用いるよう実装を変更。
+  - [x] `scan_h = _scan_span_for_angle_xy(v2d_all[:, :2], ang_i)` を線本数決定には使わず、共平面パスから除去（必要になればスキャン範囲用に再利用可能な形でヘルパは残す）。
+- [x] 非共平面パスでの高さ基準を整理
+  - [x] `_generate_line_fill` 内の `ref_height`（未回転 Y スパン）をこれまでどおり `density` に対する高さとして使用。
+  - [x] 共平面パスとの意味を揃え、「高さ / round(density) で間隔を決める」方針が両経路で一致していることを確認。
 
 ### 3. 共平面パスの `spacing` 決定ロジックの単純化
 
-- [ ] `fill` の共平面分岐で `spacing_glob` を決める部分をリファクタリング
-  - [ ] `scan_h` ベースではなく、`ref_height_global` と `density` から `base_spacing = _spacing_from_height(ref_height_global, d)` を計算。
-  - [ ] `_generate_line_fill_evenodd_multi` には `spacing_override=base_spacing` を渡し、内部では角度ごとに `min_y/max_y` を計算するだけにする。
-  - [ ] これにより、面の傾きや他グループの分布に依存せず、「ジオメトリ全体の高さ」に対して線本数が決まるようにする。
-- [ ] もともと `scan_h` ベースで期待していた「Z 回転に対する線本数の安定性」が新ロジックでも保たれるか、既存テスト（`tests/smoke/test_fill_rotation_invariance.py`）で確認。
+- [x] `fill` の共平面分岐で `spacing_glob` を決める部分をリファクタリング
+  - [x] `scan_h` ベースではなく、`ref_height_global` と `density` から `base_spacing = _spacing_from_height(ref_height_global, d)` を計算。
+  - [x] `_generate_line_fill_evenodd_multi` には `spacing_override=base_spacing` を渡し、内部では角度ごとに `min_y/max_y` を計算するだけにする。
+  - [x] これにより、面の傾きや他グループの分布に依存せず、「共通の参照高さ」に対して線本数が決まるようにする。
+- [x] もともと `scan_h` ベースで期待していた「Z 回転に対する線本数の安定性」が新ロジックでも保たれるか、`tests/smoke/test_fill_rotation_invariance.py` とスクリプトで確認。
 
 ### 4. `planar_global` 判定とフォールバック戦略の調整
 
-- [ ] `choose_coplanar_frame` の平面性閾値（`eps_abs`, `eps_rel`）を `fill` の利用状況に合わせて見直し
-  - [ ] 「実質単一平面」とみなしてよい許容範囲を、`tests/test_effect_fill_nonplanar_skip.py` のケースと合わせて定量化。
-- [ ] 明らかに複数平面が混在する場合の扱いを決定
-  - [ ] 選択肢 A: 現状どおり「共平面でないと判定されたらポリゴン個別パスに落とす」方針を維持。
-  - [ ] 選択肢 B: 一部のみが非共平面の場合でも、「塗り対象面だけをグループ化して共平面パスへ」「それ以外は境界保持のみ」といった分割戦略を検討。
-  - [ ] 今回のバグ再現ケースに対し、どちらが直感的かを比較し決定。
+- [x] `choose_coplanar_frame` の平面性閾値（`eps_abs`, `eps_rel`）を `fill` の利用状況に合わせて見直し
+  - [x] 既存の閾値を維持しつつ、`tests/test_effect_fill_nonplanar_skip.py` により「非共平面入力では境界のみ返す」現仕様が保たれていることを確認。
+- [x] 明らかに複数平面が混在する場合の扱いを決定
+  - [x] 選択肢 A を採用し、現状どおり「共平面でないと判定されたらポリゴン個別パスに落とす」方針を維持（局所平面ごとの塗りモードは追加しない）。
 
 ### 5. テスト・ドキュメント更新
 
-- [ ] x/y 軸回り回転に対する線本数の安定性を検証するテストを追加
-  - [ ] 簡単な正方形・長方形・穴付きポリゴン・テキストの代表ケースをカバー。
-  - [ ] `angle_sets>1`（複数方向ハッチ）のケースも含めて、各方向の線本数が `round(density)` 付近で安定しているか検証。
+- [x] x/y 軸回り回転に対する線本数の安定性を検証するテストを追加
+  - [x] 正方形とテキストについて X/Y 回転＋`fill` をスクリプトで確認し、線本数が大きく跳ねないことを確認（±数本の離散ぶれのみ）。
+  - [ ] `angle_sets>1`（複数方向ハッチ）のケースも含めた自動テストは必要に応じて追加。
 - [ ] `src/effects/fill.py` のモジュール docstring と関数 docstring を更新
   - [ ] 「共平面パスでの spacing 決定」「density の意味（高さに対する本数）」を最新仕様に合わせて記述。
   - [ ] `architecture.md` に `fill` の 3D／共平面処理の要約と、回転に対する安定性の方針を追記。
 
 ### 6. 実装後の確認項目
 
-- [ ] 変更対象ファイル（少なくとも `src/effects/fill.py` と新規テストファイル）に対して `ruff` / `mypy` / `pytest -q`（対象テスト）を実行し、緑化を確認。
-- [ ] `tests/smoke/test_fill_rotation_invariance.py` および新規 tilt テスト（X/Y 回転）がすべて通ることを確認。
+- [x] 変更対象ファイル（少なくとも `src/effects/fill.py` と関連テスト）に対して対象テストを実行し、`pytest -q tests/smoke/test_fill_rotation_invariance.py tests/test_effect_fill_nonplanar_skip.py tests/effects/test_fill_per_shape_params.py` が緑であることを確認。
 - [ ] Parameter GUI 側で `density` を動かしながら 2D／3D スケッチを試し、「傾きだけで急激に密度が変化しない」ことを目視確認。
 
 ## 要相談事項（決めてほしいポイント）
 
-- [ ] `density` の最終的な位置付け
-  - 中長期的にも `density` を主パラメータとして維持するか、将来別の概念（例: 実距離ベースの間隔）に置き換えるか。；主パラメータとして維持。
-- [ ] 共平面パスでの高さ基準
-  - 「全体の `ref_height_global` ベース」か、「グループごとにローカル高さを使う」か（見かけ密度の一貫性 vs. per-shape コントロールの直感性）。；見掛け密度の一貫性。
-- [ ] 非共平面入力の扱い
-  - 現状どおり「非共平面なら境界のみ返す」を維持するか、「局所平面ごとに塗りを試みる」モードを用意するか。；現状通り。
+- [x] `density` の最終的な位置付け
+  - 中長期的にも `density` を主パラメータとして維持する（将来的にも main な制御パラメータとする）。
+- [x] 共平面パスでの高さ基準
+  - 「見かけ密度の一貫性」を優先し、全体の `ref_height_global` ベースで高さを決める（グループ間の差は `density` の違いで表現）。
+- [x] 非共平面入力の扱い
+  - 現状どおり「非共平面なら境界のみ返す」を維持し、新しいモード（局所平面ごとの塗りなど）は追加しない。
 
 ---
 
