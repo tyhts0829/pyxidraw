@@ -18,7 +18,6 @@ API/実装はシンプルで理解しやすい形を目指す。
   - 仕様/ドキュメント:
     - `repeat.__param_meta__`
     - `repeat` 関数の docstring
-    - `docs/spec/repeat_effect_spec.md`（今回の仕様に同期）
 - 非対象（今回やらないこと）:
   - `effects` 他モジュールの API/挙動変更
   - Parameter GUI のレイアウト大幅変更（テキスト/説明の更新にとどめる）
@@ -41,41 +40,33 @@ API/実装はシンプルで理解しやすい形を目指す。
 ## A. 仕様詳細の整理（各フラグの意味とデフォルト）
 
 目的: `cumulative_scale` / `cumulative_offset` / `cumulative_rotate` の意味と  
-デフォルト値を明確化し、既存の `cumulative` パラメータとの関係を決める。
+デフォルト値を明確化し、既存の `cumulative` パラメータとの関係を決める。  
+さらに、「始点/終点は固定しつつ、どの程度“累積っぽく”変化させるか」を  
+イージングカーブ（`t' = t**curve`）で制御する方針を整理する。
 
 - [ ] A-1. 3 フラグの意味を定義
   - `cumulative_scale: bool`
-    - True: スケールはコピーごとに乗算で累積（幾何級数）。
-    - False: コピー番号に応じて「始点 1.0 → 終点 scale」を線形補間して適用（1→scale の線形補間）。
+    - True: コピー番号 `i` から得られる `t = i / count` に対し、`t' = t**curve` を用いて  
+      「始点 1.0 → 終点 scale」を非線形に補間して適用（curve > 1 で終盤に変化が偏る“累積感”のある挙動）。
+    - False: コピー番号 `i` に応じて「始点 1.0 → 終点 scale」を線形補間して適用（`t = i / count` をそのまま使用）。
   - `cumulative_offset: bool`
-    - True: 平行移動は「前のコピーからの増分」として累積。
+    - True: `t = i / count` から `t' = t**curve` を求め、「始点 0 → 終点 offset」を非線形に補間して適用。
     - False: コピー番号に応じて「始点 0 → 終点 offset」を線形補間して適用  
       （インスタンス番号 `i` と `count` から `t = i / count` を求め、`offset_i = (1 - t) * 0 + t * offset` とする）。
   - `cumulative_rotate: bool`
-    - True: 回転は「前のコピーからの増分」として累積。
+    - True: `t = i / count` から `t' = t**curve` を求め、「始点 0 → 終点 angles_rad_step」を非線形に補間して適用。
     - False: コピー番号に応じて「始点 0 → 終点 angles_rad_step」を線形補間して適用  
       （インスタンス番号 `i` と `count` から `t = i / count` を求め、`angles_i = t * angles_rad_step` とする）。
-- [ ] A-2. デフォルト値の方針を決定
-  - 候補案 1: すべて True（現行の「完全累積」挙動に相当）。；すべて False でいいよ
-  - 候補案 2: `cumulative_scale=True, cumulative_offset=False, cumulative_rotate=False`  
-    （現行 `cumulative=False` のスケール挙動に近いプリセットをデフォルト化）。
-  - ※どちらを採用するかユーザーと合意する。
-- [ ] A-3. 既存の `cumulative: bool` 引数の扱いを決定
-  - 案 a: 完全に廃止し、3 フラグに置き換える（シンプルだが破壊的）。；これを採用
-  - 案 b: 非公開相当として残し、内部的に 3 フラグにマッピングする（互換性重視）。
-  - 案 c: `cumulative` は deprecated としてサポートしつつ、推奨は 3 フラグに移行。
-- [ ] A-4. 3 フラグ組合せごとの「よく使うプリセット」を整理；これはいらない。
-  - 例:
-    - 全累積: `(True, True, True)` → 反復変形・螺旋など。
-    - 位置/角度のみ非累積: `(True, False, False)` → 等間隔配置 + スケール累積。
-    - 完全非累積: `(False, False, False)` → 「1→scale の線形補間 + 等間隔配置 + 等間隔角度」。
-- [ ] A-5. `docs/spec/repeat_effect_spec.md` との整合方針を決める；その md ファイルは無視していいよ。ややこしいからこちらで削除しておいた。
-  - 現状の「cumulative 1 本軸 + scale モード」の記述を、3 フラグ前提に書き換える。
-
-**要: ユーザー確認ポイント 1**
-
-- 3 フラグのデフォルト値として「案 1」か「案 2」のどちらを採用するか。
-- 既存の `cumulative` 引数を破壊的に廃止して良いか（案 a）か、互換レイヤを残すか（案 b/c）。
+- 補足: カーブパラメータ `curve: float`
+  - 共通のスカラーとして導入し、`t = i / count` に対し `t' = t**curve` を計算する。
+  - 既定値は `curve=1.0`（完全に線形）。`curve>1` で終盤に変化が集中、`curve<1` で序盤に変化が集中。
+  - `cumulative_*` が False の場合は `curve` を無視し、常に `t' = t` として扱う。
+- [x] A-2. デフォルト値の方針を決定
+  - デフォルト値は `cumulative_scale=False, cumulative_offset=False, cumulative_rotate=False`（すべて False）とする。
+  - 既定挙動は「始点/終点を線形に割るモード」（完全非累積）とし、累積感が欲しい場合は明示的に各フラグを True にする。
+- [x] A-3. 既存の `cumulative: bool` 引数の扱いを決定
+  - 既存の `cumulative` は完全に廃止し、3 フラグに置き換える（破壊的変更を許容）。
+  - 互換レイヤとしての内部マッピングや deprecate 対応は行わない。
 
 ---
 
@@ -84,11 +75,9 @@ API/実装はシンプルで理解しやすい形を目指す。
 目的: `repeat` エフェクト本体に 3 フラグを導入し、モードごとの挙動を分かりやすく実装する。
 
 - [ ] B-1. 関数シグネチャの更新案を確定
-  - 例（案 a: `cumulative` 廃止）:
-    - `def repeat(..., *, count: int = 3, cumulative_scale: bool = True, cumulative_offset: bool = True, cumulative_rotate: bool = True, ...)`
-  - 例（案 b/c: 互換レイヤあり）:
-    - `def repeat(..., *, count: int = 3, cumulative: bool | None = None, cumulative_scale: bool | None = None, cumulative_offset: bool | None = None, cumulative_rotate: bool | None = None, ...)`
-    - `None` の場合は内部ポリシーに従って決定（`cumulative` が優先など）。
+  - `cumulative` は廃止し、3 フラグ + カーブパラメータで制御する。
+  - 例:
+    - `def repeat(..., *, count: int = 3, cumulative_scale: bool = False, cumulative_offset: bool = False, cumulative_rotate: bool = False, curve: float = 1.0, ...)`
 - [ ] B-2. 内部ロジックを「元座標 base」と「現在座標 current」に整理
   - `base_coords = coords.copy()` を基準とし、
     - offset/rotate の累積/非累積は「base を使うか current を使うか」で切り替える。
@@ -121,11 +110,8 @@ API/実装はシンプルで理解しやすい形を目指す。
   - 各フラグの意味とデフォルト（累積/非累積）の説明を 1〜2 行で記述。
 - [ ] C-2. `repeat.__param_meta__` に 3 フラグを追加
   - 例: `"cumulative_scale": {"type": "bool"}` など。
-  - 既存の `"cumulative"` エントリをどう扱うか（残す/削除/非推奨）を決めて反映。
-- [ ] C-3. `docs/spec/repeat_effect_spec.md` の更新
-  - 「cumulative 1 本軸」の説明を削除し、`cumulative_scale` / `cumulative_offset` / `cumulative_rotate` ベースの説明に書き換え。
-  - 「よく使うプリセット例」を、3 フラグの組み合わせとして列挙。
-- [ ] C-4. 必要であれば `repeat_effect_plan.md` 側にも「3 フラグ案に更新した」旨を追記。
+  - 既存の `"cumulative"` エントリは削除する。
+- [ ] C-3. 必要であれば `repeat_effect_plan.md` 側にも「3 フラグ案に更新した」旨を追記。
 
 ---
 
@@ -155,8 +141,8 @@ API/実装はシンプルで理解しやすい形を目指す。
 - [ ] E-1. 既存スケッチへの影響評価
   - リポ内での `repeat` の使用箇所を `rg` で洗い出し、3 フラグ導入後の挙動差を確認。
   - 必要であればサンプル更新やコメント追記。
-- [ ] E-2. 互換レイヤ（`cumulative`）の扱い決定と実装
-  - A-3 の方針に従い、必要であれば「旧 `cumulative` → 3 フラグ」のマッピングを実装。
+- [ ] E-2. 互換レイヤ（`cumulative`）の扱い確認
+  - A-3 の方針に従い、「旧 `cumulative` 引数は廃止し、マッピングは実装しない」ことを最終確認。
 - [ ] E-3. 将来の拡張メモ
   - 「コピー番号 `n` をエフェクト外に公開するか」「LFO 等との連携で使うか」など、今回の変更に紐づくアイデアがあれば追記。
 
@@ -164,10 +150,5 @@ API/実装はシンプルで理解しやすい形を目指す。
 
 ## メモ / 質問候補
 
-- デフォルト値はどれにするか:
-  - すべて True で「従来 repeat の完全累積」挙動を保つか。
-  - あるいは「よく使うモード」（例えば scale 累積のみ）に寄せた組み合わせを既定とするか。
-- 既存の `cumulative` 引数の扱い:
-  - 破壊的変更を前提に廃止してしまうか、移行期間として docstring に deprecate 明記のうえ残すか。
 - 非累積スケールの具体ルール:
   - 本計画では「1→scale の線形補間」を想定しているが、他に使いたい形があればここで確定しておきたい。

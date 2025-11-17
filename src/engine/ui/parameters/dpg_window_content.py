@@ -27,12 +27,14 @@ class ParameterWindowContentBuilder:
         layout: ParameterLayoutConfig,
         theme_mgr: ParameterWindowThemeManager,
     ) -> None:
+        """Store/レイアウト/テーマ管理クラスを受け取り、状態を初期化する。"""
         self._store = store
         self._layout = layout
         self._theme_mgr = theme_mgr
         self._syncing: bool = False
 
     def build_root_window(self, root_tag: str, title: str) -> None:
+        """ルートウィンドウと Display/HUD セクションを構築する。"""
         with dpg.window(tag=root_tag, label=title, no_resize=False, no_collapse=True) as root:
             try:
                 self.build_display_controls(parent=root)
@@ -41,6 +43,7 @@ class ParameterWindowContentBuilder:
         dpg.set_primary_window(root, True)
 
     def build_display_controls(self, parent: int | str) -> None:
+        """Display/HUD 用のコントロール群を構築し、Store と初期同期する。"""
         try:
             from util.utils import load_config as _load_cfg
         except Exception:
@@ -74,7 +77,8 @@ class ParameterWindowContentBuilder:
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            with dpg.table(header_row=False, policy=table_policy) as disp_tbl:
+            policy_int = int(table_policy) if table_policy is not None else 0
+            with dpg.table(header_row=False, policy=policy_int) as disp_tbl:
                 try:
                     tth = self._theme_mgr.get_category_table_theme("Display")
                     if tth is not None:
@@ -150,7 +154,8 @@ class ParameterWindowContentBuilder:
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            with dpg.table(header_row=False, policy=table_policy) as hud_tbl:
+            policy_int = int(table_policy) if table_policy is not None else 0
+            with dpg.table(header_row=False, policy=policy_int) as hud_tbl:
                 try:
                     tth = self._theme_mgr.get_category_table_theme("HUD")
                     if tth is not None:
@@ -358,7 +363,8 @@ class ParameterWindowContentBuilder:
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            with dpg.table(header_row=False, policy=table_policy) as table:
+            policy_int = int(table_policy) if table_policy is not None else 0
+            with dpg.table(header_row=False, policy=policy_int) as table:
                 try:
                     tth = self._theme_mgr.get_category_table_theme(kind)
                     if tth is not None:
@@ -408,6 +414,7 @@ class ParameterWindowContentBuilder:
                     self._create_row_3cols(table, it)
 
     def _category_kind(self, items: list[ParameterDescriptor]) -> str:
+        """グループ内の Descriptor からカテゴリ種別を決定する。"""
         if not items:
             return "shape"
         try:
@@ -428,12 +435,14 @@ class ParameterWindowContentBuilder:
         return first
 
     def _label_value_ratio(self) -> tuple[float, float]:
+        """Display テーブル用のラベル列と値列の比率を計算する。"""
         left = float(self._layout.label_column_ratio)
         left = 0.1 if left < 0.1 else (0.9 if left > 0.9 else left)
         right = max(0.1, 1.0 - left)
         return left, right
 
     def _add_two_columns(self, left: float, right: float) -> None:
+        """ラベル列と値列の 2 列テーブルヘッダを追加する。"""
         try:
             dpg.add_table_column(label="Parameter", width_stretch=True, init_width_or_weight=left)
             dpg.add_table_column(label="Value", width_stretch=True, init_width_or_weight=right)
@@ -442,6 +451,7 @@ class ParameterWindowContentBuilder:
             dpg.add_table_column(label="Value")
 
     def _create_row_3cols(self, table: int | str, desc: ParameterDescriptor) -> None:
+        """カテゴリテーブルに 3 列（Label/Bars/CC）の行を追加する。"""
         with dpg.table_row(parent=table):
             with dpg.table_cell():
                 dpg.add_text(default_value=desc.label or desc.id)
@@ -451,6 +461,7 @@ class ParameterWindowContentBuilder:
                 self._create_cc_inputs(parent=dpg.last_item() or table, desc=desc)
 
     def _create_bars(self, parent: int | str, desc: ParameterDescriptor) -> None:
+        """値種別に応じた Bars 列のスライダ群を生成する。"""
         vt = desc.value_type
         value = self._current_or_default(desc)
         if self._is_style_color_desc(desc):
@@ -553,6 +564,7 @@ class ParameterWindowContentBuilder:
         self._create_widget(parent, desc)
 
     def _create_cc_inputs(self, parent: int | str, desc: ParameterDescriptor) -> None:
+        """パラメータに対応する CC 番号入力群をテーブル内に生成する。"""
         vt = desc.value_type
         if vt == "vector":
             vec = (
@@ -567,13 +579,15 @@ class ParameterWindowContentBuilder:
                 policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
             ) as cc_tbl:
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                cc_theme = None
                 if var_cell_padding is not None:
                     cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
                     cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
                     with dpg.theme() as cc_theme:
                         with dpg.theme_component(dpg.mvAll):
                             dpg.add_theme_style(var_cell_padding, cx, cy)
-                dpg.bind_item_theme(cc_tbl, cc_theme)
+                if cc_theme is not None:
+                    dpg.bind_item_theme(cc_tbl, cc_theme)
                 for _ in range(dim):
                     try:
                         dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
@@ -591,13 +605,15 @@ class ParameterWindowContentBuilder:
                 policy=self._dpg_policy(["mvTable_SizingStretchSame"]) or 0,
             ) as cc_tbl:
                 var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+                cc_theme = None
                 if var_cell_padding is not None:
                     cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
                     cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
                     with dpg.theme() as cc_theme:
                         with dpg.theme_component(dpg.mvAll):
                             dpg.add_theme_style(var_cell_padding, cx, cy)
-                dpg.bind_item_theme(cc_tbl, cc_theme)
+                if cc_theme is not None:
+                    dpg.bind_item_theme(cc_tbl, cc_theme)
                 try:
                     dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
                 except TypeError:
@@ -606,7 +622,8 @@ class ParameterWindowContentBuilder:
                     with dpg.table_cell():
                         self._add_cc_binding_input(None, desc)
 
-    def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int:
+    def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int | str:
+        """値種別に応じて単一ウィジェットを生成し、そのタグを返す。"""
         value = self._current_or_default(desc)
         vt = desc.value_type
         if vt == "bool":
@@ -706,7 +723,8 @@ class ParameterWindowContentBuilder:
         desc: ParameterDescriptor,
         value: Any,
         hint: Any,
-    ) -> int:
+    ) -> int | str:
+        """int パラメータ用のスライダと CC 入力を生成する。"""
         with dpg.table(
             parent=parent,
             header_row=False,
@@ -743,7 +761,8 @@ class ParameterWindowContentBuilder:
         desc: ParameterDescriptor,
         value: Any,
         hint: Any,
-    ) -> int:
+    ) -> int | str:
+        """float パラメータ用のスライダと CC 入力を生成する。"""
         with dpg.table(
             parent=parent,
             header_row=False,
@@ -780,7 +799,8 @@ class ParameterWindowContentBuilder:
         parent: int | str,
         desc: ParameterDescriptor,
         value: Any,
-    ) -> int:
+    ) -> int | str:
+        """style.color 用のカラー編集ウィジェットを生成し、そのタグを返す。"""
         base = self._safe_norm(value, (0.0, 0.0, 0.0, 1.0))
         r, g, b, _ = base
         picker = dpg.add_color_edit(
@@ -807,13 +827,16 @@ class ParameterWindowContentBuilder:
         return picker
 
     def _is_style_color_desc(self, desc: ParameterDescriptor) -> bool:
+        """Descriptor が style.color パラメータかどうかを判定する。"""
         return isinstance(desc.id, str) and desc.id.endswith(".color") and ".style#" in desc.id
 
     def _current_or_default(self, desc: ParameterDescriptor) -> Any:
+        """Store の現在値があればそれを、なければ Descriptor の既定値を返す。"""
         v = self._store.current_value(desc.id)
         return v if v is not None else desc.default_value
 
     def _on_widget_change(self, sender: int, app_data: Any, user_data: Any) -> None:  # noqa: D401
+        """ウィジェット変更イベントから Store の override を更新する。"""
         if self._syncing:
             return
         if isinstance(user_data, (list, tuple)) and len(user_data) == 2:
@@ -837,6 +860,7 @@ class ParameterWindowContentBuilder:
         self._store.set_override(pid, value)
 
     def on_store_change(self, ids: Iterable[str]) -> None:
+        """Store から通知された ID 群に対応する DPG ウィジェット値を更新する。"""
         self._syncing = True
         try:
             for pid in ids:
@@ -890,6 +914,7 @@ class ParameterWindowContentBuilder:
             self._syncing = False
 
     def _on_cc_binding_change(self, sender: int, app_data: Any, user_data: Any) -> None:
+        """CC 番号入力の変更を CC バインディングへ反映する。"""
         try:
             pid = str(user_data)
             text = str(app_data).strip()
@@ -914,7 +939,10 @@ class ParameterWindowContentBuilder:
         except Exception:
             pass
 
-    def _add_cc_binding_input(self, parent: int | str | None, desc: ParameterDescriptor) -> int:
+    def _add_cc_binding_input(
+        self, parent: int | str | None, desc: ParameterDescriptor
+    ) -> int | str:
+        """スカラーパラメータ用の CC 番号入力テキストを追加する。"""
         try:
             current = self._store.cc_binding(desc.id)
         except Exception:
@@ -943,7 +971,8 @@ class ParameterWindowContentBuilder:
         parent: int | str | None,
         desc: ParameterDescriptor,
         idx: int,
-    ) -> int:
+    ) -> int | str:
+        """ベクトル成分ごとの CC 番号入力テキストを追加する。"""
         suffix = ("x", "y", "z", "w")[idx]
         pid_comp = f"{desc.id}::{suffix}"
         try:
@@ -970,6 +999,7 @@ class ParameterWindowContentBuilder:
         return box
 
     def force_set_rgb_u8(self, tag: int | str, rgb_u8: Sequence[int]) -> None:
+        """0–255 RGB 値を DPG カラーピッカーに設定する。"""
         if not isinstance(rgb_u8, Sequence) or len(rgb_u8) < 3:
             raise ValueError("rgb_u8 must be a sequence of length >= 3")
         r = int(rgb_u8[0])
@@ -978,6 +1008,7 @@ class ParameterWindowContentBuilder:
         dpg.set_value(tag, [r, g, b])
 
     def store_rgb01(self, pid: str, app_data: Any) -> None:
+        """DPG カラー入力を 0..1 RGBA（または vec3）に正規化して Store に保存する。"""
         try:
             from util.color import normalize_color as _norm
 
@@ -1004,6 +1035,7 @@ class ParameterWindowContentBuilder:
         value: Any,
         default: tuple[float, float, float, float],
     ) -> tuple[float, float, float, float]:
+        """カラー値を正規化し、失敗時は既定値を返す。"""
         try:
             from util.color import normalize_color as _norm
 
@@ -1013,6 +1045,7 @@ class ParameterWindowContentBuilder:
             return default
 
     def _dpg_policy(self, names: Sequence[str]) -> Any | None:
+        """Dear PyGui テーブル policy 定数を名前の候補リストから解決する。"""
         for n in names:
             var = getattr(dpg, n, None)
             if var is not None:
