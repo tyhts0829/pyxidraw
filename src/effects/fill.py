@@ -53,6 +53,7 @@ NONPLANAR_EPS_REL = 1e-5
 PARAM_META = {
     "angle_sets": {"type": "integer", "min": 1, "max": 6, "step": 1},
     "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES, "step": 1.0},
+    "spacing_gradient": {"type": "number", "min": -2.0, "max": 2.0, "step": 0.1},
     "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
     "remove_boundary": {"type": "boolean"},
 }
@@ -65,6 +66,7 @@ def fill(
     angle_sets: int | list[int] | tuple[int, ...] = 1,
     angle_rad: float | list[float] | tuple[float, ...] = 0.7853981633974483,  # pi/4 ≈ 45°
     density: float | list[float] | tuple[float, ...] = 35.0,
+    spacing_gradient: float | list[float] | tuple[float, ...] = 0.0,
     remove_boundary: bool = False,
 ) -> Geometry:
     """閉じた形状をハッチングで塗りつぶし（純関数）。
@@ -82,6 +84,10 @@ def fill(
     density : float | list[float] | tuple[float, ...], default 35.0
         ハッチ密度（本数のスケール）。配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
         0 以下はその図形では no-op。最大は内部定数（200）。
+    spacing_gradient : float | list[float] | tuple[float, ...], default 0.0
+        スキャン方向に沿った線間隔の勾配。0.0 で一様間隔。
+        正の値でスキャン軸の +側に行くほど線間隔が広がり、負の値で -側に行くほど広がる。
+        絶対値が大きいほど変化が強くなり、配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
     remove_boundary : bool, default False
         元の閉じた輪郭線を出力から除去する。False で輪郭を残す。
 
@@ -100,10 +106,13 @@ def fill(
         if isinstance(x, (list, tuple)):
             return [float(v) for v in x]
         # その他 Iterable は受け取らない（仕様上 list/tuple のみ）
-        raise TypeError("angle_rad/density は float または list/tuple[float] を指定してください")
+        raise TypeError(
+            "angle_rad/density/spacing_gradient は float または list/tuple[float] を指定してください"
+        )
 
     density_seq = _as_float_seq(density)  # type: ignore[arg-type]
     angle_seq = _as_float_seq(angle_rad)  # type: ignore[arg-type]
+    spacing_gradient_seq = _as_float_seq(spacing_gradient)  # type: ignore[arg-type]
 
     def _as_int_seq(x: int | Iterable[int]) -> list[int]:
         if isinstance(x, (int, np.integer)):
@@ -143,6 +152,7 @@ def fill(
             if d <= 0.0:
                 continue
             d = max(0.0, min(MAX_FILL_LINES, float(d)))
+            grad = spacing_gradient_seq[gi % len(spacing_gradient_seq)]
             # グループの頂点配列にまとめ直し
             lines: list[np.ndarray] = []
             for idx in ring_indices:
@@ -167,7 +177,12 @@ def fill(
             for i in range(k_i):
                 ang_i = float(base_ang) + (np.pi / k_i) * i
                 segs_xy = _generate_line_fill_evenodd_multi(
-                    g_coords, g_offsets, d, ang_i, spacing_override=base_spacing
+                    g_coords,
+                    g_offsets,
+                    d,
+                    ang_i,
+                    spacing_override=base_spacing,
+                    spacing_gradient=float(grad),
                 )
                 for seg in segs_xy:
                     results.append(transform_back(seg, R_all, z_all))
@@ -181,6 +196,7 @@ def fill(
         vertices = coords[offsets[i] : offsets[i + 1]]
 
         d = density_seq[i % len(density_seq)]
+        grad = spacing_gradient_seq[i % len(spacing_gradient_seq)]
         if d <= 0.0:
             # 塗り線無し、境界だけ保持
             if not remove_boundary:
@@ -195,6 +211,7 @@ def fill(
                 angle_sets=k_i,
                 density=max(0.0, min(MAX_FILL_LINES, float(d))),
                 angle=float(base_ang),
+                spacing_gradient=float(grad),
                 remove_boundary=remove_boundary,
             )
         )
@@ -210,7 +227,7 @@ fill.__param_meta__ = PARAM_META
 
 
 def _generate_line_fill(
-    vertices: np.ndarray, density: float, angle: float = 0.0
+    vertices: np.ndarray, density: float, angle: float = 0.0, spacing_gradient: float = 0.0
 ) -> list[np.ndarray]:
     """平行線塗りつぶしパターンを生成します。"""
     # 処理を簡素化するため XY 平面へ射影
@@ -257,8 +274,10 @@ def _generate_line_fill(
     if spacing <= 0:
         return []
 
-    # 水平ラインを生成
-    y_values = np.arange(min_y, max_y, spacing)
+    # スキャンラインの Y 座標を生成（spacing_gradient=0 なら一様間隔）
+    y_values = _generate_y_values(min_y, max_y, spacing, float(spacing_gradient))
+    if y_values.size == 0:
+        return []
     fill_lines = []
 
     # 性能向上のためバッチ処理で交点計算（作業座標 = 角度考慮後）
@@ -321,6 +340,54 @@ def _spacing_from_height(height: float, density: float) -> float:
     return float(height) / float(num_lines)
 
 
+def _generate_y_values(
+    min_y: float, max_y: float, base_spacing: float, spacing_gradient: float
+) -> np.ndarray:
+    """スキャン範囲と勾配からスキャンラインの Y 座標列を生成する。"""
+    if not np.isfinite(base_spacing) or base_spacing <= 0.0:
+        return np.empty(0, dtype=np.float32)
+    if not np.isfinite(spacing_gradient):
+        spacing_gradient = 0.0
+    if max_y <= min_y:
+        return np.empty(0, dtype=np.float32)
+
+    # 勾配ゼロは元の一様間隔と同じ
+    if abs(spacing_gradient) < 1e-6:
+        return np.arange(min_y, max_y, base_spacing, dtype=np.float32)
+
+    height = max_y - min_y
+
+    # 勾配の暴走を抑えるためソフトクランプ
+    k = float(spacing_gradient)
+    if k > 4.0:
+        k = 4.0
+    elif k < -4.0:
+        k = -4.0
+
+    # 平均間隔がおおよそ一定になるように正規化係数を導入
+    if abs(k) < 1e-3:
+        c = 1.0
+    else:
+        c = k / (2.0 * float(np.sinh(k / 2.0)))
+
+    y_values: list[float] = []
+    y = float(min_y)
+    # 細かすぎる間隔への発散を避けるための下限
+    min_step = base_spacing * 1e-3
+
+    while y < max_y:
+        t = (y - min_y) / height  # 0..1
+        factor = c * float(np.exp(k * (t - 0.5)))
+        step = base_spacing * max(factor, 0.0)
+        if step < min_step:
+            step = min_step
+
+        y_values.append(y)
+        y += step
+
+    return np.asarray(y_values, dtype=np.float32)
+
+
 def _scan_span_for_angle_xy(coords_2d: np.ndarray, angle: float) -> float:
     """XY 座標群に対し、角度 `angle` のスキャン方向（y'=x*sinθ + y*cosθ）のスパン長を返す。
 
@@ -341,6 +408,7 @@ def _generate_line_fill_evenodd_multi(
     density: float,
     angle: float = 0.0,
     spacing_override: float | None = None,
+    spacing_gradient: float = 0.0,
 ) -> list[np.ndarray]:
     """複数輪郭を偶奇規則でまとめてハッチング（XY 平面前提）。"""
     if density <= 0 or offsets.size <= 1:
@@ -379,7 +447,7 @@ def _generate_line_fill_evenodd_multi(
     if not np.isfinite(spacing) or spacing <= 0:
         return []
 
-    y_values = np.arange(min_y, max_y, spacing, dtype=np.float32)
+    y_values = _generate_y_values(min_y, max_y, spacing, float(spacing_gradient))
     out_lines: list[np.ndarray] = []
     z0 = float(coords[0, 2])
 
@@ -422,6 +490,7 @@ def _fill_single_polygon(
     angle_sets: int,
     density: float,
     angle: float,
+    spacing_gradient: float,
     remove_boundary: bool,
 ) -> list[np.ndarray]:
     """単一ポリゴンに対して塗りつぶし線/ドットを生成し、元の輪郭と合わせて返す。"""
@@ -435,7 +504,7 @@ def _fill_single_polygon(
     k = int(angle_sets) if int(angle_sets) > 0 else 1
     for i in range(k):
         ang_i = angle + (np.pi / k) * i
-        out.extend(_generate_line_fill(vertices, density, ang_i))
+        out.extend(_generate_line_fill(vertices, density, ang_i, spacing_gradient=spacing_gradient))
     return out
 
 
