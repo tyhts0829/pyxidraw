@@ -12,7 +12,7 @@ def draw(t: float):
             .scale(4 * (i + 1), 4 * (i + 1), 4 * (i + 1))
             .translate(A5[0] / 2, A5[1] / 2, 0)
         )
-        p = E.label(uid="poly_effect").affine().fill()
+        p = E.affine().fill().label(uid="poly_effect")
         geos.append(p(g))
     return geos
 

@@ -133,3 +133,37 @@ def test_parameter_runtime_uses_fallback_range_for_missing_meta():
     # RangeHint 推定は Resolver では行わない（GUI 側で 0–1 fallback）
     assert descriptor.range_hint is None
     deactivate_runtime()
+
+
+def test_parameter_runtime_labels_repeated_labeled_pipelines_separately():
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    runtime.begin_frame()
+
+    uid1 = runtime.next_pipeline_uid()
+    uid2 = runtime.next_pipeline_uid()
+
+    runtime.before_effect_call(
+        step_index=0,
+        effect_name="displace",
+        fn=dummy_effect_with_defaults,
+        params={},
+        pipeline_uid=uid1,
+        pipeline_label="poly_effect",
+    )
+    runtime.before_effect_call(
+        step_index=0,
+        effect_name="displace",
+        fn=dummy_effect_with_defaults,
+        params={},
+        pipeline_uid=uid2,
+        pipeline_label="poly_effect",
+    )
+
+    desc1 = store.get_descriptor(f"effect@{uid1}.displace#0.amplitude_mm")
+    desc2 = store.get_descriptor(f"effect@{uid2}.displace#0.amplitude_mm")
+
+    assert desc1.category == "poly_effect_1"
+    assert desc2.category == "poly_effect_2"
+    deactivate_runtime()

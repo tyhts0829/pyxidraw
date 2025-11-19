@@ -56,6 +56,9 @@ class ParameterRuntime:
         self._resolver = ParameterValueResolver(store)
         self._t: float = 0.0
         self._pipeline_counter: int = 0
+        # ラベル付きパイプラインの表示名管理（カテゴリ用）
+        self._pipeline_label_by_uid: dict[str, str] = {}
+        self._pipeline_label_counter: dict[str, int] = {}
         # cc はランタイムでは扱わない（api.cc 内に閉じる）
 
     def set_lazy(self, lazy: bool) -> None:
@@ -70,6 +73,8 @@ class ParameterRuntime:
         self._shape_registry.reset()
         self._effect_registry.reset()
         self._pipeline_counter = 0
+        self._pipeline_label_by_uid.clear()
+        self._pipeline_label_counter.clear()
 
     # フレーム内のパイプライン順序に基づく UID を供給
     def next_pipeline_uid(self) -> str:
@@ -145,12 +150,34 @@ class ParameterRuntime:
             return v
 
         params = {k: _materialize(v) for k, v in dict(params).items()}
+        # パイプラインラベル（カテゴリ名）の決定:
+        # - E.label("uid") で指定されたラベルをベースに、同一ラベルに対してフレーム内で 1,2,... と連番を付与する。
+        # - 例: "poly_effect" → "poly_effect_1", "poly_effect_2", ...
+        base_label = ""
+        try:
+            base_label = str(pipeline_label or "").strip()
+        except Exception:
+            base_label = ""
+        display_label = ""
+        pipeline_key = str(pipeline_uid or "")
+        if base_label and pipeline_key:
+            label_map = self._pipeline_label_by_uid
+            if pipeline_key in label_map:
+                display_label = label_map[pipeline_key]
+            else:
+                count = int(self._pipeline_label_counter.get(base_label, 0)) + 1
+                self._pipeline_label_counter[base_label] = count
+                display_label = f"{base_label}_{count}"
+                label_map[pipeline_key] = display_label
+        elif base_label:
+            display_label = base_label
+
         context = ParameterContext(
             scope="effect",
             name=effect_name,
             index=step_index,
             pipeline=str(pipeline_uid or ""),
-            pipeline_label=str(pipeline_label or ""),
+            pipeline_label=str(display_label or base_label or ""),
         )
         if info.signature is not None and "t" in info.signature.parameters and "t" not in params:
             params = {**params, "t": self._t}
