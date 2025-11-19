@@ -4,17 +4,9 @@ A5 = (148, 210)
 
 
 def draw(t: float):
-    N = 3
-    geos = []
-    for i in range(N):
-        g = (
-            G.polygon()
-            .scale(4 * (i + 1), 4 * (i + 1), 4 * (i + 1))
-            .translate(A5[0] / 2, A5[1] / 2, 0)
-        )
-        p = E.affine().fill()
-        geos.append(p(g))
-    return geos
+    g = G.line().scale(100, 100, 1).translate(A5[0] / 2, A5[1] / 2, 0)
+    p = E.affine().subdivide().displace().scale(scale=(1, 1, 0)).offset().offset().offset()
+    return p(g)
 
 
 if __name__ == "__main__":

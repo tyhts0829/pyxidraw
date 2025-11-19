@@ -18,3 +18,13 @@ def test_offset_supports_three_join_styles(join: str) -> None:
     out = offset(g, join=join, distance=1.0, segments_per_circle=8)
     assert isinstance(out, Geometry)
     assert len(out.offsets) >= 2
+
+
+@pytest.mark.parametrize("join", ["round", "mitre", "bevel"])  # noqa: PT006
+def test_offset_keep_original_works_with_three_join_styles(join: str) -> None:
+    g = Geometry.from_lines(
+        [np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]], dtype=np.float32)]
+    )
+    out = offset(g, join=join, distance=1.0, segments_per_circle=8, keep_original=True)
+    assert isinstance(out, Geometry)
+    assert len(out.offsets) >= 3

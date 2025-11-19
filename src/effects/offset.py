@@ -30,9 +30,10 @@ from util.geom3d_ops import transform_back, transform_to_xy_plane
 from .registry import effect
 
 PARAM_META = {
-    "distance": {"type": "number", "min": 0.0, "max": 25.0},
     "join": {"choices": ["mitre", "round", "bevel"]},
+    "distance": {"type": "number", "min": 0.0, "max": 25.0},
     "segments_per_circle": {"type": "integer", "min": 1, "max": 100},
+    "keep_original": {"type": "bool"},
 }
 
 
@@ -43,6 +44,7 @@ def offset(
     join: str = "round",  # 'mitre'|'round'|'bevel'
     segments_per_circle: int = 12,  # shapelyのresolutionに相当（既定値を上げて円滑さを確保）
     distance: float = 5.0,
+    keep_original: bool = False,
 ) -> Geometry:
     """Shapely を用いて輪郭をオフセット（膨張/収縮）。
 
@@ -56,6 +58,8 @@ def offset(
         円弧近似の分割数（Shapely の `resolution` に相当）。
     distance : float, default 5.0
         オフセット距離（mm）。0 で no-op。負値で収縮、正値で膨張。
+    keep_original : bool, default False
+        True のときオフセット後の線に加えて元のポリラインも出力に含める。
     """
     coords, offsets = g.as_arrays(copy=False)
     actual_distance = float(distance)
@@ -65,7 +69,7 @@ def offset(
     join_style_str = join
     resolution_int = int(segments_per_circle)
 
-    vertices_list = []
+    vertices_list: list[np.ndarray] = []
     for i in range(len(offsets) - 1):
         vertices = coords[offsets[i] : offsets[i + 1]]
         if len(vertices) >= 2:
@@ -73,13 +77,19 @@ def offset(
 
     new_vertices_list = _buffer(vertices_list, actual_distance, join_style_str, resolution_int)
 
-    filtered_vertices_list = []
+    filtered_vertices_list: list[np.ndarray] = []
     for v in new_vertices_list:
         if v is not None and len(v) > 0 and isinstance(v, np.ndarray):
             filtered_vertices_list.append(v.astype(np.float32))
 
     if not filtered_vertices_list:
         return Geometry(coords.copy(), offsets.copy())
+
+    if keep_original:
+        for i in range(len(offsets) - 1):
+            original_vertices = coords[offsets[i] : offsets[i + 1]]
+            if original_vertices.shape[0] > 0:
+                filtered_vertices_list.append(original_vertices.astype(np.float32))
 
     all_coords = np.vstack(filtered_vertices_list)
     new_offsets = [0]
@@ -142,8 +152,6 @@ def _buffer(
                 new_vertices_list, buffered_line, rotation_matrix, z_offset
             )
 
-    scale_factor = 1 / (1 + distance * 2 / 25.0)
-    new_vertices_list = _scaling(new_vertices_list, scale_factor)
     return new_vertices_list
 
 
