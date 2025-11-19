@@ -90,6 +90,7 @@
   - `angle_sets`: `int | list[int] | tuple[int, ...]`
   - `angle_rad`: `float | list[float] | tuple[float, ...]`
   - `density`: `float | list[float] | tuple[float, ...]`
+   - `spacing_gradient`: `float | list[float] | tuple[float, ...]`
   - `remove_boundary`: `bool`
 
 ## mirror

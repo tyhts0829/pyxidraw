@@ -24,7 +24,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size="A5",
-        render_scale=6,
+        render_scale=10,
         use_midi=True,
         use_parameter_gui=True,
         workers=4,

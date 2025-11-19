@@ -62,12 +62,16 @@ class LineRenderer(Tickable):
 
         try:
             base_col = _normalize_color(line_color)
-            self.line_program["color"].value = base_col
-            # 基準色を保持（レイヤー未指定時に使用）
-            self._base_line_color: tuple[float, float, float, float] = base_col
         except Exception:  # pragma: no cover - 防御的フォールバック
-            self.line_program["color"].value = (0.0, 0.0, 0.0, 1.0)
-            self._base_line_color = (0.0, 0.0, 0.0, 1.0)
+            base_col = (0.0, 0.0, 0.0, 1.0)
+        # 基準色を保持（レイヤー未指定時に使用）
+        self._base_line_color: tuple[float, float, float, float] = (
+            float(base_col[0]),
+            float(base_col[1]),
+            float(base_col[2]),
+            float(base_col[3]),
+        )
+        self.line_program["color"].value = self._base_line_color
 
         # GPUBuffer を保持
         self.gpu = LineMesh(
@@ -273,6 +277,24 @@ class LineRenderer(Tickable):
         try:
             col = _normalize_color(rgba)
             self.line_program["color"].value = col
+        except Exception:
+            # mgl 非存在などの環境では黙って無視
+            pass
+
+    def set_base_line_color(self, rgba: Sequence[float]) -> None:
+        """基準線色（RGBA 0–1）を更新し、レイヤー未指定時/フォールバック用の色として保存する。"""
+        from util.color import normalize_color as _normalize_color
+
+        try:
+            col = _normalize_color(rgba)
+            self._base_line_color = (
+                float(col[0]),
+                float(col[1]),
+                float(col[2]),
+                float(col[3]),
+            )
+            # 現在色も更新しておく（非レイヤー描画時に即時反映）
+            self.line_program["color"].value = self._base_line_color
         except Exception:
             # mgl 非存在などの環境では黙って無視
             pass

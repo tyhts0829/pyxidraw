@@ -53,7 +53,7 @@ NONPLANAR_EPS_REL = 1e-5
 PARAM_META = {
     "angle_sets": {"type": "integer", "min": 1, "max": 6, "step": 1},
     "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES, "step": 1.0},
-    "spacing_gradient": {"type": "number", "min": -2.0, "max": 2.0, "step": 0.1},
+    "spacing_gradient": {"type": "number", "min": -5.0, "max": 5.0, "step": 0.1},
     "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
     "remove_boundary": {"type": "boolean"},
 }

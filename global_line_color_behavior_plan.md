@@ -125,31 +125,31 @@
 
 ### 2. Renderer API 設計
 
-- [ ] `LineRenderer` にベース色更新のための API を追加する（`set_base_line_color` など）。
-- [ ] 追加 API で `_base_line_color` を更新し、必要に応じて `set_line_color` も呼ぶかどうかを決定する。
-- [ ] 既存の `set_line_color` 呼び出し（初期適用やテスト）との互換性を確認する。
+- [x] `LineRenderer` にベース色更新のための API を追加する（`set_base_line_color` など）。
+- [x] 追加 API で `_base_line_color` を更新し、必要に応じて `set_line_color` も呼ぶかどうかを決定する。
+- [x] 既存の `set_line_color` 呼び出し（初期適用やテスト）との互換性を確認する。
 
 ### 3. 初期 line color 適用ロジックの調整
 
-- [ ] `apply_initial_colors()` を見直し、初期 line color を「ベース色」として更新するように変更する。
+- [x] `apply_initial_colors()` を見直し、初期 line color を「ベース色」として更新するように変更する。
 - [ ] `run(..., line_color=...)` 引数がある場合は、それを `_base_line_color` の初期値として最優先に適用する。
 - [ ] config (`canvas.line_color`) とのフォールバック順を確認・テストケース化する。
 
 ### 4. Parameter GUI からの更新経路の変更
 
-- [ ] `subscribe_color_changes()` の `"runner.line_color"` ハンドリングを、「ベース色更新 API」を使う形に変更する。
+- [x] `subscribe_color_changes()` の `"runner.line_color"` ハンドリングを、「ベース色更新 API」を使う形に変更する。
 - [ ] 背景変更による自動 line color 推定との兼ね合い（`runner.background` のハンドラ）を再確認し、「GUI override があるかどうか」で分岐するよう整理する。
 - [ ] Parameter GUI 無効時（`parameter_manager is None`）との挙動差分を確認する（実質従来どおりかを確認）。
 
 ### 5. レイヤー挙動の確認
 
-- [ ] `worker._normalize_result()` の現行仕様を再確認し、`.style` 無し Sequence（`p1(g1), p2(g2)`）が `StyledLayer(color=None)` になる前提を確認する。
-- [ ] Renderer 側で「`layer.color is None` → `_base_line_color`」の経路が整合しているかを確認する。
+- [x] `worker._normalize_result()` の現行仕様を再確認し、`.style` 無し Sequence（`p1(g1), p2(g2)`）が `StyledLayer(color=None)` になる前提を確認する。
+- [x] Renderer 側で「`layer.color is None` → `_base_line_color`」の経路が整合しているかを確認する。
 - [ ] `.style` を混在させたケース（片方のみ style 指定、両方 style 指定）で、期待通り「明示スタイルが優先される」ことを仕様として整理する。
 
 ### 6. テスト計画
 
-- [ ] 単一 Geometry （非レイヤー）＋ GUI line color 更新で色が変わるテストを追加/維持する。
+- [x] 単一 Geometry （非レイヤー）＋ GUI line color 更新で色が変わるテストを追加/維持する。
 - [ ] `return p1(g1), p2(g2)`（どちらも style 無し）のスケッチで、GUI line color が両レイヤーに反映されるテストを追加する。
 - [ ] 片方だけ `.style(color=...)` を持つ `return p1(g1), p2(g2)` で、「style 指定レイヤーは固定色、style 無しレイヤーは GUI line color に追従」するテストを追加する。
 - [ ] `return p1(g1) + p2(g2)` の挙動が現状と変わらないこと（グローバル line color が効くこと）を確認する。
@@ -170,4 +170,3 @@
 
 この内容で問題なければ、次のステップとして具体的なコード変更案（`LineRenderer` の API 変更案と `subscribe_color_changes` の改修案）に落とし込みます。  
 気になる点や「ここはこうしてほしい」という希望があれば、この md に追記する形で調整します。
-

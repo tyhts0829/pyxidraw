@@ -53,12 +53,19 @@ def apply_initial_colors(parameter_manager, rendering_window, line_renderer, ove
         if ln_val is None:
             ln_val = parameter_manager.store.original_value("runner.line_color")
         if ln_val is not None:
-            line_renderer.set_line_color(_norm(ln_val))
+            # 初期線色はベース色として適用し、レイヤー未指定時の既定色とする
+            try:
+                line_renderer.set_base_line_color(_norm(ln_val))
+            except Exception:
+                line_renderer.set_line_color(_norm(ln_val))
         else:
             br, bg_, bb, _ = getattr(rendering_window, "_bg_color", (1.0, 1.0, 1.0, 1.0))
             luminance = 0.2126 * float(br) + 0.7152 * float(bg_) + 0.0722 * float(bb)
             auto = (0.0, 0.0, 0.0, 1.0) if luminance >= 0.5 else (1.0, 1.0, 1.0, 1.0)
-            line_renderer.set_line_color(auto)
+            try:
+                line_renderer.set_base_line_color(auto)
+            except Exception:
+                line_renderer.set_line_color(auto)
     except Exception:
         pass
 
@@ -116,7 +123,11 @@ def subscribe_color_changes(
         - 以前の layers-active ガードは冗長となったため削除（更新取りこぼし回避）。
         """
         try:
-            line_renderer.set_line_color(_norm(raw_val))
+            # グローバル線色としてベース色も更新する
+            try:
+                line_renderer.set_base_line_color(_norm(raw_val))
+            except Exception:
+                line_renderer.set_line_color(_norm(raw_val))
         except Exception:
             pass
 
