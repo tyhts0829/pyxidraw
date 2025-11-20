@@ -86,6 +86,64 @@ class _PipelineCache:
         self._cache.clear()
 
 
+class _PipelineRuntimeAdapter:
+    """ParameterRuntime 介在やラベル管理を切り出す補助クラス。"""
+
+    def __init__(self) -> None:
+        self.pipeline_uid: str | None = None
+        self.display_label: str | None = None
+
+    def set_label(self, label: str | None) -> None:
+        try:
+            text = str(label or "").strip()
+        except Exception:
+            text = ""
+        self.display_label = text or None
+        self._relabel_runtime()
+
+    def _ensure_uid(self, runtime) -> None:
+        if self.pipeline_uid is not None:
+            return
+        try:
+            self.pipeline_uid = runtime.next_pipeline_uid()
+        except Exception:
+            self.pipeline_uid = ""
+
+    def _relabel_runtime(self) -> None:
+        runtime = get_active_runtime()
+        if runtime is None or not self.pipeline_uid:
+            return
+        try:
+            runtime.relabel_pipeline(str(self.pipeline_uid), self.display_label or "")
+        except Exception:
+            pass
+
+    def resolve_effect(
+        self, name: str, params: dict[str, Any], step_index: int
+    ) -> tuple[Callable[..., Any], dict[str, Any], bool]:
+        """ランタイム介在を含めて effect を解決し、(impl, params, bypass) を返す。"""
+        from effects.registry import get_effect as _get_effect  # local import
+
+        runtime = get_active_runtime()
+        fn = _get_effect(name)
+        impl = getattr(fn, "__effect_impl__", fn)
+        resolved = dict(params)
+        runtime_bypass = False
+        if runtime is not None:
+            self._ensure_uid(runtime)
+            resolved_map = runtime.before_effect_call(
+                step_index=step_index,
+                effect_name=name,
+                fn=fn,
+                params=resolved,
+                pipeline_uid=str(self.pipeline_uid or ""),
+                pipeline_label=self.display_label,
+            )
+            resolved = dict(resolved_map)
+            runtime_bypass = bool(resolved.pop("bypass", False))
+        return impl, resolved, runtime_bypass
+
+
 @dataclass
 class Pipeline:
     steps: tuple[tuple[str, tuple[tuple[str, object], ...]], ...]
@@ -164,47 +222,19 @@ class PipelineBuilder:
     def __init__(self) -> None:
         self._steps: list[tuple[str, tuple[tuple[str, object], ...]]] = []
         self._cache_maxsize: int | None = None
-        self._uid: str | None = None
-        # Parameter GUI 表示用のラベル（内部 UID とは分離）
-        self._label_display: str | None = None
+        self._runtime_adapter = _PipelineRuntimeAdapter()
 
     def _resolve_effect(
         self, name: str, params: dict[str, Any], step_index: int, user_bypass: bool | None
     ) -> tuple[Callable[..., Any], dict[str, Any], bool]:
         """ParameterRuntime 介在をまとめた解決ヘルパ。"""
-        runtime = get_active_runtime()
-        # デフォルト impl（ランタイム無し時の署名用ダミー）
-        impl: Callable[..., Any] = lambda **_: None
-        resolved = dict(params)
-        runtime_bypass = False
-        if runtime is None:
-            return impl, resolved, bool(user_bypass)
-
-        # 初回に Pipeline UID を確保
-        if self._uid is None:
-            try:
-                self._uid = runtime.next_pipeline_uid()
-            except Exception:
-                self._uid = ""
-        # 実関数（署名/メタ用）は effects.registry から取得
-        from effects.registry import get_effect as _get_effect  # local import
-
-        fn = _get_effect(name)
-        resolved_map = runtime.before_effect_call(
-            step_index=step_index,
-            effect_name=name,
-            fn=fn,
-            params=resolved,
-            pipeline_uid=str(self._uid or ""),
-            pipeline_label=self._label_display,
+        impl, resolved, runtime_bypass = self._runtime_adapter.resolve_effect(
+            name, params, step_index
         )
-        resolved = dict(resolved_map)
-        impl = getattr(fn, "__effect_impl__", fn)
-        runtime_bypass = bool(resolved.pop("bypass", False))
         # 明示 bypass があればそちら優先
         if user_bypass is not None:
             runtime_bypass = bool(user_bypass)
-        return impl, resolved, runtime_bypass
+        return impl, dict(resolved), runtime_bypass
 
     def __getattr__(self, name: str) -> Callable[..., "PipelineBuilder"]:
         def _adder(**params: Any) -> "PipelineBuilder":
@@ -279,17 +309,7 @@ class PipelineBuilder:
 
     # 表示ラベル（GUI のカテゴリ名）を設定
     def label(self, uid: str) -> "PipelineBuilder":
-        try:
-            text = str(uid).strip()
-        except Exception:
-            text = ""
-        self._label_display = text or None
-        runtime = get_active_runtime()
-        if runtime is not None and self._uid is not None:
-            try:
-                runtime.relabel_pipeline(str(self._uid), self._label_display or "")
-            except Exception:
-                pass
+        self._runtime_adapter.set_label(uid)
         return self
 
 
