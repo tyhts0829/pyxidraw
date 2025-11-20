@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import weakref
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -23,10 +22,68 @@ from engine.ui.parameters import get_active_runtime
 
 from .lazy_signature import lazy_signature_for
 
-# forward decl（実体はモジュール末尾の単一ブロックで初期化）
-_GLOBAL_PIPELINES: "weakref.WeakSet[Pipeline]"
-_GLOBAL_COMPILED: "OrderedDict[tuple, Pipeline]"
-_GLOBAL_COMPILED_MAXSIZE: int | None
+
+class _PipelineCache:
+    """compiled Pipeline を共有する LRU。設定やステップを含むキーで再利用を判定。"""
+
+    def __init__(self, maxsize: int | None) -> None:
+        self._cache: "OrderedDict[tuple, Pipeline]" = OrderedDict()
+        self._maxsize = maxsize
+
+    @staticmethod
+    def _settings_stamp() -> tuple[float | None, int | None]:
+        """量子化ステップや上限値をキーに含め、設定変更時に自然失効させる。"""
+        try:
+            from common.settings import get as _get_settings
+
+            s = _get_settings()
+            return (float(s.PIPELINE_QUANT_STEP), int(s.COMPILED_CACHE_MAXSIZE or -1))
+        except Exception:
+            return (None, None)
+
+    def make_key(
+        self,
+        steps: tuple[tuple[str, tuple[tuple[str, object], ...]], ...],
+        cache_maxsize: int | None,
+    ) -> tuple:
+        return (steps, cache_maxsize, self._settings_stamp())
+
+    def get(self, key: tuple) -> Pipeline | None:
+        try:
+            p = self._cache.pop(key)
+            self._cache[key] = p
+            return p
+        except Exception:
+            return None
+
+    def store(self, key: tuple, pipeline: Pipeline) -> None:
+        if self._maxsize == 0:
+            return
+        self._cache[key] = pipeline
+        if self._maxsize is not None and self._maxsize > 0:
+            while len(self._cache) > self._maxsize:
+                self._cache.popitem(last=False)
+
+    def counters(self) -> dict[str, int]:
+        try:
+            pipelines = list(self._cache.values())
+        except Exception:
+            pipelines = []
+        compiled = len(pipelines)
+        enabled = sum(1 for p in pipelines if getattr(p, "_cache_maxsize", 0) != 0)
+        hits = sum(int(getattr(p, "_hits", 0)) for p in pipelines)
+        misses = sum(int(getattr(p, "_misses", 0)) for p in pipelines)
+        return {
+            "compiled": compiled,
+            "enabled": enabled,
+            "hits": hits,
+            "misses": misses,
+            "step_hits": 0,
+            "step_misses": 0,
+        }
+
+    def clear(self) -> None:
+        self._cache.clear()
 
 
 @dataclass
@@ -42,12 +99,6 @@ class Pipeline:
     _evicts: int = 0
     # 事前コンパイル済みステップ（関数参照 + 正規化済み params）: 任意
     _compiled_steps: tuple[tuple[Callable[[Geometry], Geometry], dict[str, Any]], ...] | None = None
-
-    def __post_init__(self) -> None:  # noqa: D401
-        try:
-            _GLOBAL_PIPELINES.add(self)
-        except Exception:
-            pass
 
     def realize(self) -> "Pipeline":
         return Pipeline(
@@ -175,12 +226,8 @@ class PipelineBuilder:
 
     def build(self) -> Pipeline:
         steps_tuple = tuple(self._steps)
-        key = (steps_tuple, self._cache_maxsize)
-        # グローバル compiled を再利用
-        try:
-            p = _GLOBAL_COMPILED.get(key)  # type: ignore[arg-type]
-        except Exception:
-            p = None
+        key = _PIPELINE_CACHE.make_key(steps_tuple, self._cache_maxsize)
+        p = _PIPELINE_CACHE.get(key)
         if p is not None:
             return p
         # 事前に name→impl へ解決
@@ -198,13 +245,7 @@ class PipelineBuilder:
             _cache_maxsize=self._cache_maxsize,
             _compiled_steps=tuple(compiled_steps),
         )
-        try:
-            _GLOBAL_COMPILED[key] = p  # type: ignore[index]
-            if _GLOBAL_COMPILED_MAXSIZE is not None and _GLOBAL_COMPILED_MAXSIZE > 0:
-                while len(_GLOBAL_COMPILED) > _GLOBAL_COMPILED_MAXSIZE:
-                    _GLOBAL_COMPILED.popitem(last=False)
-        except Exception:
-            pass
+        _PIPELINE_CACHE.store(key, p)
         return p
 
     # 明示バリア（Geometry にする Pipeline を返す）
@@ -262,58 +303,34 @@ def global_cache_counters() -> dict[str, int]:
     """Pipeline キャッシュの集計（HUD 用）。
 
     WeakSet はガベージ回収の影響を受けやすいため、強参照を保持する
-    グローバル compiled キャッシュ（_GLOBAL_COMPILED）を基準に集計する。
+    グローバル compiled キャッシュ（_PIPELINE_CACHE）を基準に集計する。
     """
-    try:
-        pipelines = list(_GLOBAL_COMPILED.values())
-    except Exception:
-        pipelines = []
-    compiled = len(pipelines)
-    enabled = sum(1 for p in pipelines if getattr(p, "_cache_maxsize", 0) != 0)
-    hits = sum(int(getattr(p, "_hits", 0)) for p in pipelines)
-    misses = sum(int(getattr(p, "_misses", 0)) for p in pipelines)
-    step_hits = 0
-    step_misses = 0
-    return {
-        "compiled": compiled,
-        "enabled": enabled,
-        "hits": hits,
-        "misses": misses,
-        "step_hits": step_hits,
-        "step_misses": step_misses,
-    }
+    return _PIPELINE_CACHE.counters()
 
 
 # ---- Global caches initialization (single place) ---------------------------
 # 目的: 初期化順序を明確化し、重複初期化を避ける。
-try:  # WeakSet/OrderedDict は失敗しにくいが、安全のためガード
-    _GLOBAL_PIPELINES = weakref.WeakSet()
-except Exception:  # pragma: no cover
-    _GLOBAL_PIPELINES = weakref.WeakSet()  # type: ignore[assignment]
-
-try:
-    _GLOBAL_COMPILED = OrderedDict()
-except Exception:  # pragma: no cover
-    _GLOBAL_COMPILED = OrderedDict()  # type: ignore[assignment]
-
 # COMPILED の LRU 最大数は settings 優先、失敗時は環境変数、最後に既定 128。
 try:
     from common.settings import get as _get_settings
 
     _val = _get_settings().COMPILED_CACHE_MAXSIZE
-    _GLOBAL_COMPILED_MAXSIZE = int(_val) if _val is not None else 128
-    if _GLOBAL_COMPILED_MAXSIZE is not None and _GLOBAL_COMPILED_MAXSIZE < 0:
-        _GLOBAL_COMPILED_MAXSIZE = 0
+    _PIPELINE_CACHE_MAXSIZE = int(_val) if _val is not None else 128
+    if _PIPELINE_CACHE_MAXSIZE is not None and _PIPELINE_CACHE_MAXSIZE < 0:
+        _PIPELINE_CACHE_MAXSIZE = 0
 except Exception:
     try:
         import os as _os
 
         _raw = _os.getenv("PXD_COMPILED_CACHE_MAXSIZE")
-        _GLOBAL_COMPILED_MAXSIZE = int(_raw) if _raw is not None else 128
-        if _GLOBAL_COMPILED_MAXSIZE is not None and _GLOBAL_COMPILED_MAXSIZE < 0:
-            _GLOBAL_COMPILED_MAXSIZE = 0
+        _PIPELINE_CACHE_MAXSIZE = int(_raw) if _raw is not None else 128
+        if _PIPELINE_CACHE_MAXSIZE is not None and _PIPELINE_CACHE_MAXSIZE < 0:
+            _PIPELINE_CACHE_MAXSIZE = 0
     except Exception:
-        _GLOBAL_COMPILED_MAXSIZE = 128
+        _PIPELINE_CACHE_MAXSIZE = 128
+
+# 単一インスタンスの LRU
+_PIPELINE_CACHE = _PipelineCache(_PIPELINE_CACHE_MAXSIZE)
 
 
 def _is_json_like(obj: object) -> bool:

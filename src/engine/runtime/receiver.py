@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from queue import Empty
 from typing import Callable, Mapping
+from engine.runtime.frame import RenderFrame
 
 from ..core.tickable import Tickable
 from .buffer import SwapBuffer
@@ -53,12 +54,14 @@ class StreamReceiver(Tickable):
             # 最新のフレームならバッファに追加
             if (self._latest_frame is None) or (packet.frame_id > self._latest_frame):
                 layers = getattr(packet, "layers", None)
+                geom = getattr(packet, "geometry", None)
+                frame: RenderFrame | None = None
                 if layers is not None:
-                    self._swap_buffer.push(list(layers))
-                else:
-                    geom = getattr(packet, "geometry", None)
-                    if geom is not None:
-                        self._swap_buffer.push(geom)
+                    frame = RenderFrame.from_layers(layers)
+                elif geom is not None:
+                    frame = RenderFrame.from_geometry(geom)
+                if frame is not None:
+                    self._swap_buffer.push(frame)
                 self._latest_frame = packet.frame_id
                 # HUD 用メトリクス（任意）
                 try:

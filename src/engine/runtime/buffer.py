@@ -7,10 +7,9 @@
 from __future__ import annotations
 
 import threading
+from typing import Optional
 
-from engine.core.geometry import Geometry
-from engine.core.lazy_geometry import LazyGeometry
-from engine.render.types import StyledLayer
+from engine.runtime.frame import RenderFrame
 
 
 class SwapBuffer:
@@ -24,23 +23,17 @@ class SwapBuffer:
         _evt (Event): 新しいデータが準備できたかどうかを示すフラグ
         _lock (Lock): スレッド同士が同時に操作しないようにするためのロック
         """
-        self._front: (
-            Geometry | LazyGeometry | list[StyledLayer] | tuple[StyledLayer, ...] | None
-        ) = None
-        self._back: Geometry | LazyGeometry | list[StyledLayer] | tuple[StyledLayer, ...] | None = (
-            None
-        )
+        self._front: Optional[RenderFrame] = None
+        self._back: Optional[RenderFrame] = None
         self._version: int = 0
         self._evt = threading.Event()
         self._lock = threading.Lock()
 
     # ---------- producer (BufferSubsystem) ----------
-    def push(
-        self, data: Geometry | LazyGeometry | list[StyledLayer] | tuple[StyledLayer, ...]
-    ) -> None:
+    def push(self, frame: RenderFrame) -> None:
         """BufferSubsystemが呼び出し、新しく生成したデータをセットする"""
         with self._lock:
-            self._back = data
+            self._back = frame
             self._version += 1
             self._evt.set()  # 新しいデータが準備できたことを通知
 
@@ -54,10 +47,8 @@ class SwapBuffer:
             self._evt.clear()  # データを交換したので、イベントをクリア
         return True
 
-    def get_front(
-        self,
-    ) -> Geometry | LazyGeometry | list[StyledLayer] | tuple[StyledLayer, ...] | None:
-        """現在の front データを取得する。"""
+    def get_front(self) -> Optional[RenderFrame]:
+        """現在の front データを取得する（無ければ None）。"""
         return self._front
 
     # ---------- util ----------

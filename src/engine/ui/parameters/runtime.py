@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from typing import Any, Mapping
 
 from engine.ui.parameters.state import (
@@ -20,22 +21,28 @@ from engine.ui.parameters.state import (
 from .introspection import FunctionIntrospector
 from .value_resolver import ParameterContext, ParameterValueResolver
 
-_ACTIVE_RUNTIME: "ParameterRuntime | None" = None
 _OFFLINE_INTROSPECTOR = FunctionIntrospector()
+_RUNTIME_STACK: "ContextVar[list[ParameterRuntime]]" = ContextVar("_RUNTIME_STACK", default=[])
 
 
 def activate_runtime(runtime: "ParameterRuntime") -> None:
-    global _ACTIVE_RUNTIME
-    _ACTIVE_RUNTIME = runtime
+    """ランタイムを現在のコンテキストに積む（ネスト可）。"""
+    stack = list(_RUNTIME_STACK.get())
+    stack.append(runtime)
+    _RUNTIME_STACK.set(stack)
 
 
 def deactivate_runtime() -> None:
-    global _ACTIVE_RUNTIME
-    _ACTIVE_RUNTIME = None
+    """現在のコンテキストからランタイムを外す（無ければ何もしない）。"""
+    stack = list(_RUNTIME_STACK.get())
+    if stack:
+        stack.pop()
+    _RUNTIME_STACK.set(stack)
 
 
 def get_active_runtime() -> "ParameterRuntime | None":
-    return _ACTIVE_RUNTIME
+    stack = _RUNTIME_STACK.get()
+    return stack[-1] if stack else None
 
 
 class ParameterRuntime:

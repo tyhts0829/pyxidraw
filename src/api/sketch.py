@@ -108,6 +108,42 @@ if TYPE_CHECKING:  # 型チェック専用（実行時の循環/依存コスト�
     from engine.core.lazy_geometry import LazyGeometry
 
 
+def _resolve_canvas_and_window(
+    canvas_size: str | tuple[int, int], render_scale: float
+) -> tuple[int, int, int, int]:
+    canvas_width, canvas_height = resolve_canvas_size(canvas_size)
+    if float(render_scale) <= 0.0:
+        raise ValueError(f"render_scale must be > 0, got {render_scale}")
+    window_width = max(1, int(round(canvas_width * render_scale)))
+    window_height = max(1, int(round(canvas_height * render_scale)))
+    return canvas_width, canvas_height, window_width, window_height
+
+
+def _build_hud_config(show_hud: bool | None, hud_config: HUDConfig | None) -> HUDConfig:
+    if hud_config is None:
+        if show_hud is None:
+            return HUDConfig()
+        return HUDConfig(enabled=bool(show_hud))
+    return hud_config if show_hud is None else replace(hud_config, enabled=bool(show_hud))
+
+
+def _prepare_parameter_gui(
+    user_draw: Callable[[float], Geometry | "LazyGeometry" | Sequence[Geometry | "LazyGeometry"]],
+    use_parameter_gui: bool,
+    init_only: bool,
+) -> tuple[
+    "ParameterManager | None",
+    Callable[[float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]],
+]:
+    parameter_manager: ParameterManager | None = None
+    draw_callable = user_draw
+    if use_parameter_gui and not init_only:
+        # ParameterManager は型注釈上 Geometry 戻り値を要求するため、最小キャストで適合させる
+        parameter_manager = ParameterManager(cast(Callable[[float], Geometry], user_draw))
+        parameter_manager.initialize()
+    return parameter_manager, draw_callable
+
+
 def run_sketch(
     user_draw: Callable[[float], "Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]"],
     *,
@@ -165,11 +201,9 @@ def run_sketch(
     fps = resolve_fps(fps)
 
     # ---- ② キャンバスサイズ決定 ------------------------------------
-    canvas_width, canvas_height = resolve_canvas_size(canvas_size)
-    if float(render_scale) <= 0.0:
-        raise ValueError(f"render_scale must be > 0, got {render_scale}")
-    window_width = max(1, int(round(canvas_width * render_scale)))
-    window_height = max(1, int(round(canvas_height * render_scale)))
+    canvas_width, canvas_height, window_width, window_height = _resolve_canvas_and_window(
+        canvas_size, render_scale
+    )
 
     # ---- ③ MIDI ---------------------------------------------------
     from .sketch_runner.midi import setup_midi as _setup_midi
@@ -177,15 +211,11 @@ def run_sketch(
     midi_manager, midi_service, cc_snapshot_fn = _setup_midi(use_midi)
 
     # init_only の場合は重い依存を読み込まずに早期リターン
-    parameter_manager: ParameterManager | None = None
-    # ---- ③.5 Parameter GUI 準備 -----------------------------------
-    draw_callable = user_draw
+    parameter_manager, draw_callable = _prepare_parameter_gui(
+        user_draw, use_parameter_gui, init_only
+    )
     worker_count = max(0, int(workers))
-    if use_parameter_gui and not init_only:
-        # ParameterManager は型注釈上 Geometry 戻り値を要求するため、最小キャストで適合させる
-        parameter_manager = ParameterManager(cast(Callable[[float], Geometry], user_draw))
-        parameter_manager.initialize()
-        # ワーカへは生の user_draw を渡し、GUI 値はスナップショットで適用する
+    # ワーカへは生の user_draw を渡し、GUI 値はスナップショットで適用する
 
     if init_only:
         return None
@@ -224,13 +254,7 @@ def run_sketch(
 
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
     # ---- HUD 設定の解決（優先: show_hud 明示 > hud_config.enabled > 既定 True）----
-    if hud_config is None:
-        if show_hud is None:
-            hud_conf: HUDConfig = HUDConfig()
-        else:
-            hud_conf = HUDConfig(enabled=bool(show_hud))
-    else:
-        hud_conf = hud_config if show_hud is None else replace(hud_config, enabled=bool(show_hud))
+    hud_conf = _build_hud_config(show_hud, hud_config)
     swap_buffer = SwapBuffer()
     # API 層で CC スナップショット適用関数を注入（engine は api を知らない）
     try:

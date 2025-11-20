@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 from collections import OrderedDict
 from typing import Any, Callable, Literal
 
+from engine.core.affine_ops import rotate as _fx_rotate
+from engine.core.affine_ops import scale as _fx_scale
+from engine.core.affine_ops import translate as _fx_translate
 from engine.core.geometry import Geometry
 from common.func_id import impl_id as _impl_id
 from common.env import env_int, env_bool
@@ -309,41 +312,6 @@ def _PREFIX_EVICTS_INC() -> None:
 
 
 ## 末尾保存やミス時プリウォームの環境スイッチは未採用（将来案）。
-
-
-# ---- コア内蔵の軽量エフェクト（engine.core 依存のみ） ----------------------
-def _fx_translate(g: Geometry, *, delta: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> Geometry:
-    dx, dy, dz = float(delta[0]), float(delta[1]), float(delta[2])
-    return g.translate(dx, dy, dz)
-
-
-def _fx_scale(
-    g: Geometry,
-    *,
-    auto_center: bool = False,
-    pivot: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    scale: tuple[float, float, float] = (1.0, 1.0, 1.0),
-) -> Geometry:
-    sx, sy, sz = float(scale[0]), float(scale[1]), float(scale[2])
-    cx, cy, cz = float(pivot[0]), float(pivot[1]), float(pivot[2])
-    center = (cx, cy, cz)
-    return g.scale(sx, sy, sz, center=center)
-
-
-def _fx_rotate(
-    g: Geometry,
-    *,
-    auto_center: bool = False,
-    pivot: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    angles_rad: tuple[float, float, float] = (0.0, 0.0, 0.0),
-) -> Geometry:
-    rx, ry, rz = float(angles_rad[0]), float(angles_rad[1]), float(angles_rad[2])
-    cx, cy, cz = float(pivot[0]), float(pivot[1]), float(pivot[2])
-    center = (cx, cy, cz)
-    return g.rotate(x=rx, y=ry, z=rz, center=center)
-
-
-# 末尾にあった安全取得ユーティリティは共通化（common.func_id.impl_id を使用）
 
 
 def _fx_concat_many(

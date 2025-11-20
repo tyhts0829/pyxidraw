@@ -16,6 +16,7 @@ import numpy as np
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
+from engine.runtime.frame import RenderFrame
 from .types import StyledLayer
 from util.constants import PRIMITIVE_RESTART_INDEX
 
@@ -96,8 +97,8 @@ class LineRenderer(Tickable):
         except Exception:
             self._ibo_freeze_enabled = True
         self._ibo_debug = False
-        # レイヤーフレームバッファ（存在時は draw() 側で逐次アップロード）
-        self._frame_layers: list[StyledLayer] | None = None
+        # 受信したフレーム（layers を含む場合は draw() 側で逐次アップロード）
+        self._frame: RenderFrame | None = None
         # 直近レイヤーのスナップショット（no-layers フレームで再描画に利用）
         self._last_layers_snapshot: list[StyledLayer] | None = None
         # 直近レイヤーで適用した色（次フレーム以降に再適用するための粘着色）
@@ -114,23 +115,15 @@ class LineRenderer(Tickable):
         毎フレーム呼ばれ、SwapBufferに新データがあればGPUへ転送。
         """
         if self.swap_buffer.try_swap():
-            front = self.swap_buffer.get_front()
-            # レイヤー列が来た場合は draw() で逐次アップロード（duck-typing を採用）
-            try:
-                if isinstance(front, (list, tuple)) and front:
-                    fst = front[0]
-                    if (
-                        hasattr(fst, "geometry")
-                        and hasattr(fst, "color")
-                        and hasattr(fst, "thickness")
-                    ):
-                        self._frame_layers = list(front)  # type: ignore[list-item]
-                        return
-            except Exception:
-                pass
-            geometry = front  # type: ignore[assignment]
-            self._frame_layers = None
-            self._upload_geometry(geometry)
+            frame = self.swap_buffer.get_front()
+            self._frame = frame
+            if frame is None:
+                return
+            if frame.has_layers:
+                # レイヤーは draw() 側で逐次アップロード
+                return
+            if frame.geometry is not None:
+                self._upload_geometry(frame.geometry)
 
     # --------------------------------------------------------------------- #
     # Public drawing API                                                    #
@@ -143,15 +136,16 @@ class LineRenderer(Tickable):
             self._frame_counter += 1
         except Exception:
             self._frame_counter = 0
+        frame = self._frame
         # レイヤーが来ている場合は各レイヤーを順描画
-        if self._frame_layers:
+        if frame is not None and frame.has_layers and frame.layers is not None:
             # このフレームでレイヤー活動があったことを記録
             self._last_layers_frame = int(self._frame_counter)
 
             total_vertices = 0
             total_indices = 0
             snapshot: list[StyledLayer] = []
-            for layer in self._frame_layers:
+            for layer in frame.layers:
                 # 色
                 if layer.color is not None:
                     try:
@@ -211,13 +205,13 @@ class LineRenderer(Tickable):
                 self._last_line_count = int(num_lines)
             except Exception:
                 pass
-            # レイヤーを消費
-            self._frame_layers = None
             # スナップショットを保持（no-layers フレームのフォールバック描画に使用）
             try:
                 self._last_layers_snapshot = snapshot if snapshot else None
             except Exception:
                 self._last_layers_snapshot = None
+            # 次フレーム以降はスナップショットを再利用する（追加アップロードを避ける）
+            self._frame = None
             return
         # 通常経路（レイヤーが無いフレーム）
         # フォールバック: 直近レイヤーのスナップショットを再描画
@@ -317,7 +311,7 @@ class LineRenderer(Tickable):
     # ---- subscribe ガード用の公開ヘルパ ----
     def has_pending_layers(self) -> bool:
         try:
-            return bool(self._frame_layers)
+            return bool(self._frame is not None and self._frame.has_layers)
         except Exception:
             return False
 

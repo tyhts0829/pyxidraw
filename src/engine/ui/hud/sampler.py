@@ -12,6 +12,7 @@ import time
 from typing import Callable, Mapping, Optional
 
 from engine.core.lazy_geometry import LazyGeometry
+from engine.runtime.frame import RenderFrame
 
 from ...core.tickable import Tickable
 from ...runtime.buffer import SwapBuffer
@@ -132,10 +133,9 @@ class MetricSampler(Tickable):
                 counts = None
 
         # 頂点数
+        front = self._swap.get_front()
         if self._config.show_vertex_count:
-            verts = (
-                int(counts[0]) if counts is not None else self._vertex_count(self._swap.get_front())
-            )
+            verts = int(counts[0]) if counts is not None else self._vertex_count(front)
             self.data[VERTEX] = f"{verts}"
             self.values[VERTEX] = float(verts)
         else:
@@ -144,9 +144,7 @@ class MetricSampler(Tickable):
 
         # ライン数（ポリライン本数）
         if self._config.show_line_count:
-            lines = (
-                int(counts[1]) if counts is not None else self._line_count(self._swap.get_front())
-            )
+            lines = int(counts[1]) if counts is not None else self._line_count(front)
             self.data[LINE] = f"{lines}"
             self.values[LINE] = float(lines)
         else:
@@ -242,6 +240,10 @@ class MetricSampler(Tickable):
     def _vertex_count(geometry: object | None) -> int:
         if geometry is None:
             return 0
+        if isinstance(geometry, RenderFrame):
+            if geometry.layers:
+                return sum(MetricSampler._vertex_count(layer.geometry) for layer in geometry.layers)
+            return MetricSampler._vertex_count(geometry.geometry)
         # LazyGeometry は実体化しない（HUD での暗黙実体化を回避）
         try:
             if isinstance(geometry, LazyGeometry):
@@ -278,6 +280,10 @@ class MetricSampler(Tickable):
     def _line_count(geometry: object | None) -> int:
         if geometry is None:
             return 0
+        if isinstance(geometry, RenderFrame):
+            if geometry.layers:
+                return sum(MetricSampler._line_count(layer.geometry) for layer in geometry.layers)
+            return MetricSampler._line_count(geometry.geometry)
         # LazyGeometry は実体化しない
         try:
             if isinstance(geometry, LazyGeometry):

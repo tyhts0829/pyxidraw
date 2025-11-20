@@ -272,9 +272,9 @@ Tips:
   - 抽出後、幾何の plan から `style` ステップは除去され、幾何計算（キャッシュ）に影響しない。
 - 生成→受信→描画の流れ
   - Worker: `engine/runtime/worker.py` が `draw(t)` の戻り値を正規化し、`StyledLayer[]` に展開（`style` の後勝ちを反映）。
-  - Receiver: `engine/runtime/receiver.py` が最新フレームのみを取り出し、`layers`（または `geometry`）を `SwapBuffer.push(...)` する。
-  - Renderer（tick）: `engine/render/renderer.py` が `SwapBuffer.try_swap()` に成功したら front を取り出し、`layers` のときは `_frame_layers` に保持、`geometry` のときは即アップロード。
-  - Renderer（draw）: `_frame_layers` があれば、各レイヤーの `color/thickness` を適用してアップロード→描画を順次実行。
+  - Receiver: `engine/runtime/receiver.py` が最新フレームのみを取り出し、`RenderFrame`（geometry または layers を持つ型）として `SwapBuffer` に流し込む。
+  - Renderer（tick）: `engine/render/renderer.py` が `SwapBuffer.try_swap()` に成功したら `RenderFrame` を取り出し、`layers` のときは draw() 側で逐次アップロード、`geometry` のときは即アップロード。
+  - Renderer（draw）: `RenderFrame.layers` があれば、各レイヤーの `color/thickness` を適用してアップロード→描画を順次実行。
 - フォールバック再描画（本件の安定化）
   - 背景などの GUI 操作により `on_draw` が `tick` より先行して発火すると、レイヤー未到達のフレームが挟まることがある。
   - その場合でも見た目が崩れないよう、`renderer.draw()` は直前フレームで描いたレイヤーのスナップショット（`StyledLayer` + 実体 `Geometry`）を保持し、`_frame_layers` が無いフレームではそれを再描画する。
@@ -304,9 +304,9 @@ Tips:
   - `SwapBuffer`: front/back のダブルバッファと `version` カウンタ、イベントで構成。
 - データの流れ
   1. `FrameClock.tick()` ごとに `WorkerPool.tick()` が `RenderTask(frame_id, t, cc_state)` を `task_q` へ投入。
-  2. 各ワーカは API 層から注入された関数で `api.cc.set_snapshot(cc_state)` を呼び、ついでに `draw(t)` を実行 →`RenderPacket(geometry, frame_id)` を `result_q` へ。
-  3. `StreamReceiver.tick()` が `result_q` を非ブロッキングで最大 K 件（既定 2）処理し、最新 `frame_id` のみを `SwapBuffer.push()`。
-  4. `LineRenderer.tick()` が `SwapBuffer.try_swap()` を呼び、準備済みなら front/back を交換。
+  2. 各ワーカは API 層から注入された関数で `api.cc.set_snapshot(cc_state)` を呼び、ついでに `draw(t)` を実行 →`RenderPacket(geometry,layers, frame_id)` を `result_q` へ。
+  3. `StreamReceiver.tick()` が `result_q` を非ブロッキングで最大 K 件（既定 2）処理し、最新 `frame_id` のみを `RenderFrame` に整形して `SwapBuffer.push()`。
+  4. `LineRenderer.tick()` が `SwapBuffer.try_swap()` を呼び、準備済みなら front/back を交換して `RenderFrame` を描画キューに載せる。
 - バックプレッシャ/スキップ
   - `WorkerPool` は `task_q` の `maxsize=2*num_workers` で自然な抑制。詰まれば新タスク投入をスキップ。
   - `StreamReceiver` は「最新フレーム以外を捨てる」戦略で遅延伝播を防止。

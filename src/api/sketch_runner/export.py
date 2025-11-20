@@ -13,6 +13,7 @@ from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
 from engine.render.types import StyledLayer
 from engine.export.gcode import GCodeParams
+from engine.runtime.frame import RenderFrame
 
 if TYPE_CHECKING:  # 実行時依存を避けるための型ヒントのみ
     from engine.export.service import ExportService
@@ -26,11 +27,20 @@ def _normalize_front_to_geometry(
     """SwapBuffer.get_front() の戻り値を Geometry ベースに正規化する。
 
     - Geometry / LazyGeometry: そのまま返す。
-    - StyledLayer の列: 各レイヤーの geometry を実体 Geometry に揃え、concat して 1 つにまとめる。
+    - RenderFrame.layers: 各レイヤーの geometry を実体 Geometry に揃え、concat して 1 つにまとめる。
     - それ以外/空: None を返す。
     """
     if front is None:
         return None
+
+    if isinstance(front, RenderFrame):
+        if front.layers:
+            return _normalize_front_to_geometry(front.layers)
+        return (
+            front.geometry
+            if isinstance(front.geometry, (Geometry, LazyGeometry))
+            else _normalize_front_to_geometry(front.geometry)
+        )
 
     if isinstance(front, (Geometry, LazyGeometry)):
         return front
