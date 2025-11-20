@@ -200,6 +200,14 @@ def run_sketch(
     # ---- ① 設定からFPSを解決 --------------------------------------
     fps = resolve_fps(fps)
 
+    # ---- キャッシュ初期化（Pipeline） --------------------------------------
+    try:
+        from api.effects import clear_pipeline_cache  # 循環を避けるため局所 import
+
+        clear_pipeline_cache()
+    except Exception:
+        pass
+
     # ---- ② キャンバスサイズ決定 ------------------------------------
     canvas_width, canvas_height, window_width, window_height = _resolve_canvas_and_window(
         canvas_size, render_scale

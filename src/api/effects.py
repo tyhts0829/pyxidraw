@@ -296,7 +296,7 @@ class _EffectsAPI:
 
 E = _EffectsAPI()
 
-__all__ = ["E", "Pipeline", "PipelineBuilder"]
+__all__ = ["E", "Pipeline", "PipelineBuilder", "clear_pipeline_cache"]
 
 
 def global_cache_counters() -> dict[str, int]:
@@ -306,6 +306,11 @@ def global_cache_counters() -> dict[str, int]:
     グローバル compiled キャッシュ（_PIPELINE_CACHE）を基準に集計する。
     """
     return _PIPELINE_CACHE.counters()
+
+
+def clear_pipeline_cache() -> None:
+    """Pipeline の compiled LRU をクリア（テスト/再起動用）。"""
+    _PIPELINE_CACHE.clear()
 
 
 # ---- Global caches initialization (single place) ---------------------------
