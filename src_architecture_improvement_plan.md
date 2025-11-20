@@ -10,8 +10,8 @@
   - [x] ワーカ側への伝播方法（シリアライズ不要なハンドル or スナップショット）を設計
   - [x] 公開 API 互換ポリシーを決め、必要に応じてマイグレーション階層を用意
 
-- [ ] LazyGeometry の責務分割と affine ヘルパ統合
-  - [ ] `engine/core/lazy_geometry.py` で抱えている spec/caching/軽量エフェクトの役割を整理
+- [x] LazyGeometry の責務分割と affine ヘルパ統合
+  - [x] `engine/core/lazy_geometry.py` で抱えている spec/caching/軽量エフェクトの役割を整理
   - [x] affine 系の実装を effects 側または共通ユーティリティへ集約する設計を決める
   - [ ] キャッシュ管理（shape/prefix）が単機能クラスに分離できるか検討し、API 影響を確認
 

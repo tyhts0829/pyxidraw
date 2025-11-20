@@ -56,14 +56,7 @@ class LazyGeometry:
             except Exception:
                 key = None  # フォールバック: キャッシュを使わない
 
-            g = None
-            if key is not None:
-                _entry = _SHAPE_CACHE.get(key)
-                if _entry is not None:
-                    # LRU: move to end
-                    _ = _SHAPE_CACHE.pop(key)
-                    _SHAPE_CACHE[key] = _entry
-                    g = _entry
+            g = _shape_cache_lookup(key) if key is not None else None
             if g is None:
                 # 実生成
                 g = shape_impl(**params)  # ユーザー shape は Geometry または lines を返す前提
@@ -72,10 +65,7 @@ class LazyGeometry:
                     g = Geometry.from_lines(g)
                 # キャッシュへ格納
                 if key is not None:
-                    _SHAPE_CACHE[key] = g
-                    if _SHAPE_CACHE_MAXSIZE is not None and _SHAPE_CACHE_MAXSIZE > 0:
-                        while len(_SHAPE_CACHE) > _SHAPE_CACHE_MAXSIZE:
-                            _SHAPE_CACHE.popitem(last=False)
+                    _shape_cache_store(key, g)
             base_key = key or ("shape", id(shape_impl))
 
         # 2) effect を順次適用（Prefix LRU による途中結果の再利用を試みる）
@@ -99,8 +89,8 @@ class LazyGeometry:
                 out[k] = v
             return out
 
-        if _PREFIX_CACHE_ENABLED and steps:
-            effect_sigs: list[tuple[str, tuple[tuple[str, object], ...]]] = []
+        effect_sigs: list[tuple[str, tuple[tuple[str, object], ...]]] = []
+        if steps:
             for impl, eparams in steps:
                 try:
                     # 署名生成に失敗した場合は「非キャッシュ相当」として空署名を採用
@@ -108,20 +98,10 @@ class LazyGeometry:
                 except Exception:
                     e_tuple = tuple()
                 effect_sigs.append((_impl_id(impl), e_tuple))
-
-            for i in range(len(effect_sigs), 0, -1):
-                k = (base_key, tuple(effect_sigs[:i]))
-                cached_geo = _PREFIX_CACHE.get(k)
-                if cached_geo is not None:
-                    # LRU: move to end
-                    _ = _PREFIX_CACHE.pop(k)
-                    _PREFIX_CACHE[k] = cached_geo
-                    out = cached_geo
-                    start_idx = i
-                    _PREFIX_HITS_INC()
-                    break
-            else:
-                _PREFIX_MISSES_INC()
+            cached_geo, start = _prefix_cache_lookup(base_key, effect_sigs)
+            if cached_geo is not None:
+                out = cached_geo
+                start_idx = start
 
         # ---- 残りの effect を適用 ----
         # 事前に効果署名列を用意（上と同等）。署名生成に失敗した場合は保存キーに空署名を使用。
@@ -139,16 +119,7 @@ class LazyGeometry:
 
             # プレフィックスキャッシュへの格納（最大頂点数などの制約つき）
             if _PREFIX_CACHE_ENABLED:
-                vcount = int(out.coords.shape[0])
-                k = (base_key, tuple(effect_sigs_all[: i + 1])) if steps else (base_key, tuple())
-                if _PREFIX_CACHE_MAXSIZE != 0 and vcount <= _PREFIX_CACHE_MAX_VERTS:
-                    _PREFIX_CACHE[k] = out
-                    # LRU 制御
-                    if _PREFIX_CACHE_MAXSIZE is not None and _PREFIX_CACHE_MAXSIZE > 0:
-                        while len(_PREFIX_CACHE) > _PREFIX_CACHE_MAXSIZE:
-                            _PREFIX_CACHE.popitem(last=False)
-                            _PREFIX_EVICTS_INC()
-                    _PREFIX_STORES_INC()
+                _prefix_cache_store(base_key, effect_sigs_all, i, out)
 
         self._cached = out
         return out
@@ -312,6 +283,72 @@ def _PREFIX_EVICTS_INC() -> None:
 
 
 ## 末尾保存やミス時プリウォームの環境スイッチは未採用（将来案）。
+
+
+# ---- Cache helpers ---------------------------------------------------------
+
+
+def _shape_cache_lookup(key: object) -> Geometry | None:
+    """Shape LRU から取得し、あれば LRU 移動して返す。"""
+    entry = _SHAPE_CACHE.get(key)
+    if entry is None:
+        return None
+    try:
+        _ = _SHAPE_CACHE.pop(key)
+        _SHAPE_CACHE[key] = entry
+    except Exception:
+        pass
+    return entry
+
+
+def _shape_cache_store(key: object, geom: Geometry) -> None:
+    """Shape LRU に保存し、上限を維持。"""
+    _SHAPE_CACHE[key] = geom
+    if _SHAPE_CACHE_MAXSIZE is not None and _SHAPE_CACHE_MAXSIZE > 0:
+        while len(_SHAPE_CACHE) > _SHAPE_CACHE_MAXSIZE:
+            _SHAPE_CACHE.popitem(last=False)
+
+
+def _prefix_cache_lookup(
+    base_key: object, effect_sigs: list[tuple[str, tuple[tuple[str, object], ...]]]
+) -> tuple[Geometry | None, int]:
+    """最長一致の prefix を検索し、(Geometry, 開始 index) を返す。"""
+    if not (_PREFIX_CACHE_ENABLED and effect_sigs):
+        return None, 0
+    for i in range(len(effect_sigs), 0, -1):
+        k = (base_key, tuple(effect_sigs[:i]))
+        cached_geo = _PREFIX_CACHE.get(k)
+        if cached_geo is not None:
+            try:
+                _ = _PREFIX_CACHE.pop(k)
+                _PREFIX_CACHE[k] = cached_geo
+            except Exception:
+                pass
+            _PREFIX_HITS_INC()
+            return cached_geo, i
+    _PREFIX_MISSES_INC()
+    return None, 0
+
+
+def _prefix_cache_store(
+    base_key: object,
+    effect_sigs_all: list[tuple[str, tuple[tuple[str, object], ...]]],
+    idx: int,
+    geom: Geometry,
+) -> None:
+    """プレフィックスキャッシュへの保存（頂点数上限あり）。"""
+    if not _PREFIX_CACHE_ENABLED:
+        return
+    vcount = int(geom.coords.shape[0])
+    if _PREFIX_CACHE_MAXSIZE == 0 or vcount > _PREFIX_CACHE_MAX_VERTS:
+        return
+    k = (base_key, tuple(effect_sigs_all[: idx + 1])) if effect_sigs_all else (base_key, tuple())
+    _PREFIX_CACHE[k] = geom
+    if _PREFIX_CACHE_MAXSIZE is not None and _PREFIX_CACHE_MAXSIZE > 0:
+        while len(_PREFIX_CACHE) > _PREFIX_CACHE_MAXSIZE:
+            _PREFIX_CACHE.popitem(last=False)
+            _PREFIX_EVICTS_INC()
+    _PREFIX_STORES_INC()
 
 
 def _fx_concat_many(

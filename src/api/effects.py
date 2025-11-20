@@ -168,9 +168,46 @@ class PipelineBuilder:
         # Parameter GUI 表示用のラベル（内部 UID とは分離）
         self._label_display: str | None = None
 
+    def _resolve_effect(
+        self, name: str, params: dict[str, Any], step_index: int, user_bypass: bool | None
+    ) -> tuple[Callable[..., Any], dict[str, Any], bool]:
+        """ParameterRuntime 介在をまとめた解決ヘルパ。"""
+        runtime = get_active_runtime()
+        # デフォルト impl（ランタイム無し時の署名用ダミー）
+        impl: Callable[..., Any] = lambda **_: None
+        resolved = dict(params)
+        runtime_bypass = False
+        if runtime is None:
+            return impl, resolved, bool(user_bypass)
+
+        # 初回に Pipeline UID を確保
+        if self._uid is None:
+            try:
+                self._uid = runtime.next_pipeline_uid()
+            except Exception:
+                self._uid = ""
+        # 実関数（署名/メタ用）は effects.registry から取得
+        from effects.registry import get_effect as _get_effect  # local import
+
+        fn = _get_effect(name)
+        resolved_map = runtime.before_effect_call(
+            step_index=step_index,
+            effect_name=name,
+            fn=fn,
+            params=resolved,
+            pipeline_uid=str(self._uid or ""),
+            pipeline_label=self._label_display,
+        )
+        resolved = dict(resolved_map)
+        impl = getattr(fn, "__effect_impl__", fn)
+        runtime_bypass = bool(resolved.pop("bypass", False))
+        # 明示 bypass があればそちら優先
+        if user_bypass is not None:
+            runtime_bypass = bool(user_bypass)
+        return impl, resolved, runtime_bypass
+
     def __getattr__(self, name: str) -> Callable[..., "PipelineBuilder"]:
         def _adder(**params: Any) -> "PipelineBuilder":
-            runtime = get_active_runtime()
             resolved: dict[str, Any] = dict(params)
             # ユーザー明示の bypass は最優先（後続の GUI 値より強い）
             user_bypass_specified = False
@@ -182,37 +219,18 @@ class PipelineBuilder:
                 except Exception:
                     user_bypass_value = False
                     user_bypass_specified = True
-            if runtime is not None:
-                # 初回に Pipeline UID を確保
-                if self._uid is None:
-                    try:
-                        self._uid = runtime.next_pipeline_uid()
-                    except Exception:
-                        self._uid = ""
-                # 実関数（署名/メタ用）は effects.registry から取得
-                from effects.registry import get_effect as _get_effect  # local import
 
-                fn = _get_effect(name)
-                resolved_map = runtime.before_effect_call(
-                    step_index=len(self._steps),
-                    effect_name=name,
-                    fn=fn,
-                    params=resolved,
-                    pipeline_uid=str(self._uid or ""),
-                    pipeline_label=self._label_display,
-                )
-                resolved = dict(resolved_map)
-                impl = getattr(fn, "__effect_impl__", fn)
-                # ランタイムからの bypass（GUI/永続）を吸収し、明示引数を優先
-                runtime_bypass = bool(resolved.pop("bypass", False))
-                bypass_final = user_bypass_value if user_bypass_specified else runtime_bypass
-                if bypass_final:
-                    return self  # ステップを追加せずスキップ
-            else:
-                impl = lambda **_: None
-                # ランタイムが無い場合でも、明示 bypass があればスキップ
-                if user_bypass_specified and user_bypass_value:
-                    return self
+            impl, resolved, bypass_final = self._resolve_effect(
+                name,
+                resolved,
+                len(self._steps),
+                user_bypass_value if user_bypass_specified else None,
+            )
+            if bypass_final:
+                return self  # ステップを追加せずスキップ
+            # ランタイム無しでも、明示 bypass があればスキップ
+            if get_active_runtime() is None and user_bypass_specified and user_bypass_value:
+                return self
             params_tuple = _params_signature(impl, dict(resolved))
             self._steps.append((name, params_tuple))
             return self
