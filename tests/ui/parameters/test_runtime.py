@@ -167,3 +167,32 @@ def test_parameter_runtime_labels_repeated_labeled_pipelines_separately():
     assert desc1.category == "poly_effect_1"
     assert desc2.category == "poly_effect_2"
     deactivate_runtime()
+
+
+def test_parameter_runtime_relabels_pipeline_categories():
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    runtime.begin_frame()
+
+    uid = runtime.next_pipeline_uid()
+
+    runtime.before_effect_call(
+        step_index=0,
+        effect_name="displace",
+        fn=dummy_effect_with_defaults,
+        params={},
+        pipeline_uid=uid,
+        pipeline_label="poly_effect",
+    )
+
+    desc_before = store.get_descriptor(f"effect@{uid}.displace#0.amplitude_mm")
+    assert desc_before.category.startswith("poly_effect")
+
+    runtime.relabel_pipeline(uid, "poly_effect_new")
+
+    desc_after = store.get_descriptor(f"effect@{uid}.displace#0.amplitude_mm")
+    # 再ラベル後も「新しい base_label + 連番」の形になる
+    assert desc_after.category.startswith("poly_effect_new_")
+
+    deactivate_runtime()

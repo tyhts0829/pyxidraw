@@ -225,6 +225,12 @@ class PipelineBuilder:
         except Exception:
             text = ""
         self._label_display = text or None
+        runtime = get_active_runtime()
+        if runtime is not None and self._uid is not None:
+            try:
+                runtime.relabel_pipeline(str(self._uid), self._label_display or "")
+            except Exception:
+                pass
         return self
 
 

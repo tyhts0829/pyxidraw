@@ -86,6 +86,81 @@ class ParameterRuntime:
     def current_time(self) -> float:
         return float(self._t)
 
+    # --- パイプラインラベル管理 ---
+    def _assign_pipeline_label(
+        self, pipeline_uid: str, base_label: str, *, force: bool = False
+    ) -> str:
+        """パイプライン UID に対して表示ラベルを割り当てる。
+
+        force=True の場合は既存ラベルを上書きして再割り当てする。
+        """
+        try:
+            key = str(pipeline_uid or "")
+        except Exception:
+            key = ""
+        if not key:
+            return ""
+        try:
+            base = str(base_label or "").strip()
+        except Exception:
+            base = ""
+        if not base:
+            return ""
+        label_map = self._pipeline_label_by_uid
+        if not force and key in label_map:
+            return label_map[key]
+        count = int(self._pipeline_label_counter.get(base, 0)) + 1
+        self._pipeline_label_counter[base] = count
+        display_label = f"{base}_{count}"
+        label_map[key] = display_label
+        return display_label
+
+    def relabel_pipeline(self, pipeline_uid: str, base_label: str) -> None:
+        """既存パイプライン UID の表示ラベルを更新する。"""
+        display_label = self._assign_pipeline_label(pipeline_uid, base_label, force=True)
+        if not display_label:
+            return
+        try:
+            from .state import ParameterDescriptor  # 局所 import
+        except Exception:
+            return
+
+        pipeline_key = str(pipeline_uid or "")
+        if not pipeline_key:
+            return
+
+        def _upd(desc: ParameterDescriptor) -> ParameterDescriptor:
+            if desc.source != "effect":
+                return desc
+            if desc.pipeline_uid != pipeline_key:
+                return desc
+            if desc.category == display_label:
+                return desc
+            return ParameterDescriptor(
+                id=desc.id,
+                label=desc.label,
+                source=desc.source,
+                category=display_label,
+                value_type=desc.value_type,
+                default_value=desc.default_value,
+                category_kind=desc.category_kind,
+                range_hint=desc.range_hint,
+                help_text=desc.help_text,
+                vector_hint=desc.vector_hint,
+                supported=desc.supported,
+                choices=desc.choices,
+                string_multiline=desc.string_multiline,
+                string_height=desc.string_height,
+                pipeline_uid=desc.pipeline_uid,
+                step_index=desc.step_index,
+                param_order=desc.param_order,
+            )
+
+        try:
+            self._store.update_descriptors(_upd)
+        except Exception:
+            return
+
     # --- 形状 ---
     def before_shape_call(
         self,
@@ -153,22 +228,14 @@ class ParameterRuntime:
         # パイプラインラベル（カテゴリ名）の決定:
         # - E.label("uid") で指定されたラベルをベースに、同一ラベルに対してフレーム内で 1,2,... と連番を付与する。
         # - 例: "poly_effect" → "poly_effect_1", "poly_effect_2", ...
-        base_label = ""
+        pipeline_key = str(pipeline_uid or "")
         try:
             base_label = str(pipeline_label or "").strip()
         except Exception:
             base_label = ""
         display_label = ""
-        pipeline_key = str(pipeline_uid or "")
         if base_label and pipeline_key:
-            label_map = self._pipeline_label_by_uid
-            if pipeline_key in label_map:
-                display_label = label_map[pipeline_key]
-            else:
-                count = int(self._pipeline_label_counter.get(base_label, 0)) + 1
-                self._pipeline_label_counter[base_label] = count
-                display_label = f"{base_label}_{count}"
-                label_map[pipeline_key] = display_label
+            display_label = self._assign_pipeline_label(pipeline_key, base_label)
         elif base_label:
             display_label = base_label
 

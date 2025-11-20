@@ -220,6 +220,26 @@ class ParameterStore:
                 }
             return result
 
+    def update_descriptors(self, fn: Callable[[ParameterDescriptor], ParameterDescriptor]) -> None:
+        """Descriptor を一括変換する（ID は変更しない前提）。"""
+        changed: set[str] = set()
+        with self._lock:
+            for key, desc in list(self._descriptors.items()):
+                try:
+                    new_desc = fn(desc)
+                except Exception:
+                    continue
+                if not isinstance(new_desc, ParameterDescriptor):
+                    continue
+                if new_desc is desc:
+                    continue
+                if new_desc.id != desc.id:
+                    continue
+                self._descriptors[key] = new_desc
+                changed.add(key)
+        if changed:
+            self._notify(changed)
+
     # --- CC 連携（最小実装） ---
     def set_cc_provider(self, provider: Callable[[], Mapping[int, float]] | None) -> None:
         """現在フレームの CC スナップショットを返す関数を設定する。"""

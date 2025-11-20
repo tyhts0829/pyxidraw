@@ -82,7 +82,7 @@
     - ContentBuilder: Display/HUD セクションとパラメータテーブル（カテゴリ種別 `category_kind` × `category` 単位）の構築、Store との値同期（ウィジェット→Store/Store→ウィジェット）を担当する。
   - カテゴリ別のヘッダ色（Display/HUD/shape/pipeline）は `parameter_gui.theme.categories` で個別指定可能（キーは Descriptor の `category_kind` と対応）。未指定時は `theme.colors.header*` を使用。
   - カラー入力は `util.color.normalize_color` で RGBA (0..1) に正規化し、一般パラメータは RGBA タプル、`style.color` は vec3 (RGB 0..1) として `ParameterStore` に保存する（DPG 側は 0–255 表示、値保存は 0..1 実値）。
-  - カテゴリ名の決定規則: effect パラメータは `.label(uid)` で指定された `pipeline_label` をベースに、フレーム内インスタンス番号を付与した表示名（例: `poly_effect_1`, `poly_effect_2`）≫ `pipeline_uid`（例: `p0`）≫ `scope` の優先で決定する。
+  - カテゴリ名の決定規則: effect パラメータは `.label(uid)` で指定された `pipeline_label` をベースに、フレーム内インスタンス番号を付与した表示名（例: `poly_effect_1`, `poly_effect_2`）≫ `pipeline_uid`（例: `p0`）≫ `scope` の優先で決定する。`.label(uid)` はチェーンの前後どこで呼んでもパイプライン全体に適用される。
   - 表示ラベルは内部 UID と分離され、Parameter ID は `pipeline_uid` に基づくため衝突しない。
   - パラメータ GUI はメインスレッドで維持しつつ、ワーカ側へは GUI 値のスナップショットを渡して適用する（SnapshotRuntime）。このため GUI 有効時でも `WorkerPool` は並列実行できる。
   - 駆動方式は内部ドライバで抽象化。可能なら `pyglet.clock.schedule_interval` に統合（メインスレッドから `render_dearpygui_frame()` を実行）、未導入時はバックグラウンドスレッドで `start_dearpygui()` を実行。Dear PyGui 未導入環境では GUI を起動しない限り import は行われない（スタブは用意していないため、起動時は未導入で ImportError となる）。

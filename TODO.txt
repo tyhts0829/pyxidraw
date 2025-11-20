@@ -11,9 +11,8 @@ dropエフェクト, min_length, max_length, interval = [1, 3, 2] | 1
 dashify retio = [0.3, 2.1, ...] matplotlibの指定の仕方参考に
 cullのclipもあってもいいかも
 gui midiパラメータ固着
-fillのdensityが面が傾くと発散する問題
 特定の面を取り出すエフェクト
 clip debugmode
 step定義していない場合はdrug guiにする
 angles radの引数名統一
-labelエフェクトがE.の直後じゃないと効かないのをwarningする/どこでも効くようにする。
+独立カラーパレット
