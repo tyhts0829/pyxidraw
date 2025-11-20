@@ -13,7 +13,7 @@
 - [x] LazyGeometry の責務分割と affine ヘルパ統合
   - [x] `engine/core/lazy_geometry.py` で抱えている spec/caching/軽量エフェクトの役割を整理
   - [x] affine 系の実装を effects 側または共通ユーティリティへ集約する設計を決める
-  - [ ] キャッシュ管理（shape/prefix）が単機能クラスに分離できるか検討し、API 影響を確認
+  - [x] キャッシュ管理（shape/prefix）が単機能クラスに分離できるか検討し、API 影響を確認
 
 - [ ] PipelineBuilder/キャッシュの分離と失効条件の明確化
   - [ ] UI 介在、ラベル管理、キャッシュ設定を分離した責務分担案をまとめる

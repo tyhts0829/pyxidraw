@@ -56,7 +56,7 @@ class LazyGeometry:
             except Exception:
                 key = None  # フォールバック: キャッシュを使わない
 
-            g = _shape_cache_lookup(key) if key is not None else None
+            g = _SHAPE_CACHE.lookup(key)
             if g is None:
                 # 実生成
                 g = shape_impl(**params)  # ユーザー shape は Geometry または lines を返す前提
@@ -64,8 +64,7 @@ class LazyGeometry:
                     # 便宜: lines を許容
                     g = Geometry.from_lines(g)
                 # キャッシュへ格納
-                if key is not None:
-                    _shape_cache_store(key, g)
+                _SHAPE_CACHE.store(key, g)
             base_key = key or ("shape", id(shape_impl))
 
         # 2) effect を順次適用（Prefix LRU による途中結果の再利用を試みる）
@@ -98,7 +97,7 @@ class LazyGeometry:
                 except Exception:
                     e_tuple = tuple()
                 effect_sigs.append((_impl_id(impl), e_tuple))
-            cached_geo, start = _prefix_cache_lookup(base_key, effect_sigs)
+            cached_geo, start = _PREFIX_CACHE.lookup(base_key, effect_sigs)
             if cached_geo is not None:
                 out = cached_geo
                 start_idx = start
@@ -119,7 +118,7 @@ class LazyGeometry:
 
             # プレフィックスキャッシュへの格納（最大頂点数などの制約つき）
             if _PREFIX_CACHE_ENABLED:
-                _prefix_cache_store(base_key, effect_sigs_all, i, out)
+                _PREFIX_CACHE.store(base_key, effect_sigs_all, i, out)
 
         self._cached = out
         return out
@@ -222,6 +221,92 @@ class LazyGeometry:
 
 # ---- 形状結果 LRU（プロセス内共有） -----------------------------------------
 
+
+class _ShapeCache:
+    def __init__(self, maxsize: int | None) -> None:
+        self._cache: "OrderedDict[object, Geometry]" = OrderedDict()
+        self.maxsize = maxsize
+
+    def lookup(self, key: object | None) -> Geometry | None:
+        if key is None:
+            return None
+        entry = self._cache.get(key)
+        if entry is None:
+            return None
+        try:
+            self._cache.move_to_end(key)
+        except Exception:
+            pass
+        return entry
+
+    def store(self, key: object | None, geom: Geometry) -> None:
+        if key is None:
+            return
+        self._cache[key] = geom
+        if self.maxsize is not None and self.maxsize > 0:
+            while len(self._cache) > self.maxsize:
+                self._cache.popitem(last=False)
+
+
+class _PrefixCache:
+    def __init__(self, *, enabled: bool, maxsize: int | None, max_verts: int, debug: bool) -> None:
+        self.enabled = enabled
+        self.maxsize = maxsize
+        self.max_verts = max_verts
+        self.debug = debug
+        self._cache: "OrderedDict[object, Geometry]" = OrderedDict()
+        self.hits = 0
+        self.misses = 0
+        self.stores = 0
+        self.evicts = 0
+
+    def lookup(
+        self, base_key: object, effect_sigs: list[tuple[str, tuple[tuple[str, object], ...]]]
+    ) -> tuple[Geometry | None, int]:
+        if not (self.enabled and effect_sigs):
+            return None, 0
+        for i in range(len(effect_sigs), 0, -1):
+            k = (base_key, tuple(effect_sigs[:i]))
+            cached_geo = self._cache.get(k)
+            if cached_geo is not None:
+                try:
+                    self._cache.move_to_end(k)
+                except Exception:
+                    pass
+                if self.debug:
+                    self.hits += 1
+                return cached_geo, i
+        if self.debug:
+            self.misses += 1
+        return None, 0
+
+    def store(
+        self,
+        base_key: object,
+        effect_sigs_all: list[tuple[str, tuple[tuple[str, object], ...]]],
+        idx: int,
+        geom: Geometry,
+    ) -> None:
+        if not self.enabled:
+            return
+        vcount = int(geom.coords.shape[0])
+        if self.maxsize == 0 or vcount > self.max_verts:
+            return
+        k = (
+            (base_key, tuple(effect_sigs_all[: idx + 1]))
+            if effect_sigs_all
+            else (base_key, tuple())
+        )
+        self._cache[k] = geom
+        if self.maxsize is not None and self.maxsize > 0:
+            while len(self._cache) > self.maxsize:
+                self._cache.popitem(last=False)
+                if self.debug:
+                    self.evicts += 1
+        if self.debug:
+            self.stores += 1
+
+
 try:
     from common.settings import get as _get_settings
 
@@ -242,113 +327,13 @@ except Exception:
     _PREFIX_CACHE_MAX_VERTS = env_int("PXD_PREFIX_CACHE_MAX_VERTS", 10_000_000, min_value=0) or 0
     _PREFIX_DEBUG = env_bool("PXD_DEBUG_PREFIX_CACHE", False)
 
-_SHAPE_CACHE: "OrderedDict[object, Geometry]" = OrderedDict()
-
-# ---- Prefix（途中結果）LRU --------------------------------------------------
-
-_PREFIX_CACHE: "OrderedDict[object, Geometry]" = OrderedDict()
-_PREFIX_HITS = 0
-_PREFIX_MISSES = 0
-_PREFIX_STORES = 0
-_PREFIX_EVICTS = 0
-
-
-def _PREFIX_HITS_INC() -> None:
-    # デバッグ無効時はカウンタ更新をスキップ（実行コスト削減）
-    if not _PREFIX_DEBUG:
-        return
-    global _PREFIX_HITS
-    _PREFIX_HITS += 1
-
-
-def _PREFIX_MISSES_INC() -> None:
-    if not _PREFIX_DEBUG:
-        return
-    global _PREFIX_MISSES
-    _PREFIX_MISSES += 1
-
-
-def _PREFIX_STORES_INC() -> None:
-    if not _PREFIX_DEBUG:
-        return
-    global _PREFIX_STORES
-    _PREFIX_STORES += 1
-
-
-def _PREFIX_EVICTS_INC() -> None:
-    if not _PREFIX_DEBUG:
-        return
-    global _PREFIX_EVICTS
-    _PREFIX_EVICTS += 1
-
-
-## 末尾保存やミス時プリウォームの環境スイッチは未採用（将来案）。
-
-
-# ---- Cache helpers ---------------------------------------------------------
-
-
-def _shape_cache_lookup(key: object) -> Geometry | None:
-    """Shape LRU から取得し、あれば LRU 移動して返す。"""
-    entry = _SHAPE_CACHE.get(key)
-    if entry is None:
-        return None
-    try:
-        _ = _SHAPE_CACHE.pop(key)
-        _SHAPE_CACHE[key] = entry
-    except Exception:
-        pass
-    return entry
-
-
-def _shape_cache_store(key: object, geom: Geometry) -> None:
-    """Shape LRU に保存し、上限を維持。"""
-    _SHAPE_CACHE[key] = geom
-    if _SHAPE_CACHE_MAXSIZE is not None and _SHAPE_CACHE_MAXSIZE > 0:
-        while len(_SHAPE_CACHE) > _SHAPE_CACHE_MAXSIZE:
-            _SHAPE_CACHE.popitem(last=False)
-
-
-def _prefix_cache_lookup(
-    base_key: object, effect_sigs: list[tuple[str, tuple[tuple[str, object], ...]]]
-) -> tuple[Geometry | None, int]:
-    """最長一致の prefix を検索し、(Geometry, 開始 index) を返す。"""
-    if not (_PREFIX_CACHE_ENABLED and effect_sigs):
-        return None, 0
-    for i in range(len(effect_sigs), 0, -1):
-        k = (base_key, tuple(effect_sigs[:i]))
-        cached_geo = _PREFIX_CACHE.get(k)
-        if cached_geo is not None:
-            try:
-                _ = _PREFIX_CACHE.pop(k)
-                _PREFIX_CACHE[k] = cached_geo
-            except Exception:
-                pass
-            _PREFIX_HITS_INC()
-            return cached_geo, i
-    _PREFIX_MISSES_INC()
-    return None, 0
-
-
-def _prefix_cache_store(
-    base_key: object,
-    effect_sigs_all: list[tuple[str, tuple[tuple[str, object], ...]]],
-    idx: int,
-    geom: Geometry,
-) -> None:
-    """プレフィックスキャッシュへの保存（頂点数上限あり）。"""
-    if not _PREFIX_CACHE_ENABLED:
-        return
-    vcount = int(geom.coords.shape[0])
-    if _PREFIX_CACHE_MAXSIZE == 0 or vcount > _PREFIX_CACHE_MAX_VERTS:
-        return
-    k = (base_key, tuple(effect_sigs_all[: idx + 1])) if effect_sigs_all else (base_key, tuple())
-    _PREFIX_CACHE[k] = geom
-    if _PREFIX_CACHE_MAXSIZE is not None and _PREFIX_CACHE_MAXSIZE > 0:
-        while len(_PREFIX_CACHE) > _PREFIX_CACHE_MAXSIZE:
-            _PREFIX_CACHE.popitem(last=False)
-            _PREFIX_EVICTS_INC()
-    _PREFIX_STORES_INC()
+_SHAPE_CACHE = _ShapeCache(_SHAPE_CACHE_MAXSIZE)
+_PREFIX_CACHE = _PrefixCache(
+    enabled=_PREFIX_CACHE_ENABLED,
+    maxsize=_PREFIX_CACHE_MAXSIZE,
+    max_verts=_PREFIX_CACHE_MAX_VERTS,
+    debug=_PREFIX_DEBUG,
+)
 
 
 def _fx_concat_many(
