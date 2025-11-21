@@ -49,10 +49,10 @@ cfg = HUDConfig(show_cache_status=True, show_cpu_mem=False)
 run_sketch(user_draw, hud_config=cfg)
 ```
 
-Parameter GUI からの HUD 切替（任意）:
+HUD 表示切替:
 
-- `use_parameter_gui=True` のとき、GUI に `Show HUD`（`runner.show_hud`）が現れます。チェックで HUD の表示/非表示を動的に切り替えられます。
-- `show_hud` は起動時の HUD 初期値として扱われ、Parameter GUI が有効な間は GUI のトグルが最終的な可視性を決めます（`use_parameter_gui=False` のときのみ、`show_hud` または `hud_config.enabled` が HUD の有効/無効を固定します）。
+- `show_hud`/`hud_config.enabled` は起動時の HUD 初期値として扱われる。
+- 実行中はキーボード `H` で HUD の表示/非表示をトグルする（Parameter GUI にトグルボタンは無い）。
 
 独自 Shape の登録例（最小）:
 ```
@@ -87,6 +87,7 @@ def user_draw(t):
 - GUI は「draw 内で未指定（＝既定値採用）の引数のみ」を対象に表示・調整。
 - 優先順位は「明示引数 > GUI > 既定値」。MIDI→GUI の自動上書きは行わない。
 - RangeHint は `__param_meta__` がある場合のみ使用し、無い場合は 0–1 既定レンジ（クランプは表示上のみ）。
+- レイヤー編集は `api.layers.L` を使用する（例: `L.layer(g, color=(1,0,0))` や `L.builder().add(...).add(...).build()`). 旧 `E.style` は廃止。
 
 - 追加インストール: `pip install -e .[optional]`
 - 使用例: shapely, numba, mido, fonttools などを使う optional テストが有効になります。

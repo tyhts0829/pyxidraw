@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
-from engine.render.types import StyledLayer
+from engine.render.types import Layer
 from engine.export.gcode import GCodeParams
 from engine.runtime.frame import RenderFrame
 
@@ -47,7 +47,7 @@ def _normalize_front_to_geometry(
 
     if isinstance(front, Sequence) and front:
         fst = front[0]
-        if isinstance(fst, StyledLayer) or (
+        if isinstance(fst, Layer) or (
             hasattr(fst, "geometry") and hasattr(fst, "color") and hasattr(fst, "thickness")
         ):
             geoms: list[Geometry] = []

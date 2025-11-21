@@ -22,7 +22,6 @@ from . import partition  # noqa: F401
 from . import repeat  # noqa: F401
 from . import rotate  # noqa: F401
 from . import scale  # noqa: F401
-from . import style  # noqa: F401
 from . import subdivide  # noqa: F401
 from . import translate  # noqa: F401
 from . import trim  # noqa: F401

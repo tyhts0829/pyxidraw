@@ -29,6 +29,7 @@ from shapes.registry import (
 from .cc import cc
 from .effects import E
 from .lfo import lfo as lfo
+from .layers import L
 
 # 主要API
 from .shapes import G, ShapesAPI
@@ -48,6 +49,7 @@ __all__ = [
     # クラス（高度な使用）
     "ShapesAPI",
     "Geometry",
+    "L",
     # シリアライズ補助（削除済み：外部保存/復元/検証は提供しない）
 ]
 

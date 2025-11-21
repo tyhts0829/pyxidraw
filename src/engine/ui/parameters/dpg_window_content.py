@@ -1,12 +1,13 @@
 """
 どこで: `engine.ui.parameters` の Dear PyGui コンテンツ構築。
-何を: ParameterStore の Descriptor から Display/HUD とパラメータテーブルを構築し、Store と UI の同期を行う。
+何を: ParameterStore の Descriptor から Style セクションとパラメータテーブルを構築し、Store と UI の同期を行う。
 なぜ: レイアウトや値連携の責務を `dpg_window` 本体から分離し、見通しを良くするため。
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
 import dearpygui.dearpygui as dpg  # type: ignore
@@ -17,8 +18,18 @@ from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore
 logger = logging.getLogger("engine.ui.parameters.dpg.content")
 
 
+@dataclass(frozen=True)
+class _StyleLayerEntry:
+    """Style セクションに表示するレイヤーごとのスタイル設定。"""
+
+    key: str
+    label: str
+    color_desc: ParameterDescriptor | None = None
+    thickness_desc: ParameterDescriptor | None = None
+
+
 class ParameterWindowContentBuilder:
-    """ParameterWindow の Display/HUD とパラメータテーブルを構築する。"""
+    """ParameterWindow の Style セクションとパラメータテーブルを構築する。"""
 
     def __init__(
         self,
@@ -32,18 +43,21 @@ class ParameterWindowContentBuilder:
         self._layout = layout
         self._theme_mgr = theme_mgr
         self._syncing: bool = False
+        self._style_param_ids: set[str] = set()
 
     def build_root_window(self, root_tag: str, title: str) -> None:
-        """ルートウィンドウと Display/HUD セクションを構築する。"""
+        """ルートウィンドウを構築する。Style/パラメータ群は mount 時に追加する。"""
         with dpg.window(tag=root_tag, label=title, no_resize=False, no_collapse=True) as root:
-            try:
-                self.build_display_controls(parent=root)
-            except Exception:
-                logger.warning("failed to build runner controls; continue without Display/HUD")
+            pass
         dpg.set_primary_window(root, True)
 
-    def build_display_controls(self, parent: int | str) -> None:
-        """Display/HUD 用のコントロール群を構築し、Store と初期同期する。"""
+    def build_style_controls(
+        self,
+        parent: int | str,
+        descriptors: list[ParameterDescriptor],
+    ) -> None:
+        """Style 用のコントロール群を構築し、Store と初期同期する。"""
+        self._style_param_ids.clear()
         bgf, lnf = self._resolve_canvas_colors()
         bg_override = self._store.current_value("runner.background") or self._store.original_value(
             "runner.background"
@@ -56,22 +70,44 @@ class ParameterWindowContentBuilder:
         if ln_override is not None:
             lnf = self._safe_norm(ln_override, lnf)
 
-        with dpg.collapsing_header(label="Display", default_open=True, parent=parent) as disp_hdr:
-            th = self._theme_mgr.get_category_header_theme("Display")
+        tv = self._store.current_value("runner.hud_text_color") or self._store.original_value(
+            "runner.hud_text_color"
+        )
+        tr, tg, tb, _ = (
+            self._safe_norm(tv, (0.0, 0.0, 0.0, 1.0)) if tv is not None else (0.0, 0.0, 0.0, 1.0)
+        )
+        mv = self._store.current_value("runner.hud_meter_color") or self._store.original_value(
+            "runner.hud_meter_color"
+        )
+        mr, mg, mb, _ = (
+            self._safe_norm(mv, (0.0, 1.0, 0.0, 1.0)) if mv is not None else (0.0, 1.0, 0.0, 1.0)
+        )
+        mb_val = self._store.current_value(
+            "runner.hud_meter_bg_color"
+        ) or self._store.original_value("runner.hud_meter_bg_color")
+        br, bg, bb, _ = (
+            self._safe_norm(mb_val, (0.196, 0.196, 0.196, 1.0))
+            if mb_val is not None
+            else (0.196, 0.196, 0.196, 1.0)
+        )
+        layer_entries = self._collect_style_entries(descriptors)
+
+        with dpg.collapsing_header(label="Style", default_open=True, parent=parent) as style_hdr:
+            th = self._theme_mgr.get_category_header_theme("Style")
             if th is not None:
-                dpg.bind_item_theme(disp_hdr, th)
+                dpg.bind_item_theme(style_hdr, th)
             table_policy = self._dpg_policy(
                 ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
             )
-            with dpg.table(header_row=False, policy=table_policy) as disp_tbl:
-                tth = self._theme_mgr.get_category_table_theme("Display")
+            with dpg.table(header_row=False, policy=table_policy) as style_tbl:
+                tth = self._theme_mgr.get_category_table_theme("Style")
                 if tth is not None:
-                    dpg.bind_item_theme(disp_tbl, tth)
+                    dpg.bind_item_theme(style_tbl, tth)
                 left, right = self._label_value_ratio()
                 self._add_two_columns(left, right)
                 with dpg.table_row():
                     with dpg.table_cell():
-                        dpg.add_text("Background")
+                        dpg.add_text("Background Color")
                     with dpg.table_cell():
                         bg_picker = dpg.add_color_edit(
                             tag="runner.background",
@@ -88,6 +124,11 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
+                        self._style_param_ids.add("runner.background")
+                        try:
+                            dpg.set_item_width(bg_picker, -1)
+                        except Exception:
+                            pass
                     r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
                     self.force_set_rgb_u8(
                         bg_picker,
@@ -99,7 +140,7 @@ class ParameterWindowContentBuilder:
                     )
                 with dpg.table_row():
                     with dpg.table_cell():
-                        dpg.add_text("Line Color")
+                        dpg.add_text("Global Line Color")
                     with dpg.table_cell():
                         ln_picker = dpg.add_color_edit(
                             tag="runner.line_color",
@@ -116,6 +157,11 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
+                        self._style_param_ids.add("runner.line_color")
+                        try:
+                            dpg.set_item_width(ln_picker, -1)
+                        except Exception:
+                            pass
                     r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
                     self.force_set_rgb_u8(
                         ln_picker,
@@ -125,49 +171,37 @@ class ParameterWindowContentBuilder:
                         ln_picker,
                         callback=lambda s, a, u: self.store_rgb01("runner.line_color", a),
                     )
-
-        with dpg.collapsing_header(label="HUD", default_open=False, parent=parent) as hud_hdr:
-            th = self._theme_mgr.get_category_header_theme("HUD")
-            if th is not None:
-                dpg.bind_item_theme(hud_hdr, th)
-            table_policy = self._dpg_policy(
-                ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
-            )
-            with dpg.table(header_row=False, policy=table_policy) as hud_tbl:
-                tth = self._theme_mgr.get_category_table_theme("HUD")
-                if tth is not None:
-                    dpg.bind_item_theme(hud_tbl, tth)
-                left, right = self._label_value_ratio()
-                self._add_two_columns(left, right)
-
-                # Show HUD トグル
                 with dpg.table_row():
                     with dpg.table_cell():
-                        dpg.add_text("Show HUD")
+                        dpg.add_text("Global Thickness")
                     with dpg.table_cell():
-                        show_val = self._store.current_value(
-                            "runner.show_hud"
-                        ) or self._store.original_value("runner.show_hud")
-                        show = bool(show_val) if show_val is not None else True
-                        dpg.add_checkbox(
-                            tag="runner.show_hud",
-                            default_value=show,
+                        try:
+                            th_val = float(
+                                self._store.current_value("runner.line_thickness")
+                                or self._store.original_value("runner.line_thickness")
+                                or 0.0006
+                            )
+                        except Exception:
+                            th_val = 0.0006
+                        th_picker = dpg.add_slider_float(
+                            tag="runner.line_thickness",
+                            label="",
+                            default_value=th_val,
+                            min_value=0.0001,
+                            max_value=0.01,
+                            format=f"%.{self._layout.value_precision}f",
                             callback=self._on_widget_change,
-                            user_data="runner.show_hud",
+                            user_data="runner.line_thickness",
                         )
-
+                        try:
+                            dpg.set_item_width(th_picker, -1)
+                        except Exception:
+                            pass
+                        self._style_param_ids.add("runner.line_thickness")
                 with dpg.table_row():
                     with dpg.table_cell():
-                        dpg.add_text("Text Color")
+                        dpg.add_text("HUD: Text Color")
                     with dpg.table_cell():
-                        tv = self._store.current_value(
-                            "runner.hud_text_color"
-                        ) or self._store.original_value("runner.hud_text_color")
-                        tr, tg, tb, _ = (
-                            self._safe_norm(tv, (0.0, 0.0, 0.0, 1.0))
-                            if tv is not None
-                            else (0.0, 0.0, 0.0, 1.0)
-                        )
                         tx_picker = dpg.add_color_edit(
                             tag="runner.hud_text_color",
                             default_value=[
@@ -183,23 +217,19 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        dpg.configure_item(
-                            tx_picker,
-                            callback=lambda s, a, u: self.store_rgb01("runner.hud_text_color", a),
-                        )
-
+                        self._style_param_ids.add("runner.hud_text_color")
+                        try:
+                            dpg.set_item_width(tx_picker, -1)
+                        except Exception:
+                            pass
+                    dpg.configure_item(
+                        tx_picker,
+                        callback=lambda s, a, u: self.store_rgb01("runner.hud_text_color", a),
+                    )
                 with dpg.table_row():
                     with dpg.table_cell():
-                        dpg.add_text("Meter")
+                        dpg.add_text("HUD: Meter Color")
                     with dpg.table_cell():
-                        mv = self._store.current_value(
-                            "runner.hud_meter_color"
-                        ) or self._store.original_value("runner.hud_meter_color")
-                        mr, mg, mb, _ = (
-                            self._safe_norm(mv, (0.0, 1.0, 0.0, 1.0))
-                            if mv is not None
-                            else (0.0, 1.0, 0.0, 1.0)
-                        )
                         mt_picker = dpg.add_color_edit(
                             tag="runner.hud_meter_color",
                             default_value=[
@@ -215,23 +245,19 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        dpg.configure_item(
-                            mt_picker,
-                            callback=lambda s, a, u: self.store_rgb01("runner.hud_meter_color", a),
-                        )
-
+                        self._style_param_ids.add("runner.hud_meter_color")
+                        try:
+                            dpg.set_item_width(mt_picker, -1)
+                        except Exception:
+                            pass
+                    dpg.configure_item(
+                        mt_picker,
+                        callback=lambda s, a, u: self.store_rgb01("runner.hud_meter_color", a),
+                    )
                 with dpg.table_row():
                     with dpg.table_cell():
-                        dpg.add_text("Meter BG")
+                        dpg.add_text("HUD: Meter BG Color")
                     with dpg.table_cell():
-                        mb_val = self._store.current_value(
-                            "runner.hud_meter_bg_color"
-                        ) or self._store.original_value("runner.hud_meter_bg_color")
-                        br, bg, bb, _ = (
-                            self._safe_norm(mb_val, (0.196, 0.196, 0.196, 1.0))
-                            if mb_val is not None
-                            else (0.196, 0.196, 0.196, 1.0)
-                        )
                         mb_picker = dpg.add_color_edit(
                             tag="runner.hud_meter_bg_color",
                             default_value=[
@@ -247,43 +273,118 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        dpg.configure_item(
-                            mb_picker,
-                            callback=lambda s, a, u: self.store_rgb01(
-                                "runner.hud_meter_bg_color",
-                                a,
-                            ),
-                        )
+                        self._style_param_ids.add("runner.hud_meter_bg_color")
+                        try:
+                            dpg.set_item_width(mb_picker, -1)
+                        except Exception:
+                            pass
+                    dpg.configure_item(
+                        mb_picker,
+                        callback=lambda s, a, u: self.store_rgb01(
+                            "runner.hud_meter_bg_color",
+                            a,
+                        ),
+                    )
+                # レイヤー行を同一テーブルに追加
+                if layer_entries:
+                    for entry in layer_entries:
+                        with dpg.table_row():
+                            with dpg.table_cell():
+                                dpg.add_text(f"{entry.label or 'Layer'}: Color")
+                            with dpg.table_cell():
+                                if entry.color_desc is None:
+                                    dpg.add_text("-")
+                                else:
+                                    self._style_param_ids.add(entry.color_desc.id)
+                                    value = self._current_or_default(entry.color_desc)
+                                    r, g, b, _ = self._safe_norm(value, (0.0, 0.0, 0.0, 1.0))
+                                    picker = dpg.add_color_edit(
+                                        tag=entry.color_desc.id,
+                                        default_value=[
+                                            int(round(r * 255)),
+                                            int(round(g * 255)),
+                                            int(round(b * 255)),
+                                        ],
+                                        no_label=True,
+                                        no_alpha=True,
+                                        alpha_preview=getattr(
+                                            dpg, "mvColorEdit_AlphaPreviewHalf", 1
+                                        ),
+                                        display_mode=getattr(dpg, "mvColorEdit_DisplayRGB", 0),
+                                        display_type=getattr(dpg, "mvColorEdit_DisplayInt", 0),
+                                        input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
+                                        alpha_bar=False,
+                                    )
+                                    try:
+                                        dpg.set_item_width(picker, -1)
+                                    except Exception:
+                                        pass
+                                    self.force_set_rgb_u8(
+                                        picker,
+                                        [
+                                            int(round(r * 255)),
+                                            int(round(g * 255)),
+                                            int(round(b * 255)),
+                                        ],
+                                    )
+                                    dpg.configure_item(
+                                        picker,
+                                        callback=lambda s, a, u: self.store_rgb01(u, a),
+                                        user_data=entry.color_desc.id,
+                                    )
+                        with dpg.table_row():
+                            with dpg.table_cell():
+                                dpg.add_text(f"{entry.label or 'Layer'}: Thickness")
+                            with dpg.table_cell():
+                                if entry.thickness_desc is None:
+                                    dpg.add_text("-")
+                                else:
+                                    desc = entry.thickness_desc
+                                    self._style_param_ids.add(desc.id)
+                                    value = self._current_or_default(desc)
+                                    hint = desc.range_hint or self._layout.derive_range(
+                                        name=desc.id,
+                                        value_type=desc.value_type,
+                                        default_value=desc.default_value,
+                                    )
+                                    slider_id = dpg.add_slider_float(
+                                        tag=desc.id,
+                                        label="",
+                                        default_value=(
+                                            float(value)
+                                            if value is not None
+                                            else float(hint.min_value)
+                                        ),
+                                        min_value=float(hint.min_value),
+                                        max_value=float(hint.max_value),
+                                        format=f"%.{self._layout.value_precision}f",
+                                        callback=self._on_widget_change,
+                                        user_data=desc.id,
+                                    )
+                                    try:
+                                        dpg.set_item_width(slider_id, -1)
+                                    except Exception:
+                                        pass
 
-        self.sync_display_from_store()
-
-    def sync_display_from_store(self) -> None:
-        ids = [
-            "runner.background",
-            "runner.line_color",
-            "runner.hud_text_color",
-            "runner.hud_meter_color",
-            "runner.hud_meter_bg_color",
-        ]
-        self.on_store_change(ids)
+    def sync_style_from_store(self) -> None:
+        if not self._style_param_ids:
+            return
+        self.on_store_change(self._style_param_ids)
 
     def mount_descriptors(self, root_tag: str, descriptors: list[ParameterDescriptor]) -> None:
+        self.build_style_controls(root_tag, descriptors)
         self._build_grouped_table(root_tag, descriptors)
+        self.sync_style_from_store()
 
     def _build_grouped_table(
         self,
         parent: int | str,
         descriptors: list[ParameterDescriptor],
     ) -> None:
-        excluded = {
-            "runner.background",
-            "runner.line_color",
-            "runner.hud_text_color",
-            "runner.hud_meter_color",
-            "runner.hud_meter_bg_color",
-            "runner.show_hud",
-        }
-        filtered = [d for d in descriptors if d.id not in excluded]
+        excluded = set(self._style_param_ids) | {"runner.show_hud", "runner.line_thickness"}
+        filtered = [
+            d for d in descriptors if d.id not in excluded and not self._is_style_descriptor(d)
+        ]
         cat_items: dict[Any, list[ParameterDescriptor]] = {}
         cat_order: list[tuple[Any, str | None]] = []
         for d in filtered:
@@ -389,7 +490,7 @@ class ParameterWindowContentBuilder:
         return first
 
     def _label_value_ratio(self) -> tuple[float, float]:
-        """Display テーブル用のラベル列と値列の比率を計算する。"""
+        """Style テーブル用のラベル列と値列の比率を計算する。"""
         left = float(self._layout.label_column_ratio)
         left = 0.1 if left < 0.1 else (0.9 if left > 0.9 else left)
         right = max(0.1, 1.0 - left)
@@ -398,7 +499,7 @@ class ParameterWindowContentBuilder:
     def _resolve_canvas_colors(
         self,
     ) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float]]:
-        """config.yaml から Display 用の背景色とライン色の既定値を解決する。"""
+        """config.yaml から背景色とライン色の既定値を解決する。"""
         try:
             from util.utils import load_config as _load_cfg
 
@@ -420,6 +521,63 @@ class ParameterWindowContentBuilder:
         except TypeError:
             dpg.add_table_column(label="Parameter")
             dpg.add_table_column(label="Value")
+
+    def _collect_style_entries(
+        self, descriptors: list[ParameterDescriptor]
+    ) -> list[_StyleLayerEntry]:
+        """style 系 Descriptor をレイヤー単位に束ねる。"""
+        grouped: dict[str, _StyleLayerEntry] = {}
+        for desc in descriptors:
+            if not self._is_style_descriptor(desc):
+                continue
+            key = self._style_owner_key(desc)
+            entry = grouped.get(key) or _StyleLayerEntry(
+                key=key,
+                label=self._style_label(desc, key),
+            )
+            if desc.id.endswith(".color"):
+                entry = _StyleLayerEntry(
+                    key=entry.key,
+                    label=entry.label,
+                    color_desc=desc,
+                    thickness_desc=entry.thickness_desc,
+                )
+            elif desc.id.endswith(".thickness"):
+                entry = _StyleLayerEntry(
+                    key=entry.key,
+                    label=entry.label,
+                    color_desc=entry.color_desc,
+                    thickness_desc=desc,
+                )
+            grouped[key] = entry
+        return sorted(grouped.values(), key=lambda e: (e.label, e.key))
+
+    def _style_owner_key(self, desc: ParameterDescriptor) -> str:
+        """スタイル行を束ねるキーを決める。"""
+        if isinstance(desc.id, str) and desc.id.startswith("layer."):
+            try:
+                return desc.id.split(".")[1]
+            except Exception:
+                return desc.id
+        if desc.pipeline_uid:
+            return str(desc.pipeline_uid)
+        if desc.category:
+            return str(desc.category)
+        return str(desc.id)
+
+    def _style_label(self, desc: ParameterDescriptor, fallback_key: str) -> str:
+        """スタイル行の表示ラベル。"""
+        if isinstance(desc.id, str) and desc.id.startswith("layer."):
+            if desc.label:
+                return str(desc.label.replace(" Color", "").replace(" Thickness", ""))
+            return fallback_key
+        if desc.category:
+            return str(desc.category)
+        if desc.pipeline_uid:
+            return str(desc.pipeline_uid)
+        if desc.label:
+            return str(desc.label)
+        return str(desc.id)
 
     def _create_row_3cols(self, table: int | str, desc: ParameterDescriptor) -> None:
         """カテゴリテーブルに 3 列（Label/Bars/CC）の行を追加する。"""
@@ -619,7 +777,7 @@ class ParameterWindowContentBuilder:
                     callback=self._on_widget_change,
                     user_data=desc.id,
                 )
-            return dpg.add_combo(
+            combo = dpg.add_combo(
                 tag=desc.id,
                 items=items,
                 parent=parent,
@@ -627,6 +785,11 @@ class ParameterWindowContentBuilder:
                 callback=self._on_widget_change,
                 user_data=desc.id,
             )
+            try:
+                dpg.set_item_width(combo, -1)
+            except Exception:
+                pass
+            return combo
         if vt == "string":
             ml = bool(getattr(desc, "string_multiline", False))
             kwargs: dict[str, Any] = {
@@ -639,7 +802,12 @@ class ParameterWindowContentBuilder:
             if ml:
                 kwargs["multiline"] = True
                 kwargs["height"] = int(getattr(self._layout, "row_height", 64))
-            return dpg.add_input_text(**kwargs)
+            box = dpg.add_input_text(**kwargs)
+            try:
+                dpg.set_item_width(box, -1)
+            except Exception:
+                pass
+            return box
         if vt == "vector":
             value_vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
             dim = max(2, min(len(value_vec), 4))
@@ -797,9 +965,17 @@ class ParameterWindowContentBuilder:
         )
         return picker
 
+    def _is_style_descriptor(self, desc: ParameterDescriptor) -> bool:
+        """Descriptor がレイヤー用かどうかを判定する。"""
+        if not isinstance(desc.id, str):
+            return False
+        if desc.id.startswith("layer."):
+            return desc.id.endswith(".color") or desc.id.endswith(".thickness")
+        return False
+
     def _is_style_color_desc(self, desc: ParameterDescriptor) -> bool:
         """Descriptor が style.color パラメータかどうかを判定する。"""
-        return isinstance(desc.id, str) and desc.id.endswith(".color") and ".style#" in desc.id
+        return self._is_style_descriptor(desc) and str(desc.id).endswith(".color")
 
     def _current_or_default(self, desc: ParameterDescriptor) -> Any:
         """Store の現在値があればそれを、なければ Descriptor の既定値を返す。"""
@@ -851,7 +1027,10 @@ class ParameterWindowContentBuilder:
                             pid,
                             [int(round(r * 255)), int(round(g * 255)), int(round(b * 255))],
                         )
-                    elif isinstance(pid, str) and pid.endswith(".color") and ".style#" in pid:
+                    elif isinstance(pid, str) and (
+                        (pid.endswith(".color") and ".style#" in pid)
+                        or (pid.startswith("layer.") and pid.endswith(".color"))
+                    ):
                         r, g, b, _ = self._safe_norm(value, (0.0, 0.0, 0.0, 1.0))
                         self.force_set_rgb_u8(
                             pid,
@@ -995,8 +1174,11 @@ class ParameterWindowContentBuilder:
             from util.color import normalize_color as _norm
 
             rgba = _norm(app_data)
-            if isinstance(pid, str) and pid.endswith(".color") and ".style#" in pid:
-                # style.color は vec3 保存（HUD など他の GUI と色の扱いを揃える）
+            if isinstance(pid, str) and (
+                (pid.endswith(".color") and ".style#" in pid)
+                or (pid.startswith("layer.") and pid.endswith(".color"))
+            ):
+                # style/layer の color は vec3 保存（HUD など他の GUI と色の扱いを揃える）
                 value_tuple: tuple[float, ...] = (
                     float(rgba[0]),
                     float(rgba[1]),

@@ -220,19 +220,12 @@ parameter_gui:
       header_active: [84, 84, 84, 255]
       accent: [63, 114, 174, 255]
       accent_active: [51, 115, 230, 255]
-    # カテゴリ別（shape/pipeline）色設定（任意）。未指定時は上の colors.header* を使用。
+    # カテゴリ別（Style/shape/pipeline）色設定（任意）。未指定時は上の colors.header* を使用。
     categories:
-      Display:
+      Style:
         header: [56, 56, 56, 255]
         header_hovered: [71, 71, 71, 255]
         header_active: [84, 84, 84, 255]
-        # table_row_bg: [48, 48, 48, 255]
-        # table_row_bg_alt: [44, 44, 44, 255]
-      HUD:
-        header: [62, 62, 62, 255]
-        header_hovered: [76, 76, 76, 255]
-        header_active: [92, 92, 92, 255]
-        # 行背景は Dear PyGui の TableRowBg/Alt が利用可能な場合のみ適用
         # table_row_bg: [48, 48, 48, 255]
         # table_row_bg_alt: [44, 44, 44, 255]
       shape:

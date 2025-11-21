@@ -308,17 +308,6 @@ class _PipelineBuilder(Protocol):
             scale: vec3, range [(0.1, 0.1, 0.1), (5.0, 5.0, 5.0)]
         """
         ...
-    # meta: color (type=vec3, range=[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)])
-    # meta: thickness (type=number, range=[1.0, 10.0])
-    def style(self, *, color: Vec3 | Iterable[float] | None = ..., thickness: float = ..., **_params: Any) -> _PipelineBuilder:
-        """
-        線の色（RGB 0..1）と太さ倍率を指定する（no-op）。
-
-        引数:
-            color: vec3, range [(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)]
-            thickness: number, range [1.0, 10.0]
-        """
-        ...
     # meta: subdivisions (type=integer, range=[0, 10])
     def subdivide(self, *, subdivisions: int = ..., **_params: Any) -> _PipelineBuilder:
         """
@@ -413,7 +402,6 @@ class _Effects(Protocol):
     def repeat(self, *, count: int = ..., cumulative_scale: bool = ..., cumulative_offset: bool = ..., cumulative_rotate: bool = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., curve: float = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def rotate(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def scale(self, *, auto_center: bool = ..., pivot: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
-    def style(self, *, color: Vec3 | Iterable[float] | None = ..., thickness: float = ..., **_params: Any) -> _PipelineBuilder: ...
     def subdivide(self, *, subdivisions: int = ..., **_params: Any) -> _PipelineBuilder: ...
     def translate(self, *, delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def trim(self, *, start_param: float = ..., end_param: float = ..., **_params: Any) -> _PipelineBuilder: ...
@@ -429,7 +417,9 @@ cc: Any
 from .lfo import lfo as lfo
 from shapes.registry import shape as shape
 from effects.registry import effect as effect
+from .layers import L
+from engine.render.types import Layer
 from .sketch import run_sketch as run_sketch, run_sketch as run
 __all__ = [
-    'G', 'E', 'cc', 'lfo', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry',
+    'G', 'E', 'cc', 'lfo', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry', 'L', 'Layer',
 ]

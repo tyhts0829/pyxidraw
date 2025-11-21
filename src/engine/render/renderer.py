@@ -17,7 +17,7 @@ import numpy as np
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
 from engine.runtime.frame import RenderFrame
-from .types import StyledLayer
+from .types import Layer
 from util.constants import PRIMITIVE_RESTART_INDEX
 
 from ..core.tickable import Tickable
@@ -100,7 +100,7 @@ class LineRenderer(Tickable):
         # 受信したフレーム（layers を含む場合は draw() 側で逐次アップロード）
         self._frame: RenderFrame | None = None
         # 直近レイヤーのスナップショット（no-layers フレームで再描画に利用）
-        self._last_layers_snapshot: list[StyledLayer] | None = None
+        self._last_layers_snapshot: list[Layer] | None = None
         # 直近レイヤーで適用した色（次フレーム以降に再適用するための粘着色）
         self._sticky_color: tuple[float, float, float, float] | None = None
         # subscribe 競合回避用の簡易フレームトラッキング
@@ -144,7 +144,7 @@ class LineRenderer(Tickable):
 
             total_vertices = 0
             total_indices = 0
-            snapshot: list[StyledLayer] = []
+            snapshot: list[Layer] = []
             for layer in frame.layers:
                 # 色
                 if layer.color is not None:
@@ -165,11 +165,10 @@ class LineRenderer(Tickable):
                         self._sticky_color = tuple(self._base_line_color)
                     except Exception:
                         pass
-                # 太さ（倍率）
+                # 太さ（絶対値）
                 if layer.thickness is not None:
                     try:
-                        _mul = self._base_line_thickness * float(layer.thickness)
-                        self.set_line_thickness(_mul)
+                        self.set_line_thickness(float(layer.thickness))
                     except Exception:
                         pass
                 else:
@@ -193,9 +192,7 @@ class LineRenderer(Tickable):
                     g = layer.geometry
                     if isinstance(g, _LG):
                         g = g.realize()
-                    snapshot.append(
-                        StyledLayer(geometry=g, color=layer.color, thickness=layer.thickness)
-                    )
+                    snapshot.append(Layer(geometry=g, color=layer.color, thickness=layer.thickness))
                 except Exception:
                     pass
             # HUD 合算（近似。最後の状態を上書き）
@@ -230,7 +227,7 @@ class LineRenderer(Tickable):
                         pass
                 if layer.thickness is not None:
                     try:
-                        self.set_line_thickness(self._base_line_thickness * float(layer.thickness))
+                        self.set_line_thickness(float(layer.thickness))
                     except Exception:
                         pass
                 else:
@@ -297,6 +294,18 @@ class LineRenderer(Tickable):
         """線の太さ（クリップ空間基準）を即時更新する。"""
         try:
             v = float(value)
+            self.line_program["line_thickness"].value = v
+        except Exception:
+            pass
+
+    def set_base_line_thickness(self, value: float) -> None:
+        """基準線幅を更新し、即時適用する。"""
+        try:
+            v = float(value)
+        except Exception:
+            return
+        self._base_line_thickness = v
+        try:
             self.line_program["line_thickness"].value = v
         except Exception:
             pass

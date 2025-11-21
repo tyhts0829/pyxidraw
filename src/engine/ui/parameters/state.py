@@ -18,7 +18,7 @@ from typing import Any, Callable, Iterable, Literal, Mapping
 
 ValueType = Literal["float", "int", "bool", "enum", "vector", "string"]
 SourceType = Literal["shape", "effect"]
-CategoryKind = Literal["shape", "pipeline", "hud", "display"]
+CategoryKind = Literal["shape", "pipeline", "hud", "display", "style"]
 OverrideSource = Literal["gui"]
 
 

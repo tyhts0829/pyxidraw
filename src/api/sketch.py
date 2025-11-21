@@ -141,6 +141,10 @@ def _prepare_parameter_gui(
         # ParameterManager は型注釈上 Geometry 戻り値を要求するため、最小キャストで適合させる
         parameter_manager = ParameterManager(cast(Callable[[float], Geometry], user_draw))
         parameter_manager.initialize()
+        try:
+            parameter_manager.store.set_override("runner.line_thickness", float(line_thickness))
+        except Exception:
+            pass
     return parameter_manager, draw_callable
 
 
@@ -521,6 +525,30 @@ def run_sketch(
         # Shift+G → キャンセル
         if sym == key.G and (mods & key.MOD_SHIFT):
             _cancel_gcode_export()
+        # HUD 表示トグル（H）
+        if sym == key.H:
+            try:
+                current = True
+                if parameter_manager is not None:
+                    val = parameter_manager.store.current_value("runner.show_hud")
+                    if val is None:
+                        val = parameter_manager.store.original_value("runner.show_hud")
+                    current = bool(val) if val is not None else True
+                elif overlay is not None:
+                    current = bool(getattr(overlay, "_enabled", True))
+            except Exception:
+                current = True
+            new_state = not current
+            if parameter_manager is not None:
+                try:
+                    parameter_manager.store.set_override("runner.show_hud", new_state)
+                except Exception:
+                    pass
+            if overlay is not None:
+                try:
+                    overlay.set_enabled(new_state)
+                except Exception:
+                    pass
         # Video 録画トグル（V）
         if sym == key.V:
             try:

@@ -9,7 +9,7 @@ from typing import Mapping
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
-from engine.render.types import StyledLayer
+from engine.render.types import Layer
 
 
 @dataclass(slots=True, frozen=True)
@@ -21,4 +21,4 @@ class RenderPacket:
     # 追加メトリクス（任意）: HUD 用にキャッシュの HIT/MISS を伝える。
     cache_flags: Mapping[str, str] | None = None  # keys: "shape"/"effect" → "HIT" or "MISS"
     # レイヤー描画がある場合はこちらを使用（geometry は None を推奨）。
-    layers: tuple[StyledLayer, ...] | None = None
+    layers: tuple[Layer, ...] | None = None

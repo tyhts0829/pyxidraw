@@ -11,6 +11,7 @@ from typing import Callable
 from engine.core.geometry import Geometry
 from util.utils import load_config
 
+from engine.render.types import Layer
 from .controller import ParameterWindowController
 from .persistence import load_overrides, save_overrides
 from .runtime import ParameterRuntime, activate_runtime, deactivate_runtime
@@ -20,6 +21,7 @@ from .state import (
     ParameterStore,
     ParameterThemeConfig,
     ParameterWindowConfig,
+    RangeHint,
 )
 
 
@@ -132,16 +134,18 @@ class ParameterManager:
             self.store, layout=layout, window_cfg=window_cfg, theme_cfg=theme_cfg
         )
         self._initialized = False
+        self._layer_keys: list[str] = []
 
     def initialize(self) -> None:
         if self._initialized:
             return
         activate_runtime(self.runtime)
         self.runtime.begin_frame()
+        initial_output = None
         try:
             # 初回は t=0 のみ登録（cc は api.cc 側に閉じる）
             self.runtime.set_inputs(0.0)
-            self._user_draw(0.0)
+            initial_output = self._user_draw(0.0)
         finally:
             deactivate_runtime()
         # 追加のランナー系パラメータ（色）を登録してから override を復元
@@ -157,8 +161,8 @@ class ParameterManager:
                 id="runner.background",
                 label="Background",
                 source="effect",
-                category="Display",
-                category_kind="display",
+                category="Style",
+                category_kind="style",
                 value_type="vector",
                 default_value=(float(bg[0]), float(bg[1]), float(bg[2]), float(bg[3])),
             )
@@ -166,13 +170,24 @@ class ParameterManager:
                 id="runner.line_color",
                 label="Line Color",
                 source="effect",
-                category="Display",
-                category_kind="display",
+                category="Style",
+                category_kind="style",
                 value_type="vector",
                 default_value=(float(ln[0]), float(ln[1]), float(ln[2]), float(ln[3])),
             )
+            thickness_desc = ParameterDescriptor(
+                id="runner.line_thickness",
+                label="Global Thickness",
+                source="effect",
+                category="Style",
+                category_kind="style",
+                value_type="float",
+                default_value=0.0006,
+                range_hint=RangeHint(0.0001, 0.01, step=0.0001),
+            )
             self.store.register(bg_desc, bg_desc.default_value)
             self.store.register(ln_desc, ln_desc.default_value)
+            self.store.register(thickness_desc, thickness_desc.default_value)
 
             # HUD colors (text/meter) defaults from config
             hud_cfg = cfg.get("hud", {}) if isinstance(cfg, dict) else {}
@@ -190,8 +205,8 @@ class ParameterManager:
                 id="runner.hud_text_color",
                 label="HUD Text",
                 source="effect",
-                category="HUD",
-                category_kind="hud",
+                category="Style",
+                category_kind="style",
                 value_type="vector",
                 default_value=(
                     float(hud_text[0]),
@@ -204,8 +219,8 @@ class ParameterManager:
                 id="runner.hud_meter_color",
                 label="HUD Meter",
                 source="effect",
-                category="HUD",
-                category_kind="hud",
+                category="Style",
+                category_kind="style",
                 value_type="vector",
                 default_value=(float(mr), float(mg), float(mb), 1.0),
             )
@@ -213,8 +228,8 @@ class ParameterManager:
                 id="runner.hud_meter_bg_color",
                 label="HUD Meter BG",
                 source="effect",
-                category="HUD",
-                category_kind="hud",
+                category="Style",
+                category_kind="style",
                 value_type="vector",
                 default_value=(0.196, 0.196, 0.196, 1.0),
             )
@@ -226,12 +241,18 @@ class ParameterManager:
                 id="runner.show_hud",
                 label="Show HUD",
                 source="effect",
-                category="HUD",
-                category_kind="hud",
+                category="Style",
+                category_kind="style",
                 value_type="bool",
                 default_value=True,
             )
             self.store.register(show_hud_desc, show_hud_desc.default_value)
+        except Exception:
+            pass
+        # レイヤー構成の登録（変動しない前提）
+        try:
+            if initial_output is not None:
+                self._register_layer_descriptors(initial_output)
         except Exception:
             pass
         # ここで Descriptor が確定しているため、GUI マウント前に override を復元
@@ -252,7 +273,8 @@ class ParameterManager:
         try:
             # 現在の CC は api.cc に閉じる（GUI は Store 経由）
             self.runtime.set_inputs(t)
-            return self._user_draw(t)
+            out = self._user_draw(t)
+            return self._apply_layer_overrides(out)
         finally:
             deactivate_runtime()
 
@@ -263,3 +285,124 @@ class ParameterManager:
         except Exception:
             pass
         self.controller.shutdown()
+
+    # ---- layer helpers -------------------------------------------------
+    def _iter_layers(self, result) -> list[tuple[str, str, Layer]]:
+        """draw の戻り値からレイヤー一覧を抽出する。"""
+        layers: list[Layer] = []
+        if isinstance(result, Layer):
+            layers.append(
+                Layer(
+                    geometry=result.geometry,
+                    color=result.color,
+                    thickness=result.thickness,
+                    name=getattr(result, "name", None),
+                    meta=getattr(result, "meta", None),
+                )
+            )
+        elif isinstance(result, (list, tuple)):
+            for it in result:
+                if isinstance(it, Layer):
+                    layers.append(
+                        Layer(
+                            geometry=it.geometry,
+                            color=it.color,
+                            thickness=it.thickness,
+                            name=getattr(it, "name", None),
+                            meta=getattr(it, "meta", None),
+                        )
+                    )
+        # key/label
+        out: list[tuple[str, str, Layer]] = []
+        for idx, layer in enumerate(layers):
+            name = getattr(layer, "name", None)
+            key = name if isinstance(name, str) and name else f"layer{idx}"
+            label = name if isinstance(name, str) and name else f"Layer {idx + 1}"
+            out.append((key, label, layer))
+        return out
+
+    def _register_layer_descriptors(self, result) -> None:
+        """レイヤー色/太さを GUI 用に登録（初期フレームのみ想定）。"""
+        entries = self._iter_layers(result)
+        if not entries:
+            return
+        # 既定色は runner.line_color の original を使用（無ければ黒）
+        try:
+            base_col = self.store.original_value("runner.line_color")
+        except Exception:
+            base_col = None
+        if base_col is None:
+            base_col = (0.0, 0.0, 0.0, 1.0)
+        try:
+            from util.color import normalize_color as _norm
+
+            base_col = _norm(base_col)
+        except Exception:
+            base_col = (0.0, 0.0, 0.0, 1.0)
+
+        for key, label, layer in entries:
+            if key not in self._layer_keys:
+                self._layer_keys.append(key)
+            # color
+            try:
+                col = layer.color if layer.color is not None else base_col
+                c_desc = ParameterDescriptor(
+                    id=f"layer.{key}.color",
+                    label=f"{label} Color",
+                    source="effect",
+                    category="Style",
+                    category_kind="style",
+                    value_type="vector",
+                    default_value=tuple(col) if isinstance(col, tuple) else tuple(base_col),
+                )
+                self.store.register(c_desc, c_desc.default_value)
+            except Exception:
+                pass
+            # thickness
+            try:
+                # レイヤー指定が無ければグローバル既定（runner.line_thickness）をフォールバック
+                th_default = layer.thickness
+                if th_default is None:
+                    th_base = self.store.original_value("runner.line_thickness")
+                    th_default = float(th_base) if th_base is not None else 0.0006
+                t_desc = ParameterDescriptor(
+                    id=f"layer.{key}.thickness",
+                    label=f"{label} Thickness",
+                    source="effect",
+                    category="Style",
+                    category_kind="style",
+                    value_type="float",
+                    default_value=float(th_default),
+                    range_hint=RangeHint(0.0001, 0.01, step=0.0001),
+                )
+                self.store.register(t_desc, t_desc.default_value)
+            except Exception:
+                pass
+
+    def _apply_layer_overrides(self, result):
+        """Store の override をレイヤーに適用する。"""
+        entries = self._iter_layers(result)
+        if not entries:
+            return result
+        patched: list[Layer] = []
+        for key, _label, layer in entries:
+            color_pid = f"layer.{key}.color"
+            thick_pid = f"layer.{key}.thickness"
+            color_val = self.store.current_value(color_pid)
+            if color_val is None:
+                color_val = self.store.original_value(color_pid)
+            thickness_val = self.store.current_value(thick_pid)
+            if thickness_val is None:
+                thickness_val = self.store.original_value(thick_pid)
+            patched.append(
+                Layer(
+                    geometry=layer.geometry,
+                    color=color_val if color_val is not None else layer.color,
+                    thickness=(
+                        float(thickness_val) if thickness_val is not None else layer.thickness
+                    ),
+                    name=layer.name,
+                    meta=layer.meta,
+                )
+            )
+        return tuple(patched)

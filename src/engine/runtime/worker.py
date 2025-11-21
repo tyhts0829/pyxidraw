@@ -26,7 +26,7 @@ from typing import Callable, Mapping, Sequence, cast
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
-from engine.render.types import StyledLayer
+from engine.render.types import Layer
 
 from ..core.tickable import Tickable
 from .packet import RenderPacket
@@ -59,28 +59,13 @@ class WorkerTaskError(Exception):
         return (WorkerTaskError, (str(self),))
 
 
-# ---- internal helpers -----------------------------------------------------
-
-
-def _is_style_impl(impl: object) -> bool:
-    try:
-        kind = getattr(impl, "__effect_kind__", None)
-        if kind == "style":
-            return True
-        name = getattr(impl, "__name__", "")
-        return name == "style"
-    except Exception:
-        return False
-
-
 def _normalize_to_layers(
-    result: Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry],
-) -> tuple[Geometry | LazyGeometry | None, list[StyledLayer] | None]:
+    result: Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry | Layer],
+) -> tuple[Geometry | LazyGeometry | None, list[Layer] | None]:
     """draw() の戻り値を RenderPacket 用に正規化（レイヤー化）する。
 
     - Sequence が返れば常にレイヤー化。
-    - LazyGeometry に style ステップが含まれる場合はレイヤー化し、style ステップは plan から除去。
-    - Geometry の単体はそのまま geometry として返す。
+    - Geometry/LazyGeometry の単体はそのまま geometry として返す。
     """
     try:
         from util.color import normalize_color as _norm_color
@@ -91,70 +76,134 @@ def _normalize_to_layers(
 
     _DEBUG = False  # renderer 側で集約的に出力するため、ここでは抑制
 
+    def _to_rgba(v) -> tuple[float, float, float, float] | None:  # type: ignore[override]
+        if v is None:
+            return None
+        try:
+            r, g, b, a = _norm_color(v)
+            return (float(r), float(g), float(b), float(a))
+        except Exception:
+            try:
+                r, g, b = v  # type: ignore[misc]
+                return (float(r), float(g), float(b), 1.0)
+            except Exception:
+                return None
+
+    def _layer_from(
+        g: Geometry | LazyGeometry,
+        color,
+        thickness,
+        name: str | None = None,
+        meta: dict[str, object] | None = None,
+    ) -> Layer:
+        rgba = _to_rgba(color)
+        return Layer(
+            geometry=g,
+            color=rgba,
+            thickness=float(thickness) if thickness is not None else None,
+            name=name,
+            meta=meta,
+        )
+
     # 1) Sequence → レイヤー
-    if isinstance(result, Sequence) and not isinstance(result, (Geometry, LazyGeometry)):
-        layers: list[StyledLayer] = []
+    if isinstance(result, Sequence) and not isinstance(result, (Geometry, LazyGeometry, Layer)):
+        layers: list[Layer] = []
         for item in result:
+            if isinstance(item, Layer):
+                layers.append(
+                    _layer_from(
+                        item.geometry,
+                        item.color,
+                        item.thickness,
+                        name=getattr(item, "name", None),
+                        meta=getattr(item, "meta", None),
+                    )
+                )
+                continue
             if isinstance(item, LazyGeometry):
-                # style を抽出して plan から除去
-                last_color = None
-                last_thickness = None
-                filtered: list[tuple[Callable[[Geometry], Geometry], dict[str, object]]] = []
-                for impl, params in item.plan:
-                    if _is_style_impl(impl):
-                        try:
-                            c = params.get("color")  # type: ignore[assignment]
-                            if isinstance(c, (int, float)):
-                                last_color = (float(c), float(c), float(c))
-                            else:
-                                last_color = c if c is not None else last_color
-                            last_thickness = (
-                                float(params.get("thickness", 1.0))  # type: ignore[arg-type]
-                                if params is not None
-                                else last_thickness
-                            )
-                        except Exception:
-                            pass
-                        continue
-                    filtered.append((impl, dict(params)))
-                lg = LazyGeometry(item.base_kind, item.base_payload, filtered)
-                rgba = _norm_color(tuple(last_color)) if last_color is not None else None
-                layers.append(StyledLayer(geometry=lg, color=rgba, thickness=last_thickness))
+                layers.append(_layer_from(item, None, None))
             else:
                 # Geometry
-                layers.append(StyledLayer(geometry=item, color=None, thickness=None))
+                layers.append(_layer_from(item, None, None))
         return None, layers
 
     # 2) 単体: LazyGeometry に style があれば 1 レイヤー化、なければ geometry
+    if isinstance(result, Layer):
+        return None, [
+            _layer_from(
+                result.geometry,
+                result.color,
+                result.thickness,
+                name=getattr(result, "name", None),
+                meta=getattr(result, "meta", None),
+            )
+        ]
+
     if isinstance(result, LazyGeometry):
-        last_color = None
-        last_thickness = None
-        filtered2: list[tuple[Callable[[Geometry], Geometry], dict[str, object]]] = []
-        for impl, params in result.plan:
-            if _is_style_impl(impl):
-                try:
-                    c = params.get("color")  # type: ignore[assignment]
-                    if isinstance(c, (int, float)):
-                        last_color = (float(c), float(c), float(c))
-                    else:
-                        last_color = c if c is not None else last_color
-                    last_thickness = (
-                        float(params.get("thickness", 1.0))  # type: ignore[arg-type]
-                        if params is not None
-                        else last_thickness
-                    )
-                except Exception:
-                    pass
-                continue
-            filtered2.append((impl, dict(params)))
-        if last_color is not None or last_thickness is not None:
-            lg = LazyGeometry(result.base_kind, result.base_payload, filtered2)
-            rgba = _norm_color(tuple(last_color)) if last_color is not None else None
-            return None, [StyledLayer(geometry=lg, color=rgba, thickness=last_thickness)]
         return result, None
 
     # 3) 単体 Geometry
     return cast(Geometry | LazyGeometry, result), None
+
+
+def _apply_layer_overrides(
+    layers: list[Layer] | None, overrides: Mapping[str, object] | None
+) -> list[Layer] | None:
+    """layer.* の override をレイヤーへ適用する。"""
+    if not layers or not overrides:
+        return layers
+    try:
+        from util.color import normalize_color as _norm_color  # local import
+    except Exception:
+        _norm_color = None  # type: ignore[assignment]
+
+    # 名前の重複を避けたキーを生成
+    keys: list[str] = []
+    used: set[str] = set()
+    for idx, layer in enumerate(layers):
+        base = f"layer{idx}"
+        try:
+            nm = getattr(layer, "name", None)
+            if isinstance(nm, str) and nm:
+                base = nm
+        except Exception:
+            pass
+        key = base
+        if key in used:
+            key = f"{base}_{idx}"
+        used.add(key)
+        keys.append(key)
+
+    applied: list[Layer] = []
+    for layer, key in zip(layers, keys):
+        col_pid = f"layer.{key}.color"
+        th_pid = f"layer.{key}.thickness"
+        color_override = overrides.get(col_pid) if isinstance(overrides, Mapping) else None
+        thickness_override = overrides.get(th_pid) if isinstance(overrides, Mapping) else None
+
+        color_final = layer.color
+        if color_override is not None and _norm_color is not None:
+            try:
+                r, g, b, a = _norm_color(color_override)
+                color_final = (float(r), float(g), float(b), float(a))
+            except Exception:
+                pass
+        thickness_final = layer.thickness
+        if thickness_override is not None:
+            try:
+                thickness_final = float(thickness_override)
+            except Exception:
+                pass
+        applied.append(
+            Layer(
+                geometry=layer.geometry,
+                color=color_final,
+                thickness=thickness_final,
+                name=getattr(layer, "name", None),
+                meta=getattr(layer, "meta", None),
+            )
+        )
+    return applied
 
 
 class _WorkerProcess(mp.Process):
@@ -363,6 +412,8 @@ def _execute_draw_to_packet(
         # user draw 実行（t のみ）
         geometry_or_seq = draw_callback(t)
         packet_geom, packet_layers = _normalize_to_layers(geometry_or_seq)
+        if packet_layers is not None:
+            packet_layers = _apply_layer_overrides(packet_layers, param_overrides)
 
         # Runtime のクリア（パラメータ）
         try:

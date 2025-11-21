@@ -1,7 +1,7 @@
 import numpy as np
 
 from engine.render.renderer import LineRenderer
-from engine.render.types import StyledLayer
+from engine.render.types import Layer
 from engine.runtime.buffer import SwapBuffer
 
 
@@ -80,7 +80,7 @@ def test_layer_without_color_uses_base_line_color(monkeypatch):
     renderer.set_base_line_color((0.1, 0.2, 0.3, 1.0))
     # レイヤー1つ、color=None のケースをシミュレート
     renderer._frame_layers = [  # type: ignore[attr-defined]
-        StyledLayer(geometry=None, color=None, thickness=None),
+        Layer(geometry=None, color=None, thickness=None),
     ]
     renderer.draw()
     # draw 後に line_program の色が _base_line_color になっていること

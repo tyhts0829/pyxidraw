@@ -93,7 +93,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         def _on_store_change_wrapper(ids: Iterable[str]) -> None:
             try:
                 self._content.on_store_change(ids)
-                self._content.sync_display_from_store()
+                self._content.sync_style_from_store()
             except Exception:
                 logger.exception("store change handling failed")
 

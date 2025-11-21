@@ -1,6 +1,6 @@
 """
 どこで: `engine.runtime` の描画ペイロード型。
-何を: Renderer へ渡す 1 フレームぶんのデータ（Geometry または StyledLayer 列）を表す。
+何を: Renderer へ渡す 1 フレームぶんのデータ（Geometry または Layer 列）を表す。
 なぜ: SwapBuffer/StreamReceiver/Renderer 間の契約を明示し、duck-typing を排除するため。
 """
 
@@ -11,7 +11,7 @@ from typing import Sequence
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
-from engine.render.types import StyledLayer
+from engine.render.types import Layer
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class RenderFrame:
     """描画対象 1 フレーム分のデータコンテナ。"""
 
     geometry: Geometry | LazyGeometry | None = None
-    layers: tuple[StyledLayer, ...] | None = None
+    layers: tuple[Layer, ...] | None = None
 
     @property
     def has_layers(self) -> bool:
@@ -30,7 +30,7 @@ class RenderFrame:
         return cls(geometry=geometry, layers=None)
 
     @classmethod
-    def from_layers(cls, layers: Sequence[StyledLayer]) -> "RenderFrame":
+    def from_layers(cls, layers: Sequence[Layer]) -> "RenderFrame":
         return cls(geometry=None, layers=tuple(layers))
 
 

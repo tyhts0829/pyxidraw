@@ -79,6 +79,18 @@ def apply_initial_colors(parameter_manager, rendering_window, line_renderer, ove
                 overlay.set_text_color(_norm(tx))
         except Exception:
             pass
+    # 線太さ（store → renderer）
+    try:
+        th_val = parameter_manager.store.current_value("runner.line_thickness")
+        if th_val is None:
+            th_val = parameter_manager.store.original_value("runner.line_thickness")
+        if th_val is not None:
+            try:
+                line_renderer.set_base_line_thickness(float(th_val))
+            except Exception:
+                line_renderer.set_line_thickness(float(th_val))
+    except Exception:
+        pass
         try:
             mt = parameter_manager.store.current_value(
                 "runner.hud_meter_color"
@@ -131,6 +143,15 @@ def subscribe_color_changes(
         except Exception:
             pass
 
+    def _apply_line_thickness(_dt: float, raw_val) -> None:  # noqa: ANN001, D401
+        try:
+            line_renderer.set_base_line_thickness(float(raw_val))
+        except Exception:
+            try:
+                line_renderer.set_line_thickness(float(raw_val))
+            except Exception:
+                pass
+
     def _on_param_store_change(ids: Mapping[str, object] | _Iterable[str]) -> None:
         # 受け取る ID 集合へ正規化（想定型に限定して例外を避ける）
         if isinstance(ids, Mapping):
@@ -167,6 +188,18 @@ def subscribe_color_changes(
                     val = parameter_manager.store.original_value("runner.line_color")
                 if val is not None:
                     pyglet_mod.clock.schedule_once(lambda dt, v=val: _apply_line_color(dt, v), 0.0)
+            except Exception:
+                pass
+        # 線太さ
+        if "runner.line_thickness" in id_list:
+            try:
+                val = parameter_manager.store.current_value("runner.line_thickness")
+                if val is None:
+                    val = parameter_manager.store.original_value("runner.line_thickness")
+                if val is not None:
+                    pyglet_mod.clock.schedule_once(
+                        lambda dt, v=val: _apply_line_thickness(dt, v), 0.0
+                    )
             except Exception:
                 pass
         # HUD テキスト色

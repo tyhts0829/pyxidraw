@@ -55,6 +55,8 @@
   - Shapes: `shapes/` + `@shape` で登録。`G.<name>(...)` は既定で `LazyGeometry`（spec）を返し、終端で `realize()` して `Geometry` を得る。
 - Effects: `effects/` + `@effect` で登録。`E.<name>(...)` でチェーンし、`LazyGeometry` の plan にエフェクト実装（関数参照）を積む（`E.pipeline.<name>(...)` も後方互換として利用可能）。
   - 例: `mirror`（2D 放射状/直交の軽量版）、`mirror3d`（真の 3D 放射状: 球面くさび・大円境界）。
+- Layers: `api.layers` の `L.layer(...)/L.builder()` で Geometry/LazyGeometry をレイヤー化し、色/太さを明示して Sequence で返す（style エフェクトを介さずにレイヤーを構築可能）。
+  - 旧 `E.style` は廃止（レイヤー色/太さ指定はすべて `L` に移行）。
 
 ### Effects 概要
 
@@ -78,9 +80,9 @@
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン →`ParameterWindowController` を起動。
   - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
   - Parameter GUI の DPG 実装は `engine.ui.parameters.dpg_window.ParameterWindow` がエントリとなり、内部で `ParameterWindowThemeManager`（`dpg_window_theme.py`）と `ParameterWindowContentBuilder`（`dpg_window_content.py`）に責務を委譲する。
-    - ThemeManager: フォント解決とウィンドウ全体/カテゴリ別テーマ（Display/HUD/shape/pipeline）の構築を担当する。
-    - ContentBuilder: Display/HUD セクションとパラメータテーブル（カテゴリ種別 `category_kind` × `category` 単位）の構築、Store との値同期（ウィジェット→Store/Store→ウィジェット）を担当する。
-  - カテゴリ別のヘッダ色（Display/HUD/shape/pipeline）は `parameter_gui.theme.categories` で個別指定可能（キーは Descriptor の `category_kind` と対応）。未指定時は `theme.colors.header*` を使用。
+    - ThemeManager: フォント解決とウィンドウ全体/カテゴリ別テーマ（Style/shape/pipeline 等）の構築を担当する。
+    - ContentBuilder: Style セクション（背景/ライン/HUD 色/レイヤースタイル）とパラメータテーブル（カテゴリ種別 `category_kind` × `category` 単位）の構築、Store との値同期（ウィジェット→Store/Store→ウィジェット）を担当する。
+  - カテゴリ別のヘッダ色（Style/shape/pipeline）は `parameter_gui.theme.categories` で個別指定可能（キーは Descriptor の `category_kind` と対応）。未指定時は `theme.colors.header*` を使用。
   - カラー入力は `util.color.normalize_color` で RGBA (0..1) に正規化し、一般パラメータは RGBA タプル、`style.color` は vec3 (RGB 0..1) として `ParameterStore` に保存する（DPG 側は 0–255 表示、値保存は 0..1 実値）。
   - カテゴリ名の決定規則: effect パラメータは `.label(uid)` で指定された `pipeline_label` をベースに、フレーム内インスタンス番号を付与した表示名（例: `poly_effect_1`, `poly_effect_2`）≫ `pipeline_uid`（例: `p0`）≫ `scope` の優先で決定する。`.label(uid)` はチェーンの前後どこで呼んでもパイプライン全体に適用される。
   - 表示ラベルは内部 UID と分離され、Parameter ID は `pipeline_uid` に基づくため衝突しない。
@@ -188,14 +190,13 @@ Tips:
 - Parameter GUI の保存値がある場合は、起動直後に Store→ 描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。
   優先順位は「引数 > 保存値 > config」。
 - HUD の色（`runner.hud_text_color`、`runner.hud_meter_color`、`runner.hud_meter_bg_color`）も起動直後に Store→Overlay へ初期適用する（`OverlayHUD.set_text_color` / `set_meter_color` / `set_meter_bg_color`）。
+- HUD 表示の可否は `run(..., show_hud=...)` で初期化し、実行中はキーボード `H` でトグルする（Parameter GUI にボタンは無い）。
 
 フォント探索/適用:
 
 - 設定（`configs/default.yaml` → `config.yaml` 上書き）で `fonts.search_dirs` を指定すると、Text シェイプ（`src/shapes/text.py:108`）のフォント探索リストに最優先で追加される。拡張子は `.ttf/.otf/.ttc`。
 - HUD（`src/engine/ui/hud/overlay.py`）は起動時に `fonts.search_dirs` 配下から必要なフォントのみを `pyglet.font.add_file()` で登録する（`hud.load_all_fonts=false` 既定、family 名に部分一致）。`hud.font_name` / `hud.font_size` を用いて描画フォントを決定する。HUD のフォント指定は family 名を想定する。
 - Parameter GUI（`src/engine/ui/parameters/dpg_window.py`）は Dear PyGui 起動時に `fonts.search_dirs` からフォントファイルを列挙し、`parameter_gui.layout.font_name` の部分一致候補（優先: `.ttf`）を順次 `dpg.add_font()` でトライし、最初に成功したものを `dpg.bind_font()` で適用する（失敗時は Dear PyGui 既定フォント）。Parameter GUI の指定はファイル名ベース（family 名ではなくファイルパス登録）である。
-  優先順位は「保存値 > config」。HUD 表示の有効/無効は `run(..., show_hud=...)` で初期値を指定できる。
-  `use_parameter_gui=True` の場合は、GUI の「Show HUD（runner.show_hud）」が最終的な可視性を決定し、`show_hud` は起動時の初期値としてのみ使われる（`use_parameter_gui=False` のときは `show_hud`/`hud_config.enabled` で HUD の有効/無効が固定される）。
 - CC は引数で渡さない。`from api import cc` で `cc[i]` を参照（MIDI の 0.0–1.0）。`WorkerPool` が各フレームのスナップショットを供給。
   - Engine/UI 側は `util.cc_provider.get_cc_snapshot()` を経由して CC スナップショットを参照し、`engine/* -> api/*` の依存を避ける（登録は `api.cc` が `set_cc_snapshot_provider` で行う）。
 

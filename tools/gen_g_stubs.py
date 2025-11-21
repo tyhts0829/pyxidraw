@@ -553,11 +553,13 @@ def _render_pyi(shape_names: Iterable[str]) -> str:
     # shape/effect デコレータは API ルートで公開
     lines.append("from shapes.registry import shape as shape\n")
     lines.append("from effects.registry import effect as effect\n")
+    lines.append("from .layers import L\n")
+    lines.append("from engine.render.types import Layer\n")
     lines.append("from .sketch import run_sketch as run_sketch, run_sketch as run\n")
     # 実行時の `__all__` と整合させる（外部保存/復元/検証の API は提供しない）
     lines.append(
         "__all__ = [\n"
-        "    'G', 'E', 'cc', 'lfo', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry',\n"
+        "    'G', 'E', 'cc', 'lfo', 'shape', 'effect', 'run_sketch', 'run', 'ShapesAPI', 'Geometry', 'L', 'Layer',\n"
         "]\n"
     )
 
