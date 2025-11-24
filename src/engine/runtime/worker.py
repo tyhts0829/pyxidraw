@@ -60,7 +60,7 @@ class WorkerTaskError(Exception):
 
 
 def _normalize_to_layers(
-    result: Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry | Layer],
+    result: Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
 ) -> tuple[Geometry | LazyGeometry | None, list[Layer] | None]:
     """draw() の戻り値を RenderPacket 用に正規化（レイヤー化）する。
 
@@ -219,7 +219,8 @@ class _WorkerProcess(mp.Process):
         task_q: mp.Queue,
         result_q: mp.Queue,
         draw_callback: Callable[
-            [float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]
+            [float],
+            Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
         ],
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
         apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None,
@@ -258,7 +259,8 @@ class WorkerPool(Tickable):
         self,
         fps: int,
         draw_callback: Callable[
-            [float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]
+            [float],
+            Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
         ],
         cc_snapshot,
         num_workers: int = 4,
@@ -377,7 +379,10 @@ def _execute_draw_to_packet(
     *,
     t: float,
     frame_id: int,
-    draw_callback: Callable[[float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]],
+    draw_callback: Callable[
+        [float],
+        Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
+    ],
     apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
     apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None,
     cc_state: Mapping[int, float] | None,

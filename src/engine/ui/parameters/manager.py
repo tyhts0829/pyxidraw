@@ -6,9 +6,10 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Sequence
 
 from engine.core.geometry import Geometry
+from engine.core.lazy_geometry import LazyGeometry
 from util.utils import load_config
 
 from engine.render.types import Layer
@@ -30,7 +31,10 @@ class ParameterManager:
 
     def __init__(
         self,
-        user_draw: Callable[[float], Geometry],
+        user_draw: Callable[
+            [float],
+            Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
+        ],
         *,
         layout: ParameterLayoutConfig | None = None,
         lazy_trace: bool = True,
@@ -267,7 +271,9 @@ class ParameterManager:
             self.controller.set_visibility(False)
         self._initialized = True
 
-    def draw(self, t: float) -> Geometry:
+    def draw(
+        self, t: float
+    ) -> Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer]:
         activate_runtime(self.runtime)
         self.runtime.begin_frame()
         try:

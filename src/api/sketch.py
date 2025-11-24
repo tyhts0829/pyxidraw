@@ -1,6 +1,6 @@
 """
 どこで: `api.sketch`（実行ランナー）。
-何を: ユーザの `user_draw(t) -> Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]` を
+何を: ユーザの `user_draw(t) -> Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer]` を
       ワーカで駆動し、GL でレンダ・HUD 表示・MIDI 入力を統合。
 なぜ: 少ない記述で対話的なスケッチ実行と計測を可能にするため（UI/MIDI は任意で自動フォールバック）。
 
@@ -12,7 +12,7 @@ api.sketch — スケッチ実行・描画ランナー（リアルタイム UI +
 
 主エントリポイント:
 - `run_sketch(user_draw, *, canvas_size="A5", render_scale=4, fps=None, ... )`:
-  - `user_draw(t: float) -> Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]`
+  - `user_draw(t: float) -> Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer]`
     を一定レートで呼び出し、返された結果を正規化して GPU でレンダリングする。
   - ウィンドウは `pyglet`、描画は `ModernGL` を用いたラインレンダラにより行う。
   - バックグラウンド側で `WorkerPool` が `user_draw` を実行し、`SwapBuffer` 経由で
@@ -83,7 +83,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from queue import Empty  # 終了時のキュードレイン用
-from typing import TYPE_CHECKING, Callable, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Callable, Mapping, Sequence
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
@@ -106,6 +106,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # 型チェック専用（実行時の循環/依存コストを避ける）
     from engine.core.lazy_geometry import LazyGeometry
+    from engine.render.types import Layer
 
 
 def _resolve_canvas_and_window(
@@ -128,18 +129,23 @@ def _build_hud_config(show_hud: bool | None, hud_config: HUDConfig | None) -> HU
 
 
 def _prepare_parameter_gui(
-    user_draw: Callable[[float], Geometry | "LazyGeometry" | Sequence[Geometry | "LazyGeometry"]],
+    user_draw: Callable[
+        [float],
+        Geometry | "LazyGeometry" | "Layer" | Sequence[Geometry | "LazyGeometry" | "Layer"],
+    ],
     use_parameter_gui: bool,
     init_only: bool,
 ) -> tuple[
     "ParameterManager | None",
-    Callable[[float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]],
+    Callable[
+        [float],
+        Geometry | LazyGeometry | "Layer" | Sequence[Geometry | LazyGeometry | "Layer"],
+    ],
 ]:
     parameter_manager: ParameterManager | None = None
     draw_callable = user_draw
     if use_parameter_gui and not init_only:
-        # ParameterManager は型注釈上 Geometry 戻り値を要求するため、最小キャストで適合させる
-        parameter_manager = ParameterManager(cast(Callable[[float], Geometry], user_draw))
+        parameter_manager = ParameterManager(user_draw)
         parameter_manager.initialize()
         try:
             parameter_manager.store.set_override("runner.line_thickness", float(line_thickness))
@@ -149,7 +155,10 @@ def _prepare_parameter_gui(
 
 
 def run_sketch(
-    user_draw: Callable[[float], "Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]"],
+    user_draw: Callable[
+        [float],
+        "Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer]",
+    ],
     *,
     canvas_size: str | tuple[int, int] = "A5",
     render_scale: float = 4.0,
@@ -168,9 +177,10 @@ def run_sketch(
 
     Parameters
     ----------
-    user_draw : Callable[[float], Geometry | LazyGeometry | Sequence[Geometry | LazyGeometry]]
+    user_draw : Callable[[float], Geometry | LazyGeometry | Layer
+        | Sequence[Geometry | LazyGeometry | Layer]]
         時刻 `t` [sec] を受け取り `Geometry` または `LazyGeometry`、
-        もしくはそれらの列（レイヤー描画）を返す純関数。
+        もしくは Layer を含むそれらの列（レイヤー描画）を返す純関数。
         CC は `from api import cc; cc[i]` で参照する。
     canvas_size : str | tuple[int, int], default "A5"
         プリセット（例: "A4", "A5"）または `(width_mm, height_mm)`。
