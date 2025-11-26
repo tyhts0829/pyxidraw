@@ -19,7 +19,6 @@ def draw(t: float) -> Geometry:
     # pipe = E.pipeline.affine().partition().fill().subdivide().displace()
     pipe = (
         E.pipeline.affine()
-        .partition()
         .fill()
         .subdivide()
         .displace(t_sec=osc(t * 0.01), spatial_freq=(osc(t * 0.05) + 1) * 0.02)
@@ -33,7 +32,7 @@ if __name__ == "__main__":
     run(
         draw,
         canvas_size=(CANVAS_SIZE, CANVAS_SIZE),
-        render_scale=4.5,
+        render_scale=3,
         use_midi=True,
         use_parameter_gui=True,
         workers=6,

@@ -146,6 +146,9 @@ class LineRenderer(Tickable):
             total_indices = 0
             snapshot: list[Layer] = []
             for layer in frame.layers:
+                geometry = layer.geometry
+                if isinstance(geometry, LazyGeometry):
+                    geometry = geometry.realize()
                 # 色
                 if layer.color is not None:
                     try:
@@ -177,7 +180,7 @@ class LineRenderer(Tickable):
                     except Exception:
                         pass
                 # アップロード→描画
-                self._upload_geometry(layer.geometry)
+                self._upload_geometry(geometry)
                 if self.gpu.index_count > 0:
                     self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
                     try:
@@ -187,12 +190,9 @@ class LineRenderer(Tickable):
                         pass
                 # スナップショット: Lazy を実体化して保存
                 try:
-                    from engine.core.lazy_geometry import LazyGeometry as _LG
-
-                    g = layer.geometry
-                    if isinstance(g, _LG):
-                        g = g.realize()
-                    snapshot.append(Layer(geometry=g, color=layer.color, thickness=layer.thickness))
+                    snapshot.append(
+                        Layer(geometry=geometry, color=layer.color, thickness=layer.thickness)
+                    )
                 except Exception:
                     pass
             # HUD 合算（近似。最後の状態を上書き）

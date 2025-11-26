@@ -318,11 +318,14 @@ class ParameterManager:
                             meta=getattr(it, "meta", None),
                         )
                     )
-        # key/label
+        # key/label（worker._apply_layer_overrides と揃え、重複名に suffix を付与）
         out: list[tuple[str, str, Layer]] = []
+        used: set[str] = set()
         for idx, layer in enumerate(layers):
             name = getattr(layer, "name", None)
-            key = name if isinstance(name, str) and name else f"layer{idx}"
+            base = name if isinstance(name, str) and name else f"layer{idx}"
+            key = base if base not in used else f"{base}_{idx}"
+            used.add(key)
             label = name if isinstance(name, str) and name else f"Layer {idx + 1}"
             out.append((key, label, layer))
         return out
