@@ -131,15 +131,16 @@ def _build_hud_config(show_hud: bool | None, hud_config: HUDConfig | None) -> HU
 def _prepare_parameter_gui(
     user_draw: Callable[
         [float],
-        Geometry | "LazyGeometry" | "Layer" | Sequence[Geometry | "LazyGeometry" | "Layer"],
+        Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
     ],
     use_parameter_gui: bool,
     init_only: bool,
+    line_thickness: float,
 ) -> tuple[
-    "ParameterManager | None",
+    ParameterManager | None,
     Callable[
         [float],
-        Geometry | LazyGeometry | "Layer" | Sequence[Geometry | LazyGeometry | "Layer"],
+        Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
     ],
 ]:
     parameter_manager: ParameterManager | None = None
@@ -157,7 +158,7 @@ def _prepare_parameter_gui(
 def run_sketch(
     user_draw: Callable[
         [float],
-        "Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer]",
+        Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
     ],
     *,
     canvas_size: str | tuple[int, int] = "A5",
@@ -166,10 +167,10 @@ def run_sketch(
     line_color: str | tuple[float, float, float] | tuple[float, float, float, float] | None = None,
     fps: int | None = None,
     background: str | tuple[float, float, float, float] | None = None,
-    workers: int = 4,
+    workers: int = 6,
     use_midi: bool = True,
     init_only: bool = False,
-    use_parameter_gui: bool = False,
+    use_parameter_gui: bool = True,
     show_hud: bool | None = None,
     hud_config: HUDConfig | None = None,
 ) -> None:
@@ -234,7 +235,7 @@ def run_sketch(
 
     # init_only の場合は重い依存を読み込まずに早期リターン
     parameter_manager, draw_callable = _prepare_parameter_gui(
-        user_draw, use_parameter_gui, init_only
+        user_draw, use_parameter_gui, init_only, line_thickness=line_thickness
     )
     worker_count = max(0, int(workers))
     # ワーカへは生の user_draw を渡し、GUI 値はスナップショットで適用する

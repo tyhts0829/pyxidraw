@@ -87,7 +87,7 @@ def user_draw(t):
 - GUI は「draw 内で未指定（＝既定値採用）の引数のみ」を対象に表示・調整。
 - 優先順位は「明示引数 > GUI > 既定値」。MIDI→GUI の自動上書きは行わない。
 - RangeHint は `__param_meta__` がある場合のみ使用し、無い場合は 0–1 既定レンジ（クランプは表示上のみ）。
-- レイヤー編集は `api.layers.L` を使用する（例: `L.layer(g, color=(1,0,0))` や `L.builder().add(...).add(...).build()`). 旧 `E.style` は廃止。
+- レイヤー編集は `api.layers.L` を使用する（例: `L(g, color=(1,0,0))` / `L.layer(g, ...)` や `L.builder().add(...).add(...).build()`). 旧 `E.style` は廃止。
 
 - 追加インストール: `pip install -e .[optional]`
 - 使用例: shapely, numba, mido, fonttools などを使う optional テストが有効になります。

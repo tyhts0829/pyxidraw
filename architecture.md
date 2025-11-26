@@ -55,7 +55,7 @@
   - Shapes: `shapes/` + `@shape` で登録。`G.<name>(...)` は既定で `LazyGeometry`（spec）を返し、終端で `realize()` して `Geometry` を得る。
 - Effects: `effects/` + `@effect` で登録。`E.<name>(...)` でチェーンし、`LazyGeometry` の plan にエフェクト実装（関数参照）を積む（`E.pipeline.<name>(...)` も後方互換として利用可能）。
   - 例: `mirror`（2D 放射状/直交の軽量版）、`mirror3d`（真の 3D 放射状: 球面くさび・大円境界）。
-- Layers: `api.layers` の `L.layer(...)/L.builder()` で Geometry/LazyGeometry をレイヤー化し、色/太さを明示して Sequence で返す（style エフェクトを介さずにレイヤーを構築可能）。
+- Layers: `api.layers` の `L(...)/L.layer(...)/L.builder()` で Geometry/LazyGeometry をレイヤー化し、色/太さを明示して Sequence で返す（style エフェクトを介さずにレイヤーを構築可能）。
   - 旧 `E.style` は廃止（レイヤー色/太さ指定はすべて `L` に移行）。
 
 ### Effects 概要

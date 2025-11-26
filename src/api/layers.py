@@ -74,6 +74,24 @@ class LayerBuilder:
 class _LayersAPI:
     """レイヤー構築用の公開 API。"""
 
+    def __call__(
+        self,
+        geometry: Geometry | LazyGeometry,
+        *,
+        color: object | None = None,
+        thickness: float | None = None,
+        name: str | None = None,
+        meta: dict[str, object] | None = None,
+    ) -> Layer:
+        """`layer()` のショートハンド。"""
+        return self.layer(
+            geometry,
+            color=color,
+            thickness=thickness,
+            name=name,
+            meta=meta,
+        )
+
     def layer(
         self,
         geometry: Geometry | LazyGeometry,
