@@ -80,22 +80,19 @@ from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from queue import Empty  # 終了時のキュードレイン用
-from typing import TYPE_CHECKING, Callable, Mapping, Sequence
+from types import TracebackType
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from engine.core.geometry import Geometry
 from engine.core.tickable import Tickable
-from engine.ui.hud.config import HUDConfig
-from engine.ui.parameters.manager import ParameterManager
 
 from .sketch_runner.utils import build_projection
 from .sketch_runner.utils import hud_metrics_snapshot as _hud_metrics_snapshot
 from .sketch_runner.utils import resolve_canvas_size, resolve_fps
 
-# 型エイリアス（RGBA 0..1）
-RGBA = tuple[float, float, float, float]
 logger = logging.getLogger(__name__)
 
 
@@ -105,8 +102,45 @@ logger = logging.getLogger(__name__)
 """
 
 if TYPE_CHECKING:  # 型チェック専用（実行時の循環/依存コストを避ける）
+    from engine.core.frame_clock import FrameClock
     from engine.core.lazy_geometry import LazyGeometry
+    from engine.core.render_window import RenderWindow
+    from engine.export.service import ExportService
+    from engine.export.video import VideoRecorder
+    from engine.render.renderer import LineRenderer
     from engine.render.types import Layer
+    from engine.runtime.buffer import SwapBuffer
+    from engine.runtime.receiver import StreamReceiver
+    from engine.runtime.worker import WorkerPool
+    from engine.ui.hud.config import HUDConfig
+    from engine.ui.hud.overlay import OverlayHUD
+    from engine.ui.hud.sampler import MetricSampler
+    from engine.ui.parameters.manager import ParameterManager
+
+
+@dataclass
+class _RuntimeContext:
+    midi_manager: Any | None
+    midi_service: Tickable
+    parameter_manager: ParameterManager | None
+    draw_callable: Callable[
+        [float],
+        Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
+    ]
+    swap_buffer: SwapBuffer
+    worker_pool: WorkerPool
+    stream_receiver: StreamReceiver
+    frame_clock: FrameClock
+    sampler: MetricSampler | None
+    overlay: OverlayHUD | None
+    rendering_window: RenderWindow
+    mgl_ctx: Any
+    line_renderer: LineRenderer
+    export_service: ExportService
+    video_recorder: VideoRecorder
+    hud_conf: HUDConfig
+    quality_tick_cb: Callable[[float], None] | None = None
+    quality_recording: bool = False
 
 
 def _resolve_canvas_and_window(
@@ -121,10 +155,12 @@ def _resolve_canvas_and_window(
 
 
 def _build_hud_config(show_hud: bool | None, hud_config: HUDConfig | None) -> HUDConfig:
+    from engine.ui.hud.config import HUDConfig as _HUDConfig
+
     if hud_config is None:
         if show_hud is None:
-            return HUDConfig()
-        return HUDConfig(enabled=bool(show_hud))
+            return _HUDConfig()
+        return _HUDConfig(enabled=bool(show_hud))
     return hud_config if show_hud is None else replace(hud_config, enabled=bool(show_hud))
 
 
@@ -143,15 +179,17 @@ def _prepare_parameter_gui(
         Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
     ],
 ]:
+    from engine.ui.parameters.manager import ParameterManager as _ParameterManager
+
     parameter_manager: ParameterManager | None = None
     draw_callable = user_draw
     if use_parameter_gui and not init_only:
-        parameter_manager = ParameterManager(user_draw)
+        parameter_manager = _ParameterManager(user_draw)
         parameter_manager.initialize()
         try:
             parameter_manager.store.set_override("runner.line_thickness", float(line_thickness))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to override runner.line_thickness: %s", exc, exc_info=True)
     return parameter_manager, draw_callable
 
 
@@ -195,7 +233,7 @@ def run_sketch(
         描画更新レート。None で設定ファイルから解決。最終的に 1 以上にクランプ。
     background : tuple[float,float,float,(float)] | str | None
         背景色（RGBA 0–1 または #RRGGBB/#RRGGBBAA）。None で設定/白を適用。
-    workers : int, default 4
+    workers : int, default 6
         バックグラウンド計算プロセス数（0 でインライン）。負値は 0 にクランプ。
     use_midi : bool, default True
         True で実機 MIDI を試行。未接続/未導入時は自動フォールバック。
@@ -220,8 +258,8 @@ def run_sketch(
         from api.effects import clear_pipeline_cache  # 循環を避けるため局所 import
 
         clear_pipeline_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("failed to clear pipeline cache: %s", exc, exc_info=True)
 
     # ---- ② キャンバスサイズ決定 ------------------------------------
     canvas_width, canvas_height, window_width, window_height = _resolve_canvas_and_window(
@@ -272,8 +310,8 @@ def run_sketch(
     # pyglet ログのノイズを抑制（必要ならユーザーが上書き可能）
     try:
         logging.getLogger("pyglet").setLevel(logging.WARNING)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("failed to set pyglet log level: %s", exc, exc_info=True)
 
     # ---- ④ SwapBuffer + Worker/Receiver ---------------------------
     # ---- HUD 設定の解決（優先: show_hud 明示 > hud_config.enabled > 既定 True）----
@@ -288,7 +326,7 @@ def run_sketch(
     # メトリクス収集（HUD 用）。CACHE 無効時は None を渡す（HUD 可視性とは独立）。
     # 注意: macOS 等の spawn 環境では、ワーカープロセスへ渡す関数は
     # ピクル可能（トップレベル定義）である必要がある。
-    metrics_snapshot_fn = _hud_metrics_snapshot if (hud_conf.show_cache_status) else None
+    metrics_snapshot_fn = _hud_metrics_snapshot if hud_conf.show_cache_status else None
 
     # GUI の override のみを抽出するスナップショット関数
     _param_snapshot_fn = _make_param_snapshot_fn(parameter_manager, cc_snapshot_fn)
@@ -308,31 +346,28 @@ def run_sketch(
     on_metrics_cb: Callable[[Mapping[str, str]], None] | None = None
     if hud_conf.show_cache_status:
 
-        def _on_metrics(flags):  # type: ignore[no-untyped-def]
-            try:
-                if sampler is None:
-                    return
-                prev_e = str(sampler.data.get("E_CACHE", "")).upper()
-                prev_s = str(sampler.data.get("S_CACHE", "")).upper()
-                effect_status = str(flags.get("effect", prev_e or "MISS")).upper()
-                shape_status = str(flags.get("shape", prev_s or "MISS")).upper()
-                # 効果 → シェイプの順で更新
-                sampler.data["E_CACHE"] = effect_status
-                sampler.data["S_CACHE"] = shape_status
-            except Exception as e:
-                logger.debug("hud cache status update failed: %s", e, exc_info=True)
+        def _on_metrics(flags: Mapping[str, str]) -> None:
+            if sampler is None:
+                return
+            prev_e = str(sampler.data.get("E_CACHE", "")).upper()
+            prev_s = str(sampler.data.get("S_CACHE", "")).upper()
+            effect_status = str(flags.get("effect", prev_e or "MISS")).upper()
+            shape_status = str(flags.get("shape", prev_s or "MISS")).upper()
+            # 効果 → シェイプの順で更新
+            sampler.data["E_CACHE"] = effect_status
+            sampler.data["S_CACHE"] = shape_status
 
         on_metrics_cb = _on_metrics
 
     stream_receiver = StreamReceiver(swap_buffer, worker_pool.result_q, on_metrics=on_metrics_cb)
 
-    # ---- ⑤ Window & ModernGL --------------------------------------
-    # ⑥ 投影行列（正射影）を先に構築
+    # ---- Window & ModernGL --------------------------------------
+    # 投影行列（正射影）を先に構築
     proj = build_projection(float(canvas_width), float(canvas_height))
 
     from .sketch_runner.render import create_window_and_renderer
 
-    rendering_window, mgl_ctx, line_renderer, _bg_rgba, _line_rgba = create_window_and_renderer(
+    rendering_window, mgl_ctx, line_renderer, _, _ = create_window_and_renderer(
         window_width,
         window_height,
         background=background,
@@ -351,34 +386,36 @@ def run_sketch(
         # HUD が LazyGeometry を実体化しないよう、Renderer の実測値を参照させる
         try:
             sampler.set_counts_provider(line_renderer.get_last_counts)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to set counts provider: %s", exc, exc_info=True)
         try:
             # 初期可視性（明示引数/設定に基づく）。GUI 有効時はトグル可。
             overlay.set_enabled(bool(hud_conf.enabled))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to set initial HUD visibility: %s", exc, exc_info=True)
         # 追加メトリクス（IBO/Indices LRU）の提供
         try:
             from engine.render.renderer import get_indices_cache_counters as _idx_counters
 
-            def _extra_metrics():  # type: ignore[no-redef]
+            def _extra_metrics() -> Mapping[str, int]:
                 d: dict[str, int] = {}
                 try:
                     s = line_renderer.get_ibo_stats()
                     d["ibo_uploaded"] = int(s.get("uploaded", 0))
-                except Exception:
-                    pass
+                except Exception as exc_inner:
+                    logger.debug("failed to get IBO stats: %s", exc_inner, exc_info=True)
                 try:
-                    c = _idx_counters()
-                    d["idx_misses"] = int(c.get("misses", 0))
-                except Exception:
-                    pass
+                    counters = _idx_counters()
+                    d["idx_misses"] = int(counters.get("misses", 0))
+                except Exception as exc_inner:
+                    logger.debug(
+                        "failed to get indices cache counters: %s", exc_inner, exc_info=True
+                    )
                 return d
 
             sampler.set_extra_metrics_provider(_extra_metrics)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to configure extra HUD metrics: %s", exc, exc_info=True)
     # G-code エクスポート: 実 writer を接続（遅延 import）
     from engine.export.gcode import GCodeWriter  # 遅延 import（重依存の統一方針）
 
@@ -393,22 +430,10 @@ def run_sketch(
     if parameter_manager is not None:
         try:
             parameter_manager.store.set_override("runner.show_hud", bool(hud_conf.enabled))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to override runner.show_hud: %s", exc, exc_info=True)
 
-    # ---- Draw callbacks ----------------------------------
-    # 品質最優先モード（Shift+V録画中）はウィンドウへは描画しない（FBO のみ）。
-    quality_recording: bool = False
-
-    def _draw_main() -> None:
-        if not quality_recording:
-            line_renderer.draw()
-            if overlay is not None:
-                overlay.draw()
-
-    rendering_window.add_draw_callback(_draw_main)
-
-    # ---- ⑦ FrameCoordinator ---------------------------------------
+    # ---- FrameCoordinator ---------------------------------------
     tickables: list[Tickable] = [midi_service, worker_pool, stream_receiver, line_renderer]
     if sampler is not None:
         tickables.append(sampler)
@@ -416,9 +441,8 @@ def run_sketch(
         tickables.append(overlay)
     frame_clock = FrameClock(tickables)
     pyglet.clock.schedule_interval(frame_clock.tick, 1 / fps)
-    quality_tick_cb: Callable[[float], None] | None = None
 
-    # ---- ⑨ Parameter GUI からの色変更を監視 --------------------------
+    # ---- Parameter GUI からの色変更を監視 --------------------------
     _subscribe_color_changes(parameter_manager, overlay, line_renderer, rendering_window, pyglet)
     # HUD 表示トグル（明示引数が None のときのみ GUI で制御）
     _subscribe_hud_visibility_changes(
@@ -428,37 +452,38 @@ def run_sketch(
         lock=not use_parameter_gui,
     )
 
-    # ---- ⑧ pyglet イベント -----------------------------------------
+    # ---- pyglet イベント -----------------------------------------
 
     def _handle_save_png(mods: int) -> None:
         try:
             # ファイル名のプレフィックス（エントリスクリプト名）とキャンバス寸法 [mm]
-            _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
+            name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
             if mods & key.MOD_SHIFT:
                 # 高解像度（overlayなし）: オフスクリーン描画でラインのみ保存
-                p = save_png_screen_or_offscreen(
+                path = save_png_screen_or_offscreen(
                     rendering_window,
                     mode="quality",
                     mgl_context=mgl_ctx,
                     draw=line_renderer.draw,
-                    name_prefix=_name_prefix,
+                    name_prefix=name_prefix,
                     width_mm=float(canvas_width),
                     height_mm=float(canvas_height),
                 )
             else:
                 # 低コスト（overlayあり）: 画面バッファをそのまま保存
-                p = save_png_screen_or_offscreen(
+                path = save_png_screen_or_offscreen(
                     rendering_window,
                     mode="screen",
-                    name_prefix=_name_prefix,
+                    name_prefix=name_prefix,
                     width_mm=float(canvas_width),
                     height_mm=float(canvas_height),
                 )
             if overlay is not None:
-                overlay.show_message(f"Saved PNG: {p}")
-        except Exception as e:  # 失敗時のHUD表示
+                overlay.show_message(f"Saved PNG: {path}")
+        except Exception as exc:  # 失敗時のHUD表示
+            logger.warning("PNG export failed: %s", exc, exc_info=True)
             if overlay is not None:
-                overlay.show_message(f"PNG 保存失敗: {e}", level="error")
+                overlay.show_message(f"PNG 保存失敗: {exc}", level="error")
 
     # G-code エクスポートの開始/キャンセルハンドラ（ヘルパへ委譲）
     _start_gcode_export, _cancel_gcode_export = make_gcode_export_handlers(
@@ -470,58 +495,94 @@ def run_sketch(
         pyglet_mod=pyglet,
     )
 
-    # ---- ⑤.5 Video Recorder -------------------------------------
+    # ---- Video Recorder ------------------------------------------
     video_recorder = VideoRecorder()
 
+    runtime = _RuntimeContext(
+        midi_manager=midi_manager,
+        midi_service=midi_service,
+        parameter_manager=parameter_manager,
+        draw_callable=draw_callable,
+        swap_buffer=swap_buffer,
+        worker_pool=worker_pool,
+        stream_receiver=stream_receiver,
+        frame_clock=frame_clock,
+        sampler=sampler,
+        overlay=overlay,
+        rendering_window=rendering_window,
+        mgl_ctx=mgl_ctx,
+        line_renderer=line_renderer,
+        export_service=export_service,
+        video_recorder=video_recorder,
+        hud_conf=hud_conf,
+    )
+
+    # ---- Draw callbacks ----------------------------------
+    # 品質最優先モード（Shift+V録画中）はウィンドウへは描画しない（FBO のみ）。
+    def _draw_main() -> None:
+        if not runtime.quality_recording:
+            runtime.line_renderer.draw()
+            if runtime.overlay is not None:
+                runtime.overlay.draw()
+
+    rendering_window.add_draw_callback(_draw_main)
+
     def _enter_quality_mode() -> None:
-        nonlocal worker_pool, stream_receiver, frame_clock, quality_recording, quality_tick_cb
         from .sketch_runner.recording import enter_quality_mode as _enter_q
 
-        worker_pool, stream_receiver, frame_clock, quality_tick_cb = _enter_q(
+        (
+            runtime.worker_pool,
+            runtime.stream_receiver,
+            runtime.frame_clock,
+            runtime.quality_tick_cb,
+        ) = _enter_q(
             fps=fps,
-            draw_callable=draw_callable,
+            draw_callable=runtime.draw_callable,
             cc_snapshot_fn=cc_snapshot_fn,
             apply_cc_snapshot=_apply_cc_snapshot,
             apply_param_snapshot=apply_param_snapshot,
             param_snapshot_fn=_param_snapshot_fn,
             metrics_snapshot_fn=metrics_snapshot_fn,
-            swap_buffer=swap_buffer,
+            swap_buffer=runtime.swap_buffer,
             on_metrics_cb=on_metrics_cb,
-            midi_service=midi_service,
-            sampler=sampler,
-            overlay=overlay,
-            line_renderer=line_renderer,
-            worker_pool=worker_pool,
-            stream_receiver=stream_receiver,
-            frame_clock=frame_clock,
+            midi_service=runtime.midi_service,
+            sampler=runtime.sampler,
+            overlay=runtime.overlay,
+            line_renderer=runtime.line_renderer,
+            worker_pool=runtime.worker_pool,
+            stream_receiver=runtime.stream_receiver,
+            frame_clock=runtime.frame_clock,
             pyglet_mod=pyglet,
         )
-        quality_recording = True
+        runtime.quality_recording = True
 
     def _leave_quality_mode() -> None:
-        nonlocal worker_pool, stream_receiver, frame_clock, quality_recording, quality_tick_cb
         from .sketch_runner.recording import leave_quality_mode as _leave_q
 
-        worker_pool, stream_receiver, frame_clock = _leave_q(
+        (
+            runtime.worker_pool,
+            runtime.stream_receiver,
+            runtime.frame_clock,
+        ) = _leave_q(
             fps=fps,
-            draw_callable=draw_callable,
+            draw_callable=runtime.draw_callable,
             cc_snapshot_fn=cc_snapshot_fn,
             apply_cc_snapshot=_apply_cc_snapshot,
             apply_param_snapshot=apply_param_snapshot,
             param_snapshot_fn=_param_snapshot_fn,
             metrics_snapshot_fn=metrics_snapshot_fn,
-            swap_buffer=swap_buffer,
+            swap_buffer=runtime.swap_buffer,
             on_metrics_cb=on_metrics_cb,
-            midi_service=midi_service,
-            sampler=sampler,
-            overlay=overlay,
-            line_renderer=line_renderer,
+            midi_service=runtime.midi_service,
+            sampler=runtime.sampler,
+            overlay=runtime.overlay,
+            line_renderer=runtime.line_renderer,
             worker_count=worker_count,
-            quality_tick_cb=quality_tick_cb,
+            quality_tick_cb=runtime.quality_tick_cb,
             pyglet_mod=pyglet,
         )
-        quality_tick_cb = None
-        quality_recording = False
+        runtime.quality_tick_cb = None
+        runtime.quality_recording = False
 
     def _shutdown_parameter_gui() -> None:
         if parameter_manager is None:
@@ -530,20 +591,22 @@ def run_sketch(
             return
         try:
             parameter_manager.shutdown()
-        except Exception:
+        except Exception as exc:
+            logger.debug("parameter_manager.shutdown failed: %s", exc, exc_info=True)
             try:
-                parameter_manager.controller.shutdown()
-            except Exception:
-                pass
+                controller = getattr(parameter_manager, "controller", None)
+                if controller is not None:
+                    controller.shutdown()
+            except Exception as exc_inner:
+                logger.debug(
+                    "parameter_manager.controller.shutdown failed: %s", exc_inner, exc_info=True
+                )
         setattr(_shutdown_parameter_gui, "_done", True)
 
     @rendering_window.event
-    def on_key_press(sym, mods):  # noqa: ANN001
+    def on_key_press(sym: int, mods: int) -> None:
         if sym == key.ESCAPE:
-            try:
-                _shutdown_parameter_gui()
-            except Exception:
-                pass
+            _shutdown_parameter_gui()
             rendering_window.close()
         # PNG 保存（P / Shift+P）
         if sym == key.P:
@@ -556,101 +619,103 @@ def run_sketch(
             _cancel_gcode_export()
         # HUD 表示トグル（H）
         if sym == key.H:
-            try:
-                current = True
-                if parameter_manager is not None:
+            current = True
+            if parameter_manager is not None:
+                try:
                     val = parameter_manager.store.current_value("runner.show_hud")
                     if val is None:
                         val = parameter_manager.store.original_value("runner.show_hud")
                     current = bool(val) if val is not None else True
-                elif overlay is not None:
-                    current = bool(getattr(overlay, "_enabled", True))
-            except Exception:
-                current = True
+                except Exception as exc:
+                    logger.debug("failed to resolve HUD visibility: %s", exc, exc_info=True)
+            elif overlay is not None:
+                current = bool(getattr(overlay, "_enabled", True))
             new_state = not current
             if parameter_manager is not None:
                 try:
                     parameter_manager.store.set_override("runner.show_hud", new_state)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("failed to override HUD visibility: %s", exc, exc_info=True)
             if overlay is not None:
                 try:
                     overlay.set_enabled(new_state)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("failed to set HUD visibility: %s", exc, exc_info=True)
         # Video 録画トグル（V）
         if sym == key.V:
             try:
-                if not video_recorder.is_recording:
-                    _name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
+                if not runtime.video_recorder.is_recording:
+                    name_prefix = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else None
                     if mods & key.MOD_SHIFT:
                         # HUD を含まない録画（FBO 経由、ラインのみ）
-                        video_recorder.start(
-                            rendering_window,
+                        runtime.video_recorder.start(
+                            runtime.rendering_window,
                             fps=fps,
-                            name_prefix=_name_prefix,
+                            name_prefix=name_prefix,
                             include_overlay=False,
-                            mgl_context=mgl_ctx,
-                            draw=line_renderer.draw,
+                            mgl_context=runtime.mgl_ctx,
+                            draw=runtime.line_renderer.draw,
                         )
                         # 品質最優先モードへ移行
                         _enter_quality_mode()
-                        if overlay is not None:
-                            overlay.show_message("品質最優先モード")
+                        if runtime.overlay is not None:
+                            runtime.overlay.show_message("品質最優先モード")
                     else:
                         # 画面そのまま（HUD 含む）
-                        video_recorder.start(
-                            rendering_window,
+                        runtime.video_recorder.start(
+                            runtime.rendering_window,
                             fps=fps,
-                            name_prefix=_name_prefix,
+                            name_prefix=name_prefix,
                             include_overlay=True,
                         )
-                    if overlay is not None:
-                        overlay.show_message("REC 開始")
+                    if runtime.overlay is not None:
+                        runtime.overlay.show_message("REC 開始")
                         try:
-                            overlay.set_recording(True)
-                        except Exception:
-                            pass
+                            runtime.overlay.set_recording(True)
+                        except Exception as exc:
+                            logger.debug(
+                                "failed to set recording flag on HUD: %s", exc, exc_info=True
+                            )
                 else:
-                    p = video_recorder.stop()
+                    path = runtime.video_recorder.stop()
                     # 品質最優先モードを解除
                     _leave_quality_mode()
-                    if overlay is not None:
-                        overlay.show_message(f"Saved MP4: {p}")
+                    if runtime.overlay is not None:
+                        runtime.overlay.show_message(f"Saved MP4: {path}")
                         try:
-                            overlay.set_recording(False)
-                        except Exception:
-                            pass
-            except Exception as e:
-                if overlay is not None:
-                    overlay.show_message(f"録画エラー: {e}", level="error")
+                            runtime.overlay.set_recording(False)
+                        except Exception as exc:
+                            logger.debug(
+                                "failed to clear recording flag on HUD: %s", exc, exc_info=True
+                            )
+            except Exception as exc:
+                logger.warning("video recording error: %s", exc, exc_info=True)
+                if runtime.overlay is not None:
+                    runtime.overlay.show_message(f"録画エラー: {exc}", level="error")
 
     @rendering_window.event
-    def on_close():  # noqa: ANN001
+    def on_close() -> None:
         # 冪等なクリーンアップ
-        _closed = getattr(on_close, "_closed", False)
-        if _closed:  # type: ignore[truthy-bool]
+        closed = getattr(on_close, "_closed", False)
+        if closed:  # type: ignore[truthy-bool]
             return
         # --- Quiesce: まず Dear PyGui（GLFW）を停止して以降のフレームから外す ---
-        try:
-            _shutdown_parameter_gui()
-        except Exception:
-            pass
+        _shutdown_parameter_gui()
         # --- ループ停止・イベント解除・例外抑止に向けた準備 ---
         try:
             # 通常モードのドライバを停止
-            pyglet.clock.unschedule(frame_clock.tick)
-        except Exception:
-            pass
+            pyglet.clock.unschedule(runtime.frame_clock.tick)
+        except Exception as exc:
+            logger.debug("unschedule frame_clock failed: %s", exc, exc_info=True)
         try:
             # 品質モードのドライバがあれば停止
-            if "quality_tick_cb" in locals() and quality_tick_cb is not None:
-                pyglet.clock.unschedule(quality_tick_cb)
-        except Exception:
-            pass
+            if runtime.quality_tick_cb is not None:
+                pyglet.clock.unschedule(runtime.quality_tick_cb)
+        except Exception as exc:
+            logger.debug("unschedule quality_tick_cb failed: %s", exc, exc_info=True)
         # 受信キューに残るパケットは破棄（終了時の例外を抑止）
         try:
-            q = getattr(stream_receiver, "_q", None)
+            q = getattr(runtime.stream_receiver, "_q", None)
             if q is not None:
                 while True:
                     try:
@@ -660,61 +725,63 @@ def run_sketch(
                         break
                     except Exception:
                         break
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to drain receiver queue: %s", exc, exc_info=True)
         try:
-            worker_pool.close()
-        except Exception:
-            pass
+            runtime.worker_pool.close()
+        except Exception as exc:
+            logger.debug("worker_pool.close failed: %s", exc, exc_info=True)
         try:
             _leave_quality_mode()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("leave_quality_mode failed: %s", exc, exc_info=True)
         try:
-            if video_recorder.is_recording:
-                p = video_recorder.stop()
-                if overlay is not None:
-                    overlay.show_message(f"Saved MP4: {p}")
-        except Exception:
-            pass
+            if runtime.video_recorder.is_recording:
+                path = runtime.video_recorder.stop()
+                if runtime.overlay is not None:
+                    runtime.overlay.show_message(f"Saved MP4: {path}")
+        except Exception as exc:
+            logger.warning("failed to stop video recorder on close: %s", exc, exc_info=True)
         try:
-            if use_midi and midi_manager is not None:
-                midi_manager.save_cc()
-        except Exception:
-            pass
+            if use_midi and runtime.midi_manager is not None:
+                runtime.midi_manager.save_cc()
+        except Exception as exc:
+            logger.warning("failed to save MIDI CC: %s", exc, exc_info=True)
         try:
-            line_renderer.release()
-        except Exception:
-            pass
+            runtime.line_renderer.release()
+        except Exception as exc:
+            logger.debug("line_renderer.release failed: %s", exc, exc_info=True)
         # ModernGL コンテキストの明示解放（フェイルソフト）
         try:
-            mgl_ctx.release()
-        except Exception:
-            pass
+            runtime.mgl_ctx.release()
+        except Exception as exc:
+            logger.debug("mgl_ctx.release failed: %s", exc, exc_info=True)
         setattr(on_close, "_closed", True)
         pyglet.app.exit()
 
     # 録画フック（最後に呼ぶ）。録画中のみフレームを取り出す。
-    def _capture_frame():
+    def _capture_frame() -> None:
         try:
-            video_recorder.capture_current_frame(rendering_window)
+            runtime.video_recorder.capture_current_frame(runtime.rendering_window)
             # 品質最優先モード中は、FBO→screen ブリット後に HUD を重ねる
-            if quality_recording and overlay is not None:
+            if runtime.quality_recording and runtime.overlay is not None:
                 try:
-                    overlay.draw()
-                except Exception:
-                    pass
-        except Exception as e:
+                    runtime.overlay.draw()
+                except Exception as exc:
+                    logger.debug("overlay.draw during capture failed: %s", exc, exc_info=True)
+        except Exception as exc:
             # 一度でも失敗したら停止を試み、HUD に通知
             try:
-                if video_recorder.is_recording:
-                    p = video_recorder.stop()
-                    if overlay is not None:
-                        overlay.show_message(f"録画を停止しました: {p}")
-            except Exception:
-                pass
-            if overlay is not None:
-                overlay.show_message(f"録画フレーム取得失敗: {e}", level="error")
+                if runtime.video_recorder.is_recording:
+                    p = runtime.video_recorder.stop()
+                    if runtime.overlay is not None:
+                        runtime.overlay.show_message(f"録画を停止しました: {p}")
+            except Exception as stop_exc:
+                logger.warning(
+                    "failed to stop recorder after capture error: %s", stop_exc, exc_info=True
+                )
+            if runtime.overlay is not None:
+                runtime.overlay.show_message(f"録画フレーム取得失敗: {exc}", level="error")
 
     rendering_window.add_draw_callback(_capture_frame)
 
@@ -723,43 +790,44 @@ def run_sketch(
         import atexit
         import signal
 
-        def _sig_handler(_signum, _frame):  # noqa: ANN001
+        def _sig_handler(_signum: int, _frame: object | None) -> None:
+            _shutdown_parameter_gui()
             try:
-                _shutdown_parameter_gui()
-            except Exception:
-                pass
-            try:
-                rendering_window.close()
-            except Exception:
-                pass
+                runtime.rendering_window.close()
+            except Exception as exc:
+                logger.debug("rendering_window.close from signal failed: %s", exc, exc_info=True)
 
-        for _sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)):
+        for _sig_name in ("SIGINT", "SIGTERM"):
+            _sig = getattr(signal, _sig_name, None)
             if _sig is not None:
                 try:
                     signal.signal(_sig, _sig_handler)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "failed to register signal handler for %s: %s",
+                        _sig_name,
+                        exc,
+                        exc_info=True,
+                    )
 
-        def _at_exit():
+        def _at_exit() -> None:
+            _shutdown_parameter_gui()
             try:
-                _shutdown_parameter_gui()
-            except Exception:
-                pass
-            try:
-                rendering_window.close()
-            except Exception:
-                pass
+                runtime.rendering_window.close()
+            except Exception as exc:
+                logger.debug("rendering_window.close from atexit failed: %s", exc, exc_info=True)
 
         atexit.register(_at_exit)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("failed to register signal/atexit handlers: %s", exc, exc_info=True)
 
     # --- KeyboardInterrupt のノイズ抑制 ---
     _prev_excepthook = sys.excepthook
 
-    def _silent_excepthook(exc_type, exc, tb):  # noqa: ANN001
+    def _silent_excepthook(
+        exc_type: type[BaseException], exc: BaseException, tb: TracebackType | None
+    ) -> None:
         try:
-
             if exc_type is KeyboardInterrupt or isinstance(exc, KeyboardInterrupt):
                 return  # 黙殺
         except Exception:
@@ -773,5 +841,5 @@ def run_sketch(
         # 例外フックを復元
         try:
             sys.excepthook = _prev_excepthook
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to restore excepthook: %s", exc, exc_info=True)
