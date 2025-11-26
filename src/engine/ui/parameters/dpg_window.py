@@ -128,6 +128,10 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         # ドライバ停止 → ビューポート非表示 → コンテキスト破棄（順序厳守）
         self._stop_driver()
         try:
+            dpg.stop_dearpygui()
+        except Exception:
+            pass
+        try:
             if self._visible:
                 dpg.hide_viewport()
         except Exception:
@@ -154,9 +158,13 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
         try:
             is_run = getattr(dpg, "is_dearpygui_running", None)
             if callable(is_run) and not bool(is_run()):
+                self._closing = True
+                self._stop_driver()
                 return
             is_vp_ok = getattr(dpg, "is_viewport_ok", None)
             if callable(is_vp_ok) and not bool(is_vp_ok()):
+                self._closing = True
+                self._stop_driver()
                 return
         except Exception:
             # 確認に失敗した場合は続行（後段 try で保護）

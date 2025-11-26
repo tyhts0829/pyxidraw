@@ -523,9 +523,27 @@ def run_sketch(
         quality_tick_cb = None
         quality_recording = False
 
+    def _shutdown_parameter_gui() -> None:
+        if parameter_manager is None:
+            return
+        if getattr(_shutdown_parameter_gui, "_done", False):  # type: ignore[truthy-bool]
+            return
+        try:
+            parameter_manager.shutdown()
+        except Exception:
+            try:
+                parameter_manager.controller.shutdown()
+            except Exception:
+                pass
+        setattr(_shutdown_parameter_gui, "_done", True)
+
     @rendering_window.event
     def on_key_press(sym, mods):  # noqa: ANN001
         if sym == key.ESCAPE:
+            try:
+                _shutdown_parameter_gui()
+            except Exception:
+                pass
             rendering_window.close()
         # PNG 保存（P / Shift+P）
         if sym == key.P:
@@ -615,8 +633,7 @@ def run_sketch(
             return
         # --- Quiesce: まず Dear PyGui（GLFW）を停止して以降のフレームから外す ---
         try:
-            if parameter_manager is not None:
-                parameter_manager.shutdown()
+            _shutdown_parameter_gui()
         except Exception:
             pass
         # --- ループ停止・イベント解除・例外抑止に向けた準備 ---
@@ -708,6 +725,10 @@ def run_sketch(
 
         def _sig_handler(_signum, _frame):  # noqa: ANN001
             try:
+                _shutdown_parameter_gui()
+            except Exception:
+                pass
+            try:
                 rendering_window.close()
             except Exception:
                 pass
@@ -720,6 +741,10 @@ def run_sketch(
                     pass
 
         def _at_exit():
+            try:
+                _shutdown_parameter_gui()
+            except Exception:
+                pass
             try:
                 rendering_window.close()
             except Exception:

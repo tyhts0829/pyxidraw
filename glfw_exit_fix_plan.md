@@ -1,0 +1,4 @@
+- [x] ParameterWindow の終了優先度を上げる: on_close 開始時に GUI 停止（`_closing` フラグ、ドライバ停止、`dpg.stop_dearpygui()`/`destroy_context()`）を確実に実行する
+- [x] ParameterWindow._tick に終了/未初期化ガードを追加し、`is_viewport_ok`/`is_dearpygui_running` が偽や `_closing` 時は即 return（必要ならここで unschedule も再実行）
+- [x] atexit/signal ハンドラからも ParameterWindow を閉じるフェイルセーフを追加し、pyglet 側の終了順序に依存しないようにする
+- [ ] 手元で ESC 終了時の挙動を確認し、Worker プロセスが残らないことを目視（可能なら）確認する
