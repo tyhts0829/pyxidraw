@@ -193,6 +193,16 @@ def _prepare_parameter_gui(
     return parameter_manager, draw_callable
 
 
+def _setup_midi_layer(
+    use_midi: bool,
+) -> tuple[object | None, Tickable, Callable[[], Mapping[int, float]]]:
+    """MIDI レイヤーを初期化し、マネージャ/サービス/スナップショット関数を返す。"""
+    from .sketch_runner.midi import setup_midi as _setup_midi
+
+    midi_manager, midi_service, cc_snapshot_fn = _setup_midi(use_midi)
+    return midi_manager, midi_service, cc_snapshot_fn
+
+
 def run_sketch(
     user_draw: Callable[
         [float],
@@ -267,9 +277,7 @@ def run_sketch(
     )
 
     # ---- ③ MIDI ---------------------------------------------------
-    from .sketch_runner.midi import setup_midi as _setup_midi
-
-    midi_manager, midi_service, cc_snapshot_fn = _setup_midi(use_midi)
+    midi_manager, midi_service, cc_snapshot_fn = _setup_midi_layer(use_midi)
 
     # init_only の場合は重い依存を読み込まずに早期リターン
     parameter_manager, draw_callable = _prepare_parameter_gui(

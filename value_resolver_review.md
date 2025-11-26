@@ -26,13 +26,13 @@
 
 ## 2. 実装改善アクションチェックリスト
 
-- [ ] `ParameterContext` に Descriptor 共通情報（`category` / `category_kind` / `pipeline_uid` / `step_index` 相当）を返すプロパティを追加し、`_resolve_scalar` / `_resolve_vector` / `_resolve_passthrough` から重複ロジックを排除する。
-- [ ] `resolve()` 内の `param_order_map` 構築処理を `_build_param_order_map(signature, skip)` のような小さなヘルパに切り出し、`try/except` 範囲を局所化して読みやすくする。
-- [ ] Descriptor 生成処理の共通部分（`id` / `label` / `source` / `category` / `category_kind` / `pipeline_uid` / `step_index` / `param_order` など）をヘルパ関数または小さなビルダにまとめ、各 `_resolve_*` メソッドの引数数と重複を減らす。
-- [ ] `_resolve_vector` を「デフォルト値の正規化」「Descriptor の登録とストア解決」「CC バインド適用」の3ステップに論理的に分割し、少なくとも CC 周りの処理を `_apply_cc_to_vector(descriptor_id, base_values)` のようなヘルパに切り出す。
-- [ ] `_resolve_passthrough` の中で行っている value_type 判定・choices 抽出・string 用メタ情報解釈を、それぞれ小さな private ヘルパ（例: `_extract_choices(meta)` / `_string_meta(meta)`）に分け、メインのロジックを「Descriptor を作る」ことに集中させる。
-- [ ] 未使用のコード・引数を整理する（`_component_default_actual` / `_VECTOR_SUFFIX` / `_resolve_vector` の `has_default` 引数 / `_range_hint_from_meta` の未使用パラメータなど）。削除時に呼び出し元のシグネチャも合わせて簡素化する。
-- [ ] `inspect._empty` 直接参照を `inspect.Parameter.empty` に統一し、`# type: ignore` を削減して型情報と実装を一致させる。
+- [x] `ParameterContext` に Descriptor 共通情報（`category` / `category_kind` / `pipeline_uid` / `step_index` 相当）を返すプロパティを追加し、`_resolve_scalar` / `_resolve_vector` / `_resolve_passthrough` から重複ロジックを排除する。
+- [x] `resolve()` 内の `param_order_map` 構築処理を `_build_param_order_map(signature, skip)` のような小さなヘルパに切り出し、`try/except` 範囲を局所化して読みやすくする。
+- [x] Descriptor 生成処理の共通部分（`id` / `label` / `source` / `category` / `category_kind` / `pipeline_uid` / `step_index` / `param_order` など）をヘルパ関数または小さなビルダにまとめ、各 `_resolve_*` メソッドの引数数と重複を減らす。
+- [x] `_resolve_vector` を「デフォルト値の正規化」「Descriptor の登録とストア解決」「CC バインド適用」の3ステップに論理的に分割し、少なくとも CC 周りの処理を `_apply_cc_to_vector(descriptor_id, base_values)` のようなヘルパに切り出す。
+- [x] `_resolve_passthrough` の中で行っている value_type 判定・choices 抽出・string 用メタ情報解釈を、それぞれ小さな private ヘルパ（例: `_extract_choices(meta)` / `_string_meta(meta)`）に分け、メインのロジックを「Descriptor を作る」ことに集中させる。
+- [x] 未使用のコード・引数を整理する（`_component_default_actual` / `_resolve_vector` の `has_default` 引数 など）。削除時に呼び出し元のシグネチャも合わせて簡素化する。
+- [x] `inspect._empty` 直接参照を `inspect.Parameter.empty` に統一し、`# type: ignore` を削減して型情報と実装を一致させる。
 - [ ] `_determine_value_type` / `_is_vector_value` / `_range_hint_from_meta` など meta ベースの判定周りに、仕様意図を短く補足するコメントを追加し、RangeHint と GUI 表示の関係をコードから読み取りやすくする。
 - [ ] 仕様に影響しやすい箇所（vector の次元決定ロジック、CC バインド適用、enum/string の supported 判定）について、既存テストの有無を確認し、必要に応じて最小限のテストを追加してリファクタリングの安全性を高める。
 
@@ -42,4 +42,3 @@
 - 問題なければ、この md のチェックボックスを更新しながら上から順に実装を進める（完了した項目は `[x]` に変更する）。
 - 実装中に追加で気づいた点や、事前に相談したい設計上の論点が出てきた場合は、この md ファイルに追記してから報告する。
 - 現時点ではコードへの変更は一切行っていない。
-

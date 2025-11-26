@@ -18,6 +18,38 @@ from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore
 logger = logging.getLogger("engine.ui.parameters.dpg.content")
 
 
+# Style/HUD 用パラメータ ID
+STYLE_BG_ID = "runner.background"
+STYLE_LINE_COLOR_ID = "runner.line_color"
+STYLE_LINE_THICKNESS_ID = "runner.line_thickness"
+
+HUD_TEXT_COLOR_ID = "runner.hud_text_color"
+HUD_METER_COLOR_ID = "runner.hud_meter_color"
+HUD_METER_BG_COLOR_ID = "runner.hud_meter_bg_color"
+
+STYLE_COLOR_IDS: set[str] = {STYLE_BG_ID, STYLE_LINE_COLOR_ID}
+HUD_COLOR_IDS: set[str] = {HUD_TEXT_COLOR_ID, HUD_METER_COLOR_ID, HUD_METER_BG_COLOR_ID}
+ALL_STYLE_PARAM_IDS: set[str] = STYLE_COLOR_IDS | HUD_COLOR_IDS | {STYLE_LINE_THICKNESS_ID}
+
+# Style/HUD 用既定値
+DEFAULT_BG_COLOR = (1.0, 1.0, 1.0, 1.0)
+DEFAULT_LINE_COLOR = (0.0, 0.0, 0.0, 1.0)
+DEFAULT_HUD_TEXT_COLOR = (0.0, 0.0, 0.0, 1.0)
+DEFAULT_HUD_METER_COLOR = (0.0, 1.0, 0.0, 1.0)
+DEFAULT_HUD_METER_BG_COLOR = (0.196, 0.196, 0.196, 1.0)
+
+DEFAULT_LINE_THICKNESS = 0.0006
+LINE_THICKNESS_MIN = 0.0001
+LINE_THICKNESS_MAX = 0.01
+
+# テーブル比率用のクランプ閾値
+MIN_LABEL_RATIO = 0.1
+MAX_LABEL_RATIO = 0.9
+MIN_REST_RATIO = 0.1
+MIN_BARS_CC_RATIO = 0.05
+MAX_BARS_CC_RATIO = 0.95
+
+
 @dataclass(frozen=True)
 class _StyleLayerEntry:
     """Style セクションに表示するレイヤーごとのスタイル設定。"""
@@ -59,36 +91,20 @@ class ParameterWindowContentBuilder:
         """Style 用のコントロール群を構築し、Store と初期同期する。"""
         self._style_param_ids.clear()
         bgf, lnf = self._resolve_canvas_colors()
-        bg_override = self._store.current_value("runner.background") or self._store.original_value(
-            "runner.background"
-        )
-        if bg_override is not None:
-            bgf = self._safe_norm(bg_override, bgf)
-        ln_override = self._store.current_value("runner.line_color") or self._store.original_value(
-            "runner.line_color"
-        )
-        if ln_override is not None:
-            lnf = self._safe_norm(ln_override, lnf)
+        bgf = self._resolve_style_color_from_store(STYLE_BG_ID, bgf)
+        lnf = self._resolve_style_color_from_store(STYLE_LINE_COLOR_ID, lnf)
 
-        tv = self._store.current_value("runner.hud_text_color") or self._store.original_value(
-            "runner.hud_text_color"
+        tr, tg, tb, _ = self._resolve_style_color_from_store(
+            HUD_TEXT_COLOR_ID,
+            DEFAULT_HUD_TEXT_COLOR,
         )
-        tr, tg, tb, _ = (
-            self._safe_norm(tv, (0.0, 0.0, 0.0, 1.0)) if tv is not None else (0.0, 0.0, 0.0, 1.0)
+        mr, mg, mb, _ = self._resolve_style_color_from_store(
+            HUD_METER_COLOR_ID,
+            DEFAULT_HUD_METER_COLOR,
         )
-        mv = self._store.current_value("runner.hud_meter_color") or self._store.original_value(
-            "runner.hud_meter_color"
-        )
-        mr, mg, mb, _ = (
-            self._safe_norm(mv, (0.0, 1.0, 0.0, 1.0)) if mv is not None else (0.0, 1.0, 0.0, 1.0)
-        )
-        mb_val = self._store.current_value(
-            "runner.hud_meter_bg_color"
-        ) or self._store.original_value("runner.hud_meter_bg_color")
-        br, bg, bb, _ = (
-            self._safe_norm(mb_val, (0.196, 0.196, 0.196, 1.0))
-            if mb_val is not None
-            else (0.196, 0.196, 0.196, 1.0)
+        br, bg, bb, _ = self._resolve_style_color_from_store(
+            HUD_METER_BG_COLOR_ID,
+            DEFAULT_HUD_METER_BG_COLOR,
         )
         layer_entries = self._collect_style_entries(descriptors)
 
@@ -110,7 +126,7 @@ class ParameterWindowContentBuilder:
                         dpg.add_text("Background Color")
                     with dpg.table_cell():
                         bg_picker = dpg.add_color_edit(
-                            tag="runner.background",
+                            tag=STYLE_BG_ID,
                             default_value=[
                                 int(round(bgf[0] * 255)),
                                 int(round(bgf[1] * 255)),
@@ -124,11 +140,8 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        self._style_param_ids.add("runner.background")
-                        try:
-                            dpg.set_item_width(bg_picker, -1)
-                        except Exception:
-                            pass
+                        self._style_param_ids.add(STYLE_BG_ID)
+                        self._set_full_width(bg_picker)
                     r, g, b = float(bgf[0]), float(bgf[1]), float(bgf[2])
                     self.force_set_rgb_u8(
                         bg_picker,
@@ -136,14 +149,14 @@ class ParameterWindowContentBuilder:
                     )
                     dpg.configure_item(
                         bg_picker,
-                        callback=lambda s, a, u: self.store_rgb01("runner.background", a),
+                        callback=lambda s, a, u: self.store_rgb01(STYLE_BG_ID, a),
                     )
                 with dpg.table_row():
                     with dpg.table_cell():
                         dpg.add_text("Global Line Color")
                     with dpg.table_cell():
                         ln_picker = dpg.add_color_edit(
-                            tag="runner.line_color",
+                            tag=STYLE_LINE_COLOR_ID,
                             default_value=[
                                 int(round(lnf[0] * 255)),
                                 int(round(lnf[1] * 255)),
@@ -157,11 +170,8 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        self._style_param_ids.add("runner.line_color")
-                        try:
-                            dpg.set_item_width(ln_picker, -1)
-                        except Exception:
-                            pass
+                        self._style_param_ids.add(STYLE_LINE_COLOR_ID)
+                        self._set_full_width(ln_picker)
                     r, g, b = float(lnf[0]), float(lnf[1]), float(lnf[2])
                     self.force_set_rgb_u8(
                         ln_picker,
@@ -169,7 +179,7 @@ class ParameterWindowContentBuilder:
                     )
                     dpg.configure_item(
                         ln_picker,
-                        callback=lambda s, a, u: self.store_rgb01("runner.line_color", a),
+                        callback=lambda s, a, u: self.store_rgb01(STYLE_LINE_COLOR_ID, a),
                     )
                 with dpg.table_row():
                     with dpg.table_cell():
@@ -177,33 +187,30 @@ class ParameterWindowContentBuilder:
                     with dpg.table_cell():
                         try:
                             th_val = float(
-                                self._store.current_value("runner.line_thickness")
-                                or self._store.original_value("runner.line_thickness")
-                                or 0.0006
+                                self._store.current_value(STYLE_LINE_THICKNESS_ID)
+                                or self._store.original_value(STYLE_LINE_THICKNESS_ID)
+                                or DEFAULT_LINE_THICKNESS
                             )
                         except Exception:
-                            th_val = 0.0006
+                            th_val = DEFAULT_LINE_THICKNESS
                         th_picker = dpg.add_slider_float(
-                            tag="runner.line_thickness",
+                            tag=STYLE_LINE_THICKNESS_ID,
                             label="",
                             default_value=th_val,
-                            min_value=0.0001,
-                            max_value=0.01,
+                            min_value=LINE_THICKNESS_MIN,
+                            max_value=LINE_THICKNESS_MAX,
                             format=f"%.{self._layout.value_precision}f",
                             callback=self._on_widget_change,
-                            user_data="runner.line_thickness",
+                            user_data=STYLE_LINE_THICKNESS_ID,
                         )
-                        try:
-                            dpg.set_item_width(th_picker, -1)
-                        except Exception:
-                            pass
-                        self._style_param_ids.add("runner.line_thickness")
+                        self._set_full_width(th_picker)
+                        self._style_param_ids.add(STYLE_LINE_THICKNESS_ID)
                 with dpg.table_row():
                     with dpg.table_cell():
                         dpg.add_text("HUD: Text Color")
                     with dpg.table_cell():
                         tx_picker = dpg.add_color_edit(
-                            tag="runner.hud_text_color",
+                            tag=HUD_TEXT_COLOR_ID,
                             default_value=[
                                 int(round(tr * 255)),
                                 int(round(tg * 255)),
@@ -217,21 +224,18 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        self._style_param_ids.add("runner.hud_text_color")
-                        try:
-                            dpg.set_item_width(tx_picker, -1)
-                        except Exception:
-                            pass
+                        self._style_param_ids.add(HUD_TEXT_COLOR_ID)
+                        self._set_full_width(tx_picker)
                     dpg.configure_item(
                         tx_picker,
-                        callback=lambda s, a, u: self.store_rgb01("runner.hud_text_color", a),
+                        callback=lambda s, a, u: self.store_rgb01(HUD_TEXT_COLOR_ID, a),
                     )
                 with dpg.table_row():
                     with dpg.table_cell():
                         dpg.add_text("HUD: Meter Color")
                     with dpg.table_cell():
                         mt_picker = dpg.add_color_edit(
-                            tag="runner.hud_meter_color",
+                            tag=HUD_METER_COLOR_ID,
                             default_value=[
                                 int(round(mr * 255)),
                                 int(round(mg * 255)),
@@ -245,21 +249,18 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        self._style_param_ids.add("runner.hud_meter_color")
-                        try:
-                            dpg.set_item_width(mt_picker, -1)
-                        except Exception:
-                            pass
+                        self._style_param_ids.add(HUD_METER_COLOR_ID)
+                        self._set_full_width(mt_picker)
                     dpg.configure_item(
                         mt_picker,
-                        callback=lambda s, a, u: self.store_rgb01("runner.hud_meter_color", a),
+                        callback=lambda s, a, u: self.store_rgb01(HUD_METER_COLOR_ID, a),
                     )
                 with dpg.table_row():
                     with dpg.table_cell():
                         dpg.add_text("HUD: Meter BG Color")
                     with dpg.table_cell():
                         mb_picker = dpg.add_color_edit(
-                            tag="runner.hud_meter_bg_color",
+                            tag=HUD_METER_BG_COLOR_ID,
                             default_value=[
                                 int(round(br * 255)),
                                 int(round(bg * 255)),
@@ -273,15 +274,12 @@ class ParameterWindowContentBuilder:
                             input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                             alpha_bar=False,
                         )
-                        self._style_param_ids.add("runner.hud_meter_bg_color")
-                        try:
-                            dpg.set_item_width(mb_picker, -1)
-                        except Exception:
-                            pass
+                        self._style_param_ids.add(HUD_METER_BG_COLOR_ID)
+                        self._set_full_width(mb_picker)
                     dpg.configure_item(
                         mb_picker,
                         callback=lambda s, a, u: self.store_rgb01(
-                            "runner.hud_meter_bg_color",
+                            HUD_METER_BG_COLOR_ID,
                             a,
                         ),
                     )
@@ -315,10 +313,7 @@ class ParameterWindowContentBuilder:
                                         input_mode=getattr(dpg, "mvColorEdit_InputRGB", 0),
                                         alpha_bar=False,
                                     )
-                                    try:
-                                        dpg.set_item_width(picker, -1)
-                                    except Exception:
-                                        pass
+                                    self._set_full_width(picker)
                                     self.force_set_rgb_u8(
                                         picker,
                                         [
@@ -361,10 +356,7 @@ class ParameterWindowContentBuilder:
                                         callback=self._on_widget_change,
                                         user_data=desc.id,
                                     )
-                                    try:
-                                        dpg.set_item_width(slider_id, -1)
-                                    except Exception:
-                                        pass
+                                    self._set_full_width(slider_id)
 
     def sync_style_from_store(self) -> None:
         if not self._style_param_ids:
@@ -381,7 +373,7 @@ class ParameterWindowContentBuilder:
         parent: int | str,
         descriptors: list[ParameterDescriptor],
     ) -> None:
-        excluded = set(self._style_param_ids) | {"runner.show_hud", "runner.line_thickness"}
+        excluded = set(self._style_param_ids) | {"runner.show_hud", STYLE_LINE_THICKNESS_ID}
         filtered = [
             d for d in descriptors if d.id not in excluded and not self._is_style_descriptor(d)
         ]
@@ -446,34 +438,15 @@ class ParameterWindowContentBuilder:
                             dpg.add_theme_style(var_cell_padding, cx, cy)
                     dpg.bind_item_theme(table, outer_tbl_theme)
                 label_ratio = float(self._layout.label_column_ratio)
-                label_ratio = (
-                    0.1 if label_ratio < 0.1 else (0.9 if label_ratio > 0.9 else label_ratio)
-                )
-                rest = max(0.1, 1.0 - label_ratio)
+                label_ratio = max(MIN_LABEL_RATIO, min(MAX_LABEL_RATIO, label_ratio))
+                rest = max(MIN_REST_RATIO, 1.0 - label_ratio)
                 bcc = float(getattr(self._layout, "bars_cc_ratio", 0.7))
-                bcc = 0.05 if bcc < 0.05 else (0.95 if bcc > 0.95 else bcc)
+                bcc = max(MIN_BARS_CC_RATIO, min(MAX_BARS_CC_RATIO, bcc))
                 bars_ratio = rest * bcc
                 cc_ratio = rest - bars_ratio
-                try:
-                    dpg.add_table_column(
-                        label="Parameter",
-                        width_stretch=True,
-                        init_width_or_weight=label_ratio,
-                    )
-                    dpg.add_table_column(
-                        label="Bars",
-                        width_stretch=True,
-                        init_width_or_weight=bars_ratio,
-                    )
-                    dpg.add_table_column(
-                        label="CC",
-                        width_stretch=True,
-                        init_width_or_weight=cc_ratio,
-                    )
-                except TypeError:
-                    dpg.add_table_column(label="Parameter")
-                    dpg.add_table_column(label="Bars")
-                    dpg.add_table_column(label="CC")
+                self._add_stretch_column("Parameter", label_ratio)
+                self._add_stretch_column("Bars", bars_ratio)
+                self._add_stretch_column("CC", cc_ratio)
                 for it in items:
                     if not it.supported:
                         continue
@@ -492,8 +465,8 @@ class ParameterWindowContentBuilder:
     def _label_value_ratio(self) -> tuple[float, float]:
         """Style テーブル用のラベル列と値列の比率を計算する。"""
         left = float(self._layout.label_column_ratio)
-        left = 0.1 if left < 0.1 else (0.9 if left > 0.9 else left)
-        right = max(0.1, 1.0 - left)
+        left = max(MIN_LABEL_RATIO, min(MAX_LABEL_RATIO, left))
+        right = max(MIN_REST_RATIO, 1.0 - left)
         return left, right
 
     def _resolve_canvas_colors(
@@ -507,20 +480,27 @@ class ParameterWindowContentBuilder:
         except Exception:
             cfg = {}
         canvas = cfg.get("canvas", {}) if isinstance(cfg, dict) else {}
-        bg_raw = canvas.get("background_color", (1.0, 1.0, 1.0, 1.0))
-        ln_raw = canvas.get("line_color", (0.0, 0.0, 0.0, 1.0))
-        bgf = self._safe_norm(bg_raw, (1.0, 1.0, 1.0, 1.0))
-        lnf = self._safe_norm(ln_raw, (0.0, 0.0, 0.0, 1.0))
+        bg_raw = canvas.get("background_color", DEFAULT_BG_COLOR)
+        ln_raw = canvas.get("line_color", DEFAULT_LINE_COLOR)
+        bgf = self._safe_norm(bg_raw, DEFAULT_BG_COLOR)
+        lnf = self._safe_norm(ln_raw, DEFAULT_LINE_COLOR)
         return bgf, lnf
 
     def _add_two_columns(self, left: float, right: float) -> None:
         """ラベル列と値列の 2 列テーブルヘッダを追加する。"""
+        self._add_stretch_column("Parameter", left)
+        self._add_stretch_column("Value", right)
+
+    def _add_stretch_column(self, label: str, weight: float | None = None) -> None:
+        """幅ストレッチ付きのテーブル列を追加する。古い DPG では weight を省略して追加する。"""
+        kwargs: dict[str, Any] = {"label": label}
+        if weight is not None:
+            kwargs["width_stretch"] = True
+            kwargs["init_width_or_weight"] = float(weight)
         try:
-            dpg.add_table_column(label="Parameter", width_stretch=True, init_width_or_weight=left)
-            dpg.add_table_column(label="Value", width_stretch=True, init_width_or_weight=right)
+            dpg.add_table_column(**kwargs)
         except TypeError:
-            dpg.add_table_column(label="Parameter")
-            dpg.add_table_column(label="Value")
+            dpg.add_table_column(label=label)
 
     def _collect_style_entries(
         self, descriptors: list[ParameterDescriptor]
@@ -607,40 +587,7 @@ class ParameterWindowContentBuilder:
             else:
                 vmin = list(vh.min_values)
                 vmax = list(vh.max_values)
-            with dpg.table(
-                parent=parent,
-                header_row=False,
-                policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
-            ) as bars_tbl:
-                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
-                if var_cell_padding is not None:
-                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
-                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
-                    with dpg.theme() as bars_theme:
-                        with dpg.theme_component(dpg.mvAll):
-                            dpg.add_theme_style(var_cell_padding, cx, cy)
-                    dpg.bind_item_theme(bars_tbl, bars_theme)
-                for _ in range(dim):
-                    try:
-                        dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
-                    except TypeError:
-                        dpg.add_table_column(width_stretch=True)
-                with dpg.table_row():
-                    for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
-                        with dpg.table_cell():
-                            tag = f"{desc.id}::{suffix}"
-                            default_component = float(vec[i]) if i < len(vec) else 0.0
-                            slider_id = dpg.add_slider_float(
-                                tag=tag,
-                                label="",
-                                default_value=default_component,
-                                min_value=float(vmin[i]) if i < len(vmin) else 0.0,
-                                max_value=float(vmax[i]) if i < len(vmax) else 1.0,
-                                format=f"%.{self._layout.value_precision}f",
-                                callback=self._on_widget_change,
-                                user_data=(desc.id, i),
-                            )
-                            dpg.set_item_width(slider_id, -1)
+            self._create_vector_sliders(parent, desc, vec, vmin, vmax)
             return
         hint = desc.range_hint or self._layout.derive_range(
             name=desc.id,
@@ -653,18 +600,8 @@ class ParameterWindowContentBuilder:
                 header_row=False,
                 policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as bars_tbl:
-                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
-                if var_cell_padding is not None:
-                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
-                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
-                    with dpg.theme() as bars_theme:
-                        with dpg.theme_component(dpg.mvAll):
-                            dpg.add_theme_style(var_cell_padding, cx, cy)
-                    dpg.bind_item_theme(bars_tbl, bars_theme)
-                try:
-                    dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
-                except TypeError:
-                    dpg.add_table_column(width_stretch=True)
+                self._apply_cell_padding_theme(bars_tbl)
+                self._add_stretch_column("", 1.0)
                 with dpg.table_row():
                     with dpg.table_cell():
                         if vt == "int":
@@ -707,21 +644,9 @@ class ParameterWindowContentBuilder:
                 header_row=False,
                 policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as cc_tbl:
-                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
-                cc_theme = None
-                if var_cell_padding is not None:
-                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
-                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
-                    with dpg.theme() as cc_theme:
-                        with dpg.theme_component(dpg.mvAll):
-                            dpg.add_theme_style(var_cell_padding, cx, cy)
-                if cc_theme is not None:
-                    dpg.bind_item_theme(cc_tbl, cc_theme)
+                self._apply_cell_padding_theme(cc_tbl)
                 for _ in range(dim):
-                    try:
-                        dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
-                    except TypeError:
-                        dpg.add_table_column(width_stretch=True)
+                    self._add_stretch_column("", 1.0)
                 with dpg.table_row():
                     for i in range(dim):
                         with dpg.table_cell():
@@ -733,20 +658,8 @@ class ParameterWindowContentBuilder:
                 header_row=False,
                 policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
             ) as cc_tbl:
-                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
-                cc_theme = None
-                if var_cell_padding is not None:
-                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
-                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
-                    with dpg.theme() as cc_theme:
-                        with dpg.theme_component(dpg.mvAll):
-                            dpg.add_theme_style(var_cell_padding, cx, cy)
-                if cc_theme is not None:
-                    dpg.bind_item_theme(cc_tbl, cc_theme)
-                try:
-                    dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
-                except TypeError:
-                    dpg.add_table_column(width_stretch=True)
+                self._apply_cell_padding_theme(cc_tbl)
+                self._add_stretch_column("", 1.0)
                 with dpg.table_row():
                     with dpg.table_cell():
                         self._add_cc_binding_input(None, desc)
@@ -810,43 +723,11 @@ class ParameterWindowContentBuilder:
             return box
         if vt == "vector":
             value_vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
+            # RangeHint が無い場合は 0..1 の既定レンジを使う
             dim = max(2, min(len(value_vec), 4))
-            with dpg.table(
-                parent=parent,
-                header_row=False,
-                policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
-            ) as vec_tbl:
-                var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
-                if var_cell_padding is not None:
-                    cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
-                    cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
-                    with dpg.theme() as vec_theme:
-                        with dpg.theme_component(dpg.mvAll):
-                            dpg.add_theme_style(var_cell_padding, cx, cy)
-                    dpg.bind_item_theme(vec_tbl, vec_theme)
-                for _ in range(dim):
-                    try:
-                        dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
-                    except TypeError:
-                        dpg.add_table_column(width_stretch=True)
-                with dpg.table_row():
-                    last_slider = 0
-                    for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
-                        with dpg.table_cell():
-                            tag = f"{desc.id}::{suffix}"
-                            default_component = float(value_vec[i]) if i < len(value_vec) else 0.0
-                            last_slider = dpg.add_slider_float(
-                                tag=tag,
-                                label="",
-                                default_value=default_component,
-                                min_value=0.0,
-                                max_value=1.0,
-                                format=f"%.{self._layout.value_precision}f",
-                                callback=self._on_widget_change,
-                                user_data=(desc.id, i),
-                            )
-                            dpg.set_item_width(last_slider, -1)
-            return last_slider
+            vmin = [0.0] * dim
+            vmax = [1.0] * dim
+            return self._create_vector_sliders(parent, desc, value_vec, vmin, vmax)
         hint = desc.range_hint or self._layout.derive_range(
             name=desc.id,
             value_type=desc.value_type,
@@ -869,15 +750,9 @@ class ParameterWindowContentBuilder:
             header_row=False,
             policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
         ) as tbl:
-            var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
-            if var_cell_padding is not None:
-                pad = int(self._layout.padding)
-                with dpg.theme() as int_tbl_theme:
-                    with dpg.theme_component(dpg.mvAll):
-                        dpg.add_theme_style(var_cell_padding, pad, pad)
-                dpg.bind_item_theme(tbl, int_tbl_theme)
-            dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
-            dpg.add_table_column(width_stretch=True, init_width_or_weight=0.35)
+            self._apply_cell_padding_theme(tbl)
+            self._add_stretch_column("", 1.0)
+            self._add_stretch_column("", 0.35)
             with dpg.table_row():
                 with dpg.table_cell():
                     slider_id = dpg.add_slider_int(
@@ -889,7 +764,7 @@ class ParameterWindowContentBuilder:
                         callback=self._on_widget_change,
                         user_data=desc.id,
                     )
-                    dpg.set_item_width(slider_id, -1)
+                    self._set_full_width(slider_id)
                 with dpg.table_cell():
                     self._add_cc_binding_input(None, desc)
         return slider_id
@@ -907,15 +782,9 @@ class ParameterWindowContentBuilder:
             header_row=False,
             policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
         ) as tbl:
-            var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
-            if var_cell_padding is not None:
-                pad = int(self._layout.padding)
-                with dpg.theme() as flt_tbl_theme:
-                    with dpg.theme_component(dpg.mvAll):
-                        dpg.add_theme_style(var_cell_padding, pad, pad)
-                dpg.bind_item_theme(tbl, flt_tbl_theme)
-            dpg.add_table_column(width_stretch=True, init_width_or_weight=1.0)
-            dpg.add_table_column(width_stretch=True, init_width_or_weight=0.35)
+            self._apply_cell_padding_theme(tbl)
+            self._add_stretch_column("", 1.0)
+            self._add_stretch_column("", 0.35)
             with dpg.table_row():
                 with dpg.table_cell():
                     slider_id = dpg.add_slider_float(
@@ -928,7 +797,7 @@ class ParameterWindowContentBuilder:
                         callback=self._on_widget_change,
                         user_data=desc.id,
                     )
-                    dpg.set_item_width(slider_id, -1)
+                    self._set_full_width(slider_id)
                 with dpg.table_cell():
                     self._add_cc_binding_input(None, desc)
         return slider_id
@@ -1073,25 +942,23 @@ class ParameterWindowContentBuilder:
         """
         try:
             pid = str(user_data)
-            text = str(app_data).strip()
+            raw_text = str(app_data)
         except Exception:
             return
+        text = raw_text.strip()
+        # 空文字列はバインディング解除のみ（UI の表示は維持）
         if not text:
             self._store.bind_cc(pid, None)
             return
-        try:
-            i = int(float(text))
-        except Exception:
+        parsed = self._parse_cc_index(text)
+        if parsed is None:
+            # パース失敗時はバインド解除し、入力を空に戻す
             self._store.bind_cc(pid, None)
             dpg.set_value(f"{pid}::cc", "")
             return
-        if i < 0:
-            i = 0
-        if i > 127:
-            i = 127
-        self._store.bind_cc(pid, i)
+        self._store.bind_cc(pid, parsed)
         try:
-            dpg.set_value(f"{pid}::cc", str(i))
+            dpg.set_value(f"{pid}::cc", str(parsed))
         except Exception:
             pass
 
@@ -1112,10 +979,7 @@ class ParameterWindowContentBuilder:
             kwargs["parent"] = parent
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
-        try:
-            dpg.set_item_width(box, -1)
-        except Exception:
-            pass
+        self._set_full_width(box)
         return box
 
     def _add_cc_binding_input_component(
@@ -1140,10 +1004,7 @@ class ParameterWindowContentBuilder:
             kwargs["parent"] = parent
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
-        try:
-            dpg.set_item_width(box, -1)
-        except Exception:
-            pass
+        self._set_full_width(box)
         return box
 
     def _cc_binding_text(self, param_id: str) -> str:
@@ -1174,10 +1035,7 @@ class ParameterWindowContentBuilder:
             from util.color import normalize_color as _norm
 
             rgba = _norm(app_data)
-            if isinstance(pid, str) and (
-                (pid.endswith(".color") and ".style#" in pid)
-                or (pid.startswith("layer.") and pid.endswith(".color"))
-            ):
+            if isinstance(pid, str) and self._is_layer_style_color_id(pid):
                 # style/layer の color は vec3 保存（HUD など他の GUI と色の扱いを揃える）
                 value_tuple: tuple[float, ...] = (
                     float(rgba[0]),
@@ -1220,3 +1078,92 @@ class ParameterWindowContentBuilder:
             except Exception:
                 continue
         return 0
+
+    def _set_full_width(self, item_id: int | str) -> None:
+        """ウィジェット幅をセル幅いっぱいに広げる（失敗時は既定幅のまま）。"""
+        try:
+            dpg.set_item_width(item_id, -1)
+        except Exception:
+            # 古い DPG バージョンや一部ウィジェットでは width 指定が無視されるため、そのまま続行する。
+            pass
+
+    def _apply_cell_padding_theme(self, table_id: int | str) -> None:
+        """セルパディング付きテーブルテーマを適用する（Dear PyGui の有無に応じて安全に処理）。"""
+        var_cell_padding = getattr(dpg, "mvStyleVar_CellPadding", None)
+        if var_cell_padding is None:
+            return
+        cx = int(getattr(self._layout, "cell_padding_x", self._layout.padding))
+        cy = int(getattr(self._layout, "cell_padding_y", self._layout.padding))
+        with dpg.theme() as tbl_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_style(var_cell_padding, cx, cy)
+        dpg.bind_item_theme(table_id, tbl_theme)
+
+    def _resolve_style_color_from_store(
+        self,
+        pid: str,
+        fallback: tuple[float, float, float, float],
+    ) -> tuple[float, float, float, float]:
+        """Store の現在値/元値からスタイル用カラーを解決し、RGBA (0..1) で返す。"""
+        value = self._store.current_value(pid) or self._store.original_value(pid)
+        if value is None:
+            return fallback
+        return self._safe_norm(value, fallback)
+
+    def _create_vector_sliders(
+        self,
+        parent: int | str,
+        desc: ParameterDescriptor,
+        value_vec: Sequence[float],
+        vmin: Sequence[float],
+        vmax: Sequence[float],
+    ) -> int | str:
+        """ベクトル値用の水平スライダ群を生成する。"""
+        vec = list(value_vec)
+        dim = max(2, min(len(vec), 4))
+        last_slider: int | str = 0
+        with dpg.table(
+            parent=parent,
+            header_row=False,
+            policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
+        ) as vec_tbl:
+            self._apply_cell_padding_theme(vec_tbl)
+            for _ in range(dim):
+                self._add_stretch_column("", 1.0)
+            with dpg.table_row():
+                for i, suffix in enumerate(("x", "y", "z", "w")[:dim]):
+                    with dpg.table_cell():
+                        tag = f"{desc.id}::{suffix}"
+                        default_component = float(vec[i]) if i < len(vec) else 0.0
+                        min_val = float(vmin[i]) if i < len(vmin) else 0.0
+                        max_val = float(vmax[i]) if i < len(vmax) else 1.0
+                        last_slider = dpg.add_slider_float(
+                            tag=tag,
+                            label="",
+                            default_value=default_component,
+                            min_value=min_val,
+                            max_value=max_val,
+                            format=f"%.{self._layout.value_precision}f",
+                            callback=self._on_widget_change,
+                            user_data=(desc.id, i),
+                        )
+                        self._set_full_width(last_slider)
+        return last_slider
+
+    def _is_layer_style_color_id(self, pid: str) -> bool:
+        """style/layer 系 color パラメータの ID かどうかを判定する。"""
+        return (pid.endswith(".color") and ".style#" in pid) or (
+            pid.startswith("layer.") and pid.endswith(".color")
+        )
+
+    def _parse_cc_index(self, text: str) -> int | None:
+        """CC 入力文字列を 0..127 の整数にパースし、失敗時は None を返す。"""
+        try:
+            value = int(float(text))
+        except Exception:
+            return None
+        if value < 0:
+            return 0
+        if value > 127:
+            return 127
+        return value

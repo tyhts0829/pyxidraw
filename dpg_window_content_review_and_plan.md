@@ -67,31 +67,31 @@
 ### 2. テーブル/テーマ周りの共通化
 
 - [ ] `mvStyleVar_CellPadding` を使ったセルパディング付きテーブル構築パターンを 1 箇所に集約するヘルパ（例: `_build_stretch_table(parent, columns, *, theme_kind=None)`）を導入し、`_build_grouped_table` / `_flush_group` / `_create_bars` / `_create_cc_inputs` / `_create_widget` から重複コードを置き換える。
-- [ ] `width_stretch=True` と `init_width_or_weight` の追加に対する `try/except TypeError` パターンを、小さなユーティリティ（例: `_add_stretch_column(label, weight)`）に寄せて行数を削減しつつ、旧 Dear PyGui との互換を維持する。
-- [ ] `dpg.set_item_width(item_id, -1)` をラップするヘルパ（例: `_set_full_width(item_id)`）を導入し、`try/except Exception` のノイズを減らす。
+- [x] `width_stretch=True` と `init_width_or_weight` の追加に対する `try/except TypeError` パターンを、小さなユーティリティ（例: `_add_stretch_column(label, weight)`）に寄せて行数を削減しつつ、旧 Dear PyGui との互換を維持する。
+- [x] `dpg.set_item_width(item_id, -1)` をラップするヘルパ（例: `_set_full_width(item_id)`）を導入し、`try/except Exception` のノイズを減らす。
 
 ### 3. Style/HUD カラー処理の整理
 
-- [ ] Style/HUD に関わるパラメータ ID をモジュールレベルの定数（例: `STYLE_COLOR_IDS`, `HUD_COLOR_IDS`）として定義し、`build_style_controls` / `on_store_change` / `sync_style_from_store` で共有する。
-- [ ] 背景/ライン/HUD 色の初期値解決ロジックを `_resolve_canvas_colors`（config 読み込み）と Store の override/元値適用を行う小さなヘルパ（例: `_resolve_style_color_from_store(pid, fallback_rgba)`）に分離し、`build_style_controls` 内の if/代入ブロックを簡潔にする。
-- [ ] `store_rgb01` と `_safe_norm` での Style/Layer 色の特別扱い条件式を 1 箇所に集約し、意味のある名前（例: `_is_layer_style_color_id(pid)`）で表現する。
+- [x] Style/HUD に関わるパラメータ ID をモジュールレベルの定数（例: `STYLE_COLOR_IDS`, `HUD_COLOR_IDS`）として定義し、`build_style_controls` / `on_store_change` / `sync_style_from_store` で共有する。
+- [x] 背景/ライン/HUD 色の初期値解決ロジックを `_resolve_canvas_colors`（config 読み込み）と Store の override/元値適用を行う小さなヘルパ（例: `_resolve_style_color_from_store(pid, fallback_rgba)`）に分離し、`build_style_controls` 内の if/代入ブロックを簡潔にする。
+- [x] `store_rgb01` と `_safe_norm` での Style/Layer 色の特別扱い条件式を 1 箇所に集約し、意味のある名前（例: `_is_layer_style_color_id(pid)`）で表現する。
 
 ### 4. ウィジェット生成ロジックの整理
 
 - [ ] `_create_bars` / `_create_widget` / `_create_int` / `_create_float` の責務を整理し、「Bars 列は値のバー群」「CC 列は常に `_create_cc_inputs` 経由で生成」といった最終レイアウト仕様を明確化する（必要なら仕様メモを残す）。
 - [ ] 上記仕様に基づき、現状到達しない `_create_widget` 内の int/float 分岐と `_create_int` / `_create_float` が本当に不要かを確認する。不要と判断できれば削除または `_create_bars` 側に統合してコードパスを 1 系統にする。
-- [ ] ベクトル用スライダ生成パターン（`_create_bars` と `_create_widget` に重複する部分）を 1 箇所にまとめ、dim（2–4）と range を受け取るヘルパ（例: `_create_vector_sliders(parent, desc, value_vec, vmin, vmax)`）に切り出す。
+- [x] ベクトル用スライダ生成パターン（`_create_bars` と `_create_widget` に重複する部分）を 1 箇所にまとめ、dim（2–4）と range を受け取るヘルパ（例: `_create_vector_sliders(parent, desc, value_vec, vmin, vmax)`）に切り出す。
 
 ### 5. CC バインディングと同期処理の整理
 
 - [ ] CC 入力テーブル生成ロジック（`_create_cc_inputs`）内のセルパディング・列追加パターンを、2. のテーブルヘルパを使う形にリファクタリングする。
-- [ ] `_on_cc_binding_change` の分岐を簡素化し、入力文字列処理（trim → パース → clamp）の部分を別ヘルパに分離してテストしやすくする（既存の `tests/ui/parameters/test_cc_binding.py` を活かす）。
+- [x] `_on_cc_binding_change` の分岐を簡素化し、入力文字列処理（trim → パース → clamp）の部分を別ヘルパに分離してテストしやすくする（既存の `tests/ui/parameters/test_cc_binding.py` を活かす）。
 - [ ] `on_store_change` のカラー系特別扱い（Style/HUD/layer color）とベクトル成分（`pid::x` 等）の更新ロジックを整理し、早期 `continue` の多用を避けて処理フローを読みやすくする。
 
 ### 6. マジックナンバー・定数整理
 
-- [ ] 行太さの既定値や HUD メータ色など、UI 既定値として意味を持つ数値をモジュールレベルの定数にまとめ、`build_style_controls` から生値を排除する。
-- [ ] 列幅クランプに使っている閾値（`0.1`/`0.9`/`0.05`/`0.95` など）に簡単なコメントまたは定数名を付け、レイアウト意図をコードから推測しやすくする。
+- [x] 行太さの既定値や HUD メータ色など、UI 既定値として意味を持つ数値をモジュールレベルの定数にまとめ、`build_style_controls` から生値を排除する。
+- [x] 列幅クランプに使っている閾値（`0.1`/`0.9`/`0.05`/`0.95` など）に簡単なコメントまたは定数名を付け、レイアウト意図をコードから推測しやすくする。
 
 ### 7. テスト・ドキュメント更新
 
@@ -104,4 +104,3 @@
 - Style セクションと一般パラメータテーブルをクラスレベルで分割する（`StyleSectionBuilder` と `ParameterTableBuilder` に分ける）か、1 クラスのままメソッドレベルで整理するかは、どこまで構造を変えてよいか相談したい。
 - CC バインディング UI の仕様（ベクトル成分ごとの入力を常に表示するか、簡略表示モードを認めるか）について、将来的な拡張の方向性があればそれに合わせて設計したい。
 - 現状の API を壊してもよい範囲（例: private メソッドのシグネチャや内部タグ命名規則）に何か制約があれば教えてほしい。
-

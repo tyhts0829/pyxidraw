@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from engine.ui.parameters.state import (
+    CategoryKind,
     ParameterDescriptor,
     ParameterStore,
     RangeHint,
@@ -61,6 +62,36 @@ class ParameterContext:
     def label_prefix(self) -> str:
         return f"{self.name}#{self.index}"
 
+    @property
+    def category(self) -> str:
+        """GUI 上でのカテゴリ名を返す。"""
+
+        if self.scope == "shape":
+            return self.name
+        return self.pipeline_label or self.pipeline or self.scope
+
+    @property
+    def category_kind(self) -> CategoryKind:
+        """GUI 上でのカテゴリ種別を返す。"""
+
+        return "shape" if self.scope == "shape" else "pipeline"
+
+    @property
+    def pipeline_uid(self) -> str | None:
+        """effect 用のパイプライン識別子を返す。"""
+
+        if self.scope != "effect":
+            return None
+        return self.pipeline or None
+
+    @property
+    def step_index(self) -> int | None:
+        """effect のステップインデックスを返す。"""
+
+        if self.scope != "effect":
+            return None
+        return int(self.index)
+
 
 class ParameterValueResolver:
     """パラメータ値とメタデータを ParameterStore と同期させる責務を担う。"""
@@ -80,21 +111,7 @@ class ParameterValueResolver:
     ) -> dict[str, Any]:
         merged, sources = self._merge_with_defaults(params, signature, skip=skip)
         # シグネチャ順（0..N）を param_order として付与（存在しないものは None）
-        param_order_map: dict[str, int] = {}
-        try:
-            if signature is not None:
-                for i, (name, parameter) in enumerate(signature.parameters.items()):
-                    if skip and name in skip:
-                        continue
-                    if parameter.kind in (
-                        inspect.Parameter.VAR_POSITIONAL,
-                        inspect.Parameter.VAR_KEYWORD,
-                        inspect.Parameter.POSITIONAL_ONLY,
-                    ):
-                        continue
-                    param_order_map[name] = int(i)
-        except Exception:
-            param_order_map = {}
+        param_order_map = self._build_param_order_map(signature, skip)
         updated: dict[str, Any] = {}
 
         for key, raw_value in merged.items():
@@ -115,7 +132,6 @@ class ParameterValueResolver:
                     default_actual=default_actual,
                     doc=doc,
                     meta_entry=meta_entry,
-                    has_default=self._has_default(signature, key),
                     param_order=param_order_map.get(key),
                 )
                 continue
@@ -131,7 +147,6 @@ class ParameterValueResolver:
                     doc=doc,
                     meta_entry=meta_entry,
                     value_type=value_type,
-                    has_default=self._has_default(signature, key),
                     param_order=param_order_map.get(key),
                 )
                 continue
@@ -162,35 +177,21 @@ class ParameterValueResolver:
         doc: str | None,
         meta_entry: Mapping[str, Any],
         value_type: ValueType,
-        has_default: bool,
         param_order: int | None,
     ) -> Any:
-        # グルーピング: shape は形状名、effect は表示ラベル→UID→scope の優先でカテゴリ決定
-        category = (
-            context.name
-            if context.scope == "shape"
-            else (context.pipeline_label or context.pipeline or context.scope)
-        )
-        category_kind = "shape" if context.scope == "shape" else "pipeline"
         if source == "default":
             hint = self._range_hint_from_meta(
-                value_type=value_type,
                 meta=meta_entry,
                 component_index=None,
-                default_value=default_actual,
             )
-            descriptor = ParameterDescriptor(
-                id=descriptor_id,
-                label=f"{context.label_prefix}: {param_name}",
-                source=context.scope,
-                category=category,
-                category_kind=category_kind,
+            descriptor = self._build_descriptor(
+                context=context,
+                descriptor_id=descriptor_id,
+                param_name=param_name,
                 value_type=value_type,
                 default_value=default_actual,
                 range_hint=hint,
                 help_text=doc,
-                pipeline_uid=(context.pipeline or None) if context.scope == "effect" else None,
-                step_index=int(context.index) if context.scope == "effect" else None,
                 param_order=param_order,
             )
             return self._register_scalar(descriptor, default_actual)
@@ -208,7 +209,6 @@ class ParameterValueResolver:
         default_actual: Any,
         doc: str | None,
         meta_entry: Mapping[str, Any],
-        has_default: bool,
         param_order: int | None,
     ) -> tuple[Any, ...]:
         # 提供値（provided）は登録せず、実値をタプルとしてそのまま返す
@@ -221,77 +221,23 @@ class ParameterValueResolver:
             return tuple(self._ensure_sequence(default_actual))
 
         # default 採用時のみ GUI に登録（親 Descriptor 1 件）。
-        default_values = self._ensure_sequence(default_actual)
-        if not default_values:
-            # 次善: 長さ 3 のゼロベクトル
-            default_values = [0.0, 0.0, 0.0]
-        dim = max(2, min(len(default_values), 4))
-        default_tuple = tuple(default_values[:dim])  # type: ignore[assignment]
-
-        vector_hint = self._vector_range_hint_from_meta(meta_entry, dim)
-        category = (
-            context.name
-            if context.scope == "shape"
-            else (context.pipeline_label or context.pipeline or context.scope)
-        )
-        category_kind = "shape" if context.scope == "shape" else "pipeline"
-        descriptor = ParameterDescriptor(
-            id=descriptor_id,
-            label=f"{context.label_prefix}: {param_name}",
-            source=context.scope,
-            category=category,
-            category_kind=category_kind,
+        default_tuple = self._normalize_vector_default(default_actual)
+        vector_hint = self._vector_range_hint_from_meta(meta_entry, len(default_tuple))
+        descriptor = self._build_descriptor(
+            context=context,
+            descriptor_id=descriptor_id,
+            param_name=param_name,
             value_type="vector",
             default_value=default_tuple,
             range_hint=None,
             help_text=doc,
-            vector_hint=vector_hint,
-            pipeline_uid=(context.pipeline or None) if context.scope == "effect" else None,
-            step_index=int(context.index) if context.scope == "effect" else None,
             param_order=param_order,
+            vector_hint=vector_hint,
         )
         self._store.register(descriptor, default_tuple)
         resolved = self._store.resolve(descriptor_id, default_tuple)
-        # CC バインド（成分別）があれば、resolved をベースに置換
-        try:
-            # ベースベクトル
-            vec = list(resolved) if isinstance(resolved, (list, tuple)) else list(default_tuple)
-            dim_out = min(len(vec), 4)
-            # ヒント（成分別レンジ）
-            try:
-                desc_obj = self._store.get_descriptor(descriptor_id)
-                vh = getattr(desc_obj, "vector_hint", None)
-            except Exception:
-                vh = None
-            mins = list(getattr(vh, "min_values", (0.0, 0.0, 0.0, 0.0)))
-            maxs = list(getattr(vh, "max_values", (1.0, 1.0, 1.0, 1.0)))
-            suffixes = ("x", "y", "z", "w")
-            changed = False
-            for i in range(dim_out):
-                comp_id = f"{descriptor_id}::{suffixes[i]}"
-                try:
-                    cc_idx = self._store.cc_binding(comp_id)
-                except Exception:
-                    cc_idx = None
-                if cc_idx is None:
-                    continue
-                try:
-                    cc_val = float(self._store.cc_value(cc_idx))
-                    lo = float(mins[i]) if i < len(mins) else 0.0
-                    hi = float(maxs[i]) if i < len(maxs) else 1.0
-                    vec[i] = lo + (hi - lo) * cc_val
-                    changed = True
-                except Exception:
-                    continue
-            if changed:
-                return tuple(vec)  # type: ignore[return-value]
-        except Exception:
-            pass
-        # store は Any を返すため、tuple を保証
-        try:
-            return tuple(resolved)  # type: ignore[return-value]
-        except Exception:
-            return default_tuple
+        base_tuple = self._ensure_vector_tuple(resolved, default_tuple)
+        return self._apply_cc_to_vector(descriptor_id, base_tuple)
 
     def _resolve_passthrough(
         self,
@@ -306,64 +252,26 @@ class ParameterValueResolver:
         meta_entry: Mapping[str, Any] | None,
         param_order: int | None,
     ) -> Any:
-        # 判定は meta 優先（choices→enum / type:"string"→string）、無指定時は値から推定
         meta_map: Mapping[str, Any] = meta_entry if isinstance(meta_entry, Mapping) else {}
+        # 判定は meta 優先（choices→enum / type:"string"→string）、無指定時は値から推定
         value_type = self._determine_value_type(meta_map, default_value, value)
-        # choices 抽出
-        choices_list: list[str] | None = None
-        if isinstance(meta_map, Mapping):
-            raw_choices = meta_map.get("choices")
-            try:
-                if isinstance(raw_choices, Sequence) and not isinstance(raw_choices, (str, bytes)):
-                    cands = [str(x) for x in list(raw_choices)]
-                    choices_list = cands if cands else None
-            except Exception:
-                choices_list = None
-        # choices は上位 `resolve()` から渡されないため、ここで meta を使わずに判断する
-        # string は自由入力として GUI 対応、enum は choices が無ければ非対応
-        supported = value_type in {"float", "int", "bool", "string"} or (
-            value_type == "enum" and bool(choices_list)
-        )
-        # choices は後で param_meta から渡すよう `_determine_value_type` と resolve 経路を拡張してもよい
+        choices_list = self._extract_choices(meta_map)
+        supported = self._is_supported_passthrough_type(value_type, choices_list)
+        multiline, height = self._string_meta(meta_map, value_type)
         if source == "default":
-            # string の複数行/高さヒント（meta）を解釈
-            multiline = False
-            height: int | None = None
-            try:
-                if value_type == "string" and isinstance(meta_map, Mapping):
-                    ml_raw = meta_map.get("multiline")
-                    if isinstance(ml_raw, bool):
-                        multiline = ml_raw
-                    h_raw = meta_map.get("height")
-                    if isinstance(h_raw, (int, float)):
-                        height = int(h_raw)
-            except Exception:
-                multiline = False
-                height = None
-
-            category = (
-                context.name
-                if context.scope == "shape"
-                else (context.pipeline_label or context.pipeline or context.scope)
-            )
-            category_kind = "shape" if context.scope == "shape" else "pipeline"
-            descriptor = ParameterDescriptor(
-                id=descriptor_id,
-                label=f"{context.label_prefix}: {param_name}",
-                source=context.scope,
-                category=category,
-                category_kind=category_kind,
+            descriptor = self._build_descriptor(
+                context=context,
+                descriptor_id=descriptor_id,
+                param_name=param_name,
                 value_type=value_type,
                 default_value=default_value,
                 range_hint=None,
                 help_text=doc,
+                param_order=param_order,
                 supported=supported,
                 choices=choices_list,
                 string_multiline=multiline,
                 string_height=height,
-                pipeline_uid=(context.pipeline or None) if context.scope == "effect" else None,
-                step_index=int(context.index) if context.scope == "effect" else None,
-                param_order=param_order,
             )
             self._store.register(descriptor, value)
             return self._store.resolve(descriptor.id, value)
@@ -399,6 +307,29 @@ class ParameterValueResolver:
     # _register_vector は親 Descriptor 化に伴い廃止
 
     @staticmethod
+    def _build_param_order_map(
+        signature,
+        skip: set[str] | None,
+    ) -> dict[str, int]:
+        if signature is None:
+            return {}
+        order: dict[str, int] = {}
+        try:
+            for index, (name, parameter) in enumerate(signature.parameters.items()):
+                if skip and name in skip:
+                    continue
+                if parameter.kind in (
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                    inspect.Parameter.POSITIONAL_ONLY,
+                ):
+                    continue
+                order[name] = int(index)
+        except Exception:
+            return {}
+        return order
+
+    @staticmethod
     def _merge_with_defaults(
         params: Mapping[str, Any],
         signature,
@@ -423,7 +354,7 @@ class ParameterValueResolver:
                 merged[name] = params[name]
                 sources[name] = "provided"
                 continue
-            if parameter.default is inspect._empty:  # type: ignore[attr-defined]
+            if parameter.default is inspect.Parameter.empty:
                 continue
             merged[name] = parameter.default
             sources[name] = "default"
@@ -441,7 +372,7 @@ class ParameterValueResolver:
         parameter = signature.parameters.get(key)
         if parameter is None:
             return fallback
-        if parameter.default is inspect._empty:  # type: ignore[attr-defined]
+        if parameter.default is inspect.Parameter.empty:
             return fallback
         return parameter.default
 
@@ -451,7 +382,7 @@ class ParameterValueResolver:
         default_value: Any,
         raw_value: Any,
     ) -> ValueType:
-        # 列挙（choices）が与えられている場合は enum を優先
+        # 列挙（choices）が与えられている場合は enum を優先し、次に meta.type、その後 default/raw の値から推定する。
         if "choices" in meta:
             return "enum"
         meta_type = meta.get("type")
@@ -474,9 +405,13 @@ class ParameterValueResolver:
 
     @staticmethod
     def _is_numeric_type(value_type: ValueType) -> bool:
+        """数値系（スライダ表示対象）かどうかを判定する。"""
+
         return value_type in {"float", "int", "bool"}
 
     def _is_vector_value(self, value: Any, default_value: Any) -> bool:
+        """値または既定値がベクトル（2–4 次元の数値列）かどうかを判定する。"""
+
         if self._is_vector(value):
             return True
         if self._is_vector(default_value):
@@ -502,11 +437,11 @@ class ParameterValueResolver:
     def _range_hint_from_meta(
         self,
         *,
-        value_type: ValueType,
         meta: Mapping[str, Any],
         component_index: int | None,
-        default_value: Any | None,
     ) -> RangeHint | None:
+        """meta の min/max/step から RangeHint を構築する（表示レンジのみ扱い、値のクランプは行わない）。"""
+
         min_value = self._extract_meta_component(meta.get("min"), component_index)
         max_value = self._extract_meta_component(meta.get("max"), component_index)
         step = self._extract_meta_component(meta.get("step"), component_index)
@@ -568,31 +503,168 @@ class ParameterValueResolver:
         return None
 
     @staticmethod
-    def _component_default_actual(
-        *,
-        default_values: list[float],
-        idx: int,
-        has_default: bool,
-        hint: RangeHint | None,
-    ) -> float:
-        if has_default and idx < len(default_values):
-            return float(default_values[idx])
-        return 0.0
-
-    @staticmethod
     def _has_default(signature, key: str) -> bool:
         if signature is None:
             return False
         parameter = signature.parameters.get(key)
         if parameter is None:
             return False
-        return parameter.default is not inspect._empty  # type: ignore[attr-defined]
+        return parameter.default is not inspect.Parameter.empty
 
     @staticmethod
     def _ensure_sequence(value: Any) -> list[float]:
         if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
             return [float(v) for v in value]
         return []
+
+    @staticmethod
+    def _normalize_vector_default(default_actual: Any) -> tuple[float, ...]:
+        """ベクトル既定値を 2..4 次元のタプルに正規化する。"""
+
+        default_values = ParameterValueResolver._ensure_sequence(default_actual)
+        if not default_values:
+            # 次善: 長さ 3 のゼロベクトル
+            default_values = [0.0, 0.0, 0.0]
+        dim = max(2, min(len(default_values), 4))
+        return tuple(default_values[:dim])
+
+    @staticmethod
+    def _ensure_vector_tuple(resolved: Any, fallback: tuple[float, ...]) -> tuple[float, ...]:
+        """store からの解決結果をベクトルタプルとして扱う。"""
+
+        if isinstance(resolved, (list, tuple)):
+            try:
+                return tuple(float(v) for v in resolved)
+            except Exception:
+                return fallback
+        return fallback
+
+    def _apply_cc_to_vector(
+        self,
+        descriptor_id: str,
+        base_values: tuple[float, ...],
+    ) -> tuple[float, ...]:
+        """ベクトル各成分に CC バインドを適用する。"""
+
+        try:
+            vec = list(base_values)
+            dim_out = min(len(vec), 4)
+            try:
+                desc_obj = self._store.get_descriptor(descriptor_id)
+                vh = getattr(desc_obj, "vector_hint", None)
+            except Exception:
+                vh = None
+            mins = list(getattr(vh, "min_values", (0.0, 0.0, 0.0, 0.0)))
+            maxs = list(getattr(vh, "max_values", (1.0, 1.0, 1.0, 1.0)))
+            changed = False
+            for index in range(dim_out):
+                comp_id = f"{descriptor_id}::{_VECTOR_SUFFIX[index]}"
+                try:
+                    cc_idx = self._store.cc_binding(comp_id)
+                except Exception:
+                    cc_idx = None
+                if cc_idx is None:
+                    continue
+                try:
+                    cc_val = float(self._store.cc_value(cc_idx))
+                    lo = float(mins[index]) if index < len(mins) else 0.0
+                    hi = float(maxs[index]) if index < len(maxs) else 1.0
+                    vec[index] = lo + (hi - lo) * cc_val
+                    changed = True
+                except Exception:
+                    continue
+            if changed:
+                return tuple(vec)
+        except Exception:
+            return base_values
+        return base_values
+
+    @staticmethod
+    def _extract_choices(meta_map: Mapping[str, Any]) -> list[str] | None:
+        """enum 用の choices を meta から抽出する。"""
+
+        raw_choices = meta_map.get("choices")
+        if not isinstance(raw_choices, Sequence) or isinstance(raw_choices, (str, bytes)):
+            return None
+        try:
+            candidates = [str(item) for item in list(raw_choices)]
+        except Exception:
+            return None
+        return candidates or None
+
+    @staticmethod
+    def _is_supported_passthrough_type(
+        value_type: ValueType,
+        choices: list[str] | None,
+    ) -> bool:
+        """GUI で扱えるかどうかを判定する。"""
+
+        if value_type in {"float", "int", "bool", "string"}:
+            return True
+        if value_type == "enum":
+            return bool(choices)
+        return False
+
+    @staticmethod
+    def _string_meta(
+        meta_map: Mapping[str, Any],
+        value_type: ValueType,
+    ) -> tuple[bool, int | None]:
+        """string 入力用の UI ヒントを meta から解釈する。"""
+
+        multiline = False
+        height: int | None = None
+        if value_type != "string":
+            return multiline, height
+        try:
+            ml_raw = meta_map.get("multiline")
+            if isinstance(ml_raw, bool):
+                multiline = ml_raw
+            h_raw = meta_map.get("height")
+            if isinstance(h_raw, (int, float)):
+                height = int(h_raw)
+        except Exception:
+            return False, None
+        return multiline, height
+
+    def _build_descriptor(
+        self,
+        *,
+        context: ParameterContext,
+        descriptor_id: str,
+        param_name: str,
+        value_type: ValueType,
+        default_value: Any,
+        range_hint: RangeHint | None,
+        help_text: str | None,
+        param_order: int | None,
+        vector_hint=None,
+        supported: bool = True,
+        choices: list[str] | None = None,
+        string_multiline: bool | None = None,
+        string_height: int | None = None,
+    ) -> ParameterDescriptor:
+        """ParameterDescriptor を組み立てる共通ヘルパ。"""
+
+        return ParameterDescriptor(
+            id=descriptor_id,
+            label=f"{context.label_prefix}: {param_name}",
+            source=context.scope,
+            category=context.category,
+            category_kind=context.category_kind,
+            value_type=value_type,
+            default_value=default_value,
+            range_hint=range_hint,
+            help_text=help_text,
+            vector_hint=vector_hint,
+            pipeline_uid=context.pipeline_uid,
+            step_index=context.step_index,
+            param_order=param_order,
+            supported=supported,
+            choices=choices,
+            string_multiline=bool(string_multiline) if string_multiline is not None else False,
+            string_height=string_height or 0,
+        )
 
 
 __all__ = ["ParameterContext", "ParameterValueResolver"]
