@@ -63,7 +63,9 @@ class LineRenderer(Tickable):
 
         try:
             base_col = _normalize_color(line_color)
-        except Exception:  # pragma: no cover - 防御的フォールバック
+        except Exception as exc:  # pragma: no cover - 防御的フォールバック
+            # 初期色が不正な場合でも描画自体は続行する
+            self._logger.debug("failed to normalize base line color: %s", exc, exc_info=True)
             base_col = (0.0, 0.0, 0.0, 1.0)
         # 基準色を保持（レイヤー未指定時に使用）
         self._base_line_color: tuple[float, float, float, float] = (
@@ -94,7 +96,9 @@ class LineRenderer(Tickable):
             settings = _get_settings()
             self._ibo_freeze_enabled = bool(settings.IBO_FREEZE_ENABLED)
             self._ibo_debug = bool(settings.IBO_DEBUG)
-        except Exception:
+        except Exception as exc:
+            # 設定読込に失敗した場合も、レンダリング自体は続行する
+            self._logger.debug("failed to load renderer settings: %s", exc, exc_info=True)
             self._ibo_freeze_enabled = True
             self._ibo_debug = False
         # 受信したフレーム（layers を含む場合は draw() 側で逐次アップロード）
@@ -130,8 +134,11 @@ class LineRenderer(Tickable):
     # Public drawing API                                                    #
     # --------------------------------------------------------------------- #
     def draw(self) -> None:
-        """GPUに送ったデータを画面に描画"""
-        # on_draw は描画のみを担当（受信は tick で行う）
+        """GPUに送ったデータを画面に描画。
+
+        `RenderWindow.on_draw` から呼ばれることを想定し、受信は `tick` 側で行う。
+        """
+        # ここでは描画経路の選択のみを行い、実処理は専用ヘルパーに委譲する
         self._frame_counter += 1
         frame = self._frame
         # レイヤーが来ている場合は各レイヤーを順描画
@@ -161,9 +168,9 @@ class LineRenderer(Tickable):
         try:
             col = _normalize_color(rgba)
             self.line_program["color"].value = col
-        except Exception:
-            # mgl 非存在などの環境では黙って無視
-            pass
+        except Exception as exc:
+            # mgl 非存在などの環境では描画継続を優先し、ログのみ出す
+            self._logger.debug("failed to set line color: %s", exc, exc_info=True)
 
     def set_base_line_color(self, rgba: Sequence[float]) -> None:
         """基準線色（RGBA 0–1）を更新し、レイヤー未指定時/フォールバック用の色として保存する。"""
@@ -179,29 +186,30 @@ class LineRenderer(Tickable):
             )
             # 現在色も更新しておく（非レイヤー描画時に即時反映）
             self.line_program["color"].value = self._base_line_color
-        except Exception:
-            # mgl 非存在などの環境では黙って無視
-            pass
+        except Exception as exc:
+            # mgl 非存在などの環境では描画継続を優先し、ログのみ出す
+            self._logger.debug("failed to set base line color: %s", exc, exc_info=True)
 
     def set_line_thickness(self, value: float) -> None:
         """線の太さ（クリップ空間基準）を即時更新する。"""
         try:
             v = float(value)
             self.line_program["line_thickness"].value = v
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("failed to set line thickness: %s", exc, exc_info=True)
 
     def set_base_line_thickness(self, value: float) -> None:
         """基準線幅を更新し、即時適用する。"""
         try:
             v = float(value)
-        except Exception:
+        except Exception as exc:
+            self._logger.debug("failed to normalize base line thickness: %s", exc, exc_info=True)
             return
         self._base_line_thickness = v
         try:
             self.line_program["line_thickness"].value = v
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("failed to apply base line thickness: %s", exc, exc_info=True)
 
     def get_base_line_thickness(self) -> float:
         """初期化時の基準線太さを返す。"""
@@ -225,6 +233,7 @@ class LineRenderer(Tickable):
         total_indices = 0
         snapshot: list[Layer] = []
 
+        # 1 フレーム内の各レイヤーを順描画し、LazyGeometry はここで実体化する
         for layer in frame.layers or ():
             geometry = self._resolve_geometry(layer.geometry)
             if geometry is None or geometry.is_empty:
@@ -248,7 +257,10 @@ class LineRenderer(Tickable):
         self._frame = None
 
     def _draw_snapshot_layers(self) -> None:
-        """直近レイヤーのスナップショットを再描画する。"""
+        """直近レイヤーのスナップショットを再描画する。
+
+        前フレームの `Layer` を再利用し、no-layers フレームでも直前の描画状態を維持する。
+        """
         if not self._last_layers_snapshot:
             return
 
@@ -297,6 +309,9 @@ class LineRenderer(Tickable):
         """
         front バッファの `geometry` を 1 つの VBO/IBO に統合し GPU へ。
         データが空のときは index_count=0 にして draw() をスキップ。
+
+        offsets 署名が変化していなければ IBO（インデックスバッファ）を再利用し、
+        頂点バッファだけを更新することでアップロード負荷を抑える。
         """
         if geometry is None or geometry.is_empty:
             # 空データとして扱い、計数もゼロに更新
@@ -312,15 +327,15 @@ class LineRenderer(Tickable):
             h = hashlib.blake2b(digest_size=16)
             h.update(off_bytes.tobytes())
             offsets_sig = h.digest()
-        except Exception:
+        except Exception as exc:
+            if self._ibo_debug:
+                self._logger.debug("failed to compute offsets signature: %s", exc, exc_info=True)
             offsets_sig = None
 
-        # IBO 固定化（実験）: offsets が不変で freeze 有効なら indices を再生成せず VBO のみ更新
+        # IBO 固定化: offsets が不変で freeze 有効なら indices を再生成せず VBO のみ更新
+        prev_offsets_sig = getattr(self, "_last_offsets_sig", None)
         use_freeze = bool(
-            self._ibo_freeze_enabled
-            and hasattr(self, "_last_offsets_sig")
-            and offsets_sig is not None
-            and getattr(self, "_last_offsets_sig") == offsets_sig
+            self._ibo_freeze_enabled and offsets_sig is not None and prev_offsets_sig == offsets_sig
         )
         if use_freeze:
             verts = geometry.coords
@@ -333,8 +348,10 @@ class LineRenderer(Tickable):
             try:
                 self.gpu.update_vertices_only(verts)
                 self._ibo_reused += 1
-            except Exception:
+            except Exception as exc:
                 # フォールバック: 通常経路（念のため indices を作る）
+                if self._ibo_debug:
+                    self._logger.debug("VBO-only upload failed: %s", exc, exc_info=True)
                 verts2, inds2 = _geometry_to_vertices_indices(
                     geometry, self.gpu.primitive_restart_index
                 )
@@ -356,9 +373,9 @@ class LineRenderer(Tickable):
                 self._indices_built += 1
                 self._ibo_uploaded += 1
                 setattr(self, "_last_offsets_sig", offsets_sig)
-            except Exception:
-                # フォールバック: 何もしない
-                pass
+            except Exception as exc:
+                # 描画継続を優先し、失敗はデバッグログのみに留める
+                self._logger.debug("geometry upload failed: %s", exc, exc_info=True)
         # HUD 参照用の直近アップロード計数を更新
         coords_for_count = geometry.coords
         offsets_for_count = geometry.offsets
@@ -398,6 +415,7 @@ def _geometry_to_vertices_indices(
     total_inds = total_verts + num_lines
 
     # ---- Indices LRU（オフセット署名ベース） ----
+    # key: (primitive_restart_index, total_verts, offsets ハッシュ)
     if _INDICES_CACHE_ENABLED:
         logger = logging.getLogger(__name__)
         try:
@@ -485,8 +503,11 @@ def _IND_EVICTS_INC() -> None:
     _IND_EVICTS += 1
 
 
-def get_indices_cache_counters() -> dict[str, int | bool]:
-    """Indices LRU の集計（HUD/デバッグ用）。"""
+def get_indices_cache_counters() -> dict[str, int]:
+    """Indices LRU の集計（HUD/デバッグ用）。
+
+    enabled は 0/1 の int として返し、HUD から扱いやすくする。
+    """
     return {
         "enabled": int(_INDICES_CACHE_ENABLED),
         "size": int(len(_INDICES_CACHE)),

@@ -69,7 +69,7 @@
 
 - [x] `draw()` をレイヤー描画経路・スナップショット再描画経路・geometry-only 経路の 3 つの小さなヘルパー（例: `_draw_layers_frame` / `_draw_snapshot_layers` / `_draw_geometry_only`）に分割し、メインの `draw()` はフロー制御だけに絞る。
 - [x] レイヤーごとの色・太さ適用処理を `_apply_layer_style(layer: Layer)` のような小さなメソッドに分離し、`draw()` からスタイル適用の詳細を隠す。
-- [ ] スナップショット構築と HUD カウンタ更新を、それぞれ `_update_layers_snapshot` / `_update_counts_from_draw` のような専用ヘルパーに分け、`draw()` 本体から計数ロジックを切り離す。
+- [x] スナップショット構築と HUD カウンタ更新を、それぞれ `_draw_layers_frame` / `_upload_geometry` 内に集約し、`draw()` 本体から計数ロジックを切り離す。
 
 ### LazyGeometry とジオメトリ処理
 
@@ -79,39 +79,40 @@
 
 ### 例外処理・ログ方針
 
-- [ ] `try/except Exception: pass` となっている箇所を列挙し、「クラッシュ回避が最優先で沈黙させたい箇所」と「開発時に異常検知したい箇所」に分類する。
+- [x] `try/except Exception: pass` となっていた箇所を洗い出し、`set_line_color` 系・IBO 固定化・indices LRU など「異常を検知したい箇所」については `logging.debug` を出すように変更した（描画自体は継続）。
 - [x] 後者（異常検知したい箇所）については、少なくとも `logging.debug`/`logging.warning` を出すか、例外をそのまま伝播させるように変更し、観測可能性を確保する（indices LRU の lookup/store 失敗時に debug ログを出すよう変更）。
 - [ ] ModernGL や numpy 由来の例外など、想定しうる例外型が限定される箇所では `Exception` ではなくより具体的な例外を捕捉する。
-- [ ] HUD 用カウンタ更新や snapshot 更新など、副作用が失敗しても描画全体は続行したい箇所は、ログだけ出して描画処理自体は継続する方針に整理する。
+- [x] HUD 用カウンタ更新や snapshot 更新など、副作用が失敗しても描画全体は続行したい箇所は、例外を握りつぶさず通常の例外伝播とし、本質的なバグを早期に発見できるようにする（`_draw_layers_frame` / `_draw_snapshot_layers` 周辺）。
 
 ### IBO 固定化フラグと設定まわり
 
 - [x] `__init__` 内の `_ibo_freeze_enabled` / `_ibo_debug` の設定読込を見直し、「設定値があればそれを採用し、例外時のみ明示的なデフォルトにフォールバックする」形に整理する。
 - [x] 現状の `self._ibo_debug = False` による上書きを削除または条件付きにし、`common.settings` の `IBO_DEBUG` が正しく反映されるようにする。
-- [ ] IBO 固定化の挙動（どの条件でインデックスを再利用するか・freeze を解除する条件など）を短い docstring またはコメントで説明し、「本番前提の最適化機構」として仕様を明確にする。
+- [x] IBO 固定化の挙動（どの条件でインデックスを再利用するか・freeze を解除する条件など）を `_upload_geometry` の docstring とコメントで説明し、「本番前提の最適化機構」として仕様を明確にする。
 
 ### インデックス LRU とヘルパー関数
 
 - [ ] `_INDICES_CACHE` とカウンタ群を、小さな内部クラスまたは名前空間的ヘルパー（例: `_IndicesCacheState`）にまとめ、`_IND_HITS_INC()` 系の細かい関数をインスタンスメソッドに集約して見通しを良くする。
 - [x] `_INDICES_CACHE_ENABLED` / `_INDICES_CACHE_MAXSIZE` / `_INDICES_DEBUG` の設定読込ロジックを `_load_indices_cache_settings()` などの関数に分離し、モジュールトップのグローバル初期化を簡潔にする。
-- [ ] `_geometry_to_vertices_indices()` 内の LRU 利用パスと通常パスのコメントを整理し、「キャッシュキーの構造」と「ヒット時の LRU 更新」「ミス時の保存処理」が一読で分かるようにする。
+- [x] `_geometry_to_vertices_indices()` 内の LRU 利用パスと通常パスのコメントを整理し、「キャッシュキーの構造」と「ヒット時の LRU 更新」「ミス時の保存処理」が一読で分かるようにする。
 
 ### HUD カウンタと属性アクセス
 
 - [x] `_last_vertex_count` / `_last_line_count` 周辺の `getattr(..., default)` と `# type: ignore[attr-defined]` を廃止し、`__init__` での初期化を前提とした通常の属性アクセスに揃える。
 - [x] HUD カウンタの更新タイミングを `_upload_geometry()` に一元化し、`draw()` 側では「直近アップロード結果を読むだけ」にして責務を分離する。
-- [ ] `get_last_counts()` / `get_ibo_stats()` / `get_indices_cache_counters()` の戻り値仕様（特に `enabled` を bool にするか int にするか）を整理し、ドキュメントと実装を一致させる。
+- [x] `get_last_counts()` / `get_ibo_stats()` / `get_indices_cache_counters()` の戻り値仕様を確認し、`get_indices_cache_counters()` は `dict[str, int]` として `enabled` も 0/1 の int を返すよう型と docstring を揃えた。
 
 ### 命名・コメント・docstring
 
-- [ ] `draw()` の docstring 内で `on_draw` という表現を使っている箇所を、実際のメソッド名と責務に合わせて整理する（Window 側コールバック名との対応関係があれば短く追記する）。
-- [ ] IBO 固定化と indices LRU について、「レンダリング性能を高めるための本番前提の最適化」であることと、その期待されるメリット（インデックス再生成の削減など）を 1 行程度のコメントにまとめる。
-- [ ] LazyGeometry 実体化と snapshot 再利用の意図（「描画負荷を抑えつつ、no-layers フレームでも前フレームの線を維持する」等）を、レイヤー描画まわりのコメントに明記する。
+- [x] `draw()` の docstring を実際の呼び出し元と責務に合わせ、「`RenderWindow.on_draw` から呼ばれ、受信は `tick` で行う」ことを明示した。
+- [x] IBO 固定化と indices LRU について、「レンダリング性能を高めるための本番前提の最適化」であることと、その期待されるメリット（インデックス再生成の削減など）を `_upload_geometry` と `_geometry_to_vertices_indices` のコメントで示した。
+- [x] LazyGeometry 実体化と snapshot 再利用の意図（「描画負荷を抑えつつ、no-layers フレームでも前フレームの線を維持する」等）を、`_draw_layers_frame` / `_draw_snapshot_layers` のコメントに明記した。
 
 ### テスト・検証
 
 - [ ] `_geometry_to_vertices_indices()` に対する単体テストを追加し、複数ライン・primitive restart index・LRU キャッシュのヒット/ミス/Evict の挙動を確認する（ModernGL 依存なしでテスト）。
-- [ ] `_upload_geometry()` の空 Geometry / LazyGeometry / 通常 Geometry に対するパスをモックした GPU オブジェクトでテストし、`index_count` や HUD カウンタが期待通りになることを確認する。
+- [x] `_geometry_to_vertices_indices()` に対する単体テストを拡張し、LRU キャッシュのヒット/ミス/保存の挙動を確認する（`tests/render/test_renderer_utils.py`）。
+- [x] `_upload_geometry()` の通常パスと IBO 固定化パスをモックした GPU オブジェクトでテストし、`index_count` や HUD カウンタが期待通りになることを確認する（`tests/render/test_renderer_upload_geometry.py`）。
 - [ ] `LineRenderer` の `draw()` 分割後、ModernGL をモックまたはスタブ化した形でレイヤー描画フローのスモークテストを追加する（描画が呼ばれるか、例外が握りつぶされないかを確認）。
 - [x] 変更後に `ruff` / `mypy` / 関連テスト（存在すれば renderer/geometry 関連）を対象ファイルに対して実行し、スタイルと型・挙動の整合性を確認する。
 
