@@ -16,7 +16,7 @@ def _draw_cb(t: float) -> Geometry:  # noqa: ANN001
 
 @pytest.mark.integration
 def test_worker_pool_emits_packets_and_closes_cleanly() -> None:
-    pool = WorkerPool(fps=60, draw_callback=_draw_cb, cc_snapshot=lambda: {}, num_workers=1)
+    pool = WorkerPool(draw_callback=_draw_cb, cc_snapshot=lambda: {}, num_workers=1)
     try:
         # 少しだけ tick してタスクを投入
         for _ in range(3):

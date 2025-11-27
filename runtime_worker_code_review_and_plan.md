@@ -62,33 +62,33 @@
 
 ### 1. 色・レイヤー正規化ロジックの整理
 
-- [ ] `_normalize_to_layers` から色変換部分を抽出し、ファイルローカルヘルパー（例: `_normalize_rgba(value) -> tuple[float, float, float, float]`）に統合する。
-- [ ] `_apply_layer_overrides` でも同じ `_normalize_rgba` を利用するように変更し、色正規化の挙動を 1 箇所に集約する。
-- [ ] `util.color.normalize_color` の例外扱いを `layer_code_review.md` / `layer_fixes_plan.md` の方針に合わせて見直し、必要以上に黙殺しない（例: そのまま例外を上げるか、最低限のログを出す）。
+- [x] `_normalize_to_layers` から色変換部分を抽出し、ファイルローカルヘルパー（例: `_normalize_rgba(value) -> tuple[float, float, float, float]`）に統合する。
+- [x] `_apply_layer_overrides` でも同じ `_normalize_rgba` を利用するように変更し、色正規化の挙動を 1 箇所に集約する。
+- [x] `util.color.normalize_color` の例外扱いを `layer_code_review.md` / `layer_fixes_plan.md` の方針に合わせて見直し、必要以上に黙殺しない（例: そのまま例外を上げるか、最低限のログを出す）。
 
 ### 2. `_execute_draw_to_packet` の分割と単純化
 
-- [ ] CC/パラメータスナップショットの適用とクリーンアップを、小さなヘルパー（例: `_apply_snapshots()` / `_clear_param_runtime()`）に切り出し、`_execute_draw_to_packet` 本体からネストと `try/except` を減らす。
-- [ ] メトリクス before/after の取得と差分からのフラグ生成を、別ヘルパー（例: `_compute_cache_flags(before, after) -> dict[str, str] | None`）に分離し、テストしやすくする。
-- [ ] `_execute_draw_to_packet` は「draw 実行 → 結果正規化 → レイヤー override → `RenderPacket` 生成」に集中させ、例外ハンドリングも `WorkerTaskError` 生成のみに絞る。
+- [x] CC/パラメータスナップショットの適用とクリーンアップを、小さなヘルパー（例: `_apply_snapshots()` / `_clear_param_runtime()`）に切り出し、`_execute_draw_to_packet` 本体からネストと `try/except` を減らす。
+- [x] メトリクス before/after の取得と差分からのフラグ生成を、別ヘルパー（例: `_compute_cache_flags(before, after) -> dict[str, str] | None`）に分離し、テストしやすくする。
+- [x] `_execute_draw_to_packet` は「draw 実行 → 結果正規化 → レイヤー override → `RenderPacket` 生成」に集中させ、例外ハンドリングも `WorkerTaskError` 生成のみに絞る。
 
 ### 3. `WorkerPool` インターフェースの明確化
 
-- [ ] `WorkerPool` から `fps` 引数と内部フィールドを削除し、「時間（`dt/t`）は呼び出し側フレームクロックが完全に管理する」という前提に実装と docstring を揃える。
-- [ ] `cc_snapshot` / `param_snapshot` / `metrics_snapshot` などの引数に明示的な型注釈を付け、返り値の構造をコードから把握しやすくする。
+- [x] `WorkerPool` から `fps` 引数と内部フィールドを削除し、「時間（`dt/t`）は呼び出し側フレームクロックが完全に管理する」という前提に実装と docstring を揃える。
+- [x] `cc_snapshot` / `param_snapshot` / `metrics_snapshot` などの引数に明示的な型注釈を付け、返り値の構造をコードから把握しやすくする。
 - [ ] `result_q` の戻り値をラップする薄いアクセサ（もしくは type alias）を導入し、inline/マルチプロセスでの実体差を隠蔽して API を単純にする。
 
 ### 4. 例外処理ポリシーの整理
 
-- [ ] スナップショット適用・メトリクス取得部分の `try/except Exception: pass` を棚卸しし、「本当に黙殺したいもの」と「ログに残すべきもの」を分類する。
-- [ ] 黙殺しないと決めた箇所には `logging.debug` / `logging.warning` など最小限のログを追加し、`WorkerTaskError` でラップされる経路とそうでない経路を docstring などで明示する。
-- [ ] `_WorkerProcess.run` / inline 実行パスの例外経路が同じ振る舞いになるように確認し、差分があれば揃える。
+- [x] スナップショット適用・メトリクス取得部分の `try/except Exception: pass` を棚卸しし、「本当に黙殺したいもの」と「ログに残すべきもの」を分類する。
+- [x] 黙殺しないと決めた箇所には `logging.debug` / `logging.warning` など最小限のログを追加し、`WorkerTaskError` でラップされる経路とそうでない経路を docstring などで明示する。
+- [x] `_WorkerProcess.run` / inline 実行パスの例外経路が同じ振る舞いになるように確認し、差分があれば揃える。
 
 ### 5. 型注釈・スタイルの微修正
 
-- [ ] `WorkerTaskError.__init__` のシグネチャを実際の利用パターンに合わせて整理する（例: `frame_id: int | None` と `message: str | None` に分離し、Unpickle 経路用のクラスメソッドを用意するなど）。
-- [ ] 未使用のローカル定数（`_DEBUG` など）や不要な `getattr(..., default)` 呼び出しを削除し、読みやすさを優先する。
-- [ ] 内部関数やヘルパーの引数に足りていない型注釈があれば補い、`mypy` の `no-untyped-def` 回避のための例外ルールを減らす。
+- [x] `WorkerTaskError.__init__` のシグネチャを実際の利用パターンに合わせて整理する（例: `frame_id: int | None` と `message: str | None` に分離し、Unpickle 経路用のクラスメソッドを用意するなど）。
+- [x] 未使用のローカル定数（`_DEBUG` など）や不要な `getattr(..., default)` 呼び出しを削除し、読みやすさを優先する。
+- [x] 内部関数やヘルパーの引数に足りていない型注釈があれば補い、`mypy` の `no-untyped-def` 回避のための例外ルールを減らす。
 
 ### 6. 動作確認・テスト
 

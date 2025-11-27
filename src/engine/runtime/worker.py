@@ -2,7 +2,8 @@
 どこで: `engine.runtime` のワーカ実行層。
 何を: `RenderTask` を生成してワーカ（プロセス/インライン）へ渡し、`draw_callback` を実行して
       `Geometry` を得る。結果は `RenderPacket` としてキューへ送出し、例外は `WorkerTaskError`
-      で文脈付きに伝搬。`tick(dt)` は FPS に従いタスクを発行し、`close()` は安全に停止する。
+      で文脈付きに伝搬。`tick(dt)` は呼び出し側フレームクロックから渡される dt を積算して
+      `RenderTask` を発行し、`close()` は安全に停止する。
 なぜ: 生成（CPU 計算）をメインスレッドから切り離し、描画ループをブロックせずに安定駆動するため。
 
 注意（重要）:
@@ -18,7 +19,6 @@
 
 from __future__ import annotations
 
-import itertools
 import logging
 import multiprocessing as mp
 from queue import Full, Queue
@@ -27,6 +27,7 @@ from typing import Callable, Mapping, Sequence, cast
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
 from engine.render.types import Layer
+from util.color import normalize_color
 
 from ..core.tickable import Tickable
 from .packet import RenderPacket
@@ -41,8 +42,11 @@ class WorkerTaskError(Exception):
     """
 
     def __init__(
-        self, frame_id=None, original: Exception | None = None, message: str | None = None, *args
-    ):
+        self,
+        frame_id: int | None = None,
+        original: Exception | None = None,
+        message: str | None = None,
+    ) -> None:
         # Unpickle 経路（例外は message だけで復元されることがある）
         if message is None and isinstance(frame_id, str) and original is None:
             message = frame_id
@@ -59,6 +63,17 @@ class WorkerTaskError(Exception):
         return (WorkerTaskError, (str(self),))
 
 
+def _normalize_rgba(value: object | None) -> tuple[float, float, float, float] | None:
+    """色指定を RGBA(0–1) へ正規化する。
+
+    None はそのまま None を返し、異常な値は util.color.normalize_color に任せて例外として扱う。
+    """
+    if value is None:
+        return None
+    r, g, b, a = normalize_color(value)
+    return float(r), float(g), float(b), float(a)
+
+
 def _normalize_to_layers(
     result: Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
 ) -> tuple[Geometry | LazyGeometry | None, list[Layer] | None]:
@@ -67,39 +82,17 @@ def _normalize_to_layers(
     - Sequence が返れば常にレイヤー化。
     - Geometry/LazyGeometry の単体はそのまま geometry として返す。
     """
-    try:
-        from util.color import normalize_color as _norm_color
-    except Exception:
-
-        def _norm_color(v):  # type: ignore
-            return (0.0, 0.0, 0.0, 1.0)
-
-    _DEBUG = False  # renderer 側で集約的に出力するため、ここでは抑制
-
-    def _to_rgba(v) -> tuple[float, float, float, float] | None:  # type: ignore[override]
-        if v is None:
-            return None
-        try:
-            r, g, b, a = _norm_color(v)
-            return (float(r), float(g), float(b), float(a))
-        except Exception:
-            try:
-                r, g, b = v  # type: ignore[misc]
-                return (float(r), float(g), float(b), 1.0)
-            except Exception:
-                return None
 
     def _layer_from(
         g: Geometry | LazyGeometry,
-        color,
+        color: object | None,
         thickness,
         name: str | None = None,
         meta: dict[str, object] | None = None,
     ) -> Layer:
-        rgba = _to_rgba(color)
         return Layer(
             geometry=g,
-            color=rgba,
+            color=_normalize_rgba(color),
             thickness=float(thickness) if thickness is not None else None,
             name=name,
             meta=meta,
@@ -152,10 +145,6 @@ def _apply_layer_overrides(
     """layer.* の override をレイヤーへ適用する。"""
     if not layers or not overrides:
         return layers
-    try:
-        from util.color import normalize_color as _norm_color  # local import
-    except Exception:
-        _norm_color = None  # type: ignore[assignment]
 
     # 名前の重複を避けたキーを生成
     keys: list[str] = []
@@ -182,12 +171,8 @@ def _apply_layer_overrides(
         thickness_override = overrides.get(th_pid) if isinstance(overrides, Mapping) else None
 
         color_final = layer.color
-        if color_override is not None and _norm_color is not None:
-            try:
-                r, g, b, a = _norm_color(color_override)
-                color_final = (float(r), float(g), float(b), float(a))
-            except Exception:
-                pass
+        if color_override is not None:
+            color_final = _normalize_rgba(color_override)
         thickness_final = layer.thickness
         if thickness_override is not None:
             try:
@@ -253,30 +238,37 @@ class _WorkerProcess(mp.Process):
 
 
 class WorkerPool(Tickable):
-    """タスク生成とワーカープール管理のみを担当。"""
+    """タスク生成とワーカープール管理のみを担当。
+
+    時間軸（dt/t）の管理は呼び出し側のフレームクロックに委ね、`tick(dt)` が呼ばれた回数と
+    経過時間の累積から `RenderTask(t, frame_id, ...)` を生成してキューへ送出する。
+    """
 
     def __init__(
         self,
-        fps: int,
         draw_callback: Callable[
             [float],
             Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
         ],
-        cc_snapshot,
+        cc_snapshot: Callable[[], Mapping[int, float] | None],
         num_workers: int = 4,
         apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None = None,
         apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None = None,
         param_snapshot: Callable[[], Mapping[str, object] | None] | None = None,
         metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None = None,
     ):
-        self._fps = fps
-        self._frame_iter = itertools.count()
+        self._frame_id: int = 0
         self._elapsed_time = 0.0
         self._task_q: mp.Queue = mp.Queue(maxsize=2 * num_workers)
         self._result_q: Queue[RenderPacket | WorkerTaskError] | mp.Queue
-        self._cc_snapshot = cc_snapshot
-        self._param_snapshot = param_snapshot or (lambda: None)
-        self._draw_callback = draw_callback
+        self._cc_snapshot: Callable[[], Mapping[int, float] | None] = cc_snapshot
+        self._param_snapshot: Callable[[], Mapping[str, object] | None] = param_snapshot or (
+            lambda: None
+        )
+        self._draw_callback: Callable[
+            [float],
+            Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
+        ] = draw_callback
         self._apply_cc_snapshot = apply_cc_snapshot
         self._apply_param_snapshot = apply_param_snapshot
         self._metrics_snapshot = metrics_snapshot
@@ -304,19 +296,22 @@ class WorkerPool(Tickable):
         self._closed: bool = False
 
     # -------- Tickable interface --------
-    def tick(self, dt: float) -> None:  # dt は今回は未使用
-        """FPS に従いタスクをキューイング。Queue が詰まっていれば無視。"""
+    def tick(self, dt: float) -> None:
+        """経過時間 dt を積算し、1 フレーム分の RenderTask をキューイングする。
+
+        Queue が詰まっていれば新しいタスク投入はスキップする。
+        """
         if getattr(self, "_closed", False):
             return
         self._elapsed_time += dt
         try:
-            frame_id = next(self._frame_iter)
             task = RenderTask(
-                frame_id=frame_id,
+                frame_id=self._frame_id,
                 t=self._elapsed_time,
                 cc_state=self._cc_snapshot(),
                 param_overrides=self._param_snapshot(),
             )
+            self._frame_id += 1
             if self._inline:
                 packet, err = _execute_draw_to_packet(
                     t=task.t,
@@ -375,6 +370,91 @@ class WorkerPool(Tickable):
 # ---- 共通化ヘルパ ---------------------------------------------------------
 
 
+def _apply_cc_and_params_snapshots(
+    *,
+    t: float,
+    cc_state: Mapping[int, float] | None,
+    param_overrides: Mapping[str, object] | None,
+    apply_cc_snapshot: Callable[[Mapping[int, float] | None], None] | None,
+    apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None,
+    logger: logging.Logger,
+) -> None:
+    """CC/パラメータのスナップショットをランタイムに適用する。"""
+    if apply_cc_snapshot is not None:
+        try:
+            apply_cc_snapshot(cc_state)
+        except Exception as exc:
+            logger.debug("failed to apply CC snapshot: %s", exc, exc_info=True)
+    if apply_param_snapshot is not None:
+        try:
+            apply_param_snapshot(param_overrides, t)
+        except Exception as exc:
+            logger.debug("failed to apply parameter snapshot: %s", exc, exc_info=True)
+
+
+def _clear_param_runtime(
+    apply_param_snapshot: Callable[[Mapping[str, object] | None, float], None] | None,
+    logger: logging.Logger,
+) -> None:
+    """パラメータ SnapshotRuntime をクリアする。"""
+    if apply_param_snapshot is None:
+        return
+    try:
+        apply_param_snapshot(None, 0.0)
+    except Exception as exc:
+        logger.debug("failed to clear parameter snapshot: %s", exc, exc_info=True)
+
+
+def _safe_metrics_snapshot(
+    metrics_snapshot: Callable[[], Mapping[str, Mapping[str, int]]] | None,
+    logger: logging.Logger,
+) -> Mapping[str, Mapping[str, int]] | None:
+    """メトリクススナップショット取得のラッパ。失敗時はログを出して None を返す。"""
+    if metrics_snapshot is None:
+        return None
+    try:
+        return metrics_snapshot()
+    except Exception as exc:
+        logger.debug("metrics_snapshot failed: %s", exc, exc_info=True)
+        return None
+
+
+def _compute_cache_flags(
+    before: Mapping[str, Mapping[str, int]] | None,
+    after: Mapping[str, Mapping[str, int]] | None,
+) -> dict[str, str] | None:
+    """キャッシュメトリクスの差分から HIT/MISS フラグを算出する。"""
+    if not isinstance(before, Mapping) or not isinstance(after, Mapping):
+        return None
+    try:
+        e_hits_after = int(after.get("effect", {}).get("hits", 0))
+        e_hits_before = int(before.get("effect", {}).get("hits", 0))
+        e_miss_after = int(after.get("effect", {}).get("misses", 0))
+        e_miss_before = int(before.get("effect", {}).get("misses", 0))
+        s_hits_after = int(after.get("shape", {}).get("hits", 0))
+        s_hits_before = int(before.get("shape", {}).get("hits", 0))
+        s_miss_after = int(after.get("shape", {}).get("misses", 0))
+        s_miss_before = int(before.get("shape", {}).get("misses", 0))
+
+        e_miss = e_miss_after > e_miss_before
+        e_hit = e_hits_after > e_hits_before
+        s_miss = s_miss_after > s_miss_before
+        s_hit = s_hits_after > s_hits_before
+
+        flags: dict[str, str] = {}
+        if e_miss:
+            flags["effect"] = "MISS"
+        elif e_hit:
+            flags["effect"] = "HIT"
+        if s_miss:
+            flags["shape"] = "MISS"
+        elif s_hit:
+            flags["shape"] = "HIT"
+        return flags or None
+    except Exception:
+        return None
+
+
 def _execute_draw_to_packet(
     *,
     t: float,
@@ -395,24 +475,18 @@ def _execute_draw_to_packet(
     """
     logger = logging.getLogger(__name__)
     try:
-        # CC スナップショットを適用（存在時のみ）
-        try:
-            if apply_cc_snapshot is not None:
-                apply_cc_snapshot(cc_state)
-        except Exception:
-            pass
-        # Parameter スナップショットを適用（SnapshotRuntime を有効化）
-        try:
-            if apply_param_snapshot is not None:
-                apply_param_snapshot(param_overrides, t)
-        except Exception:
-            pass
+        # CC/Parameter スナップショットを適用（SnapshotRuntime を有効化）
+        _apply_cc_and_params_snapshots(
+            t=t,
+            cc_state=cc_state,
+            param_overrides=param_overrides,
+            apply_cc_snapshot=apply_cc_snapshot,
+            apply_param_snapshot=apply_param_snapshot,
+            logger=logger,
+        )
 
         # 直前メトリクス
-        try:
-            before = metrics_snapshot() if metrics_snapshot is not None else None
-        except Exception:
-            before = None
+        before = _safe_metrics_snapshot(metrics_snapshot, logger)
 
         # user draw 実行（t のみ）
         geometry_or_seq = draw_callback(t)
@@ -421,47 +495,13 @@ def _execute_draw_to_packet(
             packet_layers = _apply_layer_overrides(packet_layers, param_overrides)
 
         # Runtime のクリア（パラメータ）
-        try:
-            if apply_param_snapshot is not None:
-                apply_param_snapshot(None, 0.0)
-        except Exception:
-            pass
+        _clear_param_runtime(apply_param_snapshot, logger)
 
         # 直後メトリクス
-        try:
-            after = metrics_snapshot() if metrics_snapshot is not None else None
-        except Exception:
-            after = None
+        after = _safe_metrics_snapshot(metrics_snapshot, logger)
 
         # HIT/MISS の二値判定（MISS 優先）
-        flags: dict[str, str] | None = None
-        if isinstance(before, dict) and isinstance(after, dict):
-            try:
-                e_hits_after = int(after.get("effect", {}).get("hits", 0))
-                e_hits_before = int(before.get("effect", {}).get("hits", 0))
-                e_miss_after = int(after.get("effect", {}).get("misses", 0))
-                e_miss_before = int(before.get("effect", {}).get("misses", 0))
-                s_hits_after = int(after.get("shape", {}).get("hits", 0))
-                s_hits_before = int(before.get("shape", {}).get("hits", 0))
-                s_miss_after = int(after.get("shape", {}).get("misses", 0))
-                s_miss_before = int(before.get("shape", {}).get("misses", 0))
-
-                e_miss = e_miss_after > e_miss_before
-                e_hit = e_hits_after > e_hits_before
-                s_miss = s_miss_after > s_miss_before
-                s_hit = s_hits_after > s_hits_before
-
-                flags = {}
-                if e_miss:
-                    flags["effect"] = "MISS"
-                elif e_hit:
-                    flags["effect"] = "HIT"
-                if s_miss:
-                    flags["shape"] = "MISS"
-                elif s_hit:
-                    flags["shape"] = "HIT"
-            except Exception:
-                flags = None
+        flags = _compute_cache_flags(before, after)
 
         packet = RenderPacket(
             geometry=packet_geom,

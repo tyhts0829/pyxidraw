@@ -54,7 +54,6 @@ def enter_quality_mode(
     from engine.runtime.worker import WorkerPool
 
     worker_pool = WorkerPool(
-        fps=fps,
         draw_callback=draw_callable,
         cc_snapshot=cc_snapshot_fn,
         apply_cc_snapshot=apply_cc_snapshot,
@@ -116,7 +115,6 @@ def leave_quality_mode(
     from engine.runtime.worker import WorkerPool
 
     worker_pool = WorkerPool(
-        fps=fps,
         draw_callback=draw_callable,
         cc_snapshot=cc_snapshot_fn,
         apply_cc_snapshot=apply_cc_snapshot,

@@ -17,11 +17,11 @@ import numpy as np
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
 from engine.runtime.frame import RenderFrame
-from .types import Layer
 from util.constants import PRIMITIVE_RESTART_INDEX
 
 from ..core.tickable import Tickable
 from ..runtime.buffer import SwapBuffer
+from .types import Layer
 
 # 型参照は文字列注釈で行うため、実行時 import は不要。
 
@@ -83,20 +83,20 @@ class LineRenderer(Tickable):
         # HUD 連携用: 直近アップロードの頂点/ライン数
         self._last_vertex_count: int = 0
         self._last_line_count: int = 0
-        # IBO 固定化（実験）用の統計
+        # IBO 固定化用の統計
         self._ibo_uploaded: int = 0
         self._ibo_reused: int = 0
         self._indices_built: int = 0
-        # 実験の有効/ログ（環境変数）
+        # IBO 固定化の有効/ログ（環境変数）
         try:
             from common.settings import get as _get_settings
 
-            _s = _get_settings()
-            self._ibo_freeze_enabled = bool(_s.IBO_FREEZE_ENABLED)
-            self._ibo_debug = bool(_s.IBO_DEBUG)
+            settings = _get_settings()
+            self._ibo_freeze_enabled = bool(settings.IBO_FREEZE_ENABLED)
+            self._ibo_debug = bool(settings.IBO_DEBUG)
         except Exception:
             self._ibo_freeze_enabled = True
-        self._ibo_debug = False
+            self._ibo_debug = False
         # 受信したフレーム（layers を含む場合は draw() 側で逐次アップロード）
         self._frame: RenderFrame | None = None
         # 直近レイヤーのスナップショット（no-layers フレームで再描画に利用）
@@ -123,7 +123,8 @@ class LineRenderer(Tickable):
                 # レイヤーは draw() 側で逐次アップロード
                 return
             if frame.geometry is not None:
-                self._upload_geometry(frame.geometry)
+                geometry = self._resolve_geometry(frame.geometry)
+                self._upload_geometry(geometry)
 
     # --------------------------------------------------------------------- #
     # Public drawing API                                                    #
@@ -131,125 +132,17 @@ class LineRenderer(Tickable):
     def draw(self) -> None:
         """GPUに送ったデータを画面に描画"""
         # on_draw は描画のみを担当（受信は tick で行う）
-        # フレーム番号を増分
-        try:
-            self._frame_counter += 1
-        except Exception:
-            self._frame_counter = 0
+        self._frame_counter += 1
         frame = self._frame
         # レイヤーが来ている場合は各レイヤーを順描画
         if frame is not None and frame.has_layers and frame.layers is not None:
-            # このフレームでレイヤー活動があったことを記録
-            self._last_layers_frame = int(self._frame_counter)
-
-            total_vertices = 0
-            total_indices = 0
-            snapshot: list[Layer] = []
-            for layer in frame.layers:
-                geometry = layer.geometry
-                if isinstance(geometry, LazyGeometry):
-                    geometry = geometry.realize()
-                # 色
-                if layer.color is not None:
-                    try:
-                        self.set_line_color(layer.color)
-                        # 粘着色を更新（最後に適用した色を保持）
-                        try:
-                            r, g, b, a = layer.color  # type: ignore[misc]
-                            self._sticky_color = (float(r), float(g), float(b), float(a))
-                        except Exception:
-                            self._sticky_color = None
-                    except Exception:
-                        pass
-                else:
-                    # style 未指定レイヤーは基準色に戻す
-                    try:
-                        self.set_line_color(self._base_line_color)
-                        self._sticky_color = tuple(self._base_line_color)
-                    except Exception:
-                        pass
-                # 太さ（絶対値）
-                if layer.thickness is not None:
-                    try:
-                        self.set_line_thickness(float(layer.thickness))
-                    except Exception:
-                        pass
-                else:
-                    try:
-                        self.set_line_thickness(self._base_line_thickness)
-                    except Exception:
-                        pass
-                # アップロード→描画
-                self._upload_geometry(geometry)
-                if self.gpu.index_count > 0:
-                    self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
-                    try:
-                        total_vertices += int(getattr(self, "_last_vertex_count", 0))
-                        total_indices += int(self.gpu.index_count)
-                    except Exception:
-                        pass
-                # スナップショット: Lazy を実体化して保存
-                try:
-                    snapshot.append(
-                        Layer(geometry=geometry, color=layer.color, thickness=layer.thickness)
-                    )
-                except Exception:
-                    pass
-            # HUD 合算（近似。最後の状態を上書き）
-            try:
-                self._last_vertex_count = int(total_vertices)
-                num_lines = max(0, int(total_indices) - int(total_vertices))
-                self._last_line_count = int(num_lines)
-            except Exception:
-                pass
-            # スナップショットを保持（no-layers フレームのフォールバック描画に使用）
-            try:
-                self._last_layers_snapshot = snapshot if snapshot else None
-            except Exception:
-                self._last_layers_snapshot = None
-            # 次フレーム以降はスナップショットを再利用する（追加アップロードを避ける）
-            self._frame = None
+            self._draw_layers_frame(frame)
             return
         # 通常経路（レイヤーが無いフレーム）
-        # フォールバック: 直近レイヤーのスナップショットを再描画
         if self._last_layers_snapshot:
-            for layer in self._last_layers_snapshot:
-                # 色/太さを適用
-                if layer.color is not None:
-                    try:
-                        self.set_line_color(layer.color)
-                    except Exception:
-                        pass
-                else:
-                    try:
-                        self.set_line_color(self._base_line_color)
-                    except Exception:
-                        pass
-                if layer.thickness is not None:
-                    try:
-                        self.set_line_thickness(float(layer.thickness))
-                    except Exception:
-                        pass
-                else:
-                    try:
-                        self.set_line_thickness(self._base_line_thickness)
-                    except Exception:
-                        pass
-                # アップロード→描画（実体 Geometry のはず）
-                self._upload_geometry(layer.geometry)
-                if self.gpu.index_count > 0:
-                    self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
+            self._draw_snapshot_layers()
             return
-        # スナップショットが無ければ、従来の geometry-only 描画へ（粘着色を適用）
-        try:
-            if self._sticky_color is not None:
-                self.set_line_color(self._sticky_color)
-        except Exception:
-            pass
-        if self.gpu.index_count > 0:
-            self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
-        else:
-            pass
+        self._draw_geometry_only()
 
     def clear(self, color: Sequence[float]) -> None:
         """画面を指定色でクリア"""
@@ -312,58 +205,105 @@ class LineRenderer(Tickable):
 
     def get_base_line_thickness(self) -> float:
         """初期化時の基準線太さを返す。"""
-        try:
-            return float(self._base_line_thickness)
-        except Exception:
-            return 0.0006
+        return float(self._base_line_thickness)
 
     # ---- subscribe ガード用の公開ヘルパ ----
     def has_pending_layers(self) -> bool:
-        try:
-            return bool(self._frame is not None and self._frame.has_layers)
-        except Exception:
-            return False
+        return bool(self._frame is not None and self._frame.has_layers)
 
     def layers_active_this_frame(self) -> bool:
-        try:
-            return int(self._last_layers_frame) == int(self._frame_counter)
-        except Exception:
-            return False
+        return self._last_layers_frame == self._frame_counter
 
     # --------------------------------------------------------------------- #
     # Internal helpers                                                      #
     # --------------------------------------------------------------------- #
-    def _upload_geometry(self, geometry: Geometry | LazyGeometry | None) -> None:
+    def _draw_layers_frame(self, frame: RenderFrame) -> None:
+        """レイヤー付きフレームを描画し、スナップショットと HUD を更新する。"""
+        self._last_layers_frame = self._frame_counter
+
+        total_vertices = 0
+        total_indices = 0
+        snapshot: list[Layer] = []
+
+        for layer in frame.layers or ():
+            geometry = self._resolve_geometry(layer.geometry)
+            if geometry is None or geometry.is_empty:
+                continue
+
+            self._apply_layer_style(layer)
+            self._upload_geometry(geometry)
+            if self.gpu.index_count > 0:
+                self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
+                total_vertices += self._last_vertex_count
+                total_indices += self.gpu.index_count
+            snapshot.append(Layer(geometry=geometry, color=layer.color, thickness=layer.thickness))
+
+        if total_vertices and total_indices:
+            self._last_vertex_count = total_vertices
+            num_lines = max(0, total_indices - total_vertices)
+            self._last_line_count = num_lines
+
+        self._last_layers_snapshot = snapshot if snapshot else None
+        # 次フレーム以降はスナップショットを再利用する（追加アップロードを避ける）
+        self._frame = None
+
+    def _draw_snapshot_layers(self) -> None:
+        """直近レイヤーのスナップショットを再描画する。"""
+        if not self._last_layers_snapshot:
+            return
+
+        for layer in self._last_layers_snapshot:
+            self._apply_layer_style(layer)
+            geometry = self._resolve_geometry(layer.geometry)
+            self._upload_geometry(geometry)
+            if self.gpu.index_count > 0:
+                self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
+
+    def _draw_geometry_only(self) -> None:
+        """geometry-only フレームの描画（粘着色を適用）。"""
+        if self._sticky_color is not None:
+            self.set_line_color(self._sticky_color)
+        if self.gpu.index_count > 0:
+            self.gpu.vao.render(mgl.LINE_STRIP, self.gpu.index_count)
+
+    def _apply_layer_style(self, layer: Layer) -> None:
+        """レイヤーの色と太さを適用し、粘着色を更新する。"""
+        if layer.color is not None:
+            self.set_line_color(layer.color)
+            try:
+                r, g, b, a = layer.color  # type: ignore[misc]
+                self._sticky_color = (float(r), float(g), float(b), float(a))
+            except (TypeError, ValueError):
+                self._sticky_color = None
+        else:
+            self.set_line_color(self._base_line_color)
+            base_r, base_g, base_b, base_a = self._base_line_color
+            self._sticky_color = (float(base_r), float(base_g), float(base_b), float(base_a))
+
+        if layer.thickness is not None:
+            self.set_line_thickness(float(layer.thickness))
+        else:
+            self.set_line_thickness(self._base_line_thickness)
+
+    def _resolve_geometry(self, geometry: Geometry | LazyGeometry | None) -> Geometry | None:
+        """LazyGeometry を含む geometry を実体 Geometry に解決する。"""
+        if geometry is None:
+            return None
+        if isinstance(geometry, LazyGeometry):
+            return geometry.realize()
+        return geometry
+
+    def _upload_geometry(self, geometry: Geometry | None) -> None:
         """
         front バッファの `geometry` を 1 つの VBO/IBO に統合し GPU へ。
         データが空のときは index_count=0 にして draw() をスキップ。
         """
-        if geometry is None:
+        if geometry is None or geometry.is_empty:
             # 空データとして扱い、計数もゼロに更新
             self.gpu.index_count = 0
-            try:
-                self._last_vertex_count = 0  # type: ignore[attr-defined]
-                self._last_line_count = 0  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
+            self._last_vertex_count = 0
+            self._last_line_count = 0
             return
-        # LazyGeometry はここで実体化
-        if isinstance(geometry, LazyGeometry):
-            geometry = geometry.realize()
-        # 早期スキップ（空）
-        try:
-            if getattr(geometry, "is_empty", False):  # type: ignore[truthy-bool]
-                self.gpu.index_count = 0
-                try:
-                    self._last_vertex_count = 0  # type: ignore[attr-defined]
-                    self._last_line_count = 0  # type: ignore[attr-defined]
-                except Exception:
-                    pass
-
-                return
-        except Exception:
-            pass
 
         # オフセット署名（不変なら IBO を再利用）
         try:
@@ -420,22 +360,16 @@ class LineRenderer(Tickable):
                 # フォールバック: 何もしない
                 pass
         # HUD 参照用の直近アップロード計数を更新
-        try:
-            total_verts = int(len(verts))
-            total_inds = int(len(inds))
-            num_lines = max(0, total_inds - total_verts)
-            self._last_vertex_count = total_verts  # type: ignore[attr-defined]
-            self._last_line_count = num_lines  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        coords_for_count = geometry.coords
+        offsets_for_count = geometry.offsets
+        total_verts = int(len(coords_for_count))
+        num_lines = max(0, int(len(offsets_for_count)) - 1)
+        self._last_vertex_count = total_verts
+        self._last_line_count = num_lines
 
     # HUD 用: 直近アップロードの頂点/ライン数
     def get_last_counts(self) -> tuple[int, int]:
-        try:
-            return int(self._last_vertex_count), int(self._last_line_count)  # type: ignore[attr-defined]
-        except Exception:
-            # 初期値（未アップロード）
-            return 0, 0
+        return int(self._last_vertex_count), int(self._last_line_count)
 
     # IBO 固定化の実験用カウンタ（HUD/ログから参照可能）
     def get_ibo_stats(self) -> dict[str, int]:
@@ -465,6 +399,7 @@ def _geometry_to_vertices_indices(
 
     # ---- Indices LRU（オフセット署名ベース） ----
     if _INDICES_CACHE_ENABLED:
+        logger = logging.getLogger(__name__)
         try:
             off_bytes = offsets.view(np.uint8)
             h = hashlib.blake2b(digest_size=16)
@@ -479,7 +414,8 @@ def _geometry_to_vertices_indices(
                 return coords, cached
             _IND_MISSES_INC()
         except Exception:
-            pass
+            if _INDICES_DEBUG:
+                logger.debug("Indices cache lookup failed", exc_info=True)
     # ベクトル化: 連結 arange + PR マスク挿入
     indices = np.empty(total_inds, dtype=np.uint32)
     # 再始動位置（各ライン終端の直後）: offsets[1:] + 行番号
@@ -492,6 +428,7 @@ def _geometry_to_vertices_indices(
     indices[mask] = np.uint32(primitive_restart_index)
     # LRU 保存
     if _INDICES_CACHE_ENABLED:
+        logger = logging.getLogger(__name__)
         try:
             _INDICES_CACHE[key] = indices
             if _INDICES_CACHE_MAXSIZE is not None and _INDICES_CACHE_MAXSIZE > 0:
@@ -500,24 +437,26 @@ def _geometry_to_vertices_indices(
                     _IND_EVICTS_INC()
             _IND_STORES_INC()
         except Exception:
-            pass
+            if _INDICES_DEBUG:
+                logger.debug("Indices cache store failed", exc_info=True)
     return coords, indices
 
 
-# ---- Indices LRU: 設定/カウンタ/取得API -------------------------------------
-try:
-    from common.settings import get as _get_settings
+def _load_indices_cache_settings() -> tuple[bool, int | None, bool]:
+    """Indices LRU 用の設定を読み込む。"""
+    try:
+        from common.settings import get as _get_settings
 
-    _s2 = _get_settings()
-    _INDICES_CACHE_ENABLED = bool(_s2.INDICES_CACHE_ENABLED)
-    _INDICES_CACHE_MAXSIZE: int | None = _s2.INDICES_CACHE_MAXSIZE
-    if _INDICES_CACHE_MAXSIZE is not None and _INDICES_CACHE_MAXSIZE < 0:
-        _INDICES_CACHE_MAXSIZE = 0
-    _INDICES_DEBUG = bool(_s2.INDICES_DEBUG)
-except Exception:
-    _INDICES_CACHE_ENABLED = True
-    _INDICES_CACHE_MAXSIZE = 64
-    _INDICES_DEBUG = False
+        settings = _get_settings()
+        maxsize: int | None = settings.INDICES_CACHE_MAXSIZE
+        if maxsize is not None and maxsize < 0:
+            maxsize = 0
+        return bool(settings.INDICES_CACHE_ENABLED), maxsize, bool(settings.INDICES_DEBUG)
+    except Exception:
+        return True, 64, False
+
+
+_INDICES_CACHE_ENABLED, _INDICES_CACHE_MAXSIZE, _INDICES_DEBUG = _load_indices_cache_settings()
 
 _INDICES_CACHE: "OrderedDict[object, np.ndarray]" = OrderedDict()
 _IND_HITS = 0

@@ -340,7 +340,6 @@ def run_sketch(
     _param_snapshot_fn = _make_param_snapshot_fn(parameter_manager, cc_snapshot_fn)
 
     worker_pool = WorkerPool(
-        fps=fps,
         draw_callback=draw_callable,
         cc_snapshot=cc_snapshot_fn,
         apply_cc_snapshot=_apply_cc_snapshot,
