@@ -146,6 +146,7 @@ class _RuntimeContext:
 def _resolve_canvas_and_window(
     canvas_size: str | tuple[int, int], render_scale: float
 ) -> tuple[int, int, int, int]:
+    """キャンバスサイズとスケーリングからキャンバス/ウィンドウ寸法を解決する。"""
     canvas_width, canvas_height = resolve_canvas_size(canvas_size)
     if float(render_scale) <= 0.0:
         raise ValueError(f"render_scale must be > 0, got {render_scale}")
@@ -155,6 +156,7 @@ def _resolve_canvas_and_window(
 
 
 def _build_hud_config(show_hud: bool | None, hud_config: HUDConfig | None) -> HUDConfig:
+    """show_hud と既存設定から一貫した HUDConfig を構築する。"""
     from engine.ui.hud.config import HUDConfig as _HUDConfig
 
     if hud_config is None:
@@ -179,6 +181,7 @@ def _prepare_parameter_gui(
         Geometry | LazyGeometry | Layer | Sequence[Geometry | LazyGeometry | Layer],
     ],
 ]:
+    """パラメータ GUI を必要に応じて初期化し、マネージャと描画コールバックを返す。"""
     from engine.ui.parameters.manager import ParameterManager as _ParameterManager
 
     parameter_manager: ParameterManager | None = None
@@ -247,7 +250,7 @@ def run_sketch(
         バックグラウンド計算プロセス数（0 でインライン）。負値は 0 にクランプ。
     use_midi : bool, default True
         True で実機 MIDI を試行。未接続/未導入時は自動フォールバック。
-    use_parameter_gui : bool, default False
+    use_parameter_gui : bool, default True
         True で描画パラメータ GUI を有効化。
     show_hud : bool | None, default None
         HUD の有効/無効。None で上書きしない（従来の既定/`hud_config` を尊重）。

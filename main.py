@@ -14,7 +14,7 @@ def draw(t: float):
         E.affine()
         .fill()
         .subdivide()
-        # .displace(t_sec=osc(t * 0.01), spatial_freq=(osc(t * 0.05) + 1) * 0.02)
+        .displace(t_sec=osc(t * 0.01), spatial_freq=(osc(t * 0.05) + 1) * 0.02)
         .mirror()
         .rotate()
     )
