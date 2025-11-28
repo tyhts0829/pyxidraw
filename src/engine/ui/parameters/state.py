@@ -18,7 +18,7 @@ from typing import Any, Callable, Iterable, Literal, Mapping
 
 ValueType = Literal["float", "int", "bool", "enum", "vector", "string"]
 SourceType = Literal["shape", "effect"]
-CategoryKind = Literal["shape", "pipeline", "hud", "display", "style"]
+CategoryKind = Literal["shape", "pipeline", "hud", "display", "style", "palette"]
 OverrideSource = Literal["gui"]
 
 
@@ -371,7 +371,7 @@ class ParameterThemeConfig:
 
     style: dict[str, Any] = field(default_factory=dict)
     colors: dict[str, Any] = field(default_factory=dict)
-    # カテゴリ種別ごとの色設定（category_kind: shape/pipeline/hud/display 等）。
+    # カテゴリ種別ごとの色設定（category_kind: shape/pipeline/hud/display/palette 等）。
     # 任意キー辞書とし、存在するものだけをフェイルソフトに適用する。
     # 例:
     #   {
@@ -379,6 +379,7 @@ class ParameterThemeConfig:
     #       "pipeline": {"header": [...], "header_hovered": [...], "header_active": [...]},
     #       "hud": {...},
     #       "display": {...},
+    #       "palette": {...},
     #   }
     categories: dict[str, Any] = field(default_factory=dict)
 

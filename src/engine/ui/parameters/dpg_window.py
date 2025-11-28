@@ -94,6 +94,7 @@ class ParameterWindow(ParameterWindowBase):  # type: ignore[override]
             try:
                 self._content.on_store_change(ids)
                 self._content.sync_style_from_store()
+                self._content.sync_palette_from_store()
             except Exception:
                 logger.exception("store change handling failed")
 

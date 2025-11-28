@@ -4,7 +4,7 @@
 
 - 層（数値は内外の序数。小さいほど内側）
   - L0 Core/Base: `common/`, `util/`, `engine/core/`
-  - L1 Domain/Transforms: `shapes/`, `effects/`（純関数 `Geometry -> Geometry`）
+  - L1 Domain/Transforms: `shapes/`, `effects/`, `palette/`（純関数 `Geometry -> Geometry` / カラー計算）
   - L2 Infra & Runtime: `engine/render/`, `engine/runtime/`, `engine/ui/`, `engine/io/`, `engine/export/`
   - L3 API/Entry: `api/`, `main.py`
 - 許可する依存方向
@@ -80,9 +80,9 @@
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン →`ParameterWindowController` を起動。
   - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
   - Parameter GUI の DPG 実装は `engine.ui.parameters.dpg_window.ParameterWindow` がエントリとなり、内部で `ParameterWindowThemeManager`（`dpg_window_theme.py`）と `ParameterWindowContentBuilder`（`dpg_window_content.py`）に責務を委譲する。
-    - ThemeManager: フォント解決とウィンドウ全体/カテゴリ別テーマ（Style/shape/pipeline 等）の構築を担当する。
-    - ContentBuilder: Style セクション（背景/ライン/HUD 色/レイヤースタイル）とパラメータテーブル（カテゴリ種別 `category_kind` × `category` 単位）の構築、Store との値同期（ウィジェット→Store/Store→ウィジェット）を担当する。
-  - カテゴリ別のヘッダ色（Style/shape/pipeline）は `parameter_gui.theme.categories` で個別指定可能（キーは Descriptor の `category_kind` と対応）。未指定時は `theme.colors.header*` を使用。
+    - ThemeManager: フォント解決とウィンドウ全体/カテゴリ別テーマ（Style/shape/pipeline/palette 等）の構築を担当する。
+    - ContentBuilder: Style セクション（背景/ライン/HUD 色/レイヤースタイル）と Palette セクション（ベースカラー/種別/スタイル/色数）およびパラメータテーブル（カテゴリ種別 `category_kind` × `category` 単位）の構築、Store との値同期（ウィジェット→Store/Store→ウィジェット）を担当する。
+  - カテゴリ別のヘッダ色（Style/shape/pipeline/palette）は `parameter_gui.theme.categories` で個別指定可能（キーは Descriptor の `category_kind` と対応）。未指定時は `theme.colors.header*` を使用。
   - カラー入力は `util.color.normalize_color` で RGBA (0..1) に正規化し、一般パラメータは RGBA タプル、`style.color` は vec3 (RGB 0..1) として `ParameterStore` に保存する（DPG 側は 0–255 表示、値保存は 0..1 実値）。
   - カテゴリ名の決定規則: effect パラメータは `.label(uid)` で指定された `pipeline_label` をベースに、フレーム内インスタンス番号を付与した表示名（例: `poly_effect_1`, `poly_effect_2`）≫ `pipeline_uid`（例: `p0`）≫ `scope` の優先で決定する。`.label(uid)` はチェーンの前後どこで呼んでもパイプライン全体に適用される。
   - 表示ラベルは内部 UID と分離され、Parameter ID は `pipeline_uid` に基づくため衝突しない。

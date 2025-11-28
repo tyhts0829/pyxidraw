@@ -174,6 +174,7 @@ def _prepare_parameter_gui(
     use_parameter_gui: bool,
     init_only: bool,
     line_thickness: float,
+    enable_palette_gui: bool,
 ) -> tuple[
     ParameterManager | None,
     Callable[
@@ -187,7 +188,10 @@ def _prepare_parameter_gui(
     parameter_manager: ParameterManager | None = None
     draw_callable = user_draw
     if use_parameter_gui and not init_only:
-        parameter_manager = _ParameterManager(user_draw)
+        parameter_manager = _ParameterManager(
+            user_draw,
+            enable_palette_gui=enable_palette_gui,
+        )
         parameter_manager.initialize()
         try:
             parameter_manager.store.set_override("runner.line_thickness", float(line_thickness))
@@ -222,6 +226,7 @@ def run_sketch(
     use_midi: bool = True,
     init_only: bool = False,
     use_parameter_gui: bool = True,
+    enable_palette_gui: bool = True,
     show_hud: bool | None = None,
     hud_config: HUDConfig | None = None,
 ) -> None:
@@ -248,10 +253,12 @@ def run_sketch(
         背景色（RGBA 0–1 または #RRGGBB/#RRGGBBAA）。None で設定/白を適用。
     workers : int, default 6
         バックグラウンド計算プロセス数（0 でインライン）。負値は 0 にクランプ。
-    use_midi : bool, default True
+        use_midi : bool, default True
         True で実機 MIDI を試行。未接続/未導入時は自動フォールバック。
     use_parameter_gui : bool, default True
         True で描画パラメータ GUI を有効化。
+    enable_palette_gui : bool, default True
+        True で Parameter GUI 内に palette セクションを表示し、パレット操作を有効化。
     show_hud : bool | None, default None
         HUD の有効/無効。None で上書きしない（従来の既定/`hud_config` を尊重）。
         優先順位は「show_hud 明示 > hud_config.enabled > 既定(True)」。
@@ -284,7 +291,11 @@ def run_sketch(
 
     # init_only の場合は重い依存を読み込まずに早期リターン
     parameter_manager, draw_callable = _prepare_parameter_gui(
-        user_draw, use_parameter_gui, init_only, line_thickness=line_thickness
+        user_draw,
+        use_parameter_gui,
+        init_only,
+        line_thickness=line_thickness,
+        enable_palette_gui=enable_palette_gui,
     )
     worker_count = max(0, int(workers))
     # ワーカへは生の user_draw を渡し、GUI 値はスナップショットで適用する

@@ -28,8 +28,9 @@ from shapes.registry import (
 
 from .cc import cc
 from .effects import E
-from .lfo import lfo as lfo
 from .layers import L
+from .lfo import lfo as lfo
+from .palette import C
 
 # 主要API
 from .shapes import G, ShapesAPI
@@ -41,6 +42,7 @@ __all__ = [
     "G",  # 形状ファクトリ
     "E",  # エフェクトファクトリ
     "cc",  # 現在フレームの CC（MIDI）
+    "C",  # 現在フレームのカラー パレット
     "lfo",  # 低周波オシレータ（時間変調ユーティリティ）
     "shape",  # ユーザー拡張用デコレータ（唯一の公開経路）
     "effect",  # ユーザー拡張用デコレータ（唯一の公開経路）

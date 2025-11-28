@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
-from engine.render.types import Layer
 from engine.export.gcode import GCodeParams
+from engine.render.types import Layer
 from engine.runtime.frame import RenderFrame
 
 if TYPE_CHECKING:  # 実行時依存を避けるための型ヒントのみ

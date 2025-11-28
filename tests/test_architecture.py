@@ -28,6 +28,7 @@ LAYER_MAP = {
     ("engine", "core"): 0,
     ("effects",): 1,
     ("shapes",): 1,
+    ("palette",): 1,
     ("engine", "render"): 2,
     ("engine", "pipeline"): 2,
     ("engine", "ui"): 2,
@@ -36,7 +37,7 @@ LAYER_MAP = {
     ("api",): 3,
 }
 
-CHECK_ROOTS = {"api", "engine", "effects", "shapes", "common", "util"}
+CHECK_ROOTS = {"api", "engine", "effects", "shapes", "palette", "common", "util"}
 ENGINE_FORBIDDEN_TARGET_SUBS = {"render", "pipeline", "ui", "io", "monitor"}
 
 

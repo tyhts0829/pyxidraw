@@ -10,9 +10,9 @@ from typing import Callable, Sequence
 
 from engine.core.geometry import Geometry
 from engine.core.lazy_geometry import LazyGeometry
+from engine.render.types import Layer
 from util.utils import load_config
 
-from engine.render.types import Layer
 from .controller import ParameterWindowController
 from .persistence import load_overrides, save_overrides
 from .runtime import ParameterRuntime, activate_runtime, deactivate_runtime
@@ -38,8 +38,10 @@ class ParameterManager:
         *,
         layout: ParameterLayoutConfig | None = None,
         lazy_trace: bool = True,
+        enable_palette_gui: bool = True,
     ) -> None:
         self._user_draw = user_draw
+        self._enable_palette_gui = bool(enable_palette_gui)
         self.store = ParameterStore()
         # CC プロバイダを util 層のフック経由で注入（engine→api の依存を避ける）。
         try:
@@ -253,6 +255,12 @@ class ParameterManager:
             self.store.register(show_hud_desc, show_hud_desc.default_value)
         except Exception:
             pass
+        # パレット関連パラメータ（Parameter GUI 用）
+        try:
+            if self._enable_palette_gui:
+                self._register_palette_descriptors()
+        except Exception:
+            pass
         # レイヤー構成の登録（変動しない前提）
         try:
             if initial_output is not None:
@@ -387,6 +395,125 @@ class ParameterManager:
                 self.store.register(t_desc, t_desc.default_value)
             except Exception:
                 pass
+
+    def _register_palette_descriptors(self) -> None:
+        """パレット GUI 用の Descriptor を登録する。"""
+        try:
+            from palette import (  # type: ignore[import]
+                PALETTE_STYLE_OPTIONS,
+                PALETTE_TYPE_OPTIONS,
+            )
+            from util.color import normalize_color as _norm  # type: ignore[import]
+        except Exception:
+            return
+
+        # ベースカラーは runner.line_color の original を既定とする。
+        try:
+            base_raw = self.store.original_value("runner.line_color")
+        except Exception:
+            base_raw = None
+        if base_raw is None:
+            base_raw = (0.0, 0.0, 0.0, 1.0)
+        try:
+            r, g, b, a = _norm(base_raw)
+            base_rgba = (float(r), float(g), float(b), float(a))
+        except Exception:
+            base_rgba = (0.0, 0.0, 0.0, 1.0)
+
+        # RGBA から OKLCH を推定して L/C/h の既定値にする。
+        try:
+            from palette.engine import DefaultColorEngine  # type: ignore[import]
+
+            eng = DefaultColorEngine()
+            L0, C0, h0 = eng.srgb_to_oklch(base_rgba[0], base_rgba[1], base_rgba[2])
+        except Exception:
+            L0, C0, h0 = 60.0, 0.1, 0.0
+
+        # 軽いクランプ
+        if L0 < 0.0:
+            L0 = 0.0
+        if L0 > 100.0:
+            L0 = 100.0
+        if C0 < 0.0:
+            C0 = 0.0
+        if C0 > 0.4:
+            C0 = 0.4
+        h0 = float(h0 % 360.0)
+
+        l_desc = ParameterDescriptor(
+            id="palette.L",
+            label="Lightness",
+            source="effect",
+            category="Palette",
+            category_kind="palette",
+            value_type="float",
+            default_value=float(L0),
+            range_hint=RangeHint(0.0, 100.0, step=0.1),
+        )
+        c_desc = ParameterDescriptor(
+            id="palette.C",
+            label="Chroma",
+            source="effect",
+            category="Palette",
+            category_kind="palette",
+            value_type="float",
+            default_value=float(C0),
+            range_hint=RangeHint(0.0, 0.4, step=0.01),
+        )
+        h_desc = ParameterDescriptor(
+            id="palette.h",
+            label="Hue",
+            source="effect",
+            category="Palette",
+            category_kind="palette",
+            value_type="float",
+            default_value=float(h0),
+            range_hint=RangeHint(0.0, 360.0, step=1.0),
+        )
+        self.store.register(l_desc, l_desc.default_value)
+        self.store.register(c_desc, c_desc.default_value)
+        self.store.register(h_desc, h_desc.default_value)
+
+        type_labels = [label for label, _ in PALETTE_TYPE_OPTIONS]
+        style_labels = [label for label, _ in PALETTE_STYLE_OPTIONS]
+
+        if type_labels:
+            type_desc = ParameterDescriptor(
+                id="palette.type",
+                label="Palette Type",
+                source="effect",
+                category="Palette",
+                category_kind="palette",
+                value_type="enum",
+                default_value=type_labels[0],
+                choices=type_labels,
+            )
+            self.store.register(type_desc, type_desc.default_value)
+
+        if style_labels:
+            style_desc = ParameterDescriptor(
+                id="palette.style",
+                label="Palette Style",
+                source="effect",
+                category="Palette",
+                category_kind="palette",
+                value_type="enum",
+                default_value=style_labels[0],
+                choices=style_labels,
+            )
+            self.store.register(style_desc, style_desc.default_value)
+
+        n_desc = ParameterDescriptor(
+            id="palette.n_colors",
+            label="Colors",
+            source="effect",
+            category="Palette",
+            category_kind="palette",
+            value_type="int",
+            default_value=4,
+            range_hint=RangeHint(2, 6, step=1),
+        )
+        self.store.register(n_desc, n_desc.default_value)
 
     def _apply_layer_overrides(self, result):
         """Store の override をレイヤーに適用する。"""

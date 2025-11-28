@@ -31,6 +31,24 @@ STYLE_COLOR_IDS: set[str] = {STYLE_BG_ID, STYLE_LINE_COLOR_ID}
 HUD_COLOR_IDS: set[str] = {HUD_TEXT_COLOR_ID, HUD_METER_COLOR_ID, HUD_METER_BG_COLOR_ID}
 ALL_STYLE_PARAM_IDS: set[str] = STYLE_COLOR_IDS | HUD_COLOR_IDS | {STYLE_LINE_THICKNESS_ID}
 
+# Palette 用パラメータ ID
+PALETTE_L_ID = "palette.L"
+PALETTE_C_ID = "palette.C"
+PALETTE_H_ID = "palette.h"
+PALETTE_TYPE_ID = "palette.type"
+PALETTE_STYLE_ID = "palette.style"
+PALETTE_N_COLORS_ID = "palette.n_colors"
+ALL_PALETTE_PARAM_IDS: set[str] = {
+    PALETTE_L_ID,
+    PALETTE_C_ID,
+    PALETTE_H_ID,
+    PALETTE_TYPE_ID,
+    PALETTE_STYLE_ID,
+    PALETTE_N_COLORS_ID,
+}
+
+PALETTE_PREVIEW_TEXT_ID = "__pxd_palette_preview__"
+
 # Style/HUD 用既定値
 DEFAULT_BG_COLOR = (1.0, 1.0, 1.0, 1.0)
 DEFAULT_LINE_COLOR = (0.0, 0.0, 0.0, 1.0)
@@ -76,6 +94,9 @@ class ParameterWindowContentBuilder:
         self._theme_mgr = theme_mgr
         self._syncing: bool = False
         self._style_param_ids: set[str] = set()
+        self._palette_param_ids: set[str] = set()
+        self._palette_preview_id: int | str | None = None
+        self._palette_swatches_container: int | str | None = None
 
     def build_root_window(self, root_tag: str, title: str) -> None:
         """ルートウィンドウを構築する。Style/パラメータ群は mount 時に追加する。"""
@@ -363,17 +384,126 @@ class ParameterWindowContentBuilder:
             return
         self.on_store_change(self._style_param_ids)
 
+    def build_palette_controls(
+        self,
+        parent: int | str,
+        descriptors: list[ParameterDescriptor],
+    ) -> None:
+        """Palette 用のコントロール群を構築し、Store と初期同期する。"""
+        self._palette_param_ids.clear()
+        desc_index: dict[str, ParameterDescriptor] = {d.id: d for d in descriptors}
+        l_desc = desc_index.get(PALETTE_L_ID)
+        c_desc = desc_index.get(PALETTE_C_ID)
+        h_desc = desc_index.get(PALETTE_H_ID)
+        type_desc = desc_index.get(PALETTE_TYPE_ID)
+        style_desc = desc_index.get(PALETTE_STYLE_ID)
+        n_desc = desc_index.get(PALETTE_N_COLORS_ID)
+        if (
+            l_desc is None
+            and c_desc is None
+            and h_desc is None
+            and type_desc is None
+            and style_desc is None
+            and n_desc is None
+        ):
+            return
+
+        with dpg.collapsing_header(label="Palette", default_open=True, parent=parent) as pal_hdr:
+            th = self._theme_mgr.get_category_header_theme("palette")
+            if th is not None:
+                dpg.bind_item_theme(pal_hdr, th)
+            table_policy = self._dpg_policy(
+                ["mvTable_SizingStretchProp", "mvTable_SizingStretchSame"]
+            )
+            with dpg.table(header_row=False, policy=table_policy) as pal_tbl:
+                # Style セクションと同等のセル間隔を適用
+                self._apply_cell_padding_theme(pal_tbl)
+                tth = self._theme_mgr.get_category_table_theme("palette")
+                if tth is not None:
+                    dpg.bind_item_theme(pal_tbl, tth)
+                left, right = self._label_value_ratio()
+                self._add_two_columns(left, right)
+
+                # Base color (L/C/h)
+                if l_desc is not None:
+                    self._palette_param_ids.add(l_desc.id)
+                    with dpg.table_row():
+                        with dpg.table_cell():
+                            dpg.add_text(l_desc.label or "Lightness")
+                        with dpg.table_cell():
+                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=l_desc)
+
+                if c_desc is not None:
+                    self._palette_param_ids.add(c_desc.id)
+                    with dpg.table_row():
+                        with dpg.table_cell():
+                            dpg.add_text(c_desc.label or "Chroma")
+                        with dpg.table_cell():
+                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=c_desc)
+
+                if h_desc is not None:
+                    self._palette_param_ids.add(h_desc.id)
+                    with dpg.table_row():
+                        with dpg.table_cell():
+                            dpg.add_text(h_desc.label or "Hue")
+                        with dpg.table_cell():
+                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=h_desc)
+
+                if type_desc is not None:
+                    self._palette_param_ids.add(type_desc.id)
+                    with dpg.table_row():
+                        with dpg.table_cell():
+                            dpg.add_text(type_desc.label or "Palette Type")
+                        with dpg.table_cell():
+                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=type_desc)
+
+                if style_desc is not None:
+                    self._palette_param_ids.add(style_desc.id)
+                    with dpg.table_row():
+                        with dpg.table_cell():
+                            dpg.add_text(style_desc.label or "Palette Style")
+                        with dpg.table_cell():
+                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=style_desc)
+
+                if n_desc is not None:
+                    self._palette_param_ids.add(n_desc.id)
+                    with dpg.table_row():
+                        with dpg.table_cell():
+                            dpg.add_text(n_desc.label or "Colors")
+                        with dpg.table_cell():
+                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=n_desc)
+
+                # プレビュー行（ラベル列 + スウォッチ群）
+                with dpg.table_row():
+                    with dpg.table_cell():
+                        dpg.add_text("Preview")
+                    with dpg.table_cell():
+                        with dpg.group(horizontal=True) as sw_group:
+                            self._palette_swatches_container = sw_group
+
+    def sync_palette_from_store(self) -> None:
+        if not self._palette_param_ids:
+            return
+        self.on_store_change(self._palette_param_ids)
+        self._refresh_palette_preview()
+
     def mount_descriptors(self, root_tag: str, descriptors: list[ParameterDescriptor]) -> None:
         self.build_style_controls(root_tag, descriptors)
+        self.build_palette_controls(root_tag, descriptors)
         self._build_grouped_table(root_tag, descriptors)
         self.sync_style_from_store()
+        self.sync_palette_from_store()
 
     def _build_grouped_table(
         self,
         parent: int | str,
         descriptors: list[ParameterDescriptor],
     ) -> None:
-        excluded = set(self._style_param_ids) | {"runner.show_hud", STYLE_LINE_THICKNESS_ID}
+        excluded = (
+            set(self._style_param_ids)
+            | set(self._palette_param_ids)
+            | {"runner.show_hud", STYLE_LINE_THICKNESS_ID}
+        )
         filtered = [
             d for d in descriptors if d.id not in excluded and not self._is_style_descriptor(d)
         ]
@@ -877,6 +1007,7 @@ class ParameterWindowContentBuilder:
 
     def on_store_change(self, ids: Iterable[str]) -> None:
         """Store から通知された ID 群に対応する DPG ウィジェット値を更新する。"""
+        palette_dirty = False
         self._syncing = True
         try:
             for pid in ids:
@@ -911,6 +1042,10 @@ class ParameterWindowContentBuilder:
                         )
                     else:
                         dpg.set_value(pid, value)
+                    if isinstance(pid, str) and (
+                        pid.startswith("palette.") or pid == "runner.line_color"
+                    ):
+                        palette_dirty = True
                     continue
                 try:
                     desc = self._store.get_descriptor(pid)
@@ -932,6 +1067,11 @@ class ParameterWindowContentBuilder:
                     dpg.set_value(tag, float(vec[i]))
         finally:
             self._syncing = False
+        if palette_dirty:
+            try:
+                self._refresh_palette_preview()
+            except Exception:
+                logger.debug("palette preview refresh failed", exc_info=True)
 
     def _on_cc_binding_change(self, sender: int, app_data: Any, user_data: Any) -> None:
         """CC 番号入力の変更を CC バインディングへ反映する。
@@ -979,7 +1119,10 @@ class ParameterWindowContentBuilder:
             kwargs["parent"] = parent
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
-        self._set_full_width(box)
+        try:
+            dpg.set_item_width(box, int(getattr(self._layout, "cc_box_width", 24)))
+        except Exception:
+            self._set_full_width(box)
         return box
 
     def _add_cc_binding_input_component(
@@ -1004,7 +1147,10 @@ class ParameterWindowContentBuilder:
             kwargs["parent"] = parent
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
-        self._set_full_width(box)
+        try:
+            dpg.set_item_width(box, int(getattr(self._layout, "cc_box_width", 24)))
+        except Exception:
+            self._set_full_width(box)
         return box
 
     def _cc_binding_text(self, param_id: str) -> str:
@@ -1109,6 +1255,132 @@ class ParameterWindowContentBuilder:
         if value is None:
             return fallback
         return self._safe_norm(value, fallback)
+
+    def _refresh_palette_preview(self) -> None:
+        """現在の Store 値から Palette を再計算し、プレビュー/共有状態を更新する。"""
+        if self._palette_swatches_container is None:
+            return
+        try:
+            from engine.ui.palette.helpers import build_palette_from_values  # type: ignore[import]
+            from palette.ui_helpers import (  # type: ignore[import]
+                ExportFormat,
+                export_palette,
+            )
+            from util.palette_state import set_palette as _set_palette  # type: ignore[import]
+        except Exception:
+            return
+
+        try:
+            L_val = self._store.current_value(PALETTE_L_ID) or self._store.original_value(
+                PALETTE_L_ID
+            )
+        except Exception:
+            L_val = None
+        try:
+            C_val = self._store.current_value(PALETTE_C_ID) or self._store.original_value(
+                PALETTE_C_ID
+            )
+        except Exception:
+            C_val = None
+        try:
+            h_val = self._store.current_value(PALETTE_H_ID) or self._store.original_value(
+                PALETTE_H_ID
+            )
+        except Exception:
+            h_val = None
+        try:
+            type_val = self._store.current_value(PALETTE_TYPE_ID) or self._store.original_value(
+                PALETTE_TYPE_ID
+            )
+        except Exception:
+            type_val = None
+        try:
+            style_val = self._store.current_value(PALETTE_STYLE_ID) or self._store.original_value(
+                PALETTE_STYLE_ID
+            )
+        except Exception:
+            style_val = None
+        try:
+            n_val = self._store.current_value(PALETTE_N_COLORS_ID) or self._store.original_value(
+                PALETTE_N_COLORS_ID
+            )
+        except Exception:
+            n_val = None
+
+        palette_obj = None
+        try:
+            palette_obj = build_palette_from_values(
+                base_color_value=None,
+                palette_type_value=type_val,
+                palette_style_value=style_val,
+                n_colors_value=n_val,
+                L_value=L_val,
+                C_value=C_val,
+                h_value=h_val,
+            )
+        except Exception:
+            palette_obj = None
+
+        try:
+            _set_palette(palette_obj)
+        except Exception:
+            pass
+
+        # 既存スウォッチをクリア
+        try:
+            if dpg.does_item_exist(self._palette_swatches_container):
+                children = dpg.get_item_children(self._palette_swatches_container, 1)
+                if isinstance(children, (list, tuple)):
+                    for cid in list(children):
+                        try:
+                            dpg.delete_item(cid)
+                        except Exception:
+                            continue
+        except Exception:
+            logger.debug("failed to clear palette swatches", exc_info=True)
+
+        if palette_obj is None:
+            return
+
+        # HEX と sRGB(0..1) の両方を取得
+        try:
+            hex_list = export_palette(palette_obj, ExportFormat.HEX)
+            srgb_list = export_palette(palette_obj, ExportFormat.SRGB_01)
+        except Exception:
+            return
+
+        # スウォッチを横に並べる
+        for idx, (hex_str, rgb) in enumerate(zip(hex_list, srgb_list)):
+            try:
+                r, g, b = rgb  # type: ignore[misc]
+                rv = int(round(float(r) * 255.0))
+                gv = int(round(float(g) * 255.0))
+                bv = int(round(float(b) * 255.0))
+            except Exception:
+                continue
+            try:
+                size = int(getattr(self._layout, "row_height", 28))
+                width = size * 2
+                height = max(1, size // 2)
+                dpg.add_color_button(
+                    parent=self._palette_swatches_container,
+                    default_value=[rv, gv, bv, 255],
+                    no_border=True,
+                    width=width,
+                    height=height,
+                    callback=lambda *_, h=hex_str: self._on_palette_swatch_click(h),
+                )
+            except Exception:
+                continue
+
+    def _on_palette_swatch_click(self, hex_str: str) -> None:
+        """スウォッチクリックで HEX をクリップボードへコピーする。"""
+        try:
+            set_clip = getattr(dpg, "set_clipboard_text", None)
+            if callable(set_clip):
+                set_clip(str(hex_str))
+        except Exception:
+            logger.debug("failed to copy palette swatch HEX to clipboard", exc_info=True)
 
     def _create_vector_sliders(
         self,

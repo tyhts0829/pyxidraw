@@ -88,6 +88,7 @@ def user_draw(t):
 - 優先順位は「明示引数 > GUI > 既定値」。MIDI→GUI の自動上書きは行わない。
 - RangeHint は `__param_meta__` がある場合のみ使用し、無い場合は 0–1 既定レンジ（クランプは表示上のみ）。
 - レイヤー編集は `api.layers.L` を使用する（例: `L(g, color=(1,0,0))` / `L.layer(g, ...)` や `L.builder().add(...).add(...).build()`). 旧 `E.style` は廃止。
+- カラーパレットは `from api import C` で参照し、Parameter GUI の `Palette` セクションでベースカラー/種別/スタイル/色数を変更すると `C[i]` が指す色が更新される（`run_sketch(..., enable_palette_gui=False)` で GUI を無効化可）。
 
 - 追加インストール: `pip install -e .[optional]`
 - 使用例: shapely, numba, mido, fonttools などを使う optional テストが有効になります。

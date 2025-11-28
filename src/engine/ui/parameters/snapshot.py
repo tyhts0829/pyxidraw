@@ -41,6 +41,10 @@ def extract_overrides(
             continue
         if cur is None:
             continue
+        # palette.* は original と同じでも常にスナップショットへ含める
+        if isinstance(pid, str) and pid.startswith("palette."):
+            overrides[pid] = cur
+            continue
         if cur == org:
             continue
         # JSON保存互換で tuple はそのまま運ぶ（呼び出し側で解釈）
@@ -272,6 +276,7 @@ def apply_param_snapshot(overrides: Mapping[str, Any] | None, t: float) -> None:
     - overrides が Truthy の場合: SnapshotRuntime を生成して有効化（t を注入）。
     - None/空 の場合: `deactivate_runtime()` を呼び、ランタイムを無効化。
     """
+    _update_palette_from_overrides(overrides)
     if overrides is not None:
         rt = SnapshotRuntime(overrides)
         rt.begin_frame()
@@ -279,6 +284,49 @@ def apply_param_snapshot(overrides: Mapping[str, Any] | None, t: float) -> None:
         activate_runtime(rt)  # type: ignore[arg-type]
     else:
         deactivate_runtime()
+
+
+def _update_palette_from_overrides(overrides: Mapping[str, Any] | None) -> None:
+    """スナップショットからパレット状態を更新する（存在しない場合は None）。"""
+    try:
+        from engine.ui.palette.helpers import build_palette_from_values  # type: ignore[import]
+        from util.palette_state import set_palette as _set_palette  # type: ignore[import]
+    except Exception:
+        return
+
+    if not overrides:
+        try:
+            _set_palette(None)
+        except Exception:
+            pass
+        return
+
+    base_val = overrides.get("runner.line_color")
+    L_val = overrides.get("palette.L")
+    C_val = overrides.get("palette.C")
+    h_val = overrides.get("palette.h")
+    type_val = overrides.get("palette.type")
+    style_val = overrides.get("palette.style")
+    n_val = overrides.get("palette.n_colors")
+
+    palette_obj = None
+    try:
+        palette_obj = build_palette_from_values(
+            base_color_value=base_val,
+            palette_type_value=type_val,
+            palette_style_value=style_val,
+            n_colors_value=n_val,
+            L_value=L_val,
+            C_value=C_val,
+            h_value=h_val,
+        )
+    except Exception:
+        palette_obj = None
+
+    try:
+        _set_palette(palette_obj)
+    except Exception:
+        pass
 
 
 __all__ = ["extract_overrides", "apply_param_snapshot", "SnapshotRuntime"]
