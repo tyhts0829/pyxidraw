@@ -399,10 +399,6 @@ class ParameterManager:
     def _register_palette_descriptors(self) -> None:
         """パレット GUI 用の Descriptor を登録する。"""
         try:
-            from palette import (  # type: ignore[import]
-                PALETTE_STYLE_OPTIONS,
-                PALETTE_TYPE_OPTIONS,
-            )
             from util.color import normalize_color as _norm  # type: ignore[import]
         except Exception:
             return
@@ -474,8 +470,10 @@ class ParameterManager:
         self.store.register(c_desc, c_desc.default_value)
         self.store.register(h_desc, h_desc.default_value)
 
-        type_labels = [label for label, _ in PALETTE_TYPE_OPTIONS]
-        style_labels = [label for label, _ in PALETTE_STYLE_OPTIONS]
+        # GUI 表示用の省略ラベル（ANA/COM/...）
+        type_labels = ["ANA", "COM", "SPL", "TRI", "TET", "TAS"]
+        # GUI 表示用のスタイルラベル（記号付き）
+        style_labels = ["Square", "Triangle", "Circle", "Diamond"]
 
         if type_labels:
             type_desc = ParameterDescriptor(

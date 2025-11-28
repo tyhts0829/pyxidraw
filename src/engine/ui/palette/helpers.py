@@ -42,6 +42,32 @@ _TYPE_BY_LABEL: dict[str, PaletteType] = {label: enum for label, enum in PALETTE
 _STYLE_BY_LABEL: dict[str, PaletteStyle] = {label: enum for label, enum in PALETTE_STYLE_OPTIONS}
 
 
+_TYPE_BY_SHORT_LABEL: dict[str, PaletteType] = {
+    "ANA": PaletteType.ANALOGOUS,
+    "COM": PaletteType.COMPLEMENTARY,
+    "SPL": PaletteType.SPLIT_COMPLEMENTARY,
+    "TRI": PaletteType.TRIADIC,
+    "TET": PaletteType.TETRADIC,
+    "TAS": PaletteType.TINTS_SHADES,
+}
+
+_STYLE_BY_SHORT_LABEL: dict[str, PaletteStyle] = {
+    "□Square": PaletteStyle.SQUARE,
+    "△Triangle": PaletteStyle.TRIANGLE,
+    "◯Circle": PaletteStyle.CIRCLE,
+    "◇Diamond": PaletteStyle.DIAMOND,
+}
+
+
+def _normalize_n_colors_for_type(palette_type: PaletteType, n_colors: int) -> int:
+    """PaletteType ごとの色数制約を UI からの入力に合わせて正規化する。"""
+    if palette_type == PaletteType.TRIADIC:
+        return 3
+    if palette_type == PaletteType.TETRADIC:
+        return 4
+    return n_colors
+
+
 def build_palette_from_values(
     *,
     base_color_value: Any | None,
@@ -58,6 +84,7 @@ def build_palette_from_values(
     - L/C/h が与えられている場合はそれを優先して OKLCH ベースでベースカラーを決める。
     - type/style は UI 上のラベル文字列を想定し、不明な値は既定値にフォールバックする。
     - n_colors は 1 以上の int に正規化し、失敗時は 4 を用いる。
+      TRIADIC/TETRADIC の場合は、それぞれ 3/4 に内部的に強制する。
     """
     # ベースカラー（L/C/h が揃っていればそれを優先）
     if L_value is not None and C_value is not None and h_value is not None:
@@ -99,13 +126,13 @@ def build_palette_from_values(
 
     # パレット種別
     type_label = str(palette_type_value) if palette_type_value is not None else ""
-    palette_type = _TYPE_BY_LABEL.get(type_label)
+    palette_type = _TYPE_BY_LABEL.get(type_label) or _TYPE_BY_SHORT_LABEL.get(type_label)
     if palette_type is None:
         palette_type = next(iter(_TYPE_BY_LABEL.values()))
 
     # スタイル
     style_label = str(palette_style_value) if palette_style_value is not None else ""
-    palette_style = _STYLE_BY_LABEL.get(style_label)
+    palette_style = _STYLE_BY_LABEL.get(style_label) or _STYLE_BY_SHORT_LABEL.get(style_label)
     if palette_style is None:
         palette_style = next(iter(_STYLE_BY_LABEL.values()))
 
@@ -116,6 +143,9 @@ def build_palette_from_values(
         n_colors = 4
     if n_colors <= 0:
         n_colors = 4
+
+    # PaletteType ごとの制約に合わせて色数を正規化
+    n_colors = _normalize_n_colors_for_type(palette_type, n_colors)
 
     return generate_palette(
         base_color=base_input,

@@ -421,65 +421,32 @@ class ParameterWindowContentBuilder:
                 tth = self._theme_mgr.get_category_table_theme("palette")
                 if tth is not None:
                     dpg.bind_item_theme(pal_tbl, tth)
-                left, right = self._label_value_ratio()
-                self._add_two_columns(left, right)
+                # shape/pipeline と同じ列比率（Parameter/Bars/CC）を使う
+                label_ratio = float(self._layout.label_column_ratio)
+                label_ratio = max(MIN_LABEL_RATIO, min(MAX_LABEL_RATIO, label_ratio))
+                rest = max(MIN_REST_RATIO, 1.0 - label_ratio)
+                bcc = float(getattr(self._layout, "bars_cc_ratio", 0.7))
+                bcc = max(MIN_BARS_CC_RATIO, min(MAX_BARS_CC_RATIO, bcc))
+                bars_ratio = rest * bcc
+                cc_ratio = rest - bars_ratio
+                self._add_stretch_column("Parameter", label_ratio)
+                self._add_stretch_column("Bars", bars_ratio)
+                self._add_stretch_column("CC", cc_ratio)
 
-                # Base color (L/C/h)
-                if l_desc is not None:
-                    self._palette_param_ids.add(l_desc.id)
-                    with dpg.table_row():
-                        with dpg.table_cell():
-                            dpg.add_text(l_desc.label or "Lightness")
-                        with dpg.table_cell():
-                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=l_desc)
-
-                if c_desc is not None:
-                    self._palette_param_ids.add(c_desc.id)
-                    with dpg.table_row():
-                        with dpg.table_cell():
-                            dpg.add_text(c_desc.label or "Chroma")
-                        with dpg.table_cell():
-                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=c_desc)
-
-                if h_desc is not None:
-                    self._palette_param_ids.add(h_desc.id)
-                    with dpg.table_row():
-                        with dpg.table_cell():
-                            dpg.add_text(h_desc.label or "Hue")
-                        with dpg.table_cell():
-                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=h_desc)
-
-                if type_desc is not None:
-                    self._palette_param_ids.add(type_desc.id)
-                    with dpg.table_row():
-                        with dpg.table_cell():
-                            dpg.add_text(type_desc.label or "Palette Type")
-                        with dpg.table_cell():
-                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=type_desc)
-
-                if style_desc is not None:
-                    self._palette_param_ids.add(style_desc.id)
-                    with dpg.table_row():
-                        with dpg.table_cell():
-                            dpg.add_text(style_desc.label or "Palette Style")
-                        with dpg.table_cell():
-                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=style_desc)
-
-                if n_desc is not None:
-                    self._palette_param_ids.add(n_desc.id)
-                    with dpg.table_row():
-                        with dpg.table_cell():
-                            dpg.add_text(n_desc.label or "Colors")
-                        with dpg.table_cell():
-                            self._create_widget(parent=dpg.last_item() or pal_tbl, desc=n_desc)
-
-                # プレビュー行（ラベル列 + スウォッチ群）
+                # Base color (L/C/h) + type/style/colors を既存ロジックで 3 列行として構築
+                for desc in (l_desc, c_desc, h_desc, type_desc, style_desc, n_desc):
+                    if desc is None:
+                        continue
+                    self._palette_param_ids.add(desc.id)
+                    self._create_row_3cols(pal_tbl, desc)
+                # プレビュー行（ラベル列 + Bars 列にスウォッチ群, CC 列は空）
                 with dpg.table_row():
                     with dpg.table_cell():
                         dpg.add_text("Preview")
                     with dpg.table_cell():
-                        with dpg.group(horizontal=True) as sw_group:
-                            self._palette_swatches_container = sw_group
+                        self._palette_swatches_container = dpg.add_group(horizontal=True)
+                    with dpg.table_cell():
+                        pass
 
     def sync_palette_from_store(self) -> None:
         if not self._palette_param_ids:
@@ -810,7 +777,12 @@ class ParameterWindowContentBuilder:
         if vt == "enum":
             items = list(desc.choices or [])
             default = str(value) if value is not None else (items[0] if items else "")
-            if len(items) <= 5:
+            use_radio = False
+            if desc.id == "palette.type":
+                use_radio = True
+            elif len(items) <= 5:
+                use_radio = True
+            if use_radio:
                 return dpg.add_radio_button(
                     tag=desc.id,
                     items=items,
@@ -1357,6 +1329,7 @@ class ParameterWindowContentBuilder:
                 gv = int(round(float(g) * 255.0))
                 bv = int(round(float(b) * 255.0))
             except Exception:
+                logger.debug("refresh_palette_preview: failed to decode rgb for swatch %d", idx)
                 continue
             try:
                 size = int(getattr(self._layout, "row_height", 28))
@@ -1371,6 +1344,11 @@ class ParameterWindowContentBuilder:
                     callback=lambda *_, h=hex_str: self._on_palette_swatch_click(h),
                 )
             except Exception:
+                logger.debug(
+                    "refresh_palette_preview: failed to add color button for %s",
+                    hex_str,
+                    exc_info=True,
+                )
                 continue
 
     def _on_palette_swatch_click(self, hex_str: str) -> None:
