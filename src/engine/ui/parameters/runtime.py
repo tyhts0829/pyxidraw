@@ -17,6 +17,7 @@ from engine.ui.parameters.state import (
     ParameterStore,
     SourceType,
 )
+from engine.core.lazy_geometry import set_shape_label_hook
 
 from .introspection import FunctionIntrospector
 from .value_resolver import ParameterContext, ParameterValueResolver
@@ -43,6 +44,20 @@ def deactivate_runtime() -> None:
 def get_active_runtime() -> "ParameterRuntime | None":
     stack = _RUNTIME_STACK.get()
     return stack[-1] if stack else None
+
+
+def _shape_label_hook(shape_name: str, base_label: str) -> None:
+    """LazyGeometry.label からの shape ラベル適用を担当するフック。"""
+    runtime = get_active_runtime()
+    if runtime is None:
+        return
+    try:
+        runtime.relabel_shape(shape_name, base_label)
+    except Exception:
+        return
+
+
+set_shape_label_hook(_shape_label_hook)
 
 
 class ParameterRuntime:

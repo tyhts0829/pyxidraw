@@ -12,8 +12,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
 
 from engine.core.affine_ops import rotate as _fx_rotate
@@ -27,11 +27,21 @@ from common.env import env_int, env_bool
 BaseKind = Literal["shape", "geometry"]
 
 
+ShapeLabelHook = Callable[[str, str], None]
+_shape_label_hook: ShapeLabelHook | None = None
+
+
+def set_shape_label_hook(hook: ShapeLabelHook | None) -> None:
+    """shape ラベル適用用のフックを登録する（UI 層から設定）。"""
+    global _shape_label_hook
+    _shape_label_hook = hook
+
+
 @dataclass
 class LazyGeometry:
     base_kind: BaseKind
-    base_payload: Any  # (shape_impl: Callable, params_dict) or Geometry
-    plan: list[tuple[Callable[[Geometry], Geometry], dict[str, Any]]] = field(default_factory=list)
+    base_payload: Any  # ("shape_name", shape_impl: Callable, params_dict) or Geometry
+    plan: list[tuple[Callable[..., Geometry], dict[str, Any]]] = field(default_factory=list)
 
     _cached: Geometry | None = field(default=None, init=False, repr=False)
 
@@ -48,7 +58,11 @@ class LazyGeometry:
             assert isinstance(g, Geometry)
             base_key: Any = ("geom-id", id(g))
         else:
-            shape_impl, params = self.base_payload
+            # base_payload: (shape_name, shape_impl, params_dict)
+            try:
+                _shape_name, shape_impl, params = self.base_payload
+            except Exception:
+                shape_impl, params = self.base_payload  # 後方互換（旧形式: (impl, params)）
             # 形状結果の LRU キャッシュ（フレーム間共有）
             try:
                 params_tuple = _params_signature(shape_impl, dict(params))
@@ -174,6 +188,41 @@ class LazyGeometry:
             "angles_rad": (float(x), float(y), float(z)),
         }
         return LazyGeometry(self.base_kind, self.base_payload, self.plan + [(_fx_rotate, params)])
+
+    def label(self, uid: str) -> "LazyGeometry":
+        """Parameter GUI 向けに shape カテゴリラベルを設定する便宜メソッド。
+
+        base_kind が "shape" の場合のみ動作し、それ以外では self をそのまま返す。
+        Parameter GUI が無効な場合や、ラベルが空文字列の場合も no-op とする。
+        """
+        if self.base_kind != "shape":
+            return self
+
+        if self.base_kind != "shape":
+            return self
+
+        try:
+            text = str(uid).strip()
+        except Exception:
+            text = ""
+        if not text:
+            return self
+
+        if _shape_label_hook is None:
+            return self
+
+        # base_payload: (shape_name, shape_impl, params_dict)
+        try:
+            shape_name, _shape_impl, _params = self.base_payload
+        except Exception:
+            return self
+
+        try:
+            _shape_label_hook(str(shape_name), text)
+        except Exception:
+            return self
+
+        return self
 
     # Geometry 互換の便宜プロパティ
     @property
@@ -431,7 +480,11 @@ def _lazy_sig_for(lg: "LazyGeometry") -> object:
         g = lg.base_payload
         base_sig: Any = ("geom-id", id(g))
     else:
-        shape_impl, params = lg.base_payload
+        # base_payload: (shape_name, shape_impl, params_dict)
+        try:
+            _shape_name, shape_impl, params = lg.base_payload
+        except Exception:
+            shape_impl, params = lg.base_payload  # 後方互換
         try:
             params_tuple = _params_signature(shape_impl, dict(params))
             base_sig = ("shape", _impl_id(shape_impl), params_tuple)

@@ -385,6 +385,16 @@ class Geometry:
         """ポリライン本数 `M` を返す。`len(self)` と同義。"""
         return len(self)
 
+    def label(self, uid: str) -> "Geometry":
+        """Parameter GUI 用カテゴリラベル指定の便宜メソッド（現在は no-op）。
+
+        `G.<shape>(...)` の戻り値は実装上 `LazyGeometry` だが、型スタブ上は `Geometry`
+        として公開しているため、開発体験向上のために `Geometry.label()` も用意する。
+        現時点では Parameter GUI 側への伝達は行わず、自身のコピーを返すのみとする。
+        """
+        _ = uid  # 将来の拡張余地を残しつつ、現状は no-op。
+        return Geometry(self.coords.copy(), self.offsets.copy())
+
     def __repr__(self) -> str:  # pragma: no cover - 表示用
         """形状/件数中心の簡素な表現。
 

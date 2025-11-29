@@ -7,14 +7,14 @@
 - 実行時 API
   - `api.shapes.ShapesAPI` (`src/api/shapes.py`)
     - `G = ShapesAPI()` として公開。
-    - `G.<shape>(...)` は `LazyGeometry(base_kind="shape", base_payload=(impl, params))` を返す（`_lazy_shape`）。
-    - `ShapesAPI.label(self, uid: str) -> ShapesAPI` は「次の shape 呼び出しに対するラベル」を `_ShapeCallContext` に格納するだけ。
-    - `_build_shape_method()` 内で `get_active_runtime()` を取得し、`runtime.before_shape_call(...)` と `runtime.relabel_shape(shape_name, ctx_label)` を呼び出す。
+    - `G.<shape>(...)` は `LazyGeometry(base_kind="shape", base_payload=(shape_name, impl, params))` を返す（`_lazy_shape`）。
+    - `ShapesAPI.label(self, uid: str) -> ShapesAPI` は「次の shape 呼び出しに対するラベル」を `_ShapeCallContext` に格納し、`_build_shape_method()` から生成された `LazyGeometry` に対して `.label(uid)` を適用する。
+    - `_build_shape_method()` 内では `get_active_runtime()` を取得し、`runtime.before_shape_call(...)` により Descriptor 登録とパラメータ解決を行う。
   - `LazyGeometry` (`src/engine/core/lazy_geometry.py`)
     - `base_kind: Literal["shape", "geometry"]` と `base_payload` を持つ。
-    - shape の場合の `base_payload` は `(shape_impl, params_dict)`。
+    - shape の場合の `base_payload` は `(shape_name, shape_impl, params_dict)`。
     - `realize()` では `(shape_impl, params)` から Geometry を生成し、effect plan を適用する。
-    - 便宜メソッドとして `translate/scale/rotate/__add__` はあるが、`label()` は未実装。
+    - 便宜メソッドとして `translate/scale/rotate/__add__/label` を持ち、`label()` は Parameter GUI の shape カテゴリラベルを設定する。
   - Parameter GUI (`src/engine/ui/parameters/runtime.py`, `value_resolver.py`)
     - `ParameterRuntime.before_shape_call()` で `ParameterContext(scope="shape", name=shape_name, index=index)` を構築し、Descriptor を登録。
     - `ParameterContext.category` は shape のとき `name` / `name_1` / `name_2` ... の規則でヘッダ名を決定（shape ヘッダ分割は実装済み）。
@@ -34,14 +34,14 @@
 ## 課題（問題点の整理）
 
 - ランタイム挙動
-  - `G.label("title").text(...)` は動作するが、`G.text(...).label("title")` / `G.polygon(...).label("title")` は `LazyGeometry`（実際の戻り値）に `label` が無いため実行時エラーになる。
+  - `G.text(...).label("title")` / `G.polygon(...).label("title")` など shape 呼び出し後の `.label()` を正式サポートしつつ、Parameter GUI 上のカテゴリ名に期待どおり反映されることを保証する必要がある。
   - `ParameterRuntime.relabel_shape` は `shape_name` 単位でカテゴリを書き換えるため、「同じ shape を複数回呼び出したときのラベル連番（`title`, `title_1`, ...）」の仕様が現状コードに完全には反映されていない可能性がある。
 - 型チェック・開発体験
   - `_GShapes` が `-> Geometry` を返すことにより、エディタ/型チェッカでは `G.polygon().label()` が「`Geometry` に `label` が無い」と警告される。
   - 実体は `LazyGeometry` であるため、型情報と実装の乖離が大きく、`label` 以外の Lazy ベースの API 拡張にも影響する。
 - 設計整合性
-  - Shapes 側では「`G` にだけ `label()` がある」状態で、LazyGeometry には無い。一方 Effects 側は `PipelineBuilder` 自身が `.label()` を持つ。
-  - `parameter_gui_shape_header_split_plan.md` の「チェーン任意位置」という仕様と、実装/型情報が噛み合っていない。
+  - Shapes 側では `ShapesAPI`（=`G`）および `LazyGeometry` の両方に `label()` が存在するため、効果的な責務分担と今後の拡張方針を整理する必要がある。
+  - `parameter_gui_shape_header_split_plan.md` の「チェーン任意位置」という仕様と、実装/型情報が一貫するように維持する必要がある。
 
 ## 方針（ざっくりした解決イメージ）
 
@@ -61,23 +61,22 @@
 
 ### 1. 仕様の確定・確認事項
 
-- [ ] `G.text(...).label("title")` のように「shape 呼び出し後に label」を掛ける書き方を正式にサポートしてよいか確認する。
-- [ ] ラベル適用の単位を「shape 名」単位にするか「shape 呼び出しインスタンス」単位にするかを決める。
+- [x] `G.text(...).label("title")` のように「shape 呼び出し後に label」を掛ける書き方を正式にサポートしてよいか確認する。
+- [x] ラベル適用の単位を「shape 名」単位にするか「shape 呼び出しインスタンス」単位にするかを決める。
   - 例: `G.text(...).label("title")` を 2 回呼んだとき、ヘッダ名を `title` / `title_1` とするか、どちらも `title` にするか。
-- [ ] `LazyGeometry` 以外（`Geometry` や `Layer`）に対して `.label()` を許容するかどうか（no-op か、エラーとするか）を決める。
-- [ ] 型スタブの目標粒度（`Geometry` に嘘の `label` を載せるか、`LazyGeometry` を正式に API として出すか）を決める。
+- [x] `LazyGeometry` 以外（`Geometry` や `Layer`）に対して `.label()` を許容するかどうか（no-op か、エラーとするか）を決める。
+- [x] 型スタブの目標粒度（`Geometry` に嘘の `label` を載せるか、`LazyGeometry` を正式に API として出すか）を決める。
 
 ### 2. ランタイム実装設計（LazyGeometry.label）
 
-- [ ] `LazyGeometry` に `def label(self, uid: str) -> "LazyGeometry"` を追加する設計をまとめる。
+- [x] `LazyGeometry` に `def label(self, uid: str) -> "LazyGeometry"` を追加する設計をまとめる。
   - base が `"shape"` のときのみラベル処理を行い、それ以外は self をそのまま返す。
   - `uid` は `str(uid).strip()` で正規化し、空文字列は無視（no-op）とする。
-- [ ] `LazyGeometry` から shape 名を特定するヘルパを設計する。
-  - `shapes.registry.get_registry()` を使い、登録済み shape 関数から name → fn を取得。
-  - 各 `fn` に対して `impl = getattr(fn, "__shape_impl__", fn)` を取り、`impl is shape_impl` で一致を取る。
-  - 一致する name が複数見つかった場合は、最初の 1 件のみ採用（想定外ケースなのでログ/コメントで軽く言及）。
-- [ ] `get_active_runtime()` が存在しない（Parameter GUI 無効）場合や、shape 名が解決できなかった場合の挙動を決める（単に self を返すだけ）。
-- [ ] 既存の `ShapesAPI.label()` との重複を整理する。
+- [x] `LazyGeometry` から shape 名を特定するヘルパを設計する。
+  - `base_payload` に shape 名（`shape_name`）を含めて格納し、そこから直接参照する。
+  - 一致する name が複数見つかった場合の扱いは `base_payload` 作成側（ShapesAPI）で一意に決まる前提とする。
+- [x] `get_active_runtime()` が存在しない（Parameter GUI 無効）場合や、shape 名が解決できなかった場合の挙動を決める（単に self を返すだけ）。
+- [x] 既存の `ShapesAPI.label()` との重複を整理する。
   - `G.label("uid").text(...)` では、現在 `_ShapeCallContext` を経由して `runtime.relabel_shape(shape_name, uid)` を shape 呼び出し直前に行っている。
   - 将来的に `ShapesAPI.label()` の実装を「`G.label("uid")` → 次の LazyGeometry に `.label("uid")` を適用する薄いラッパ」に寄せるかどうかを検討する（互換性とシンプルさのトレードオフ）。
 
@@ -91,20 +90,20 @@
 
 ### 4. 型スタブ・スタブ生成スクリプトの更新
 
-- [ ] `src/api/__init__.pyi` の `_GShapes` 定義を見直し、戻り値型と `label` 呼び出しの型整合性を取る案を 2 パターン用意する。
-  - 案 A（最小変更）: 既存どおり戻り値は `Geometry` のままとし、`Geometry` に `def label(self, uid: str) -> Geometry: ...` を追加して警告だけ解消する。
+- [x] `src/api/__init__.pyi` の `_GShapes` 定義を見直し、戻り値型と `label` 呼び出しの型整合性を取る案を 2 パターン用意する。
+  - 案 A（最小変更）: 既存どおり戻り値は `Geometry` のままとし、`Geometry` に `def label(self, uid: str) -> Geometry: ...` を追加して警告だけ解消する（採用済み）。
   - 案 B（精度重視）: 戻り値を `LazyGeometry`（または `Geometry | LazyGeometry`）に変更し、`LazyGeometry` 型を `api` からも import 可能にする。
 - [ ] `tools/gen_g_stubs.py` に `LazyGeometry` を import させるかどうか、どの層まで型を露出させるかを決める。
 - [ ] 選択した案に応じてスタブ生成ロジックを修正し、`python -m tools.gen_g_stubs` の出力とテスト（`tests/stubs/test_g_stub_sync.py`）が通ることを確認する。
 
 ### 5. テスト追加・更新
 
-- [ ] `tests/ui/parameters` 配下に「shape ラベル適用」用のテストを追加する。
+- [x] `tests/ui/parameters` 配下に「shape ラベル適用」用のテストを追加する。
   - `G.text(...).label("title")` 相当のコードパスで、Parameter GUI 上のカテゴリ名が期待どおりになるかを検証する（ユニットテストベースでよい）。
   - `G.label("title").text(...)` との挙動差/互換性も確認する。
-- [ ] `LazyGeometry.label()` 単体の挙動テストを追加する。
+- [x] `LazyGeometry.label()` 単体の挙動テストを追加する。
   - shape ベース / geometry ベース / Runtime 無効 / shape 名解決失敗 の各ケースで no-op かラベル適用かを確認する。
-- [ ] 型レベルの検証（mypy あるいは pyright 相当の simple スクリプト）で、`G.polygon().label("uid")` に警告が出ないことを確認する（必要なら `tests/stubs` に近い場所でスモークテスト化）。
+- [x] 型レベルの検証（mypy あるいは pyright 相当の simple スクリプト）で、`G.polygon().label("uid")` に警告が出ないことを確認する（必要なら `tests/stubs` に近い場所でスモークテスト化）。
 
 ### 6. ドキュメント更新
 

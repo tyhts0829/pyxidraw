@@ -39,7 +39,11 @@ def lazy_signature_for(lg: LazyGeometry) -> bytes:
         h.update(b"geom-id")
         h.update(str(id(g)).encode())
     else:
-        shape_impl, params = lg.base_payload
+        # base_payload: (shape_name, shape_impl, params_dict)
+        try:
+            _shape_name, shape_impl, params = lg.base_payload
+        except Exception:
+            shape_impl, params = lg.base_payload  # 後方互換
         params_tuple = _params_signature(shape_impl, dict(params))
         h.update(b"shape")
         h.update(_impl_id(shape_impl).encode())

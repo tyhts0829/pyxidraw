@@ -129,10 +129,15 @@ class ShapesAPI:
 
     @staticmethod
     def _lazy_shape(shape_name: str, params_dict: dict[str, Any]) -> LazyGeometry:
-        """登録シェイプを spec（非量子化パラメータ）として Lazy に構築する。"""
+        """登録シェイプを spec（非量子化パラメータ）として Lazy に構築する。
+
+        base_payload には shape 名も含めて格納し、後段（Parameter GUI など）で
+        ラベル付けや識別に利用できるようにする。
+        """
         fn = get_shape_generator(shape_name)
         impl = getattr(fn, "__shape_impl__", fn)
-        return LazyGeometry(base_kind="shape", base_payload=(impl, dict(params_dict)))
+        # base_payload: (shape_name, shape_impl, params_dict)
+        return LazyGeometry(base_kind="shape", base_payload=(shape_name, impl, dict(params_dict)))
 
     # 直接実行のヘルパは不要（LazyGeometry.realize 側で統一処理）
 
@@ -166,28 +171,33 @@ class ShapesAPI:
                 # 登録解除と整合を取るため、キャッシュ済みの属性を破棄して AttributeError を送出
                 self.__dict__.pop(name, None)
                 raise AttributeError(f"'{self.__class__.__name__}' has no attribute '{name}'")
+
             runtime = get_active_runtime()
-            # shape 呼び出しに対するラベルがあればランタイムへ伝搬
             ctx_label: str | None = getattr(self._context, "label", None)
-            if runtime is not None and ctx_label:
-                try:
-                    runtime.relabel_shape(name, ctx_label)
-                except Exception:
-                    pass
             fn = get_shape_generator(name)
             impl = getattr(fn, "__shape_impl__", fn)
+
             if runtime is not None:
                 # ランタイムで最終値へ解決（量子化を含む）
                 resolved = dict(runtime.before_shape_call(name, fn, dict(params)))
                 # 署名は impl を対象に（鍵は量子化、実行は非量子化を payload に保持）
                 params_tuple = _params_signature(impl, resolved)
                 _record_spec(name, params_tuple)
-                return self._lazy_shape(name, resolved)
-            # ランタイム無し: 実値をそのまま payload に、鍵は量子化した署名
-            params_dict = dict(params)
-            params_tuple = _params_signature(impl, params_dict)
-            _record_spec(name, params_tuple)
-            return self._lazy_shape(name, params_dict)
+                lazy = self._lazy_shape(name, resolved)
+            else:
+                # ランタイム無し: 実値をそのまま payload に、鍵は量子化した署名
+                params_dict = dict(params)
+                params_tuple = _params_signature(impl, params_dict)
+                _record_spec(name, params_tuple)
+                lazy = self._lazy_shape(name, params_dict)
+
+            # shape 呼び出しに対するラベルがあれば LazyGeometry 側に委譲
+            if ctx_label:
+                try:
+                    return lazy.label(ctx_label)
+                except Exception:
+                    return lazy
+            return lazy
 
         _shape_method.__name__ = name
         _shape_method.__qualname__ = f"{self.__class__.__name__}.{name}"
