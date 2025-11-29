@@ -58,7 +58,7 @@ DEFAULT_HUD_METER_BG_COLOR = (0.196, 0.196, 0.196, 1.0)
 
 DEFAULT_LINE_THICKNESS = 0.0006
 LINE_THICKNESS_MIN = 0.0001
-LINE_THICKNESS_MAX = 0.01
+LINE_THICKNESS_MAX = 0.001
 
 # テーブル比率用のクランプ閾値
 MIN_LABEL_RATIO = 0.1
@@ -223,6 +223,9 @@ class ParameterWindowContentBuilder:
                             mn, mx = self._effective_range(thickness_desc)
                         else:
                             mn, mx = LINE_THICKNESS_MIN, LINE_THICKNESS_MAX
+                        precision = getattr(self._layout, "value_precision", 6)
+                        if precision < 6:
+                            precision = 6
                         with dpg.group(horizontal=False) as th_group:
                             th_picker = dpg.add_slider_float(
                                 tag=STYLE_LINE_THICKNESS_ID,
@@ -230,7 +233,7 @@ class ParameterWindowContentBuilder:
                                 default_value=th_val,
                                 min_value=float(mn),
                                 max_value=float(mx),
-                                format=f"%.{self._layout.value_precision}f",
+                                format=f"%.{precision}f",
                                 callback=self._on_widget_change,
                                 user_data=STYLE_LINE_THICKNESS_ID,
                             )
@@ -375,6 +378,9 @@ class ParameterWindowContentBuilder:
                                         value_type=desc.value_type,
                                         default_value=desc.default_value,
                                     )
+                                    precision = getattr(self._layout, "value_precision", 6)
+                                    if precision < 6:
+                                        precision = 6
                                     slider_id = dpg.add_slider_float(
                                         tag=desc.id,
                                         label="",
@@ -385,7 +391,7 @@ class ParameterWindowContentBuilder:
                                         ),
                                         min_value=float(hint.min_value),
                                         max_value=float(hint.max_value),
-                                        format=f"%.{self._layout.value_precision}f",
+                                        format=f"%.{precision}f",
                                         callback=self._on_widget_change,
                                         user_data=desc.id,
                                     )
@@ -769,6 +775,11 @@ class ParameterWindowContentBuilder:
             return
         mn, mx = self._effective_range(desc)
         if vt in {"int", "float"}:
+            precision = getattr(self._layout, "value_precision", 6)
+            desc_id = str(desc.id)
+            if desc_id == STYLE_LINE_THICKNESS_ID or desc_id.endswith(".thickness"):
+                if precision < 6:
+                    precision = 6
             with dpg.table(
                 parent=parent,
                 header_row=False,
@@ -795,7 +806,7 @@ class ParameterWindowContentBuilder:
                                 default_value=float(value) if value is not None else 0.0,
                                 min_value=float(mn),
                                 max_value=float(mx),
-                                format=f"%.{self._layout.value_precision}f",
+                                format=f"%.{precision}f",
                                 callback=self._on_widget_change,
                                 user_data=desc.id,
                             )
@@ -1250,6 +1261,8 @@ class ParameterWindowContentBuilder:
                             ],
                         )
                     else:
+                        if value is None:
+                            continue
                         dpg.set_value(pid, value)
                     if isinstance(pid, str) and pid.startswith("palette."):
                         palette_dirty = True

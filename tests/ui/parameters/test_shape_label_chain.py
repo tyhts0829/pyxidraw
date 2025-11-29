@@ -45,3 +45,58 @@ def test_shape_label_via_lazygeometry_label():
         assert category == "title"
     finally:
         deactivate_runtime()
+
+
+def _categories_for_text_indices(store: ParameterStore) -> dict[int, str]:
+    """text shape の index ごとのカテゴリ名を返す。"""
+    result: dict[int, str] = {}
+    for desc in store.descriptors():
+        if desc.source != "shape":
+            continue
+        id_str = str(desc.id)
+        if not id_str.startswith("shape.text#"):
+            continue
+        try:
+            _, rest = id_str.split("shape.", 1)
+            name_part, _ = rest.split(".", 1)
+            _, idx_str = name_part.split("#", 1)
+            idx_val = int(idx_str)
+        except Exception:
+            continue
+        result[idx_val] = str(desc.category)
+    return result
+
+
+def test_shape_label_multiple_labels_are_separated():
+    """同一 shape 名に対する複数ラベルが別カテゴリになる。"""
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    try:
+        runtime.begin_frame()
+        # `G.label` パス
+        G.label("v_text").text()
+        G.label("h_text").text()
+
+        cats = _categories_for_text_indices(store)
+        assert cats[0] == "v_text"
+        assert cats[1] == "h_text"
+    finally:
+        deactivate_runtime()
+
+
+def test_shape_label_multiple_labels_via_lazygeometry_label():
+    """`G.text().label(...)` パスでも複数ラベルが別カテゴリになる。"""
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    try:
+        runtime.begin_frame()
+        G.text().label("v_text")
+        G.text().label("h_text")
+
+        cats = _categories_for_text_indices(store)
+        assert cats[0] == "v_text"
+        assert cats[1] == "h_text"
+    finally:
+        deactivate_runtime()

@@ -22,7 +22,11 @@ def draw(t: float):
     v_line_p = E.affine().label(uid="v_line_eff")
     v_line_l = L(v_line_p(v_line))
 
-    return sp_l, v_text_l, h_text_l, v_line_l
+    square = G.polygon().label(uid="square")
+    square_p = E.affine().fill().label(uid="square_eff")
+    square_l = L(square_p(square))
+
+    return sp_l, v_text_l, h_text_l, v_line_l, square_l
 
 
 if __name__ == "__main__":

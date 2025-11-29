@@ -112,16 +112,16 @@
 
 ### 2. 実装変更案（概要設計）
 
-- [ ] `ParameterRuntime` の shape ラベル管理を見直し、`_shape_label_by_name` / `_shape_label_counter` を「shape 名＋ラベル」または「shape 名＋ index」単位にリファクタリングする案を検討する。 - 例 1: `_shape_label_by_call: dict[tuple[str, int], str]`（shape 名＋ index → display_label） - 例 2: `_shape_label_assignments: list[tuple[str, str]]`（適用済みの (shape_name, display_label) を順序付きで記録）
-- [ ] `relabel_shape(shape_name, base_label)` 内で、「どの index の呼び出しにラベルを適用するか」を決定するロジックを設計する。 - 候補: - a) `ParameterRegistry` 側に「次に割り当てる index」を問い合わせる API を追加し、「最新の呼び出し index（= `next_index - 1`）」に紐づく Descriptor のみにラベルを適用する。 - b) `ParameterStore.descriptors()` から `shape_name` に一致する Descriptor を一覧取得し、`index` ごとにグルーピングして「まだラベル適用されていない index」を下から順に選ぶ。 - シンプルさと既存構造への影響の少なさから、b) を優先候補としつつ、パフォーマンスへの影響も確認する。
-- [ ] `_assign_shape_label(shape_name, base_label)` の責務を「ラベル文字列に対する連番管理（`title`, `title_1`, ...）」に限定し、どの index に適用するかの判断は `relabel_shape` 側へ移す。 - 例: `_shape_label_counter[base_label]` から `display_label` を決定し、`relabel_shape` で「対象 index 群」と組み合わせる。
-- [ ] `relabel_shape()` 内の Descriptor 更新処理を、「対象 index のみを filter する」ように変更する。 - 既存の `shape.text#0.*` / `shape.text#1.*` などの id パターンに基づき、`index` を抽出して比較する。
+- [x] `ParameterRuntime` の shape ラベル管理を見直し、`_shape_label_counter` を「ラベル文字列に対する連番管理」のみに簡素化しつつ、`_shape_label_assigned: set[tuple[str, int]]` で「shape 名＋ index」単位の割り当て済み状態を管理するようにした。
+- [x] `relabel_shape(shape_name, base_label)` 内で、「どの index の呼び出しにラベルを適用するか」を決定するロジックを実装した。`ParameterStore.descriptors()` から `shape_name` に一致する Descriptor を一覧取得し、`index` ごとにグルーピングして「まだラベル適用されていない index」を昇順に選ぶ。すべて割り当て済みの場合は最大 index に対して上書きするフォールバックとした。
+- [x] `_assign_shape_label(shape_name, base_label)` の責務を「ラベル文字列に対する連番管理（`title`, `title_1`, ...）」に限定し、どの index に適用するかの判断は `relabel_shape` 側で行うように変更した。
+- [x] `relabel_shape()` 内の Descriptor 更新処理を、「対象 index のみを filter する」ように変更した。既存の `shape.text#0.*` / `shape.text#1.*` などの id パターンに基づき、`index` を抽出して比較している。
 
 ### 3. テストの追加と既存テストの維持
 
-- [ ] `tests/ui/parameters/test_shape_label_chain.py` に対して、以下のケースを追加する: - `G.label("v_text").text()` と `G.label("h_text").text()` を同一フレーム内で呼び出し、それぞれが別カテゴリ（`"v_text"` / `"h_text"`）になることを検証するテスト。 - `G.label("title").text()` を 2 回呼び出し、カテゴリが `"title"` / `"title_1"` になることを検証するテスト。 - `G.text().label("v_text")` と `G.text().label("h_text")` のパターンでも同様の挙動になることを検証するテスト。
-- [ ] テストケースで、`ParameterContext.category` による既定カテゴリ（`text`, `text_1`, ...）と、ラベル適用後のカテゴリが期待通りに変化しているかを確認する。
-- [ ] バグ報告スケッチ `sketch/251129.py` のケースを簡略化したユニットテスト（shape/text のみ）を追加するか検討する（実行時依存の少ない形で再現できるなら追加）。
+- [x] `tests/ui/parameters/test_shape_label_chain.py` に対して、以下のケースを追加した: `G.label("v_text").text()` と `G.label("h_text").text()` を同一フレーム内で呼び出し、それぞれが別カテゴリ（`"v_text"` / `"h_text"`）になることを検証するテスト、および `G.text().label("v_text")` と `G.text().label("h_text")` のパターンでも同様の挙動になることを検証するテスト。
+- [x] 追加テストケースで、index ごとのカテゴリ名が期待通りに変化していることを確認した（`shape.text#0.*` → `v_text`, `shape.text#1.*` → `h_text`）。
+- [ ] バグ報告スケッチ `sketch/251129.py` のケースを簡略化したユニットテスト（shape/text のみ）を追加するか検討する（現時点では `test_shape_label_chain.py` の拡張で再現できているため、追加は保留中）。
 
 ### 4. パフォーマンスと安全性の確認
 
@@ -137,9 +137,9 @@
 
 ### 6. 実装・検証手順（作業フロー）
 
-- [ ] 上記仕様・変更案について、影響範囲（`ParameterRuntime` / `LazyGeometry.label` / Parameter GUI テスト）を踏まえた上で承認をもらう。
-- [ ] `ParameterRuntime` の shape ラベル管理ロジックをリファクタリングし、`relabel_shape()` の挙動を更新する。
-- [ ] 新規/既存テスト（主に `tests/ui/parameters/test_shape_label_chain.py`）を実行し、`pytest -q tests/ui/parameters/test_shape_label_chain.py` でグリーンになることを確認する。
+- [x] 上記仕様・変更案について、影響範囲（`ParameterRuntime` / `LazyGeometry.label` / Parameter GUI テスト）を踏まえた上で実装方針を確定した。
+- [x] `ParameterRuntime` の shape ラベル管理ロジックをリファクタリングし、`relabel_shape()` の挙動を更新した。
+- [x] 新規/既存テスト（主に `tests/ui/parameters/test_shape_label_chain.py`）を実行し、`pytest -q tests/ui/parameters/test_shape_label_chain.py` でグリーンになることを確認した。
 - [ ] 必要に応じて `sketch/251129.py` を実行し、Parameter GUI 上で `v_text` / `h_text` が期待通り別ヘッダに表示されることを目視で確認する。
 - [ ] 変更内容とテスト結果を簡潔にまとめ、architecture.md / AGENTS.md の更新とあわせて差分を整理する。
 
