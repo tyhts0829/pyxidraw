@@ -70,6 +70,7 @@
 - 署名生成（キャッシュ鍵）は `common.param_utils.params_signature` により「float のみ量子化」を行う（`__param_meta__['step']` 優先、未指定は 1e-6／`PXD_PIPELINE_QUANT_STEP` で上書き可、ベクトルは成分ごと）。Effects は量子化後の値が実行引数にも渡る。Shapes は鍵のみ量子化（実行はランタイム解決値）。
 - Runtime は `set_inputs(t)` のみを扱い、cc は関知しない（cc は `api.cc` 内でフレーム毎スナップショットとして更新）。
 - macOS 注記: Dear PyGui は UI イベントをメインスレッドで処理する必要があるため、pyglet が利用可能な環境では `pyglet.clock.schedule_interval` でメインスレッドから DPG を駆動。pyglet 未導入時はバックグラウンドスレッド／スタブで無害化する。
+ - Parameter GUI の shape ヘッダは `G.<shape>()` の呼び出しごとに分割され、同一 shape 名には `text`, `text_1`, `text_2` のようにサフィックスが付く（`G.label("title").text(...)` のようにラベル指定があれば `title`, `title_1`, ... を用いる）。
 
 ## Testing / CI ルール
 

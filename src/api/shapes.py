@@ -48,7 +48,8 @@ Examples
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any, Callable, Iterable
+from dataclasses import dataclass
+from typing import Any, Callable, Iterable, Optional
 
 # レジストリ登録の副作用を発火させるため、shapes パッケージを 1 度だけ import すれば十分
 import shapes  # noqa: F401  (登録目的の副作用)
@@ -89,6 +90,20 @@ def _record_spec(shape_name: str, params_tuple: ParamsTuple) -> None:
             pass
 
 
+@dataclass
+class _ShapeCallContext:
+    """単一の shape 呼び出しコンテキスト（label 付き）。"""
+
+    label: Optional[str] = None
+
+    def with_label(self, label: str | None) -> "_ShapeCallContext":
+        try:
+            text = str(label or "").strip()
+        except Exception:
+            text = ""
+        return _ShapeCallContext(label=text or None)
+
+
 class ShapesAPI:
     """高性能キャッシュ付き形状 API（`G` の実体）。
 
@@ -107,6 +122,10 @@ class ShapesAPI:
         g1 = G.sphere(subdivisions=1)
         g2 = G.polygon(n_sides=6)
     """
+
+    def __init__(self, *, _context: _ShapeCallContext | None = None) -> None:
+        # label などの補助情報を保持する呼び出しコンテキスト
+        self._context = _context or _ShapeCallContext()
 
     @staticmethod
     def _lazy_shape(shape_name: str, params_dict: dict[str, Any]) -> LazyGeometry:
@@ -148,6 +167,13 @@ class ShapesAPI:
                 self.__dict__.pop(name, None)
                 raise AttributeError(f"'{self.__class__.__name__}' has no attribute '{name}'")
             runtime = get_active_runtime()
+            # shape 呼び出しに対するラベルがあればランタイムへ伝搬
+            ctx_label: str | None = getattr(self._context, "label", None)
+            if runtime is not None and ctx_label:
+                try:
+                    runtime.relabel_shape(name, ctx_label)
+                except Exception:
+                    pass
             fn = get_shape_generator(name)
             impl = getattr(fn, "__shape_impl__", fn)
             if runtime is not None:
@@ -195,6 +221,17 @@ class ShapesAPI:
             要素を持たない `Geometry`。
         """
         return Geometry.from_lines([])
+
+    # --- ラベル指定（shape ヘッダ名のベース） ---
+
+    def label(self, uid: str) -> "ShapesAPI":
+        """次の shape 呼び出しに対して表示ラベルを設定する。
+
+        例: `G.label("title").text(...)` のように使い、Parameter GUI 上の
+        shape ヘッダ名に `title`, `title_1` ... のようなラベルを用いる。
+        """
+        new_ctx = (self._context or _ShapeCallContext()).with_label(uid)
+        return ShapesAPI(_context=new_ctx)
 
     def __getattr__(self, name: str) -> Callable[..., LazyGeometry]:
         """レジストリに基づき `G.<name>` を遅延生成する。

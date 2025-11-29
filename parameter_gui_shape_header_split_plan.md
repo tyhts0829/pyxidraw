@@ -51,37 +51,37 @@
 
 ### 2. コア実装の変更
 
-- [ ] `engine.ui.parameters.value_resolver.ParameterContext.category` を修正し、`scope == "shape"` の場合に `index` に応じてカテゴリ名を切り替えるようにする（`index == 0` なら `name`、それ以外は `f"{name}_{index}"` のような実装）。
-- [ ] `engine.ui.parameters.runtime.ParameterRuntime.before_shape_call` で供給している `index` が `ParameterRegistry.next_index(shape_name)` に基づく 0 ベース連番であることを確認し、想定どおり `text`, `text_1`, `text_2` … となることをコードレベルで検証する。
-- [ ] shape 以外（effect/pipeline/hud/style/palette 等）のカテゴリ決定ロジックに変更が波及していないことを確認する（`ParameterContext.category` の effect 分岐と `ParameterRuntime._assign_pipeline_label` 周りを再確認）。
+- [x] `engine.ui.parameters.value_resolver.ParameterContext.category` を修正し、`scope == "shape"` の場合に `index` に応じてカテゴリ名を切り替えるようにする（`index == 0` なら `name`、それ以外は `f"{name}_{index}"` のような実装）。
+- [x] `engine.ui.parameters.runtime.ParameterRuntime.before_shape_call` で供給している `index` が `ParameterRegistry.next_index(shape_name)` に基づく 0 ベース連番であることを確認し、想定どおり `text`, `text_1`, `text_2` … となることをコードレベルで検証する。
+- [x] shape 以外（effect/pipeline/hud/style/palette 等）のカテゴリ決定ロジックに変更が波及していないことを確認する（`ParameterContext.category` の effect 分岐と `ParameterRuntime._assign_pipeline_label` 周りを再確認）。
 
 ### 3. テスト追加・更新
 
-- [ ] `tests/ui/parameters/test_value_resolver.py` もしくは新規テストファイルを追加し、`scope="shape"` の `ParameterContext` を用いたユニットテストで `ParameterDescriptor.category` がインデックスに応じて `text`, `text_1`, `text_2` となることを検証する。
-- [ ] effect 側のカテゴリ名（`poly_effect_1`, `poly_effect_2` 等）が変更されていないことを確認するテストを用意するか、既存テストで十分かどうかレビューする。
-- [ ] shape ヘッダ名の変更が `persistence.save_overrides` / `load_overrides` の挙動に影響しないことを確認する（Descriptor ID ベースで動作していることをテストまたはコードレビューで明示する）。
+- [x] `tests/ui/parameters/test_value_resolver.py` もしくは新規テストファイルを追加し、`scope="shape"` の `ParameterContext` を用いたユニットテストで `ParameterDescriptor.category` がインデックスに応じて `text`, `text_1`, `text_2` となることを検証する。
+- [x] effect 側のカテゴリ名（`poly_effect_1`, `poly_effect_2` 等）が変更されていないことを確認するテストを用意するか、既存テストで十分かどうかレビューする。
+- [x] shape ヘッダ名の変更が `persistence.save_overrides` / `load_overrides` の挙動に影響しないことを確認する（Descriptor ID ベースで動作していることをテストまたはコードレビューで明示する）。
 
 ### 4. Parameter GUI 実装との整合確認
 
-- [ ] `src/engine/ui/parameters/dpg_window_content.py` の `_build_grouped_table` / `_flush_group` が、新しい shape カテゴリ名でも期待どおり「ヘッダごとにテーブルを分ける」だけの挙動になっていることを確認する（追加の状態や副作用がないことを確認）。
-- [ ] `_style_owner_key` / `_style_label` など style 系ヘルパが shape カテゴリ名の変更で予期せず挙動を変えないことを確認する（shape 系 Descriptor が style グループに混ざらないことも含めて軽くチェック）。
+- [x] `src/engine/ui/parameters/dpg_window_content.py` の `_build_grouped_table` / `_flush_group` が、新しい shape カテゴリ名でも期待どおり「ヘッダごとにテーブルを分ける」だけの挙動になっていることを確認する（追加の状態や副作用がないことを確認）。
+- [x] `_style_owner_key` / `_style_label` など style 系ヘルパが shape カテゴリ名の変更で予期せず挙動を変えないことを確認する（shape 系 Descriptor が style グループに混ざらないことも含めて軽くチェック）。
 
 ### 5. G.label() API 拡張（shape 用）
 
-- [ ] `api.G` に対して、`E` と同様の `label()` メソッドチェーンを導入する設計をまとめる（例: `G.label("title").text(...)`）。
+- [x] `api.G` に対して、`E` と同様の `label()` メソッドチェーンを導入する設計をまとめる（例: `G.label("title").text(...)`）。
   - label メソッドはチェーンの任意の位置で呼べる（`G.label("title").text()`, `G.text(...).label("title")` など）。
   - 現行の shape 呼び出し API（`G.text(...)`, `G.polygon(...)` など）との後方互換を維持する。
-- [ ] `G.label()` 呼び出しがあった場合に、Parameter GUI の shape カテゴリ名（ヘッダ名）にラベルを反映する方針を整理する。
+- [x] `G.label()` 呼び出しがあった場合に、Parameter GUI の shape カテゴリ名（ヘッダ名）にラベルを反映する方針を整理する。
   - 重複ラベルが与えられた場合は `label`, `label_1`, `label_2`, ... のようにサフィックスを付ける。
   - ラベルが無い場合は本計画で定義した shape 名ベース（`text`, `text_1`, ...）を用いる。
-- [ ] shape ラベル情報を ParameterRuntime / ParameterContext にどう伝搬するかを設計し、カテゴリ名の決定ロジックと矛盾しないようにする。
-- [ ] `G.label()` の追加により、新たな Descriptor ID 形式やバイナリ互換性に問題が生じないことを確認する（ID はこれまで通り `shape.<name>#<index>.<param>` を維持する方向を優先）。
+- [x] shape ラベル情報を ParameterRuntime / ParameterContext にどう伝搬するかを設計し、カテゴリ名の決定ロジックと矛盾しないようにする。
+- [x] `G.label()` の追加により、新たな Descriptor ID 形式やバイナリ互換性に問題が生じないことを確認する（ID はこれまで通り `shape.<name>#<index>.<param>` を維持する方向を優先）。
 
 ### 6. ドキュメントと手動動作確認
 
-- [ ] `architecture.md` の「パラメータ GUI」セクションに、shape カテゴリ名の決定規則（`G.<shape>()` の呼び出しごとにヘッダを分割し、同一 shape 名には `_1`, `_2` などのサフィックスを付ける）を追記する。
-- [ ] `G.label()` を含む新しい形の shape 呼び出し例（`G.label("title").text(...)`）を architecture か docs のいずれかに追加し、ヘッダ名との対応関係を簡潔に説明する。
-- [ ] 必要であれば、ルート `AGENTS.md` の Parameter GUI 関連の箇所に「shape ヘッダは呼び出しごとに分割され、任意のラベルがあればそれをヘッダ名に用いる」旨を 1 行程度で追記するか検討する。
-- [ ] `main.py` のように `G.text` を複数回呼び出すスケッチを `use_parameter_gui=True` で実行し、shape セクションのヘッダが `text`, `text_1`, `polygon` のように分割されていることを目視確認する。
+- [x] `architecture.md` の「パラメータ GUI」セクションに、shape カテゴリ名の決定規則（`G.<shape>()` の呼び出しごとにヘッダを分割し、同一 shape 名には `_1`, `_2` などのサフィックスを付ける）を追記する。
+- [x] `G.label()` を含む新しい形の shape 呼び出し例（`G.label("title").text(...)`）を architecture か docs のいずれかに追加し、ヘッダ名との対応関係を簡潔に説明する。
+- [x] 必要であれば、ルート `AGENTS.md` の Parameter GUI 関連の箇所に「shape ヘッダは呼び出しごとに分割され、任意のラベルがあればそれをヘッダ名に用いる」旨を 1 行程度で追記するか検討する。
+- [x] `main.py` のように `G.text` を複数回呼び出すスケッチを `use_parameter_gui=True` で実行し、shape セクションのヘッダが `text`, `text_1`, `polygon` のように分割されていることを目視確認する。
 
 ※ このファイルは「shape ヘッダ分割および G.label() 拡張の改善計画（ドラフト）」です。このチェックリストに沿って実装とテスト、ドキュメント更新を進めます。

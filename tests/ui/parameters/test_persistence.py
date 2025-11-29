@@ -217,3 +217,33 @@ def test_persistence_ignores_unknown_keys(tmp_path: Path, monkeypatch: pytest.Mo
     # 未知キーは無視され、既知キーは適用される
     assert applied >= 1
     assert store2.current_value(desc.id) == pytest.approx(0.7, abs=1e-6)
+
+
+def test_persistence_keys_are_id_based_not_category(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "util.utils.load_config",
+        lambda: {"parameter_gui": {"state_dir": str(tmp_path)}},
+        raising=True,
+    )
+    store = ParameterStore()
+    desc = ParameterDescriptor(
+        id="shape.text#0.size",
+        label="text#0: size",
+        source="shape",
+        category="text",
+        value_type="float",
+        default_value=1.0,
+        range_hint=RangeHint(0.0, 10.0),
+    )
+    store.register(desc, 1.0)
+    store.set_override(desc.id, 2.0)
+
+    p = save_overrides(store, script_path=str(tmp_path / "text.py"))
+    assert p is not None
+    data = json.loads(p.read_text(encoding="utf-8"))
+    overrides = data.get("overrides", {})
+    # category 名ではなく Descriptor.id をキーにしていることを確認
+    assert "text" not in overrides
+    assert desc.id in overrides

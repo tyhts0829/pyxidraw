@@ -67,7 +67,15 @@ class ParameterContext:
         """GUI 上でのカテゴリ名を返す。"""
 
         if self.scope == "shape":
-            return self.name
+            # shape は呼び出しごとにヘッダを分割し、1 回目は無印、
+            # 2 回目以降は name_1, name_2 ... のように連番を付与する。
+            try:
+                idx = int(self.index)
+            except Exception:
+                idx = 0
+            if idx <= 0:
+                return self.name
+            return f"{self.name}_{idx}"
         return self.pipeline_label or self.pipeline or self.scope
 
     @property

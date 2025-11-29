@@ -66,6 +66,9 @@ class ParameterRuntime:
         # ラベル付きパイプラインの表示名管理（カテゴリ用）
         self._pipeline_label_by_uid: dict[str, str] = {}
         self._pipeline_label_counter: dict[str, int] = {}
+        # shape 用のカスタムラベル管理（カテゴリ用）
+        self._shape_label_by_name: dict[str, str] = {}
+        self._shape_label_counter: dict[str, int] = {}
         # cc はランタイムでは扱わない（api.cc 内に閉じる）
 
     def set_lazy(self, lazy: bool) -> None:
@@ -82,6 +85,8 @@ class ParameterRuntime:
         self._pipeline_counter = 0
         self._pipeline_label_by_uid.clear()
         self._pipeline_label_counter.clear()
+        self._shape_label_by_name.clear()
+        self._shape_label_counter.clear()
 
     # フレーム内のパイプライン順序に基づく UID を供給
     def next_pipeline_uid(self) -> str:
@@ -140,6 +145,76 @@ class ParameterRuntime:
             if desc.source != "effect":
                 return desc
             if desc.pipeline_uid != pipeline_key:
+                return desc
+            if desc.category == display_label:
+                return desc
+            return ParameterDescriptor(
+                id=desc.id,
+                label=desc.label,
+                source=desc.source,
+                category=display_label,
+                value_type=desc.value_type,
+                default_value=desc.default_value,
+                category_kind=desc.category_kind,
+                range_hint=desc.range_hint,
+                help_text=desc.help_text,
+                vector_hint=desc.vector_hint,
+                supported=desc.supported,
+                choices=desc.choices,
+                string_multiline=desc.string_multiline,
+                string_height=desc.string_height,
+                pipeline_uid=desc.pipeline_uid,
+                step_index=desc.step_index,
+                param_order=desc.param_order,
+            )
+
+        try:
+            self._store.update_descriptors(_upd)
+        except Exception:
+            return
+
+    # --- shape ラベル管理 ---
+    def _assign_shape_label(self, shape_name: str, base_label: str) -> str:
+        """shape 名に対して表示ラベルを割り当てる（フレーム内で連番付与）。"""
+        try:
+            key = str(shape_name or "")
+        except Exception:
+            key = ""
+        if not key:
+            return ""
+        try:
+            base = str(base_label or "").strip()
+        except Exception:
+            base = ""
+        if not base:
+            return ""
+        label_map = self._shape_label_by_name
+        if key in label_map:
+            return label_map[key]
+        count = int(self._shape_label_counter.get(base, 0)) + 1
+        self._shape_label_counter[base] = count
+        display_label = f"{base}_{count}" if count > 1 else base
+        label_map[key] = display_label
+        return display_label
+
+    def relabel_shape(self, shape_name: str, base_label: str) -> None:
+        """shape 名に対するカテゴリラベルを設定する。"""
+        display_label = self._assign_shape_label(shape_name, base_label)
+        if not display_label:
+            return
+
+        def _upd(desc: ParameterDescriptor) -> ParameterDescriptor:
+            if desc.source != "shape":
+                return desc
+            # shape.id は "shape.<name>#<index>.<param>" 形式を前提とする
+            try:
+                parts = str(desc.id).split(".", 2)
+                if len(parts) < 2:
+                    return desc
+                _, shape_part = parts[0], parts[1]
+            except Exception:
+                return desc
+            if not shape_part.startswith(f"{shape_name}#"):
                 return desc
             if desc.category == display_label:
                 return desc

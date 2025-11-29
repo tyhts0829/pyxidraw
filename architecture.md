@@ -78,6 +78,7 @@
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と Descriptor 登録を行い、GUI override を適用してから元の関数へ委譲（変換レイヤは廃止し、実値を扱う）。
   - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
   - スライダーの min/max は GUI 側から編集可能であり、`ParameterStore` に UI レンジオーバーライド（min/max）が保存される。RangeHint はあくまで初期レンジのヒントとして扱う。
+  - shape カテゴリ名の決定規則: `G.<shape>()` は呼び出しごとにヘッダを分割し、同一 shape 名は `text`, `text_1`, `text_2` のようにインデックス付きで表示される（1 回目は無印、2 回目以降は `_1`, `_2`, ... を付与）。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン →`ParameterWindowController` を起動。
   - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
   - Parameter GUI の DPG 実装は `engine.ui.parameters.dpg_window.ParameterWindow` がエントリとなり、内部で `ParameterWindowThemeManager`（`dpg_window_theme.py`）と `ParameterWindowContentBuilder`（`dpg_window_content.py`）に責務を委譲する。
@@ -86,6 +87,7 @@
   - カテゴリ別のヘッダ色（Style/shape/pipeline/palette）は `parameter_gui.theme.categories` で個別指定可能（キーは Descriptor の `category_kind` と対応）。未指定時は `theme.colors.header*` を使用。
   - カラー入力は `util.color.normalize_color` で RGBA (0..1) に正規化し、一般パラメータは RGBA タプル、`style.color` は vec3 (RGB 0..1) として `ParameterStore` に保存する（DPG 側は 0–255 表示、値保存は 0..1 実値）。
   - カテゴリ名の決定規則: effect パラメータは `.label(uid)` で指定された `pipeline_label` をベースに、フレーム内インスタンス番号を付与した表示名（例: `poly_effect_1`, `poly_effect_2`）≫ `pipeline_uid`（例: `p0`）≫ `scope` の優先で決定する。`.label(uid)` はチェーンの前後どこで呼んでもパイプライン全体に適用される。
+    - shape も同様に `G.label("title").text(...)` のようにラベルを指定でき、指定されたラベルをベースに `title`, `title_1`, `title_2` のようなヘッダ名が付与される（ラベル未指定時は shape 名ベース）。
   - 表示ラベルは内部 UID と分離され、Parameter ID は `pipeline_uid` に基づくため衝突しない。
   - パラメータ GUI はメインスレッドで維持しつつ、ワーカ側へは GUI 値のスナップショットを渡して適用する（SnapshotRuntime）。このため GUI 有効時でも `WorkerPool` は並列実行できる。
   - 駆動方式は内部ドライバで抽象化。可能なら `pyglet.clock.schedule_interval` に統合（メインスレッドから `render_dearpygui_frame()` を実行）、未導入時はバックグラウンドスレッドで `start_dearpygui()` を実行。Dear PyGui 未導入環境では GUI を起動しない限り import は行われない（スタブは用意していないため、起動時は未導入で ImportError となる）。

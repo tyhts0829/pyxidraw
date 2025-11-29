@@ -109,3 +109,36 @@ def test_parameter_value_resolver_handles_vector_params_defaults_register_gui():
     d = store.get_descriptor("effect.rotate#1.angles_rad")
     assert d.value_type == "vector"
     assert d.vector_hint is not None
+
+
+def test_parameter_context_category_for_shapes_uses_index_suffix():
+    store = ParameterStore()
+    resolver = ParameterValueResolver(store)
+    signature = inspect.signature(effect_fn)
+    param_meta = {"amplitude_mm": {"min": 0.0, "max": 1.0, "step": 0.1}}
+
+    # 1 回目の shape 呼び出し（index=0）は無印カテゴリ名
+    ctx0 = ParameterContext(scope="shape", name="text", index=0)
+    resolver.resolve(
+        context=ctx0,
+        params={},
+        signature=signature,
+        doc=None,
+        param_meta=param_meta,
+        skip={"g"},
+    )
+    desc0 = store.get_descriptor("shape.text#0.amplitude_mm")
+    assert desc0.category == "text"
+
+    # 2 回目の shape 呼び出し（index=1）は `text_1`
+    ctx1 = ParameterContext(scope="shape", name="text", index=1)
+    resolver.resolve(
+        context=ctx1,
+        params={},
+        signature=signature,
+        doc=None,
+        param_meta=param_meta,
+        skip={"g"},
+    )
+    desc1 = store.get_descriptor("shape.text#1.amplitude_mm")
+    assert desc1.category == "text_1"
