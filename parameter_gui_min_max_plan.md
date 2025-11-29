@@ -4,8 +4,13 @@
 
 ## 想定仕様（ドラフト）
 
-- 対象: `value_type == "int" | "float"` のスカラーパラメータ（Style/Palette/shape/effect すべてを含む）。
-- 表示位置: カテゴリ別テーブルの Bars 列にあるスライダーの直下に、小さな `min` / `max` 入力ボックスを横並びで配置する（vector は当面対象外）。
+- 対象:
+  - `value_type == "int" | "float"` のスカラーパラメータ（Style/Palette/shape/effect すべてを含む）。
+  - `value_type == "vector"` のベクトルパラメータ（min/max は全成分共通で適用する）。
+- 表示位置:
+  - カテゴリ別テーブルは「ラベル / Bars / MinMax / CC」の 4 列構成とする。
+  - Bars 列にはこれまで通りスライダー（scalar/vector）を配置する。
+  - MinMax 列に `min` / `max` 入力ボックスを横並びで配置する（vector も同じ min/max を全成分に適用）。
 - 入力種別: Dear PyGui の `input_float` / `input_int` 相当の数値入力（型に応じて使い分ける）。
 - 初期値: `desc.range_hint` もしくは `ParameterLayoutConfig.derive_range()` で得た min/max をそのままコピーする。
 - 動作:
@@ -13,43 +18,42 @@
   - min >= max など明らかな不正値は採用せず、直前の有効な min/max を維持する（UI 側でのみガードし、例外は出さない）。
   - 実際の値（`ParameterStore` 内の original/override）は変更しない。Range はあくまで UI 表示用ヒントとして扱う。
 - 永続化:
-  - 第一段階ではセッション内のみ有効（アプリ終了でリセット）。
-  - 余力があれば `persistence.py` の JSON フォーマットを拡張して min/max を永続化する（後述）。
+  - `persistence.py` の JSON フォーマットを拡張し、パラメータごとの min/max を保存/復元する。
+  - 旧フォーマット（version 1）のファイルは従来通り override 値のみ読み込み、新フォーマット（version 2）では range 情報も復元する。
 
 ## やること（チェックリスト）
 
 ### 1. 設計/仕様の確定
 
-- [ ] 仕様ドラフトの確定（対象パラメータと UI レイアウトを明文化する）。
-- [ ] 永続化の範囲を決める（セッションのみ / JSON 保存まで含めるか）。
-- [ ] vector パラメータへの適用有無（当面は対象外とするか）を決める。
+- [x] 仕様ドラフトの確定（対象パラメータと UI レイアウトを明文化する）。
+- [x] 永続化の範囲を決める（min/max も JSON 保存に含める）。
+- [x] vector パラメータも min/max 指定可能とし、min/max は全成分共通のレンジとして適用する。
 
 ### 2. 状態管理の拡張
 
-- [ ] `ParameterWindowContentBuilder` に「UI 用 range オーバーライド」を保持する構造（例: `dict[str, tuple[float, float]]`）を追加する。
+- [ ] `ParameterWindowContentBuilder` に「UI 用 range オーバーライド」を保持する構造（例: `dict[str, tuple[float, float]]`）を追加する（scalar/vector 共通）。
 - [ ] スライダー作成時に「ベース RangeHint」と「オーバーライド値」をマージするヘルパ関数（例: `_effective_range(desc)`）を実装する。
-- [ ] min/max 入力変更時に上記 dict を更新し、`dpg.configure_item` 経由で該当スライダーの `min_value` / `max_value` を更新するフローを実装する。
+- [ ] min/max 入力変更時に上記 dict を更新し、scalar/vector 双方について `dpg.configure_item` 経由で該当スライダーの `min_value` / `max_value` を更新するフローを実装する。
 
 ### 3. Bars 列（通常パラメータ）の UI 変更
 
-- [ ] `src/engine/ui/parameters/dpg_window_content.py` の `_create_bars` 内、int/float 分岐を「スライダー + min/max 入力」構成に変更する。
-  - [ ] 1 行目: 既存どおり、スライダーを幅いっぱいに配置する。
-  - [ ] 2 行目: 小さな `min` / `max` 入力ボックスを横並びで配置する（ラベルはプレースホルダや tooltip で簡潔に表示）。
-- [ ] min/max 入力の `callback` から「入力文字列のパース → 妥当性チェック → range dict 更新 → 対応スライダーの再設定」を呼び出す。
-- [ ] CC 列 / CC バインディング（`_create_cc_inputs`）には影響を与えない。
+- [ ] `src/engine/ui/parameters/dpg_window_content.py` の `_create_row_3cols` / `_create_bars` / `_create_cc_inputs` を「ラベル / Bars / MinMax / CC」の 4 列構成にリファクタリングする。
+  - [ ] Bars 列: 既存どおり、スライダー（scalar/vector）を幅いっぱいに配置する。
+  - [ ] MinMax 列: 各パラメータに対応する `min` / `max` 入力ボックスを横並びで配置する（vector も 1 組の min/max を全成分に共有する）。
+  - [ ] CC 列: 既存の CC 入力 UI を維持しつつ、MinMax 列との位置関係のみ変更する。
+- [ ] min/max 入力の `callback` から「入力値のパース → 妥当性チェック → range dict 更新 → 対応スライダー（scalar/vector）の再設定」を呼び出す。
 
 ### 4. その他スライダー利用箇所の追従
 
-- [ ] Style セクションの `Global Thickness` スライダー（`build_style_controls` 内）に min/max 入力を追加するかどうか決める。
-  - [ ] 追加する場合は、共通ヘルパ（スライダー + min/max 入力）で構築できるように整理する。
-- [ ] Palette セクション（`build_palette_controls` / `_create_row_3cols` 経由）の int/float スライダーも同じ仕組みで range オーバーライドに対応させる。
+- [ ] Style セクションの `Global Thickness` スライダー（`build_style_controls` 内）も、共通ヘルパ（スライダー + min/max 入力）を使って min/max 調整可能にする。
+- [ ] Palette セクション（`build_palette_controls` / `_create_row_3cols` 経由）の int/float/vector スライダーも同じ仕組みで range オーバーライドに対応させる。
 
-### 5. 永続化対応（オプション）
+### 5. 永続化対応
 
 - [ ] `src/engine/ui/parameters/persistence.py` に UI range オーバーライド保存用のフィールド（例: `"ranges": { "<id>": {"min": ..., "max": ...}, ... }`）を追加する。
-  - [ ] `save_overrides` で range dict を受け取れるよう API を拡張するか、Parameter GUI 側から別ヘルパ経由で書き込むかを決める。
+  - [ ] `save_overrides` から range dict を受け取れるようにするか、Parameter GUI 側で range dict を構築して保存ヘルパに渡す API を設計する。
   - [ ] `load_overrides` 側で range 情報を読み出し、Parameter GUI 初期化時に `ParameterWindowContentBuilder` へ適用するフックを用意する。
-- [ ] JSON `version` の扱い（`1` → `2` など）と後方互換の方針を決める。
+- [ ] JSON `version` の扱い（`1` → `2` など）と後方互換の方針を決める（version 1 は overrides のみ、version 2 では ranges も扱う）。
 - [ ] `tests/ui/parameters/test_persistence.py` に min/max 保存/復元のテストケースを追加する。
 
 ### 6. ドキュメント/アーキテクチャ反映
@@ -62,10 +66,3 @@
 - [ ] 代表的な sketch（shape/effect が複数あるもの）で Parameter GUI を起動し、min/max 入力からスライダー範囲が動的に切り替わることを目視確認する。
 - [ ] 異常系（min >= max、非数値入力、極端に大きい/小さい値）でクラッシュしないことを確認する。
 - [ ] 変更ファイルに対して `ruff` / `black` / `isort` / `mypy` / `pytest -q tests/ui/parameters/test_persistence.py` を実行し、緑であることを確認する。
-
-## 確認したいポイント
-
-- min/max の永続化（JSON 保存）まで今回のタスクに含めるかどうか。
-- vector パラメータについても、将来的に per-component range を GUI から調整したいか（今回スコープ外なら明示的に除外する）。
-- min/max 入力の UI（Bars 列内の 2 行構成）で問題ないか、別案があれば教えてほしい。
-
