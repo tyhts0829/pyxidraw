@@ -103,6 +103,10 @@
 - インデント 4、行長 100、Python 3.10 型ヒント必須。
 - できるだけ純粋・決定的（副作用を避ける）。
 - 命名: ファイル/モジュール `lower_snake_case.py`、クラス `CamelCase`、関数/変数 `snake_case`。
+- 角度/位相パラメータの命名:
+  - 公開 API では角度は degree ベースで扱い、引数名に単位サフィックス（`*_rad`/`*_deg`）を付けない。
+  - 3D 回転 Vec3 は `rotation`、終点回転 Vec3 は `rotation_step`、単一角度は `angle`、位相は `phase`、mirror3d の開始角は `phi0` を用いる。
+  - 内部実装で三角関数を使う箇所は必要に応じて radian に変換してから計算する。
 - `effects`/`shapes` 追加時は各 `registry.py` に登録。
 - コメント/docstring は日本語。
 

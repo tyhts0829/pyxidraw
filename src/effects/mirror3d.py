@@ -33,7 +33,7 @@ PARAM_META = {
     "cx": {"min": 0.0, "max": 1000.0},
     "cy": {"min": 0.0, "max": 1000.0},
     "cz": {"min": 0.0, "max": 1000.0},
-    "phi0_deg": {"min": -180.0, "max": 180.0, "step": 1.0},
+    "phi0": {"min": -180.0, "max": 180.0, "step": 1.0},
     # 追加（polyhedral モード向け）
     "mode": {"choices": ["azimuth", "polyhedral"]},
     "group": {"choices": ["T", "O", "I"]},
@@ -52,7 +52,7 @@ def mirror3d(
     cy: float = 0.0,
     cz: float = 0.0,
     axis: Sequence[float] = (0.0, 0.0, 1.0),
-    phi0_deg: float = 0.0,
+    phi0: float = 0.0,
     mirror_equator: bool = False,
     source_side: bool | Sequence[bool] = True,
     mode: str = "azimuth",
@@ -76,8 +76,8 @@ def mirror3d(
         中心座標（回転/反射の pivot）。
     axis : Sequence[float], default (0,0,1)
         回転軸（内部で単位化）。'azimuth' のくさび軸、'polyhedral' の代表反射にも利用。
-    phi0_deg : float, default 0.0
-        くさびの開始角（mode='azimuth' のみ使用）。
+    phi0 : float, default 0.0
+        くさびの開始角 [deg]（mode='azimuth' のみ使用）。
     mirror_equator : bool, default False
         赤道面（axis ⟂）で反転を追加（mode='azimuth'）。
     source_side : bool | Sequence[bool], default True
@@ -100,8 +100,8 @@ def mirror3d(
     if mode == "azimuth":
         if n_azimuth < 1:
             raise ValueError("n_azimuth は 1 以上の整数である必要があります。")
-        phi0 = float(np.deg2rad(phi0_deg))
-        n0, n1 = _compute_azimuth_plane_normals(int(n_azimuth), ax, phi0)
+        phi0_rad = float(np.deg2rad(phi0))
+        n0, n1 = _compute_azimuth_plane_normals(int(n_azimuth), ax, phi0_rad)
 
         src_lines: list[np.ndarray] = []
         # くさび内にクリップ（H0: n0·(p-c)>=0, H1: (-n1)·(p-c)>=0）
@@ -320,8 +320,8 @@ def mirror3d(
 
         plane_lines: list[np.ndarray] = []
         if mode == "azimuth":
-            phi0 = float(np.deg2rad(phi0_deg))
-            n0, n1 = _compute_azimuth_plane_normals(int(max(1, n_azimuth)), ax, phi0)
+            phi0_rad = float(np.deg2rad(phi0))
+            n0, n1 = _compute_azimuth_plane_normals(int(max(1, n_azimuth)), ax, phi0_rad)
             plane_lines.extend(_plane_cross_segments(n0))
             plane_lines.extend(_plane_cross_segments(n1))
             if mirror_equator:

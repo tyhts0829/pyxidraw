@@ -13,7 +13,7 @@ def _geom_small() -> Geometry:
 
 def test_pipeline_cache_hits_for_same_input_and_pipeline() -> None:
     g = _geom_small()
-    p = E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.0)).build()
+    p = E.pipeline.rotate(rotation=(0.0, 0.0, 0.0)).build()
     a = p(g)
     b = p(g)
     assert a is b  # 単層キャッシュヒット
@@ -21,7 +21,7 @@ def test_pipeline_cache_hits_for_same_input_and_pipeline() -> None:
 
 def test_pipeline_cache_hits_for_same_input_and_pipeline_from_E_direct() -> None:
     g = _geom_small()
-    p = E.rotate(angles_rad=(0.0, 0.0, 0.0)).build()
+    p = E.rotate(rotation=(0.0, 0.0, 0.0)).build()
     a = p(g)
     b = p(g)
     assert a is b  # 単層キャッシュヒット
@@ -29,7 +29,7 @@ def test_pipeline_cache_hits_for_same_input_and_pipeline_from_E_direct() -> None
 
 def test_pipeline_cache_disabled_with_maxsize_zero() -> None:
     g = _geom_small()
-    p = E.pipeline.cache(maxsize=0).rotate(angles_rad=(0.0, 0.0, 0.0)).build()
+    p = E.pipeline.cache(maxsize=0).rotate(rotation=(0.0, 0.0, 0.0)).build()
     a = p(g)
     b = p(g)
     assert a is not b
@@ -37,7 +37,7 @@ def test_pipeline_cache_disabled_with_maxsize_zero() -> None:
 
 def test_pipeline_cache_disabled_with_maxsize_zero_from_E_direct() -> None:
     g = _geom_small()
-    p = E.rotate(angles_rad=(0.0, 0.0, 0.0)).cache(maxsize=0).build()
+    p = E.rotate(rotation=(0.0, 0.0, 0.0)).cache(maxsize=0).build()
     a = p(g)
     b = p(g)
     assert a is not b
@@ -46,7 +46,7 @@ def test_pipeline_cache_disabled_with_maxsize_zero_from_E_direct() -> None:
 def test_pipeline_cache_lru_eviction_with_maxsize_one() -> None:
     g1 = _geom_small()
     g2 = g1.translate(1.0, 0.0, 0.0)
-    p = E.pipeline.cache(maxsize=1).rotate(angles_rad=(0.0, 0.0, 0.0)).build()
+    p = E.pipeline.cache(maxsize=1).rotate(rotation=(0.0, 0.0, 0.0)).build()
     a1 = p(g1)
     _ = p(g2)  # cache エントリを g2 で更新（未使用）
     a1_again = p(g1)
@@ -56,7 +56,7 @@ def test_pipeline_cache_lru_eviction_with_maxsize_one() -> None:
 def test_pipeline_cache_lru_eviction_with_maxsize_one_from_E_direct() -> None:
     g1 = _geom_small()
     g2 = g1.translate(1.0, 0.0, 0.0)
-    p = E.rotate(angles_rad=(0.0, 0.0, 0.0)).cache(maxsize=1).build()
+    p = E.rotate(rotation=(0.0, 0.0, 0.0)).cache(maxsize=1).build()
     a1 = p(g1)
     _ = p(g2)
     a1_again = p(g1)

@@ -18,7 +18,7 @@ from api import E, G
 def test_pipeline_miss_vs_hit(benchmark, mode: str):
     g = G.grid(nx=100, ny=100).scale(200, 200, 1)
     pipe = (
-        E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.3))
+        E.pipeline.rotate(rotation=(0.0, 0.0, 17.0))
         .scale(scale=(1.05, 0.95, 1.0))
         .translate(delta=(1.0, 2.0, 0.0))
         .cache(maxsize=128)
@@ -57,13 +57,13 @@ def test_pipeline_cache_on_off(benchmark, cache: str):
     g = G.grid(nx=120, ny=120).scale(180, 180, 1)
 
     pipe_off = (
-        E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.25))
+        E.pipeline.rotate(rotation=(0.0, 0.0, 15.0))
         .scale(scale=(1.02, 0.98, 1.0))
         .cache(maxsize=0)
         .build()
     )
     pipe_on = (
-        E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.25))
+        E.pipeline.rotate(rotation=(0.0, 0.0, 15.0))
         .scale(scale=(1.02, 0.98, 1.0))
         .cache(maxsize=128)
         .build()

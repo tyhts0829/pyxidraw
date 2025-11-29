@@ -14,7 +14,7 @@ def test_noop_placeholder_to_keep_file_active() -> None:
 def test_pipeline_cache_none_and_clear_cache_behavior() -> None:
     # maxsize=None（無制限） + clear_cache の挙動
     g = Geometry.from_lines([[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]])
-    p = E.pipeline.cache(maxsize=None).rotate(angles_rad=(0.0, 0.0, 0.0)).build()
+    p = E.pipeline.cache(maxsize=None).rotate(rotation=(0.0, 0.0, 0.0)).build()
     a = p(g)
     b = p(g)
     assert a is b  # ヒット

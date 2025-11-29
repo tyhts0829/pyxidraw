@@ -55,7 +55,7 @@ API 方針（ADR 準拠）:
 使用例:
     from api import G, E
     g = G.grid(nx=10, ny=10).scale(50, 50, 1).translate(100, 100, 0)
-    pipe = (E.rotate(angles_rad=(0.0, 0.0, 0.5)).build())
+    pipe = (E.rotate(rotation=(0.0, 0.0, 30.0)).build())
     out = pipe(g)  # Geometry -> Geometry
 """
 

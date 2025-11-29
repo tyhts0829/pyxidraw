@@ -129,7 +129,7 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
   - キャッシュ累計スナップショット取得は `api.sketch_runner.utils.hud_metrics_snapshot`（トップレベル関数）で実装し、Worker へ関数注入する（engine は api を参照しない）。
   - `io/`: MIDI 接続・スナップショット取得。
 - `effects/`: 幾何処理のオペレータ群と `registry.py`。
-  - 代表例: `affine(auto_center: bool, pivot: Vec3, angles_rad: Vec3, scale: Vec3, delta: Vec3)` —
+  - 代表例: `affine(auto_center: bool, pivot: Vec3, rotation: Vec3, scale: Vec3, delta: Vec3)` —
     `auto_center=True` でジオメトリの平均座標を中心に使用。`False` で `pivot` を使用。
 - `shapes/`: プリミティブ形状と `registry.py`。
 - `common/`, `util/`: ロギング、型、幾何ユーティリティ、定数、設定ロード。
@@ -153,7 +153,7 @@ def draw(t):
     g = G.sphere(subdivisions=cc[1])
     pipe = (
         E.pipeline
-         .rotate(angles_rad=(cc[3], cc[4], cc[5]), pivot=(200, 200, 0))
+         .rotate(rotation=(cc[3], cc[4], cc[5]), pivot=(200, 200, 0))
          .displace(amplitude_mm=cc[6]*50, spatial_freq=(0.01,0.01,0.01), t_sec=t)
          .build()
     )

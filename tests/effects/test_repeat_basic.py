@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 
 import numpy as np
 
@@ -25,7 +24,7 @@ def test_repeat_linear_offset_spacing() -> None:
         cumulative_offset=False,
         cumulative_rotate=False,
         offset=(3.0, 0.0, 0.0),
-        angles_rad_step=(0.0, 0.0, 0.0),
+        rotation_step=(0.0, 0.0, 0.0),
         scale=(1.0, 1.0, 1.0),
         auto_center=False,
         pivot=(0.0, 0.0, 0.0),
@@ -66,7 +65,7 @@ def test_repeat_linear_scale_same_endpoints() -> None:
         cumulative_offset=False,
         cumulative_rotate=False,
         offset=(0.0, 0.0, 0.0),
-        angles_rad_step=(0.0, 0.0, 0.0),
+        rotation_step=(0.0, 0.0, 0.0),
         scale=(0.4, 0.4, 1.0),
         auto_center=False,
         pivot=(0.0, 0.0, 0.0),
@@ -127,7 +126,7 @@ def test_repeat_cumulative_offset_with_curve() -> None:
         cumulative_offset=True,
         cumulative_rotate=False,
         offset=(3.0, 0.0, 0.0),
-        angles_rad_step=(0.0, 0.0, 0.0),
+        rotation_step=(0.0, 0.0, 0.0),
         scale=(1.0, 1.0, 1.0),
         curve=2.0,
         auto_center=False,
@@ -169,13 +168,13 @@ def test_repeat_linear_rotate_z() -> None:
         cumulative_offset=False,
         cumulative_rotate=False,
         offset=(0.0, 0.0, 0.0),
-        angles_rad_step=(0.0, 0.0, math.pi),
+        rotation_step=(0.0, 0.0, 180.0),
         scale=(1.0, 1.0, 1.0),
         auto_center=False,
         pivot=(0.0, 0.0, 0.0),
     )
 
-    # angles_rad_step = pi, count=2 のとき、角度は 0, pi/2, pi
+    # rotation_step = 180deg, count=2 のとき、角度は 0, 90deg, 180deg
     expected = np.array(
         [
             # 元（0 度）

@@ -185,7 +185,7 @@ class LazyGeometry:
         params = {
             "auto_center": False,
             "pivot": (float(center[0]), float(center[1]), float(center[2])),
-            "angles_rad": (float(x), float(y), float(z)),
+            "rotation": (float(x), float(y), float(z)),
         }
         return LazyGeometry(self.base_kind, self.base_payload, self.plan + [(_fx_rotate, params)])
 

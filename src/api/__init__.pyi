@@ -49,17 +49,17 @@ from common.types import Vec3
 class _PipelineBuilder(Protocol):
     # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
-    # meta: angles_rad (type=vec3, range=[(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)])
+    # meta: rotation (type=vec3, range=[(-180.0, -180.0, -180.0), (180.0, 180.0, 180.0)])
     # meta: scale (type=vec3, range=[(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)])
     # meta: delta (type=vec3, range=[(0, 0, 0), (200.0, 200.0, 200.0)])
-    def affine(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    def affine(self, *, auto_center: bool = ..., pivot: Vec3 = ..., rotation: Vec3 = ..., scale: Vec3 = ..., delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         スケール→回転→平行移動を適用（合成アフィン）。
 
         引数:
             auto_center: bool
             pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
-            angles_rad: vec3, range [(0, 0, 0), (6.283185307179586, 6.283185307179586, 6.283185307179586)]
+            rotation: vec3, range [(-180.0, -180.0, -180.0), (180.0, 180.0, 180.0)]
             scale: vec3, range [(0.25, 0.25, 0.25), (4.0, 4.0, 4.0)]
             delta: vec3, range [(0, 0, 0), (200.0, 200.0, 200.0)]
         """
@@ -177,17 +177,17 @@ class _PipelineBuilder(Protocol):
         """
         ...
     # meta: angle_sets (type=integer, range=[1, 6])
-    # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
+    # meta: angle (type=number, range=[0.0, 180.0])
     # meta: density (type=number, range=[0.0, 400])
     # meta: spacing_gradient (type=number, range=[-5.0, 5.0])
     # meta: remove_boundary (type=boolean)
-    def fill(self, *, angle_sets: int | list[int] | tuple[int, ...] = ..., angle_rad: float | list[float] | tuple[float, ...] = ..., density: float | list[float] | tuple[float, ...] = ..., spacing_gradient: float | list[float] | tuple[float, ...] = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
+    def fill(self, *, angle_sets: int | list[int] | tuple[int, ...] = ..., angle: float | list[float] | tuple[float, ...] = ..., density: float | list[float] | tuple[float, ...] = ..., spacing_gradient: float | list[float] | tuple[float, ...] = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
         閉じた形状をハッチングで塗りつぶし（純関数）。
 
         引数:
             angle_sets: integer, range [1, 6]
-            angle_rad: number, range [0.0, 6.283185307179586]
+            angle: number, range [0.0, 180.0]
             density: number, range [0.0, 400]
             spacing_gradient: number, range [-5.0, 5.0]
             remove_boundary: boolean
@@ -213,12 +213,12 @@ class _PipelineBuilder(Protocol):
     # meta: cy (range=[0.0, 1000.0])
     # meta: cz (range=[0.0, 1000.0])
     # meta: axis (type=vec3, range=[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)])
-    # meta: phi0_deg (range=[-180.0, 180.0])
+    # meta: phi0 (range=[-180.0, 180.0])
     # choices: mode in ['azimuth', 'polyhedral']
     # choices: group in ['T', 'O', 'I']
     # meta: use_reflection (type=bool)
     # meta: show_planes (type=bool)
-    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., show_planes: bool = ..., **_params: Any) -> _PipelineBuilder:
+    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., show_planes: bool = ..., **_params: Any) -> _PipelineBuilder:
         """
         3D 放射状ミラー（azimuth/ polyhedral）。
 
@@ -228,7 +228,7 @@ class _PipelineBuilder(Protocol):
             cy: range [0.0, 1000.0]
             cz: range [0.0, 1000.0]
             axis: vec3, range [(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)]
-            phi0_deg: range [-180.0, 180.0]
+            phi0: range [-180.0, 180.0]
             mode: choices { 'azimuth', 'polyhedral' }
             group: choices { 'T', 'O', 'I' }
             use_reflection: bool
@@ -266,12 +266,12 @@ class _PipelineBuilder(Protocol):
     # meta: cumulative_offset (type=bool)
     # meta: cumulative_rotate (type=bool)
     # meta: offset (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
-    # meta: angles_rad_step (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
+    # meta: rotation_step (type=vec3, range=[(-180.0, -180.0, -180.0), (180.0, 180.0, 180.0)])
     # meta: scale (type=vec3, range=[(0.5, 0.5, 0.5), (1.5, 1.5, 1.5)])
     # meta: curve (type=float, range=[0.1, 5.0])
     # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
-    def repeat(self, *, count: int = ..., cumulative_scale: bool = ..., cumulative_offset: bool = ..., cumulative_rotate: bool = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., curve: float = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    def repeat(self, *, count: int = ..., cumulative_scale: bool = ..., cumulative_offset: bool = ..., cumulative_rotate: bool = ..., offset: Vec3 = ..., rotation_step: Vec3 = ..., scale: Vec3 = ..., curve: float = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         入力のコピーを配列状に生成。
 
@@ -281,7 +281,7 @@ class _PipelineBuilder(Protocol):
             cumulative_offset: bool
             cumulative_rotate: bool
             offset: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
-            angles_rad_step: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
+            rotation_step: vec3, range [(-180.0, -180.0, -180.0), (180.0, 180.0, 180.0)]
             scale: vec3, range [(0.5, 0.5, 0.5), (1.5, 1.5, 1.5)]
             curve: float, range [0.1, 5.0]
             auto_center: bool
@@ -290,15 +290,15 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: auto_center (type=bool)
     # meta: pivot (type=vec3, range=[(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)])
-    # meta: angles_rad (type=vec3, range=[(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)])
-    def rotate(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
+    # meta: rotation (type=vec3, range=[(-180.0, -180.0, -180.0), (180.0, 180.0, 180.0)])
+    def rotate(self, *, auto_center: bool = ..., pivot: Vec3 = ..., rotation: Vec3 = ..., **_params: Any) -> _PipelineBuilder:
         """
         回転（auto_center 対応）。
 
         引数:
             auto_center: bool
             pivot: vec3, range [(-300.0, -300.0, -300.0), (300.0, 300.0, 300.0)]
-            angles_rad: vec3, range [(-3.141592653589793, -3.141592653589793, -3.141592653589793), (3.141592653589793, 3.141592653589793, 3.141592653589793)]
+            rotation: vec3, range [(-180.0, -180.0, -180.0), (180.0, 180.0, 180.0)]
         """
         ...
     # meta: auto_center (type=bool)
@@ -343,14 +343,14 @@ class _PipelineBuilder(Protocol):
             end_param: number, range [0.0, 1.0]
         """
         ...
-    # meta: angle_rad (type=number, range=[0.0, 6.283185307179586])
+    # meta: angle (type=number, range=[0.0, 360.0])
     # choices: axis in ['x', 'y', 'z']
-    def twist(self, *, angle_rad: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder:
+    def twist(self, *, angle: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder:
         """
         位置に応じて軸回りにねじる。
 
         引数:
-            angle_rad: number, range [0.0, 6.283185307179586]
+            angle: number, range [0.0, 360.0]
             axis: choices { 'x', 'y', 'z' }
         """
         ...
@@ -369,7 +369,7 @@ class _PipelineBuilder(Protocol):
         ...
     # meta: amplitude (type=number, range=[0.0, 20.0])
     # meta: frequency (type=number, range=[(0.0, 0.0, 0.0), (0.2, 0.2, 0.2)])
-    # meta: phase (type=number, range=[0.0, 6.283185307179586])
+    # meta: phase (type=number, range=[0.0, 360.0])
     def wobble(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder:
         """
         線にウォブル/波の歪みを追加（純関数）。
@@ -377,7 +377,7 @@ class _PipelineBuilder(Protocol):
         引数:
             amplitude: 変位量（座標単位, mm 相当）
             frequency: 空間周波数 [cycles per unit]
-            phase: 位相（ラジアン）
+            phase: 位相 [deg]
         """
         ...
     def build(self) -> Pipeline: ...
@@ -391,7 +391,7 @@ class _Effects(Protocol):
     @property
     def pipeline(self) -> _PipelineBuilder: ...
     def label(self, uid: str) -> _PipelineBuilder: ...
-    def affine(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., scale: Vec3 = ..., delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
+    def affine(self, *, auto_center: bool = ..., pivot: Vec3 = ..., rotation: Vec3 = ..., scale: Vec3 = ..., delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def boldify(self, *, boldness: float = ..., **_params: Any) -> _PipelineBuilder: ...
     def clip(self, *, outline: engine.core.geometry.Geometry | Sequence[engine.core.geometry.Geometry], draw_outline: bool = ..., draw_inside: bool = ..., **_params: Any) -> _PipelineBuilder: ...
     def collapse(self, *, intensity: float = ..., subdivisions: int = ..., **_params: Any) -> _PipelineBuilder: ...
@@ -400,18 +400,18 @@ class _Effects(Protocol):
     def drop(self, *, interval: int | None = ..., offset: int = ..., min_length: float | None = ..., max_length: float | None = ..., probability: float = ..., by: str = ..., seed: int | None = ..., keep_mode: str = ..., **_params: Any) -> _PipelineBuilder: ...
     def explode(self, *, factor: float = ..., **_params: Any) -> _PipelineBuilder: ...
     def extrude(self, *, direction: Vec3 = ..., distance: float = ..., scale: float = ..., subdivisions: int = ..., center_mode: str = ..., **_params: Any) -> _PipelineBuilder: ...
-    def fill(self, *, angle_sets: int | list[int] | tuple[int, ...] = ..., angle_rad: float | list[float] | tuple[float, ...] = ..., density: float | list[float] | tuple[float, ...] = ..., spacing_gradient: float | list[float] | tuple[float, ...] = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder: ...
+    def fill(self, *, angle_sets: int | list[int] | tuple[int, ...] = ..., angle: float | list[float] | tuple[float, ...] = ..., density: float | list[float] | tuple[float, ...] = ..., spacing_gradient: float | list[float] | tuple[float, ...] = ..., remove_boundary: bool = ..., **_params: Any) -> _PipelineBuilder: ...
     def mirror(self, *, n_mirror: int = ..., cx: float = ..., cy: float = ..., source_side: bool | Sequence[bool] = ..., show_planes: bool = ..., **_params: Any) -> _PipelineBuilder: ...
-    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0_deg: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., show_planes: bool = ..., **_params: Any) -> _PipelineBuilder: ...
+    def mirror3d(self, *, n_azimuth: int = ..., cx: float = ..., cy: float = ..., cz: float = ..., axis: Sequence[float] = ..., phi0: float = ..., mirror_equator: bool = ..., source_side: bool | Sequence[bool] = ..., mode: str = ..., group: str | None = ..., use_reflection: bool = ..., show_planes: bool = ..., **_params: Any) -> _PipelineBuilder: ...
     def offset(self, *, join: str = ..., segments_per_circle: int = ..., distance: float = ..., keep_original: bool = ..., **_params: Any) -> _PipelineBuilder: ...
     def partition(self, *, site_count: int = ..., seed: int = ..., **_params: Any) -> _PipelineBuilder: ...
-    def repeat(self, *, count: int = ..., cumulative_scale: bool = ..., cumulative_offset: bool = ..., cumulative_rotate: bool = ..., offset: Vec3 = ..., angles_rad_step: Vec3 = ..., scale: Vec3 = ..., curve: float = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
-    def rotate(self, *, auto_center: bool = ..., pivot: Vec3 = ..., angles_rad: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
+    def repeat(self, *, count: int = ..., cumulative_scale: bool = ..., cumulative_offset: bool = ..., cumulative_rotate: bool = ..., offset: Vec3 = ..., rotation_step: Vec3 = ..., scale: Vec3 = ..., curve: float = ..., auto_center: bool = ..., pivot: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
+    def rotate(self, *, auto_center: bool = ..., pivot: Vec3 = ..., rotation: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def scale(self, *, auto_center: bool = ..., pivot: Vec3 = ..., scale: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def subdivide(self, *, subdivisions: int = ..., **_params: Any) -> _PipelineBuilder: ...
     def translate(self, *, delta: Vec3 = ..., **_params: Any) -> _PipelineBuilder: ...
     def trim(self, *, start_param: float = ..., end_param: float = ..., **_params: Any) -> _PipelineBuilder: ...
-    def twist(self, *, angle_rad: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder: ...
+    def twist(self, *, angle: float = ..., axis: str = ..., **_params: Any) -> _PipelineBuilder: ...
     def weave(self, *, num_candidate_lines: int = ..., relaxation_iterations: int = ..., step: float = ..., **_params: Any) -> _PipelineBuilder: ...
     def wobble(self, *, amplitude: float = ..., frequency: float | tuple[float, float, float] = ..., phase: float = ..., **_params: Any) -> _PipelineBuilder: ...
 

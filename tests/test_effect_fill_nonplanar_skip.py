@@ -20,7 +20,7 @@ def test_fill_skips_nonplanar_quad_keeps_boundary():
         dtype=np.float32,
     )
     g = Geometry.from_lines([quad])
-    pipe = E.pipeline.fill(angle_sets=1, angle_rad=0.0, density=20).build()
+    pipe = E.pipeline.fill(angle_sets=1, angle=0.0, density=20).build()
     out = pipe(g)
 
     in_coords, in_offsets = _coords_offsets(g)
@@ -52,7 +52,7 @@ def test_fill_skips_nonplanar_even_when_remove_boundary_true():
 
 def test_fill_planar_polygon_still_generates_fill():
     g = G.polygon(n_sides=4)
-    pipe = E.pipeline.fill(angle_sets=1, angle_rad=0.0, density=10).build()
+    pipe = E.pipeline.fill(angle_sets=1, angle=0.0, density=10).build()
     out = pipe(g)
 
     in_coords, in_offsets = _coords_offsets(g)

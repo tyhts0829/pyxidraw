@@ -30,7 +30,7 @@ def test_fill_keep_boundary_default():
 def test_fill_remove_boundary_true():
     g = G.polygon(n_sides=4)
     in_first = _first_line_coords(g)
-    pipe = E.pipeline.fill(angle_sets=1, angle_rad=0.0, density=10, remove_boundary=True).build()
+    pipe = E.pipeline.fill(angle_sets=1, angle=0.0, density=10, remove_boundary=True).build()
     out = pipe(g)
     lines = _all_lines(out)
     # 元ポリゴン線と完全一致するラインが含まれないこと
@@ -72,7 +72,7 @@ def test_fill_evenodd_excludes_inner_hole_square():
     from engine.core.geometry import Geometry
 
     g = Geometry.from_lines([outer, inner])
-    pipe = E.pipeline.fill(angle_sets=1, angle_rad=0.0, density=20.0, remove_boundary=True).build()
+    pipe = E.pipeline.fill(angle_sets=1, angle=0.0, density=20.0, remove_boundary=True).build()
     out = pipe(g)
 
     coords, offsets = out.as_arrays(copy=False)
@@ -115,7 +115,7 @@ def test_fill_evenodd_concentric_circles_four_loops():
 
     pipe = E.pipeline.fill(
         angle_sets=1,
-        angle_rad=0.0,
+        angle=0.0,
         density=30.0,
         remove_boundary=True,
     ).build()

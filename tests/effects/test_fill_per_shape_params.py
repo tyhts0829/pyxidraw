@@ -1,4 +1,3 @@
-import math
 from typing import List, Tuple
 
 import numpy as np
@@ -42,7 +41,7 @@ def test_fill_per_shape_params_cycle_and_angle():
 
     pipe = E.pipeline.fill(
         angle_sets=1,
-        angle_rad=[0.0, math.pi / 2],  # 0 番目: 横, 1 番目: 縦, 2 番目: 横（サイクル）
+        angle=[0.0, 90.0],  # 0 番目: 横, 1 番目: 縦, 2 番目: 横（サイクル）
         density=[5.0, 15.0],  # 0 番目/2 番目: 疎, 1 番目: 密
         remove_boundary=True,
     ).build()

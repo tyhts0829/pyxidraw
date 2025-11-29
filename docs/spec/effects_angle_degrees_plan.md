@@ -236,16 +236,16 @@
 
 ### 共通基盤
 
-- [ ] **命名・単位ポリシーの確定**
+- [x] **命名・単位ポリシーの確定**
   - 角度引数名から `_rad` / `_deg` など単位サフィックスを廃止し、「引数名の統一ルール」に沿って `rotation` / `rotation_step` / `angle` / `phase` / `phi0` などへ整理する。
-- [ ] **RangeHint 方針の確定**
-  - `rotation` 系の `min/max/step`（±180 or ±360、step=1 or 0.1 など）を決める。
-- [ ] **API スタブの更新方針**
-  - `src/api/__init__.pyi` を手修正せず、`tools/gen_g_stubs.py` ベースで再生成して同期を取る流れを確認。
+- [x] **RangeHint 方針の確定**
+  - `rotation` 系や単一角度の `min/max` を degree ベース（±180 など）に変更し、位相も度単位に揃える。
+- [x] **API スタブの更新方針**
+  - `tools/gen_g_stubs.py` を用いて `src/api/__init__.pyi` を再生成し、effects の角度パラメータを degree 仕様と同期。
 
 ### 各エフェクトの変更
 
-- [ ] **rotate エフェクトを degree 対応に変更**
+- [x] **rotate エフェクトを degree 対応に変更**
 
   - 関数シグネチャ `angles_rad` → `rotation` へリネーム。
   - `PARAM_META["angles_rad"]` → `rotation` に変更し、RangeHint を degree に合わせて再定義。
@@ -253,7 +253,7 @@
   - 関数内部で `rotation`（degree） → radian 変換（`np.deg2rad`）を挟んで `Geometry.rotate` に渡す。
   - `LazyGeometry.rotate`（`angles_rad` キー）との整合方法を決め、必要に応じて key 名を `rotation` に変更。
 
-- [ ] **affine エフェクトを degree 対応に変更**
+- [x] **affine エフェクトを degree 対応に変更**
 
   - 関数シグネチャ `angles_rad` → `rotation` へリネーム。
   - `PARAM_META["angles_rad"]` → `rotation` に変更し RangeHint を degree 基準に設定。
@@ -261,7 +261,7 @@
   - `rotate_radians = np.deg2rad(rotation)` へ変更。
   - `architecture.md` の affine 例（`angles_rad` 記載）を degree 仕様に合わせて更新。
 
-- [ ] **repeat エフェクトを degree 対応に変更**
+- [x] **repeat エフェクトを degree 対応に変更**
 
   - 関数シグネチャ `angles_rad_step` → `rotation_step` にリネーム。
   - `PARAM_META["angles_rad_step"]` → `rotation_step` に変更し RangeHint を degree に合わせる。
@@ -269,7 +269,7 @@
   - 内部で `rotation_step`（degree）を radian に変換してから `rotate_radians` を構成。
   - 関連テスト（`tests/effects/test_repeat_basic.py` など）のパラメータ指定を degree に揃える。
 
-- [ ] **twist エフェクトを degree 対応に変更**
+- [x] **twist エフェクトを degree 対応に変更**
 
   - 関数シグネチャ `angle_rad` → `angle` にリネーム。
   - `PARAM_META["angle_rad"]` → `angle` に変更し RangeHint を degree 用に調整。
@@ -277,7 +277,7 @@
   - `max_rad = np.deg2rad(angle)` として内部の radian 計算を維持。
   - API スタブ内の説明「ラジアン」を「度」に変更。
 
-- [ ] **fill エフェクトを degree 対応に変更**
+- [x] **fill エフェクトを degree 対応に変更**
 
   - 関数シグネチャ `angle_rad` → `angle` にリネーム。
   - `PARAM_META["angle_rad"]` → `angle` に変更し RangeHint（0..180 or 0..360）を決める。
@@ -286,14 +286,14 @@
   - `_generate_line_fill` / `_fill_single_polygon` / `_scan_span_for_angle_xy` など角度を受け取るヘルパーのインターフェース（引数名と単位）を整理。
   - 関連テスト（特に `tests/smoke/test_fill_rotation_invariance.py`）で `np.deg2rad` に依存している箇所を degree 指定に書き換え。
 
-- [ ] **wobble エフェクトを degree 対応に変更**
+- [x] **wobble エフェクトを degree 対応に変更**
   - 引数名は現行どおり `phase` を維持する（単位のみ degree に変更）。
   - `PARAM_META["phase"]` の `max` を `360.0` に変更し、RangeHint を degree ベースに調整。
   - docstring の位相単位を degree に変更。
   - `_wobble_vertices` に渡す前に `phase_rad = np.deg2rad(phase)` へ変換。
   - API スタブの説明「位相（ラジアン）」を degree に合わせる。
 
-- [ ] **mirror3d エフェクトの開始角を degree 仕様として整理**
+- [x] **mirror3d エフェクトの開始角を degree 仕様として整理**
   - 引数名 `phi0_deg` を `phi0` にリネーム（単位は degree）。
   - `PARAM_META["phi0_deg"]` → `phi0` に変更し、RangeHint を degree ベースで維持。
   - 内部の `np.deg2rad(phi0_deg)` を `np.deg2rad(phi0)` に変更。
@@ -301,30 +301,30 @@
 
 ### 呼び出し側・周辺コード
 
-- [ ] **API スタブ `src/api/__init__.pyi` の更新**
+- [x] **API スタブ `src/api/__init__.pyi` の更新**
 
   - `affine/rotate/repeat/fill/twist/wobble/mirror3d` の角度・位相パラメータを degree 仕様に合わせて更新。
   - `tools/gen_g_stubs.py` を用いた自動再生成の実行と `tests/stubs/test_g_stub_sync.py` の確認。
 
-- [ ] **Parameter GUI 周辺の更新**
+- [x] **Parameter GUI 周辺の更新**
 
   - `tests/ui/parameters/test_value_resolver.py` などで `angles_rad` を前提にしている部分を degree 用に更新（descriptor ID の命名も含める）。
   - `tests/ui/parameters/test_runtime.py` のパラメータ名・期待値を degree ベースに修正。
 
-- [ ] **ドキュメント・アーキテクチャの更新**
+- [x] **ドキュメント・アーキテクチャの更新**
 
   - `architecture.md` 内の affine/rotate のシグネチャと説明を degree 仕様に変更。
   - `docs/spec/pipeline.md` のコード例（`angles_rad`, `angle_rad` など）を degree ベースに更新。
   - 必要に応じて `docs/spec/drop_effect_spec.md` など関連 spec から radians 前提の文言を洗い替え。
 
-- [ ] **テストコード・スケッチの更新**
+- [x] **テストコード・スケッチの更新**
 
   - `tests/**` 内で `angles_rad/angle_rad/phase` を直接指定している箇所を degree 名＋値に書き換え。
     - 特に `tests/smoke/test_fill_rotation_invariance.py` のように degree→radian 変換を行っているテストを集中的に更新。
   - `sketch/**` 内の `angles_rad/angle_rad` の利用箇所を degree に更新（内部検証用スクリプトも含めて一括で揃える）。
 
-- [ ] **TODO/メモの整理**
-  - `TODO.txt` にある「mirror3d phi0_deg を radians に。引数についてもう一度検証」を「degree に統一したため不要」としてクローズ、または新しい方針に沿った TODO に差し替え。
+- [x] **TODO/メモの整理**
+  - `TODO.txt` にある「mirror3d phi0_deg を radians に。引数についてもう一度検証」を「mirror3d phi0 を degree 仕様に統一済み」とするメモに更新。
 
 ---
 

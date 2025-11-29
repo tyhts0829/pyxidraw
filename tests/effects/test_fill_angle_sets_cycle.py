@@ -51,7 +51,7 @@ def test_fill_angle_sets_cycles_per_shape():
 
     pipe = E.pipeline.fill(
         angle_sets=[1, 2],  # 左=1, 中=2, 右=1（サイクル）
-        angle_rad=0.0,
+        angle=0.0,
         density=12.0,
         remove_boundary=True,
     ).build()

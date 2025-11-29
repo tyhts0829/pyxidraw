@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 from api import E, G
@@ -13,13 +12,13 @@ def test_fill_line_count_rotation_invariant_square():
     angle = 0.0  # スキャン角（水平ハッチ）
 
     pipe0 = (
-        E.pipeline.affine(angles_rad=(0.0, 0.0, 0.0))
-        .fill(density=density, angle_sets=1, angle_rad=angle, remove_boundary=True)
+        E.pipeline.affine(rotation=(0.0, 0.0, 0.0))
+        .fill(density=density, angle_sets=1, angle=angle, remove_boundary=True)
         .build()
     )
     pipe45 = (
-        E.pipeline.affine(angles_rad=(0.0, 0.0, np.pi / 4))
-        .fill(density=density, angle_sets=1, angle_rad=angle, remove_boundary=True)
+        E.pipeline.affine(rotation=(0.0, 0.0, 45.0))
+        .fill(density=density, angle_sets=1, angle=angle, remove_boundary=True)
         .build()
     )
 
@@ -38,10 +37,10 @@ def test_fill_line_count_tilt_invariant_square_xy():
     density = 50.0
     angle = 0.0  # スキャン角（水平ハッチ）
 
-    def _count_lines(rx: float, ry: float) -> int:
+    def _count_lines(rx_deg: float, ry_deg: float) -> int:
         pipe = (
-            E.pipeline.affine(angles_rad=(rx, ry, 0.0))
-            .fill(density=density, angle_sets=1, angle_rad=angle, remove_boundary=True)
+            E.pipeline.affine(rotation=(rx_deg, ry_deg, 0.0))
+            .fill(density=density, angle_sets=1, angle=angle, remove_boundary=True)
             .build()
         )
         return pipe(base).n_lines
@@ -50,20 +49,16 @@ def test_fill_line_count_tilt_invariant_square_xy():
 
     # X 軸周りのチルト
     for deg in [15, 30, 45, 60, 75]:
-        rx = np.deg2rad(deg)
-        n = _count_lines(rx, 0.0)
+        n = _count_lines(deg, 0.0)
         assert abs(n - base_count) <= 1
 
     # Y 軸周りのチルト
     for deg in [15, 30, 45, 60, 75]:
-        ry = np.deg2rad(deg)
-        n = _count_lines(0.0, ry)
+        n = _count_lines(0.0, deg)
         assert abs(n - base_count) <= 1
 
     # X/Y の組み合わせチルト
     combos = [(15, 15), (30, 15), (30, 30), (45, 30), (60, 45), (75, 60)]
     for rx_deg, ry_deg in combos:
-        rx = np.deg2rad(rx_deg)
-        ry = np.deg2rad(ry_deg)
-        n = _count_lines(rx, ry)
+        n = _count_lines(rx_deg, ry_deg)
         assert abs(n - base_count) <= 1

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 処理の流れ（開発者向け）
 1) パラメータ正規化
-   - `density/angle_rad/angle_sets` はスカラまたは配列（図形グループごとにサイクル適用）。
+   - `density/angle/angle_sets` はスカラまたは配列（図形グループごとにサイクル適用）。
 
 2) 共平面判定と XY 整列（重要）
    - 各リングを試し、十分平面なリングから姿勢（回転 R と z オフセット）を推定。
@@ -54,7 +54,7 @@ PARAM_META = {
     "angle_sets": {"type": "integer", "min": 1, "max": 6, "step": 1},
     "density": {"type": "number", "min": 0.0, "max": MAX_FILL_LINES, "step": 1.0},
     "spacing_gradient": {"type": "number", "min": -5.0, "max": 5.0, "step": 0.1},
-    "angle_rad": {"type": "number", "min": 0.0, "max": 2 * np.pi},
+    "angle": {"type": "number", "min": 0.0, "max": 180.0},
     "remove_boundary": {"type": "boolean"},
 }
 
@@ -64,7 +64,7 @@ def fill(
     g: Geometry,
     *,
     angle_sets: int | list[int] | tuple[int, ...] = 1,
-    angle_rad: float | list[float] | tuple[float, ...] = 0.7853981633974483,  # pi/4 ≈ 45°
+    angle: float | list[float] | tuple[float, ...] = 45.0,
     density: float | list[float] | tuple[float, ...] = 35.0,
     spacing_gradient: float | list[float] | tuple[float, ...] = 0.0,
     remove_boundary: bool = False,
@@ -78,8 +78,8 @@ def fill(
     angle_sets : int | list[int] | tuple[int, ...], default 1
         ハッチ方向の本数（1=単方向, 2=90°クロス, 3=60°間隔, ...）。
         配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
-    angle_rad : float | list[float] | tuple[float, ...], default pi/4
-        ハッチ角（ラジアン）。配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
+    angle : float | list[float] | tuple[float, ...], default 45.0
+        ハッチ角 [deg]。配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
         共平面の場合は外環＋穴のグループ単位で適用。
     density : float | list[float] | tuple[float, ...], default 35.0
         ハッチ密度（本数のスケール）。配列指定時は図形（グループ）ごとに順番適用し、長さに応じてサイクルする。
@@ -107,11 +107,13 @@ def fill(
             return [float(v) for v in x]
         # その他 Iterable は受け取らない（仕様上 list/tuple のみ）
         raise TypeError(
-            "angle_rad/density/spacing_gradient は float または list/tuple[float] を指定してください"
+            "angle/density/spacing_gradient は float または list/tuple[float] を指定してください"
         )
 
     density_seq = _as_float_seq(density)  # type: ignore[arg-type]
-    angle_seq = _as_float_seq(angle_rad)  # type: ignore[arg-type]
+    angle_seq_deg = _as_float_seq(angle)  # type: ignore[arg-type]
+    # degree で受け取り radian に変換
+    angle_seq = [float(np.deg2rad(a)) for a in angle_seq_deg]
     spacing_gradient_seq = _as_float_seq(spacing_gradient)  # type: ignore[arg-type]
 
     def _as_int_seq(x: int | Iterable[int]) -> list[int]:

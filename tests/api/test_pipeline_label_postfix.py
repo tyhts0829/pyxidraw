@@ -11,7 +11,7 @@ def test_E_label_postfix_updates_pipeline_category() -> None:
     activate_runtime(runtime)
     runtime.begin_frame()
 
-    builder = E.rotate(angles_rad=(0.0, 0.0, 0.0))
+    builder = E.rotate(rotation=(0.0, 0.0, 0.0))
     # Runtime が有効な状態で effect を 1 つ追加したので UID が振られている
     descriptors_before = {d.id: d for d in store.descriptors()}
     assert any(

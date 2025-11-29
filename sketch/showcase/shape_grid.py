@@ -310,7 +310,7 @@ def _initialize_grid() -> None:
             # ラベルにハッチフィル（効果が使えない環境では無視）
             try:
                 fill_fn = get_effect("fill")
-                label_geo = fill_fn(label_geo, angle_rad=0, density=50)
+                label_geo = fill_fn(label_geo, angle=0, density=50)
             except Exception:
                 pass
             labels = labels.concat(label_geo)

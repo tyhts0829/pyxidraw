@@ -28,7 +28,7 @@ def test_delta_only_translation_applied() -> None:
         g,
         auto_center=False,
         pivot=(0.0, 0.0, 0.0),
-        angles_rad=(0.0, 0.0, 0.0),
+        rotation=(0.0, 0.0, 0.0),
         scale=(1.0, 1.0, 1.0),
         delta=delta,
     )
@@ -45,7 +45,7 @@ def test_scale_about_origin_then_delta() -> None:
         g,
         auto_center=False,
         pivot=(0.0, 0.0, 0.0),
-        angles_rad=(0.0, 0.0, 0.0),
+        rotation=(0.0, 0.0, 0.0),
         scale=scale,
         delta=delta,
     )
@@ -56,12 +56,12 @@ def test_scale_about_origin_then_delta() -> None:
 def test_rotate_about_auto_center_then_delta() -> None:
     # 中心 (15,15,0) を基準に Z 回転後、delta を加算
     g = _make_rect()
-    angle = np.pi / 2  # 90度
+    angle = np.pi / 2  # 90度（検証用は radian のまま）
     delta = (3.0, -1.0, 0.0)
     out = affine(
         g,
         auto_center=True,
-        angles_rad=(0.0, 0.0, angle),
+        rotation=(0.0, 0.0, 90.0),
         scale=(1.0, 1.0, 1.0),
         delta=delta,
     )

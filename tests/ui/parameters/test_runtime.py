@@ -50,7 +50,7 @@ def test_parameter_runtime_handles_effect_vectors():
     runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
     activate_runtime(runtime)
     runtime.begin_frame()
-    params = {"angles_rad": (0.1, 0.2, 0.3)}
+    params = {"rotation": (0.1, 0.2, 0.3)}
     updated = runtime.before_effect_call(
         step_index=0,
         effect_name="rotate",
@@ -58,7 +58,7 @@ def test_parameter_runtime_handles_effect_vectors():
         params=params,
     )
     # provided 値はそのまま渡され、GUI 登録は行われない
-    assert updated["angles_rad"] == (0.1, 0.2, 0.3)
+    assert updated["rotation"] == (0.1, 0.2, 0.3)
     deactivate_runtime()
 
 

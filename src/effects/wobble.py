@@ -5,7 +5,7 @@ wobble エフェクト（ゆらぎ）
 - 実装は各軸ごとの `sin(2π f * axis + 位相)` を加算する方式で、2D/3D に対応します。
 
 パラメータ:
-- amplitude [mm], frequency (float または Vec3), phase [rad]。
+- amplitude [mm], frequency (float または Vec3), phase [deg]。
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ PARAM_META = {
         "min": (0.0, 0.0, 0.0),
         "max": (0.2, 0.2, 0.2),
     },
-    "phase": {"type": "number", "min": 0.0, "max": 2 * np.pi},
+    "phase": {"type": "number", "min": 0.0, "max": 360.0},
 }
 
 
@@ -46,7 +46,7 @@ def wobble(
     引数:
         amplitude: 変位量（座標単位, mm 相当）。
         frequency: 空間周波数 [cycles per unit]。float なら全軸同一、タプルは (fx, fy, fz)。
-        phase: 位相（ラジアン）。
+        phase: 位相 [deg]。
     """
     coords, offsets = g.as_arrays(copy=False)
 
@@ -64,7 +64,8 @@ def wobble(
         return Geometry(coords.copy(), offsets.copy())
 
     vertices_list = [coords[offsets[i] : offsets[i + 1]] for i in range(len(offsets) - 1)]
-    wobbled_vertices = _wobble_vertices(vertices_list, float(amplitude), freq_tuple, float(phase))
+    phase_rad = float(np.deg2rad(phase))
+    wobbled_vertices = _wobble_vertices(vertices_list, float(amplitude), freq_tuple, phase_rad)
     if not wobbled_vertices:
         return Geometry(coords.copy(), offsets.copy())
     return Geometry.from_lines(wobbled_vertices)

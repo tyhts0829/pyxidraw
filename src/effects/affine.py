@@ -6,7 +6,7 @@ affine エフェクト（合成アフィン：スケール→回転→平行移�
 パラメータ（新API）:
 - auto_center: True ならジオメトリの平均座標を中心に使用。False なら `pivot` を使用。
 - pivot: `auto_center=False` のときの中心座標。
-- angles_rad: (rx, ry, rz) [rad]。
+- rotation: (rx, ry, rz) [deg]。
 - scale: (sx, sy, sz) 倍率。
 - delta: (dx, dy, dz) [mm] 平行移動量。
 
@@ -31,10 +31,10 @@ PARAM_META = {
         "min": (-300.0, -300.0, -300.0),
         "max": (300.0, 300.0, 300.0),
     },
-    "angles_rad": {
+    "rotation": {
         "type": "vec3",
-        "min": (0, 0, 0),
-        "max": (2 * np.pi, 2 * np.pi, 2 * np.pi),
+        "min": (-180.0, -180.0, -180.0),
+        "max": (180.0, 180.0, 180.0),
     },
     "scale": {"type": "vec3", "min": (0.25, 0.25, 0.25), "max": (4.0, 4.0, 4.0)},
     "delta": {
@@ -51,7 +51,7 @@ def affine(
     *,
     auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
-    angles_rad: Vec3 = (0, 0, 0),
+    rotation: Vec3 = (0.0, 0.0, 0.0),
     scale: Vec3 = (1.0, 1.0, 1.0),
     delta: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
@@ -65,8 +65,8 @@ def affine(
         True のとき形状の平均座標を中心に使用。False のとき `pivot` を使用。
     pivot : tuple[float, float, float], default (0.0, 0.0, 0.0)
         `auto_center=False` のときの変換中心 [mm]。
-    angles_rad : tuple[float, float, float], default (π/4, π/4, π/4)
-        回転角 [rad]（X, Y, Z）。
+    rotation : tuple[float, float, float], default (0.0, 0.0, 0.0)
+        回転角 [deg]（X, Y, Z）。
     scale : tuple[float, float, float], default (0.5, 0.5, 0.5)
         スケール倍率（X, Y, Z）。
     delta : tuple[float, float, float], default (0.0, 0.0, 0.0)
@@ -80,9 +80,9 @@ def affine(
     # 恒等変換なら早期リターン（中心の選択に依存しない）
     if (
         scale == (1, 1, 1)
-        and abs(angles_rad[0]) < 1e-10
-        and abs(angles_rad[1]) < 1e-10
-        and abs(angles_rad[2]) < 1e-10
+        and abs(rotation[0]) < 1e-10
+        and abs(rotation[1]) < 1e-10
+        and abs(rotation[2]) < 1e-10
         and delta == (0, 0, 0)
     ):
         return Geometry(coords.copy(), offsets.copy())
@@ -93,7 +93,9 @@ def affine(
     else:
         center_np = np.array(pivot, dtype=np.float32)
     scale_np = np.array(scale, dtype=np.float32)
-    rotate_radians = np.array(angles_rad, dtype=np.float32)
+    # degree で受け取り radian に変換
+    rot_deg = np.array(rotation, dtype=np.float32)
+    rotate_radians = np.deg2rad(rot_deg).astype(np.float32)
     translate_np = np.array(delta, dtype=np.float32)
 
     transformed_coords = _apply_combined_transform(

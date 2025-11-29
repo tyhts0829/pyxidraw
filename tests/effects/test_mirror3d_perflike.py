@@ -26,7 +26,7 @@ def test_mirror3d_equator_dedup_many_points() -> None:
         cy=0.0,
         cz=0.0,
         axis=(0.0, 0.0, 1.0),
-        phi0_deg=-90.0,
+        phi0=-90.0,
         mirror_equator=True,
     )
 

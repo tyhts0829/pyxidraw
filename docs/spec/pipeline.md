@@ -19,8 +19,8 @@ from api import G, E
 # 形状 → エフェクト合成 → 実行
 base = G.polygon(n_sides=6)
 pipe = (
-    E.rotate(pivot=(200, 200, 0), angles_rad=(0, 0, 0.5))
-     .fill(angle_sets=1, angle_rad=0.0, density=0.6)
+    E.rotate(pivot=(200, 200, 0), rotation=(0, 0, 30))
+     .fill(angle_sets=1, angle=0.0, density=0.6)
      .build()
 )
 out = pipe(base)

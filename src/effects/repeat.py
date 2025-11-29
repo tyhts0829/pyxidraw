@@ -2,7 +2,7 @@
 repeat エフェクト（配列複製）
 
 - 入力のポリライン群を複製して規則的な配列を作る。
-- 各複製に対して、ピボット基準のスケール、XYZ 回転（ラジアン）、平行移動を
+- 各複製に対して、ピボット基準のスケール、XYZ 回転、平行移動を
   「始点/終点 + カーブ（t**curve）」で決定する。
 - スケール・平行移動・回転ごとに、線形補間のみ（完全非累積）かカーブ付き補間かを
   個別のフラグで制御する。
@@ -10,7 +10,7 @@ repeat エフェクト（配列複製）
 主なパラメータ:
 - count: 複製回数。0 で変化なし。
 - offset: 終点オフセット [mm]。始点 0 から offset までを補間。
-- angles_rad_step: 終点角度 [rad]。始点 0 から angles_rad_step までを補間（Z→Y→X の順で回転）。
+- rotation_step: 終点角度 [deg]。始点 0 から rotation_step までを補間（Z→Y→X の順で回転）。
 - scale: 終点スケール。始点 1 から scale までを補間。
 - cumulative_scale / cumulative_offset / cumulative_rotate:
   - False のとき線形補間（t = i / count）。
@@ -27,7 +27,6 @@ repeat エフェクト（配列複製）
 
 from __future__ import annotations
 
-import math
 
 import numpy as np
 from numba import njit  # type: ignore[attr-defined]
@@ -48,10 +47,10 @@ PARAM_META = {
         "min": (-300.0, -300.0, -300.0),
         "max": (300.0, 300.0, 300.0),
     },
-    "angles_rad_step": {
+    "rotation_step": {
         "type": "vec3",
-        "min": (-math.pi, -math.pi, -math.pi),
-        "max": (math.pi, math.pi, math.pi),
+        "min": (-180.0, -180.0, -180.0),
+        "max": (180.0, 180.0, 180.0),
     },
     "scale": {"type": "vec3", "min": (0.5, 0.5, 0.5), "max": (1.5, 1.5, 1.5)},
     "curve": {"type": "float", "min": 0.1, "max": 5.0, "step": 0.1},
@@ -72,7 +71,7 @@ def repeat(
     cumulative_offset: bool = False,
     cumulative_rotate: bool = False,
     offset: Vec3 = (0.0, 0.0, 0.0),
-    angles_rad_step: Vec3 = (0.0, 0.0, 0.0),
+    rotation_step: Vec3 = (0.0, 0.0, 0.0),
     scale: Vec3 = (1.0, 1.0, 1.0),
     curve: float = 1.0,
     auto_center: bool = True,
@@ -91,11 +90,11 @@ def repeat(
     cumulative_offset : bool, default False
         True のときオフセット補間にカーブ（t' = t**curve）を用いる。False のとき 0→offset を線形補間する。
     cumulative_rotate : bool, default False
-        True のとき回転補間にカーブ（t' = t**curve）を用いる。False のとき 0→angles_rad_step を線形補間する。
+        True のとき回転補間にカーブ（t' = t**curve）を用いる。False のとき 0→rotation_step を線形補間する。
     offset : tuple[float, float, float], default (0.0, 0.0, 0.0)
         終点オフセット [mm]。始点 0 から offset までを補間する。
-    angles_rad_step : tuple[float, float, float], default (0.1, 0.1, 0.1)
-        終点回転角 [rad]（X, Y, Z）。始点 0 から angles_rad_step までを補間する。
+    rotation_step : tuple[float, float, float], default (0.0, 0.0, 0.0)
+        終点回転角 [deg]（X, Y, Z）。始点 0 から rotation_step までを補間する。
     scale : tuple[float, float, float], default (0.8, 0.8, 0.8)
         終点スケール倍率（X, Y, Z）。始点 1 から scale までを補間する。
     curve : float, default 1.0
@@ -118,7 +117,9 @@ def repeat(
     offset_np = np.array(offset, dtype=np.float32)
     scale_np = np.array(scale, dtype=np.float32)
 
-    rotate_radians = np.array(angles_rad_step, dtype=np.float32)
+    # degree で受け取り radian に変換
+    rot_step_deg = np.array(rotation_step, dtype=np.float32)
+    rotate_radians = np.deg2rad(rot_step_deg).astype(np.float32)
 
     # 生成する線のリスト（Geometry.from_lines で正しい offsets を構築）
     lines: list[np.ndarray] = []

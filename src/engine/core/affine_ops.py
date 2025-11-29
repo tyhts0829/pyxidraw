@@ -32,9 +32,9 @@ def rotate(
     *,
     auto_center: bool = False,
     pivot: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    angles_rad: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> Geometry:
-    rx, ry, rz = float(angles_rad[0]), float(angles_rad[1]), float(angles_rad[2])
+    rx, ry, rz = float(rotation[0]), float(rotation[1]), float(rotation[2])
     cx, cy, cz = float(pivot[0]), float(pivot[1]), float(pivot[2])
     center = (cx, cy, cz)
     return g.rotate(x=rx, y=ry, z=rz, center=center)

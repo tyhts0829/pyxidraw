@@ -1,13 +1,13 @@
 """
 rotate エフェクト（回転）
 
-- 中心の選択（auto_center or pivot）に基づき、XYZ 各軸の回転角（ラジアン）を適用。
+- 中心の選択（auto_center or pivot）に基づき、XYZ 各軸の回転角を適用。
 - 実装は `Geometry.rotate` に委譲し、新規インスタンスを返す純関数。
 
 パラメータ:
 - auto_center: True ならジオメトリの平均座標を中心に使用。False なら `pivot` を使用。
 - pivot: 回転中心（Vec3）。`auto_center=False` のときのみ有効。
-- angles_rad: (rx, ry, rz) [rad]（右手系）。
+- rotation: (rx, ry, rz) [deg]（右手系）。
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ PARAM_META = {
         "min": (-300.0, -300.0, -300.0),
         "max": (300.0, 300.0, 300.0),
     },
-    "angles_rad": {
+    "rotation": {
         "type": "vec3",
-        "min": (-np.pi, -np.pi, -np.pi),
-        "max": (np.pi, np.pi, np.pi),
+        "min": (-180.0, -180.0, -180.0),
+        "max": (180.0, 180.0, 180.0),
     },
 }
 
@@ -40,7 +40,7 @@ def rotate(
     *,
     auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
-    angles_rad: Vec3 = (0, 0, 0),
+    rotation: Vec3 = (0.0, 0.0, 0.0),
 ) -> Geometry:
     """回転（auto_center 対応）。
 
@@ -52,11 +52,12 @@ def rotate(
         True なら平均座標を中心に使用。False なら `pivot` を使用。
     pivot : tuple[float, float, float], default (0.0,0.0,0.0)
         回転の中心（`auto_center=False` のとき有効）。
-    angles_rad : tuple[float, float, float], default (π/4, π/4, π/4)
-        (rx, ry, rz) ラジアン角。
+    rotation : tuple[float, float, float], default (0.0, 0.0, 0.0)
+        各軸の回転角 [deg]（rx, ry, rz）。
     """
-    # 角度を正規化
-    rx, ry, rz = float(angles_rad[0]), float(angles_rad[1]), float(angles_rad[2])
+    # 角度を degree で受け取り radian に変換
+    rx_deg, ry_deg, rz_deg = float(rotation[0]), float(rotation[1]), float(rotation[2])
+    rx, ry, rz = np.deg2rad([rx_deg, ry_deg, rz_deg])
 
     # 中心を決定（auto_center 優先）
     if auto_center:

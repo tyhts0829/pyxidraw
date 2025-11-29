@@ -1,5 +1,3 @@
-import numpy as np
-
 from api import E, G, L, run
 
 A5 = (148, 210)
@@ -7,7 +5,7 @@ A5 = (148, 210)
 
 def draw(t: float):
     g1 = G.polygon().scale(40, 40, 40).translate(A5[0] / 2, A5[1] / 2, 0)
-    p1 = E.label(uid="polygons").affine(angles_rad=(0, 0, np.pi / 4)).repeat().repeat().fill()
+    p1 = E.label(uid="polygons").affine(rotation=(0, 0, 45.0)).repeat().repeat().fill()
     g2 = G.text()
     p2 = E.affine().fill()
     return L.layer(geometry=p1(g1)), p2(g2)

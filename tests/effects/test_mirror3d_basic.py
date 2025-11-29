@@ -27,7 +27,7 @@ def test_mirror3d_n3_sector_replication_and_remove_others() -> None:
         cy=0.0,
         cz=0.0,
         axis=(0.0, 0.0, 1.0),
-        phi0_deg=-90.0,  # 基準境界を +X に合わせる
+        phi0=-90.0,  # 基準境界を +X に合わせる
         mirror_equator=False,
     )
 
@@ -60,7 +60,7 @@ def test_mirror3d_equator_mirror_doubles_count_and_flips_z() -> None:
         cy=0.0,
         cz=0.0,
         axis=(0.0, 0.0, 1.0),
-        phi0_deg=0.0,
+        phi0=0.0,
         mirror_equator=True,
     )
 
@@ -85,7 +85,7 @@ def test_mirror3d_n1_halfspace_reflection_two_lines() -> None:
         cy=0.0,
         cz=0.0,
         axis=(0.0, 0.0, 1.0),
-        phi0_deg=180.0,
+        phi0=180.0,
         mirror_equator=False,
     )
 
@@ -110,7 +110,7 @@ def test_mirror3d_center_axis_reflection_around_cx() -> None:
         cy=0.0,
         cz=0.0,
         axis=(0.0, 0.0, 1.0),
-        phi0_deg=180.0,
+        phi0=180.0,
         mirror_equator=False,
     )
 

@@ -11,10 +11,10 @@ def test_builder_allows_unknown_param_at_build_time() -> None:
 
 
 def test_builder_build_no_raise_with_valid_params() -> None:
-    ok = E.pipeline.rotate(angles_rad=(0.0, 0.0, 0.0))
+    ok = E.pipeline.rotate(rotation=(0.0, 0.0, 0.0))
     ok.build()  # 例外なし
 
 
 def test_builder_build_no_raise_with_valid_params_from_E_direct() -> None:
-    ok = E.rotate(angles_rad=(0.0, 0.0, 0.0))
+    ok = E.rotate(rotation=(0.0, 0.0, 0.0))
     ok.build()  # 例外なし

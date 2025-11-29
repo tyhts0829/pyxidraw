@@ -10,7 +10,7 @@ def effect_fn(g, *, amplitude_mm: float = 0.5, enable: bool = True):  # noqa: AN
     return g
 
 
-def vector_effect(g, *, angles_rad=(0.0, 0.0, 0.0)):  # noqa: ANN001,B006
+def vector_effect(g, *, rotation=(0.0, 0.0, 0.0)):  # noqa: ANN001,B006
     return g
 
 
@@ -97,16 +97,16 @@ def test_parameter_value_resolver_handles_vector_params_defaults_register_gui():
         params={},
         signature=signature,
         doc=None,
-        param_meta={"angles_rad": {"min": (-1.0, -1.0, -1.0), "max": (1.0, 1.0, 1.0)}},
+        param_meta={"rotation": {"min": (-1.0, -1.0, -1.0), "max": (1.0, 1.0, 1.0)}},
         skip={"g"},
     )
 
     # 既定値採用のため GUI 登録され、親ベクトル Descriptor が 1 件作成される
-    assert resolved["angles_rad"] == pytest.approx((0.0, 0.0, 0.0))
+    assert resolved["rotation"] == pytest.approx((0.0, 0.0, 0.0))
     descriptor_ids = {desc.id for desc in store.descriptors()}
-    assert "effect.rotate#1.angles_rad" in descriptor_ids
+    assert "effect.rotate#1.rotation" in descriptor_ids
     # value_type は vector、vector_hint(min/max) が設定される（メタがあれば）
-    d = store.get_descriptor("effect.rotate#1.angles_rad")
+    d = store.get_descriptor("effect.rotate#1.rotation")
     assert d.value_type == "vector"
     assert d.vector_hint is not None
 

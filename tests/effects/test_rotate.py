@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 
 import numpy as np
 
@@ -14,6 +13,6 @@ def test_rotate_effect_around_origin() -> None:
         g,
         auto_center=False,
         pivot=(0.0, 0.0, 0.0),
-        angles_rad=(0.0, 0.0, math.pi / 2),
+        rotation=(0.0, 0.0, 90.0),
     )
     assert np.allclose(out.coords, np.array([[0.0, 1.0, 0.0]], dtype=np.float32))
