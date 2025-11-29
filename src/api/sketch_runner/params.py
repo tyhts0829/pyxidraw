@@ -152,6 +152,165 @@ def subscribe_color_changes(
             except Exception:
                 pass
 
+    def _apply_palette_auto(_dt: float) -> None:  # noqa: ANN001, D401
+        """Palette パラメータから背景/線色/レイヤー色を自動適用する。"""
+        # 遅延 import で依存を局所化
+        try:
+            from engine.ui.palette.helpers import build_palette_from_values  # type: ignore[import]
+            from palette import Palette  # type: ignore[import]
+            from util.palette_state import set_palette as _set_palette  # type: ignore[import]
+        except Exception:
+            return
+
+        store = parameter_manager.store
+
+        # Palette 関連パラメータを Store から取得
+        def _val(pid: str) -> object | None:
+            try:
+                v = store.current_value(pid)
+                if v is None:
+                    v = store.original_value(pid)
+                return v
+            except Exception:
+                return None
+
+        L_val = _val("palette.L")
+        C_val = _val("palette.C")
+        h_val = _val("palette.h")
+        type_val = _val("palette.type")
+        style_val = _val("palette.style")
+        n_val = _val("palette.n_colors")
+
+        palette_obj = None
+        try:
+            palette_obj = build_palette_from_values(
+                base_color_value=None,
+                palette_type_value=type_val,
+                palette_style_value=style_val,
+                n_colors_value=n_val,
+                L_value=L_val,
+                C_value=C_val,
+                h_value=h_val,
+            )
+        except Exception:
+            palette_obj = None
+
+        try:
+            _set_palette(palette_obj)
+        except Exception:
+            pass
+
+        if not isinstance(palette_obj, Palette):
+            return
+
+        # 自動適用モード（off / bg_global_and_layers）。古い値 "bg_and_global" は layers モード扱い。
+        auto_mode = _val("palette.auto_apply_mode")
+        raw_mode = str(auto_mode) if auto_mode is not None else "bg_global_and_layers"
+        mode = "off" if raw_mode == "off" else "bg_global_and_layers"
+        if mode == "off":
+            return
+
+        # 現在の背景色（固定キャンバス色）を取得
+        try:
+            bg_val = store.current_value("runner.background")
+            if bg_val is None:
+                bg_val = store.original_value("runner.background")
+            if bg_val is None:
+                bg_r, bg_g, bg_b = 1.0, 1.0, 1.0
+            else:
+                bg_r, bg_g, bg_b, _ = _norm(bg_val)
+        except Exception:
+            bg_r, bg_g, bg_b = 1.0, 1.0, 1.0
+        bg_lum = 0.2126 * float(bg_r) + 0.7152 * float(bg_g) + 0.0722 * float(bg_b)
+
+        # Palette.colors から OKLCH/L と sRGB を取得
+        colors: list[tuple[float, float, float, float, float]] = []
+        try:
+            for c in palette_obj.colors:
+                try:
+                    L, _C, _h = c.oklch
+                    r, g, b = c.srgb
+                    colors.append((float(L), float(r), float(g), float(b), 1.0))
+                except Exception:
+                    continue
+        except Exception:
+            colors = []
+        if not colors:
+            return
+
+        # グローバル線色: 背景との輝度差が最大の色（なければ黒/白フォールバック）
+        line_rgba = None
+        try:
+            best = None
+            best_diff = -1.0
+            for _L, r, g, b, a in colors:
+                lum = 0.2126 * float(r) + 0.7152 * float(g) + 0.0722 * float(b)
+                diff = abs(lum - bg_lum)
+                if diff > best_diff:
+                    best_diff = diff
+                    best = (r, g, b, a)
+            if best is not None:
+                line_rgba = best
+        except Exception:
+            line_rgba = None
+        # しきい値が小さすぎる場合は黒/白へフォールバック
+        if line_rgba is not None:
+            try:
+                r, g, b, _a = line_rgba
+                lum_line = 0.2126 * float(r) + 0.7152 * float(g) + 0.0722 * float(b)
+                if abs(lum_line - bg_lum) < 0.15:
+                    line_rgba = None
+            except Exception:
+                line_rgba = None
+        if line_rgba is None:
+            if bg_lum >= 0.5:
+                line_rgba = (0.0, 0.0, 0.0, 1.0)
+            else:
+                line_rgba = (1.0, 1.0, 1.0, 1.0)
+
+        # Store とレンダラーへ反映（グローバル線色のみ、自動で背景は変えない）
+        try:
+            store.set_override("runner.line_color", line_rgba)
+        except Exception:
+            pass
+        try:
+            pyglet_mod.clock.schedule_once(
+                lambda dt, v=line_rgba: _apply_line_color(dt, v),
+                0.0,
+            )
+        except Exception:
+            pass
+
+        # レイヤー線色: layer.*.color に残りの色を循環適用
+        if mode != "bg_global_and_layers":
+            return
+        try:
+            layer_color_ids: list[str] = []
+            for desc in store.descriptors():
+                pid = desc.id
+                if isinstance(pid, str) and pid.startswith("layer.") and pid.endswith(".color"):
+                    layer_color_ids.append(pid)
+            if not layer_color_ids:
+                return
+            layer_color_ids.sort()
+            # 背景との輝度差が大きい順に色を並べる
+            sorted_colors = sorted(
+                colors,
+                key=lambda it: abs(
+                    (0.2126 * float(it[1]) + 0.7152 * float(it[2]) + 0.0722 * float(it[3])) - bg_lum
+                ),
+                reverse=True,
+            )
+            palette_cycle = [c[1:] for c in sorted_colors]  # (r,g,b,a) のリスト
+            for idx, pid in enumerate(layer_color_ids):
+                color_rgba = palette_cycle[idx % len(palette_cycle)]
+                try:
+                    store.set_override(pid, color_rgba)
+                except Exception:
+                    continue
+        except Exception:
+            return
+
     def _on_param_store_change(ids: Mapping[str, object] | _Iterable[str]) -> None:
         # 受け取る ID 集合へ正規化（想定型に限定して例外を避ける）
         if isinstance(ids, Mapping):
@@ -178,6 +337,11 @@ def subscribe_color_changes(
                         pyglet_mod.clock.schedule_once(
                             lambda dt, v=auto: _apply_line_color(dt, v), 0.0
                         )
+                    # palette 自動適用モード有効時は、新しい背景に合わせて線色/レイヤー色を再計算
+                    try:
+                        pyglet_mod.clock.schedule_once(_apply_palette_auto, 0.0)
+                    except Exception:
+                        pass
             except Exception:
                 pass
         # 線色
@@ -239,6 +403,12 @@ def subscribe_color_changes(
                     pyglet_mod.clock.schedule_once(
                         lambda dt, v=rgba: overlay.set_meter_bg_color(v), 0.0
                     )
+            except Exception:
+                pass
+        # Palette 変更に応じた自動適用
+        if any(isinstance(pid, str) and pid.startswith("palette.") for pid in id_list):
+            try:
+                pyglet_mod.clock.schedule_once(_apply_palette_auto, 0.0)
             except Exception:
                 pass
 

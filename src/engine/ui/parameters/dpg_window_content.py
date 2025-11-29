@@ -398,6 +398,7 @@ class ParameterWindowContentBuilder:
         type_desc = desc_index.get(PALETTE_TYPE_ID)
         style_desc = desc_index.get(PALETTE_STYLE_ID)
         n_desc = desc_index.get(PALETTE_N_COLORS_ID)
+        auto_mode_desc = desc_index.get("palette.auto_apply_mode")
         if (
             l_desc is None
             and c_desc is None
@@ -433,8 +434,16 @@ class ParameterWindowContentBuilder:
                 self._add_stretch_column("Bars", bars_ratio)
                 self._add_stretch_column("CC", cc_ratio)
 
-                # Base color (L/C/h) + type/style/colors を既存ロジックで 3 列行として構築
-                for desc in (l_desc, c_desc, h_desc, type_desc, style_desc, n_desc):
+                # Base color (L/C/h) + type/style/colors + auto_apply_mode を既存ロジックで 3 列行として構築
+                for desc in (
+                    l_desc,
+                    c_desc,
+                    h_desc,
+                    type_desc,
+                    style_desc,
+                    n_desc,
+                    auto_mode_desc,
+                ):
                     if desc is None:
                         continue
                     self._palette_param_ids.add(desc.id)
@@ -1014,9 +1023,7 @@ class ParameterWindowContentBuilder:
                         )
                     else:
                         dpg.set_value(pid, value)
-                    if isinstance(pid, str) and (
-                        pid.startswith("palette.") or pid == "runner.line_color"
-                    ):
+                    if isinstance(pid, str) and pid.startswith("palette."):
                         palette_dirty = True
                     continue
                 try:

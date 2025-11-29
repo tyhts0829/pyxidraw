@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from api import E, G, L, lfo, run
+from api import E, G, lfo, run
 
 CANVAS_SIZE = 400
 
@@ -18,8 +18,11 @@ def draw(t: float):
         .mirror()
         .rotate()
     )
-    return L(geometry=pipe(base))
+    txt = G.text().scale(sx=10)
+    e = E.affine().fill()
+    return pipe(base) + e(txt)
+    # return L(geometry=pipe(base)), L(geometry=e(txt))
 
 
 if __name__ == "__main__":
-    run(draw, canvas_size=(CANVAS_SIZE, CANVAS_SIZE))
+    run(draw, canvas_size=(CANVAS_SIZE, CANVAS_SIZE), use_parameter_gui=True)

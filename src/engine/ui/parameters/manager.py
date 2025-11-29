@@ -513,6 +513,20 @@ class ParameterManager:
         )
         self.store.register(n_desc, n_desc.default_value)
 
+        # palette 自動適用モード（背景固定で線/レイヤー色のみ反映）
+        auto_choices = ["off", "bg_global_and_layers"]
+        auto_desc = ParameterDescriptor(
+            id="palette.auto_apply_mode",
+            label="Apply palette to colors",
+            source="effect",
+            category="Palette",
+            category_kind="palette",
+            value_type="enum",
+            default_value="bg_global_and_layers",
+            choices=auto_choices,
+        )
+        self.store.register(auto_desc, auto_desc.default_value)
+
     def _apply_layer_overrides(self, result):
         """Store の override をレイヤーに適用する。"""
         entries = self._iter_layers(result)

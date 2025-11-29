@@ -9,8 +9,7 @@
 - palette セクションに「パレット自動適用」のトグルを追加する。
   - 例: `palette.auto_apply_mode`（enum）  
     - `"off"`: 既存挙動（palette はプレビューと `api.C` 用のみで、背景/線色には触れない）
-    - `"bg_and_global"`: 背景 (`runner.background`) とグローバル線色 (`runner.line_color`) のみ自動適用
-    - `"bg_global_and_layers"`: 背景 + グローバル線色 + `layer.*.color` を自動適用
+    - `"bg_global_and_layers"`: 現在の背景色を基準に、グローバル線色 (`runner.line_color`) と `layer.*.color` を自動適用
   - UI ラベル例:  
     - Label: `Apply palette to colors`  
     - Choices: `Off / BG+Global / BG+Global+Layers`
@@ -43,26 +42,26 @@
   - palette オブジェクトを計算し `util.palette_state.set_palette(palette_obj)` した直後に、
     `palette.auto_apply_mode` の値を見て `runner.*` / `layer.*` に色を流し込む。
 
-### 2. 色マッピング戦略（初期案）
+### 2. 色マッピング戦略（背景固定版）
 
-- palette オブジェクトから `colors` を取得し、OKLCH と sRGB の両方を使って簡単なヒューリスティックで役割を割り当てる。
+- palette オブジェクトから `colors` を取得し、OKLCH と sRGB の両方を使って「線のコントラスト」だけを最適化する。
 - 基本方針:
-  - 背景色: 「明るめまたは暗めの単色」を選び、α=1.0 の RGBA として `runner.background` へ書き込む。
-  - グローバル線色: 背景色とコントラストがそこそこ取れる色を 1 つ選び、`runner.line_color` へ書き込む。
-  - レイヤー線色: 残りの色を循環させながら `layer.{key}.color` へ割り当てる。
+  - 背景色: 既存のキャンバス設定 (`runner.background`) を尊重し、自動では変更しない。
+  - グローバル線色: 背景との輝度差が最大になるパレット色を 1 つ選び、`runner.line_color` へ書き込む。
+  - レイヤー線色: 背景との輝度差が大きい順にパレット色を並べ、`layer.{key}.color` へ順に割り当てる。
 - 具体的アルゴリズム案:
-  - 背景候補選択:
-    - まず palette.colors の各色の L 値（OKLCH）を取得。
-    - 「明るい背景」モードとして、最大 L の色を背景候補とする。
-      - 今回は UI 設定追加を避け、最初は「明るい背景」固定で実装。  
-        将来的に「暗い背景優先」のモード追加が必要になれば拡張する。
+  - 背景取得:
+    - `ParameterStore` から `runner.background` の現在値（なければ original）を取り、`util.color.normalize_color` で sRGB(0..1) に正規化。
+    - sRGB から相対輝度 `Y_bg = 0.2126*r + 0.7152*g + 0.0722*b` を計算。
   - 線色候補選択:
-    - 背景候補以外の色から、L の差分が大きいものを 1 つ選ぶ（単純に |L_bg - L| が最大の色）。
-    - 見つからない場合や色数が 1 つしかない場合は、背景とは逆側に寄せたモノクロ（黒/白）でフォールバック。
+    - palette.colors の各色について sRGB を取得し、同様に輝度 `Y` を求める。
+    - `abs(Y - Y_bg)` が最大の色をグローバル線色候補とする。
+    - それでも `abs(Y - Y_bg)` が小さい場合（例: `< 0.15`）は、背景とのコントラストが明確になるよう黒/白を選ぶ（Y_bg に応じて「暗い線/明るい線」を決定）。
   - レイヤー線色:
     - `ParameterStore.descriptors()` から `id` が `layer.` で始まり `.color` で終わるものを列挙。
-    - ID 昇順に並べ、残りの palette.colors を順番に割り当てる（足りなければループ）。
-    - こうすることでレイヤー数と palette.n_colors がずれても、常に決定的なマッピングが得られる。
+    - 各パレット色について `abs(Y - Y_bg)` を計算し、これが大きい順に並べたリストを作る。
+    - レイヤー ID をソートし、このリストを循環しながら `layer.{key}.color` に割り当てる。
+    - こうすることで、レイヤーごとに背景とのコントラストが高めの色が順番に付与される。
 
 ### 3. ParameterStore への書き込み
 
@@ -98,33 +97,33 @@
 
 ### 1. パラメータ/GUI デザイン
 
-- [ ] `src/engine/ui/parameters/manager.py` の `_register_palette_descriptors` に `palette.auto_apply_mode` の Descriptor を追加  
+- [x] `src/engine/ui/parameters/manager.py` の `_register_palette_descriptors` に `palette.auto_apply_mode` の Descriptor を追加  
   - `id="palette.auto_apply_mode"`, `value_type="enum"`, `category="Palette"`, `category_kind="palette"`  
-  - `choices=["off", "bg_and_global", "bg_global_and_layers"]`, `default_value="bg_and_global"`（初期案: palette を使うときはデフォルトで効かせる）
-- [ ] `src/engine/ui/parameters/dpg_window_content.py` の `build_palette_controls` に `palette.auto_apply_mode` の UI を追加  
+  - `choices=["off", "bg_global_and_layers"]`, `default_value="bg_global_and_layers"`（初期案: palette を使うときはデフォルトで効かせる）
+- [x] `src/engine/ui/parameters/dpg_window_content.py` の `build_palette_controls` に `palette.auto_apply_mode` の UI を追加  
   - `value_type="enum"` なので既存ロジックで `radio_button` or `combo` が自動選択される（必要なら palette セクション内だけ `radio_button` を強制）。
 
 ### 2. palette → 色マッピングヘルパー
 
-- [ ] `src/engine/ui/palette/helpers.py` か `src/engine/ui/parameters/dpg_window_content.py` 内に、「palette と layer ID 一覧から背景/線色/レイヤー色を決める純粋関数」を切り出す。
+- [x] `src/engine/ui/palette/helpers.py` か `src/engine/ui/parameters/dpg_window_content.py` 内に、「palette と layer ID 一覧から背景/線色/レイヤー色を決める純粋関数」を切り出す。
   - 入力: `Palette` オブジェクト、`apply_mode`（enum 値）、`layer_color_ids`（`["layer.layer0.color", ...]`）
   - 出力: `bg_rgba | None`, `line_rgba | None`, `layer_color_map: dict[str, tuple[float,float,float,float]]`
-- [ ] 上記ヘルパーで OKLCH L ベースの簡易アルゴリズムを実装（背景=最大L, 線=最大コントラスト, レイヤー=残りを循環）。
-- [ ] 将来の拡張用に、ヘルパー関数を単体テストしやすい形に保つ（UI 依存を持たない）。
+- [x] 上記ヘルパーで OKLCH L ベースの簡易アルゴリズムを実装（背景=最大L, 線=最大コントラスト, レイヤー=残りを循環）。
+- [x] 将来の拡張用に、ヘルパー関数を単体テストしやすい形に保つ（UI 依存を持たない）。
 
 ### 3. `_refresh_palette_preview` 拡張
 
-- [ ] 既存の palette 計算 + `util.palette_state.set_palette(palette_obj)` の直後に、自動適用ロジックを追加。
-- [ ] `store.current_value("palette.auto_apply_mode")`（無ければ default）を取得し、`"off"` 以外なら:
-  - [ ] `layer_color_ids` を `self._store.descriptors()` から組み立てる。
-  - [ ] マッピングヘルパーを呼び出して色割り当てを決定。
-  - [ ] `runner.background` / `runner.line_color` / `layer.*.color` に対して `set_override` を呼ぶ（存在チェック付き）。
-- [ ] 既存のスウォッチ描画ロジックはそのまま保持し、palette_obj が None のときは何もしない（現在の仕様を踏襲）。
+- [x] 既存の palette 計算 + `util.palette_state.set_palette(palette_obj)` の直後に、自動適用ロジックを追加。
+- [x] `store.current_value("palette.auto_apply_mode")`（無ければ default）を取得し、`"off"` 以外なら:
+  - [x] `layer_color_ids` を `self._store.descriptors()` から組み立てる。
+  - [x] マッピングヘルパーを呼び出して色割り当てを決定。
+  - [x] `runner.background` / `runner.line_color` / `layer.*.color` に対して `set_override` を呼ぶ（存在チェック付き）。
+- [x] 既存のスウォッチ描画ロジックはそのまま保持し、palette_obj が None のときは何もしない（現在の仕様を踏襲）。
 
 ### 4. ランタイム連携確認
 
-- [ ] `src/api/sketch_runner/params.py` の `apply_initial_colors` / `subscribe_color_changes` が、`runner.background` / `runner.line_color` の変更をすでに拾っていることを確認（コードレビューのみ）。
-- [ ] レイヤー色については、`ParameterManager._apply_layer_overrides` と `engine.runtime.worker._apply_layer_overrides` が `layer.*.color` の override を適用していることを確認し、追加の変更が不要であることをメモする。
+- [x] `src/api/sketch_runner/params.py` の `apply_initial_colors` / `subscribe_color_changes` が、`runner.background` / `runner.line_color` の変更をすでに拾っていることを確認（コードレビューのみ）。
+- [x] レイヤー色については、`ParameterManager._apply_layer_overrides` と `engine.runtime.worker._apply_layer_overrides` が `layer.*.color` の override を適用していることを確認し、追加の変更が不要であることをメモする。
 
 ### 5. テスト方針
 
@@ -142,8 +141,7 @@
 
 ## メモ・相談ポイント
 
-- `palette.auto_apply_mode` の default を `"bg_and_global"` にするか `"off"` にするかは、既存スケッチとの互換性と「palette を開いた瞬間から気持ちよく動く」体験のバランスで決めたい。
-  - 現状ユーザー数は少なく破壊的変更も許容されるため、「palette を有効にしたらデフォルトで BG+Global に効く」方が UX は良さそう。
+- `palette.auto_apply_mode` の default を `"bg_global_and_layers"` にするか `"off"` にするかは、既存スケッチとの互換性と「palette を開いた瞬間から気持ちよく動く」体験のバランスで決めたい。
+  - 現状ユーザー数は少なく破壊的変更も許容されるため、「palette を有効にしたらデフォルトで BG+Global+Layers に効く」方が UX は良さそう。
 - 背景を暗色系にしたいケース向けに、「背景は最小 L を選ぶ」モードを将来的に追加する余地を残しておく（今回は仕様をシンプルに保つため見送り）。
 - レイヤー色は `layer.*.color` による GUI override が強いので、「レイヤー側で明示的に color を指定している場合は palette 自動適用をスキップする」ような高度な判定も考えられるが、初回はシンプルに「Parameter GUI のレイヤー色が常に最終優先」という方針で実装する。
-
