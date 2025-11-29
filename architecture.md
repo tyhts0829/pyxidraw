@@ -77,6 +77,7 @@
   - `engine.ui.parameters` パッケージ（`ParameterRuntime`, `FunctionIntrospector`, `ParameterValueResolver`, `ParameterStore`, `ParameterWindow` 等）が shape/effect 引数を検出し、Dear PyGui による独立ウィンドウで表示/編集する（実体は `engine.ui.parameters.dpg_window`）。
   - `ParameterRuntime` は `FunctionIntrospector`/`ParameterValueResolver` を介してメタ情報抽出と Descriptor 登録を行い、GUI override を適用してから元の関数へ委譲（変換レイヤは廃止し、実値を扱う）。
   - RangeHint は実レンジ（min/max/step）のヒントのみを提供する。UI は表示比率を計算してクランプするが、内部値はクランプしない。
+  - スライダーの min/max は GUI 側から編集可能であり、`ParameterStore` に UI レンジオーバーライド（min/max）が保存される。RangeHint はあくまで初期レンジのヒントとして扱う。
   - GUI 有効時は `engine.ui.parameters.manager.ParameterManager` が `user_draw` をラップし、初回フレームで自動スキャン →`ParameterWindowController` を起動。
   - 外観設定は `util.utils.load_config()` で読み込む `parameter_gui` キー（`configs/default.yaml` / ルート `config.yaml`）から解決し、`ParameterWindowController` → `ParameterWindow` に渡す（ウィンドウ寸法/タイトル、スタイル/色）。設定未指定時は既定の最小テーマで動作。
   - Parameter GUI の DPG 実装は `engine.ui.parameters.dpg_window.ParameterWindow` がエントリとなり、内部で `ParameterWindowThemeManager`（`dpg_window_theme.py`）と `ParameterWindowContentBuilder`（`dpg_window_content.py`）に責務を委譲する。
@@ -187,7 +188,7 @@ Tips:
 - 背景色 `background` も RGBA タプルまたはヘックスで指定可能。
 - `background` / `line_color` を未指定の場合は、`configs/default.yaml` の
   `canvas.background_color` / `canvas.line_color` をフォールバックとして使用。
-- Parameter GUI の保存値がある場合は、起動直後に Store→ 描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。
+- Parameter GUI の保存値がある場合は、起動直後に Store→ 描画へ初期適用（背景は `RenderWindow.set_background_color`、線色は `LineRenderer.set_line_color`）。スライダーの UI レンジ（min/max）も `engine.ui.parameters.persistence` 経由で永続化されるが、実値はクランプしない。
   優先順位は「引数 > 保存値 > config」。
 - HUD の色（`runner.hud_text_color`、`runner.hud_meter_color`、`runner.hud_meter_bg_color`）も起動直後に Store→Overlay へ初期適用する（`OverlayHUD.set_text_color` / `set_meter_color` / `set_meter_bg_color`）。
 - HUD 表示の可否は `run(..., show_hud=...)` で初期化し、実行中はキーボード `H` でトグルする（Parameter GUI にボタンは無い）。

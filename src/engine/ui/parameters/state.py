@@ -113,6 +113,9 @@ class ParameterStore:
         # CC 関連（プロバイダとバインディング）
         self._cc_provider: Callable[[], Mapping[int, float]] | None = None
         self._cc_bindings: dict[str, int] = {}
+        # スライダー用 UI レンジのオーバーライド（min/max）。
+        # 実値のクランプには使用せず、Dear PyGui 側の表示幅のみを制御する。
+        self._range_overrides: dict[str, tuple[float, float]] = {}
 
     # --- 登録 / 問合せ ---
     def register(self, descriptor: ParameterDescriptor, value: Any) -> None:
@@ -289,6 +292,29 @@ class ParameterStore:
         """すべての CC バインディングを返す（保存/デバッグ用）。"""
         with self._lock:
             return dict(self._cc_bindings)
+
+    # --- UI レンジ（min/max）オーバーライド ---
+    def set_range_override(self, param_id: str, min_value: float, max_value: float) -> None:
+        """スライダー表示用の min/max を上書きする（実値には影響させない）。"""
+        try:
+            mn = float(min_value)
+            mx = float(max_value)
+        except Exception:
+            return
+        if not mn < mx:
+            return
+        with self._lock:
+            self._range_overrides[param_id] = (mn, mx)
+
+    def range_override(self, param_id: str) -> tuple[float, float] | None:
+        """指定パラメータの UI レンジオーバーライドを返す（未設定は None）。"""
+        with self._lock:
+            return self._range_overrides.get(param_id)
+
+    def all_range_overrides(self) -> dict[str, tuple[float, float]]:
+        """すべての UI レンジオーバーライドを返す（永続化/デバッグ用）。"""
+        with self._lock:
+            return dict(self._range_overrides)
 
 
 @dataclass(frozen=True)

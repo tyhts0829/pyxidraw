@@ -214,18 +214,30 @@ class ParameterWindowContentBuilder:
                             )
                         except Exception:
                             th_val = DEFAULT_LINE_THICKNESS
-                        th_picker = dpg.add_slider_float(
-                            tag=STYLE_LINE_THICKNESS_ID,
-                            label="",
-                            default_value=th_val,
-                            min_value=LINE_THICKNESS_MIN,
-                            max_value=LINE_THICKNESS_MAX,
-                            format=f"%.{self._layout.value_precision}f",
-                            callback=self._on_widget_change,
-                            user_data=STYLE_LINE_THICKNESS_ID,
-                        )
-                        self._set_full_width(th_picker)
-                        self._style_param_ids.add(STYLE_LINE_THICKNESS_ID)
+                        thickness_desc = None
+                        for d in descriptors:
+                            if d.id == STYLE_LINE_THICKNESS_ID:
+                                thickness_desc = d
+                                break
+                        if thickness_desc is not None:
+                            mn, mx = self._effective_range(thickness_desc)
+                        else:
+                            mn, mx = LINE_THICKNESS_MIN, LINE_THICKNESS_MAX
+                        with dpg.group(horizontal=False) as th_group:
+                            th_picker = dpg.add_slider_float(
+                                tag=STYLE_LINE_THICKNESS_ID,
+                                label="",
+                                default_value=th_val,
+                                min_value=float(mn),
+                                max_value=float(mx),
+                                format=f"%.{self._layout.value_precision}f",
+                                callback=self._on_widget_change,
+                                user_data=STYLE_LINE_THICKNESS_ID,
+                            )
+                            self._set_full_width(th_picker)
+                            self._style_param_ids.add(STYLE_LINE_THICKNESS_ID)
+                            if thickness_desc is not None:
+                                self._create_minmax_inputs(th_group, thickness_desc)
                 with dpg.table_row():
                     with dpg.table_cell():
                         dpg.add_text("HUD: Text Color")
@@ -422,16 +434,19 @@ class ParameterWindowContentBuilder:
                 tth = self._theme_mgr.get_category_table_theme("palette")
                 if tth is not None:
                     dpg.bind_item_theme(pal_tbl, tth)
-                # shape/pipeline と同じ列比率（Parameter/Bars/CC）を使う
+                # shape/pipeline と同じ列比率（Parameter/Bars/MinMax/CC）を使う
                 label_ratio = float(self._layout.label_column_ratio)
                 label_ratio = max(MIN_LABEL_RATIO, min(MAX_LABEL_RATIO, label_ratio))
                 rest = max(MIN_REST_RATIO, 1.0 - label_ratio)
                 bcc = float(getattr(self._layout, "bars_cc_ratio", 0.7))
                 bcc = max(MIN_BARS_CC_RATIO, min(MAX_BARS_CC_RATIO, bcc))
                 bars_ratio = rest * bcc
-                cc_ratio = rest - bars_ratio
+                remaining = max(MIN_REST_RATIO, rest - bars_ratio)
+                minmax_ratio = remaining * 0.5
+                cc_ratio = remaining - minmax_ratio
                 self._add_stretch_column("Parameter", label_ratio)
                 self._add_stretch_column("Bars", bars_ratio)
+                self._add_stretch_column("Min/Max", minmax_ratio)
                 self._add_stretch_column("CC", cc_ratio)
 
                 # Base color (L/C/h) + type/style/colors + auto_apply_mode を既存ロジックで 3 列行として構築
@@ -448,12 +463,14 @@ class ParameterWindowContentBuilder:
                         continue
                     self._palette_param_ids.add(desc.id)
                     self._create_row_3cols(pal_tbl, desc)
-                # プレビュー行（ラベル列 + Bars 列にスウォッチ群, CC 列は空）
+                # プレビュー行（ラベル列 + Bars 列にスウォッチ群, MinMax/CC 列は空）
                 with dpg.table_row():
                     with dpg.table_cell():
                         dpg.add_text("Preview")
                     with dpg.table_cell():
                         self._palette_swatches_container = dpg.add_group(horizontal=True)
+                    with dpg.table_cell():
+                        pass
                     with dpg.table_cell():
                         pass
 
@@ -549,9 +566,12 @@ class ParameterWindowContentBuilder:
                 bcc = float(getattr(self._layout, "bars_cc_ratio", 0.7))
                 bcc = max(MIN_BARS_CC_RATIO, min(MAX_BARS_CC_RATIO, bcc))
                 bars_ratio = rest * bcc
-                cc_ratio = rest - bars_ratio
+                remaining = max(MIN_REST_RATIO, rest - bars_ratio)
+                minmax_ratio = remaining * 0.5
+                cc_ratio = remaining - minmax_ratio
                 self._add_stretch_column("Parameter", label_ratio)
                 self._add_stretch_column("Bars", bars_ratio)
+                self._add_stretch_column("Min/Max", minmax_ratio)
                 self._add_stretch_column("CC", cc_ratio)
                 for it in items:
                     if not it.supported:
@@ -574,6 +594,60 @@ class ParameterWindowContentBuilder:
         left = max(MIN_LABEL_RATIO, min(MAX_LABEL_RATIO, left))
         right = max(MIN_REST_RATIO, 1.0 - left)
         return left, right
+
+    # ---- レンジ（min/max）ヘルパ ----
+    def _base_range(self, desc: ParameterDescriptor) -> tuple[float, float]:
+        """Descriptor から UI 用の基本レンジを取得する。"""
+        vt = desc.value_type
+        if vt == "vector":
+            # VectorRangeHint があればそれを、無ければ既定レンジを用いる。
+            try:
+                if desc.vector_hint is not None:
+                    mins = list(desc.vector_hint.min_values)
+                    maxs = list(desc.vector_hint.max_values)
+                else:
+                    if isinstance(desc.default_value, (list, tuple)):
+                        dim = max(2, min(len(desc.default_value), 4))
+                    else:
+                        dim = 3
+                    vh = self._layout.derive_vector_range(dim=dim)
+                    mins = list(vh.min_values)
+                    maxs = list(vh.max_values)
+                base_min = float(min(mins))
+                base_max = float(max(maxs))
+            except Exception:
+                base_min, base_max = 0.0, 1.0
+        else:
+            hint = desc.range_hint or self._layout.derive_range(
+                name=desc.id,
+                value_type=desc.value_type,
+                default_value=desc.default_value,
+            )
+            try:
+                base_min = float(hint.min_value)
+                base_max = float(hint.max_value)
+            except Exception:
+                base_min, base_max = 0.0, 1.0
+        if base_min == base_max:
+            base_max = base_min + 1.0
+        return base_min, base_max
+
+    def _effective_range(self, desc: ParameterDescriptor) -> tuple[float, float]:
+        """基本レンジと Store のオーバーライドをマージした UI レンジを返す。"""
+        base_min, base_max = self._base_range(desc)
+        try:
+            override = self._store.range_override(desc.id)
+        except Exception:
+            override = None
+        if override is None:
+            return base_min, base_max
+        try:
+            mn, mx = float(override[0]), float(override[1])
+        except Exception:
+            return base_min, base_max
+        if not mn < mx:
+            return base_min, base_max
+        return mn, mx
 
     def _resolve_canvas_colors(
         self,
@@ -666,12 +740,14 @@ class ParameterWindowContentBuilder:
         return str(desc.id)
 
     def _create_row_3cols(self, table: int | str, desc: ParameterDescriptor) -> None:
-        """カテゴリテーブルに 3 列（Label/Bars/CC）の行を追加する。"""
+        """カテゴリテーブルに 4 列（Label/Bars/MinMax/CC）の行を追加する。"""
         with dpg.table_row(parent=table):
             with dpg.table_cell():
                 dpg.add_text(default_value=desc.label or desc.id)
             with dpg.table_cell():
                 self._create_bars(parent=dpg.last_item() or table, desc=desc)
+            with dpg.table_cell():
+                self._create_minmax_inputs(parent=dpg.last_item() or table, desc=desc)
             with dpg.table_cell():
                 self._create_cc_inputs(parent=dpg.last_item() or table, desc=desc)
 
@@ -685,21 +761,13 @@ class ParameterWindowContentBuilder:
         if vt == "vector":
             vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
             dim = max(2, min(len(vec), 4))
-            vh = desc.vector_hint
-            if vh is None:
-                default_vh = self._layout.derive_vector_range(dim=dim)
-                vmin = list(default_vh.min_values)
-                vmax = list(default_vh.max_values)
-            else:
-                vmin = list(vh.min_values)
-                vmax = list(vh.max_values)
+            # vector 用のレンジは全成分共通の min/max を用いる
+            mn, mx = self._effective_range(desc)
+            vmin = [mn] * dim
+            vmax = [mx] * dim
             self._create_vector_sliders(parent, desc, vec, vmin, vmax)
             return
-        hint = desc.range_hint or self._layout.derive_range(
-            name=desc.id,
-            value_type=desc.value_type,
-            default_value=desc.default_value,
-        )
+        mn, mx = self._effective_range(desc)
         if vt in {"int", "float"}:
             with dpg.table(
                 parent=parent,
@@ -715,8 +783,8 @@ class ParameterWindowContentBuilder:
                                 tag=desc.id,
                                 label="",
                                 default_value=int(value) if value is not None else 0,
-                                min_value=int(hint.min_value),
-                                max_value=int(hint.max_value),
+                                min_value=int(mn),
+                                max_value=int(mx),
                                 callback=self._on_widget_change,
                                 user_data=desc.id,
                             )
@@ -725,8 +793,8 @@ class ParameterWindowContentBuilder:
                                 tag=desc.id,
                                 label="",
                                 default_value=float(value) if value is not None else 0.0,
-                                min_value=float(hint.min_value),
-                                max_value=float(hint.max_value),
+                                min_value=float(mn),
+                                max_value=float(mx),
                                 format=f"%.{self._layout.value_precision}f",
                                 callback=self._on_widget_change,
                                 user_data=desc.id,
@@ -769,6 +837,78 @@ class ParameterWindowContentBuilder:
                 with dpg.table_row():
                     with dpg.table_cell():
                         self._add_cc_binding_input(None, desc)
+
+    def _create_minmax_inputs(self, parent: int | str, desc: ParameterDescriptor) -> None:
+        """Bars 列に対応する min/max 入力ボックスを生成する。"""
+        vt = desc.value_type
+        if vt not in {"float", "int", "vector"}:
+            return
+        mn, mx = self._effective_range(desc)
+        # vector も共通の min/max を用いる
+        tag_min = f"{desc.id}::min"
+        tag_max = f"{desc.id}::max"
+        with dpg.table(
+            parent=parent,
+            header_row=False,
+            policy=self._dpg_policy(["mvTable_SizingStretchSame"]),
+        ) as mm_tbl:
+            self._apply_cell_padding_theme(mm_tbl)
+            # Min / Max を 1:1 でセル幅にストレッチさせる
+            self._add_stretch_column("", 1.0)
+            self._add_stretch_column("", 1.0)
+            with dpg.table_row():
+                with dpg.table_cell():
+                    if vt == "int":
+                        min_id = dpg.add_input_int(
+                            tag=tag_min,
+                            default_value=int(mn),
+                            step=0,
+                            step_fast=0,
+                            callback=self._on_minmax_change,
+                            user_data=(desc.id, "min"),
+                        )
+                    else:
+                        min_id = dpg.add_input_float(
+                            tag=tag_min,
+                            default_value=float(mn),
+                            # min/max は必要最低限の桁数で表示する
+                            format="%g",
+                            step=0.0,
+                            step_fast=0.0,
+                            callback=self._on_minmax_change,
+                            user_data=(desc.id, "min"),
+                        )
+                    self._set_full_width(min_id)
+                with dpg.table_cell():
+                    if vt == "int":
+                        max_id = dpg.add_input_int(
+                            tag=tag_max,
+                            default_value=int(mx),
+                            step=0,
+                            step_fast=0,
+                            callback=self._on_minmax_change,
+                            user_data=(desc.id, "max"),
+                        )
+                    else:
+                        max_id = dpg.add_input_float(
+                            tag=tag_max,
+                            default_value=float(mx),
+                            # min/max は必要最低限の桁数で表示する
+                            format="%g",
+                            step=0.0,
+                            step_fast=0.0,
+                            callback=self._on_minmax_change,
+                            user_data=(desc.id, "max"),
+                        )
+                    self._set_full_width(max_id)
+        # それぞれに簡単な tooltip を付与
+        try:
+            with dpg.tooltip(tag_min):
+                dpg.add_text("min")
+            with dpg.tooltip(tag_max):
+                dpg.add_text("max")
+        except Exception:
+            pass
 
     def _create_widget(self, parent: int | str, desc: ParameterDescriptor) -> int | str:
         """値種別に応じて単一ウィジェットを生成し、そのタグを返す。"""
@@ -834,28 +974,23 @@ class ParameterWindowContentBuilder:
             return box
         if vt == "vector":
             value_vec = list(value) if isinstance(value, (list, tuple)) else [0.0, 0.0, 0.0]
-            # RangeHint が無い場合は 0..1 の既定レンジを使う
             dim = max(2, min(len(value_vec), 4))
-            vmin = [0.0] * dim
-            vmax = [1.0] * dim
+            mn, mx = self._effective_range(desc)
+            vmin = [mn] * dim
+            vmax = [mx] * dim
             return self._create_vector_sliders(parent, desc, value_vec, vmin, vmax)
-        hint = desc.range_hint or self._layout.derive_range(
-            name=desc.id,
-            value_type=desc.value_type,
-            default_value=desc.default_value,
-        )
         if vt == "int":
-            return self._create_int(parent, desc, value, hint)
-        return self._create_float(parent, desc, value, hint)
+            return self._create_int(parent, desc, value)
+        return self._create_float(parent, desc, value)
 
     def _create_int(
         self,
         parent: int | str,
         desc: ParameterDescriptor,
         value: Any,
-        hint: Any,
     ) -> int | str:
         """int パラメータ用のスライダと CC 入力を生成する。"""
+        mn, mx = self._effective_range(desc)
         with dpg.table(
             parent=parent,
             header_row=False,
@@ -870,8 +1005,8 @@ class ParameterWindowContentBuilder:
                         tag=desc.id,
                         label="",
                         default_value=int(value) if value is not None else 0,
-                        min_value=int(hint.min_value),
-                        max_value=int(hint.max_value),
+                        min_value=int(mn),
+                        max_value=int(mx),
                         callback=self._on_widget_change,
                         user_data=desc.id,
                     )
@@ -885,9 +1020,9 @@ class ParameterWindowContentBuilder:
         parent: int | str,
         desc: ParameterDescriptor,
         value: Any,
-        hint: Any,
     ) -> int | str:
         """float パラメータ用のスライダと CC 入力を生成する。"""
+        mn, mx = self._effective_range(desc)
         with dpg.table(
             parent=parent,
             header_row=False,
@@ -902,8 +1037,8 @@ class ParameterWindowContentBuilder:
                         tag=desc.id,
                         label="",
                         default_value=float(value) if value is not None else 0.0,
-                        min_value=float(hint.min_value),
-                        max_value=float(hint.max_value),
+                        min_value=float(mn),
+                        max_value=float(mx),
                         format=f"%.{self._layout.value_precision}f",
                         callback=self._on_widget_change,
                         user_data=desc.id,
@@ -985,6 +1120,99 @@ class ParameterWindowContentBuilder:
         pid = str(user_data)
         value = app_data
         self._store.set_override(pid, value)
+
+    def _on_minmax_change(self, sender: int, app_data: Any, user_data: Any) -> None:
+        """min/max 入力変更からスライダーの表示レンジを更新する。"""
+        if self._syncing:
+            return
+        try:
+            pid, kind = user_data
+            param_id = str(pid)
+            kind_str = str(kind)
+        except Exception:
+            return
+        try:
+            desc = self._store.get_descriptor(param_id)
+        except Exception:
+            return
+        base_min, base_max = self._base_range(desc)
+        try:
+            current_override = self._store.range_override(param_id)
+        except Exception:
+            current_override = None
+        if current_override is None:
+            cur_min, cur_max = base_min, base_max
+        else:
+            try:
+                cur_min = float(current_override[0])
+                cur_max = float(current_override[1])
+            except Exception:
+                cur_min, cur_max = base_min, base_max
+        try:
+            new_val = float(app_data)
+        except Exception:
+            # 入力が数値でない場合は元の値に戻す
+            self._syncing = True
+            try:
+                if kind_str == "min":
+                    dpg.set_value(sender, cur_min)
+                else:
+                    dpg.set_value(sender, cur_max)
+            finally:
+                self._syncing = False
+            return
+
+        if kind_str == "min":
+            new_min, new_max = new_val, cur_max
+        else:
+            new_min, new_max = cur_min, new_val
+
+        # min >= max は採用しない（UI を元に戻す）
+        if not new_min < new_max:
+            self._syncing = True
+            try:
+                dpg.set_value(sender, cur_min if kind_str == "min" else cur_max)
+            finally:
+                self._syncing = False
+            return
+
+        # Store にオーバーライドを保存し、関連スライダーのレンジを更新
+        self._store.set_range_override(param_id, new_min, new_max)
+        eff_min, eff_max = new_min, new_max
+
+        self._syncing = True
+        try:
+            # 入力ボックスの値を正規化
+            try:
+                tag_min = f"{param_id}::min"
+                tag_max = f"{param_id}::max"
+                dpg.set_value(tag_min, eff_min)
+                dpg.set_value(tag_max, eff_max)
+            except Exception:
+                pass
+
+            # 対応するスライダー（scalar/vector）の min/max を更新
+            if desc.value_type == "vector":
+                for suffix in ("x", "y", "z", "w"):
+                    tag = f"{param_id}::{suffix}"
+                    if not dpg.does_item_exist(tag):
+                        continue
+                    try:
+                        dpg.configure_item(tag, min_value=float(eff_min), max_value=float(eff_max))
+                    except Exception:
+                        continue
+            elif desc.value_type in {"float", "int"}:
+                if dpg.does_item_exist(param_id):
+                    try:
+                        dpg.configure_item(
+                            param_id,
+                            min_value=float(eff_min),
+                            max_value=float(eff_max),
+                        )
+                    except Exception:
+                        pass
+        finally:
+            self._syncing = False
 
     def on_store_change(self, ids: Iterable[str]) -> None:
         """Store から通知された ID 群に対応する DPG ウィジェット値を更新する。"""
@@ -1098,10 +1326,8 @@ class ParameterWindowContentBuilder:
             kwargs["parent"] = parent
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
-        try:
-            dpg.set_item_width(box, int(getattr(self._layout, "cc_box_width", 24)))
-        except Exception:
-            self._set_full_width(box)
+        # セル幅に素直にフィットさせる（固定ピクセル幅は使わない）
+        self._set_full_width(box)
         return box
 
     def _add_cc_binding_input_component(
@@ -1126,10 +1352,8 @@ class ParameterWindowContentBuilder:
             kwargs["parent"] = parent
         kwargs["height"] = int(getattr(self._layout, "row_height", 28))
         box = dpg.add_input_text(**kwargs)
-        try:
-            dpg.set_item_width(box, int(getattr(self._layout, "cc_box_width", 24)))
-        except Exception:
-            self._set_full_width(box)
+        # セル幅に素直にフィットさせる（固定ピクセル幅は使わない）
+        self._set_full_width(box)
         return box
 
     def _cc_binding_text(self, param_id: str) -> str:

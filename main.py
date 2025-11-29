@@ -20,7 +20,10 @@ def draw(t: float):
     )
     txt = G.text().scale(sx=10)
     e = E.affine().fill()
-    return pipe(base) + e(txt)
+
+    geo = G.polygon().scale(50)
+    p = E.affine()
+    return pipe(base) + e(txt), p(geo)
     # return L(geometry=pipe(base)), L(geometry=e(txt))
 
 

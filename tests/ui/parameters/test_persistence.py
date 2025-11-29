@@ -131,12 +131,57 @@ def test_persistence_saves_only_differences(
     data = json.loads(p.read_text(encoding="utf-8"))
     assert isinstance(data.get("overrides"), dict)
     assert not data["overrides"]
+    # レンジオーバーライド未設定時は ranges も空ディクショナリ
+    assert isinstance(data.get("ranges"), dict)
+    assert not data["ranges"]
 
     # override 設定 → overrides に含まれる
     store.set_override(desc.id, 5.5)
     p2 = save_overrides(store, script_path=str(tmp_path / "sq.py"))
     data2 = json.loads(p2.read_text(encoding="utf-8"))
     assert desc.id in data2["overrides"]
+
+
+def test_persistence_saves_and_loads_ranges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "util.utils.load_config",
+        lambda: {"parameter_gui": {"state_dir": str(tmp_path)}},
+        raising=True,
+    )
+
+    store = ParameterStore()
+    descs = _make_descriptors()
+    _register_defaults(store, descs)
+
+    # min/max オーバーライドを設定（float/vector の両方）
+    store.set_range_override("shape.circle#0.radius", 1.0, 5.0)
+    store.set_range_override("effect.move#0.offset", -2.0, 8.0)
+
+    path = save_overrides(store, script_path=str(tmp_path / "ranges.py"))
+    assert path is not None and path.exists()
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data.get("version") >= 2
+    ranges = data.get("ranges")
+    assert isinstance(ranges, dict)
+    assert ranges["shape.circle#0.radius"]["min"] == pytest.approx(1.0)
+    assert ranges["shape.circle#0.radius"]["max"] == pytest.approx(5.0)
+
+    # 新しい Store へ復元
+    store2 = ParameterStore()
+    _register_defaults(store2, descs)
+    _ = load_overrides(store2, script_path=str(tmp_path / "ranges.py"))
+
+    r_minmax = store2.range_override("shape.circle#0.radius")
+    v_minmax = store2.range_override("effect.move#0.offset")
+    assert r_minmax is not None
+    assert v_minmax is not None
+    assert r_minmax[0] == pytest.approx(1.0)
+    assert r_minmax[1] == pytest.approx(5.0)
+    assert v_minmax[0] == pytest.approx(-2.0)
+    assert v_minmax[1] == pytest.approx(8.0)
 
 
 def test_persistence_ignores_unknown_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

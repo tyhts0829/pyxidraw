@@ -147,12 +147,30 @@ def save_overrides(store: ParameterStore, *, script_path: str | None = None) -> 
         except Exception:
             cc_bindings = {}
 
+        # UI レンジ（min/max）オーバーライド
+        try:
+            ranges_raw = store.all_range_overrides()
+        except Exception:
+            ranges_raw = {}
+        ranges: dict[str, Any] = {}
+        if isinstance(ranges_raw, dict):
+            for pid, pair in ranges_raw.items():
+                try:
+                    mn, mx = pair
+                    ranges[str(pid)] = {
+                        "min": float(mn),
+                        "max": float(mx),
+                    }
+                except Exception:
+                    continue
+
         data = {
-            "version": 1,
+            "version": 2,
             "script": str(script_path or sys.argv[0]),
             "saved_at": datetime.now(timezone.utc).isoformat(),
             "overrides": overrides,
             "cc_bindings": cc_bindings,
+            "ranges": ranges,
         }
         with path.open("w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -174,7 +192,7 @@ def load_overrides(store: ParameterStore, *, script_path: str | None = None) -> 
             data = json.load(f)
         overrides = data.get("overrides", {})
         if not isinstance(overrides, dict):
-            return 0
+            overrides = {}
 
         applied = 0
         # 有効な Descriptor のみ適用（未知キー/型不一致はスキップ）
@@ -221,10 +239,11 @@ def load_overrides(store: ParameterStore, *, script_path: str | None = None) -> 
         return 0
 
     finally:
-        # CC バインディングの復元（存在時）
+        # CC バインディングと UI レンジオーバーライドの復元（存在時）
         try:
             with open(_state_path_for_script(script_path), "r", encoding="utf-8") as f:
                 data = json.load(f)
+            # CC
             cc_map = data.get("cc_bindings", {})
             if isinstance(cc_map, dict):
                 valid_ids = {d.id for d in store.descriptors()}
@@ -244,6 +263,21 @@ def load_overrides(store: ParameterStore, *, script_path: str | None = None) -> 
                         continue
                     try:
                         store.bind_cc(str(pid), int(idx))
+                    except Exception:
+                        continue
+            # UI ranges
+            ranges = data.get("ranges", {})
+            if isinstance(ranges, dict):
+                for pid, meta in ranges.items():
+                    try:
+                        if isinstance(meta, dict):
+                            mn = meta.get("min")
+                            mx = meta.get("max")
+                        elif isinstance(meta, (list, tuple)) and len(meta) >= 2:
+                            mn, mx = meta[0], meta[1]
+                        else:
+                            continue
+                        store.set_range_override(str(pid), float(mn), float(mx))
                     except Exception:
                         continue
         except Exception:

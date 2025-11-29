@@ -179,7 +179,7 @@ io:
 # Parameter GUI の外観既定
 parameter_gui:
   window:
-    width: 600
+    width: 800
     height: 920
     title: "Parameters"
   layout:
@@ -189,11 +189,11 @@ parameter_gui:
     # Dear PyGui のフォント名（fonts.search_dirs から登録済みのものを推奨）
     font_name: "HackGen Console NF"
     font_size: 12
-    value_precision: 6
+    value_precision: 3
     # ラベル列の比率（0.1..0.9）。残りは Bars:CC で配分
     label_column_ratio: 0.3
     # 残り領域に対する Bars:CC の比率（Bars 側の割合）
-    bars_cc_ratio: 0.8
+    bars_cc_ratio: 0.7
     # CC 入力ボックスの固定幅（px）
     cc_box_width: 24
     # 表のセル余白（X, Y）: パラメータ行の行間/バー間に適用

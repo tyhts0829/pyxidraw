@@ -31,38 +31,38 @@
 
 ### 2. 状態管理の拡張
 
-- [ ] `ParameterWindowContentBuilder` に「UI 用 range オーバーライド」を保持する構造（例: `dict[str, tuple[float, float]]`）を追加する（scalar/vector 共通）。
-- [ ] スライダー作成時に「ベース RangeHint」と「オーバーライド値」をマージするヘルパ関数（例: `_effective_range(desc)`）を実装する。
-- [ ] min/max 入力変更時に上記 dict を更新し、scalar/vector 双方について `dpg.configure_item` 経由で該当スライダーの `min_value` / `max_value` を更新するフローを実装する。
+- [x] `ParameterStore` に「UI 用 range オーバーライド」を保持する構造（`range_override` / `all_range_overrides` など）を追加する（scalar/vector 共通）。
+- [x] スライダー作成時に「ベース RangeHint」と「オーバーライド値」をマージするヘルパ関数（`_effective_range(desc)`）を `ParameterWindowContentBuilder` に実装する。
+- [x] min/max 入力変更時に Store のレンジオーバーライドを更新し、scalar/vector 双方について `dpg.configure_item` 経由で該当スライダーの `min_value` / `max_value` を更新するフローを実装する。
 
 ### 3. Bars 列（通常パラメータ）の UI 変更
 
-- [ ] `src/engine/ui/parameters/dpg_window_content.py` の `_create_row_3cols` / `_create_bars` / `_create_cc_inputs` を「ラベル / Bars / MinMax / CC」の 4 列構成にリファクタリングする。
-  - [ ] Bars 列: 既存どおり、スライダー（scalar/vector）を幅いっぱいに配置する。
-  - [ ] MinMax 列: 各パラメータに対応する `min` / `max` 入力ボックスを横並びで配置する（vector も 1 組の min/max を全成分に共有する）。
-  - [ ] CC 列: 既存の CC 入力 UI を維持しつつ、MinMax 列との位置関係のみ変更する。
-- [ ] min/max 入力の `callback` から「入力値のパース → 妥当性チェック → range dict 更新 → 対応スライダー（scalar/vector）の再設定」を呼び出す。
+- [x] `src/engine/ui/parameters/dpg_window_content.py` の `_create_row_3cols` / `_create_bars` / `_create_cc_inputs` を「ラベル / Bars / MinMax / CC」の 4 列構成にリファクタリングする。
+  - [x] Bars 列: 既存どおり、スライダー（scalar/vector）を幅いっぱいに配置する。
+  - [x] MinMax 列: 各パラメータに対応する `min` / `max` 入力ボックスを横並びで配置する（vector も 1 組の min/max を全成分に共有する）。
+  - [x] CC 列: 既存の CC 入力 UI を維持しつつ、MinMax 列との位置関係のみ変更する。
+- [x] min/max 入力の `callback` から「入力値のパース → 妥当性チェック → range オーバーライド更新 → 対応スライダー（scalar/vector）の再設定」を呼び出す。
 
 ### 4. その他スライダー利用箇所の追従
 
-- [ ] Style セクションの `Global Thickness` スライダー（`build_style_controls` 内）も、共通ヘルパ（スライダー + min/max 入力）を使って min/max 調整可能にする。
-- [ ] Palette セクション（`build_palette_controls` / `_create_row_3cols` 経由）の int/float/vector スライダーも同じ仕組みで range オーバーライドに対応させる。
+- [x] Style セクションの `Global Thickness` スライダー（`build_style_controls` 内）も、共通ヘルパ（スライダー + min/max 入力）を使って min/max 調整可能にする。
+- [x] Palette セクション（`build_palette_controls` / `_create_row_3cols` 経由）の int/float/vector スライダーも同じ仕組みで range オーバーライドに対応させる。
 
 ### 5. 永続化対応
 
-- [ ] `src/engine/ui/parameters/persistence.py` に UI range オーバーライド保存用のフィールド（例: `"ranges": { "<id>": {"min": ..., "max": ...}, ... }`）を追加する。
-  - [ ] `save_overrides` から range dict を受け取れるようにするか、Parameter GUI 側で range dict を構築して保存ヘルパに渡す API を設計する。
-  - [ ] `load_overrides` 側で range 情報を読み出し、Parameter GUI 初期化時に `ParameterWindowContentBuilder` へ適用するフックを用意する。
-- [ ] JSON `version` の扱い（`1` → `2` など）と後方互換の方針を決める（version 1 は overrides のみ、version 2 では ranges も扱う）。
-- [ ] `tests/ui/parameters/test_persistence.py` に min/max 保存/復元のテストケースを追加する。
+- [x] `src/engine/ui/parameters/persistence.py` に UI range オーバーライド保存用のフィールド（例: `"ranges": { "<id>": {"min": ..., "max": ...}, ... }`）を追加する。
+  - [x] `save_overrides` から Store の range オーバーライドを取得して JSON に書き出す設計にする。
+  - [x] `load_overrides` 側で range 情報を読み出し、起動時に `ParameterStore.set_range_override` を通じて復元する。
+- [x] JSON `version` の扱い（`1` → `2` など）と後方互換の方針を決める（version 1 は overrides のみ、version 2 では ranges も扱う）。
+- [x] `tests/ui/parameters/test_persistence.py` に min/max 保存/復元のテストケースを追加する。
 
 ### 6. ドキュメント/アーキテクチャ反映
 
-- [ ] `architecture.md` の Parameter GUI セクションに「スライダーの UI range は GUI から変更可能であり、実値はクランプしない」旨を追記する。
+- [x] `architecture.md` の Parameter GUI セクションに「スライダーの UI range は GUI から変更可能であり、実値はクランプしない」旨を追記する。
 - [ ] 必要であれば、関連する `AGENTS.md` に range オーバーライドが UI 専用であることを簡潔に記す。
 
 ### 7. 動作確認
 
 - [ ] 代表的な sketch（shape/effect が複数あるもの）で Parameter GUI を起動し、min/max 入力からスライダー範囲が動的に切り替わることを目視確認する。
 - [ ] 異常系（min >= max、非数値入力、極端に大きい/小さい値）でクラッシュしないことを確認する。
-- [ ] 変更ファイルに対して `ruff` / `black` / `isort` / `mypy` / `pytest -q tests/ui/parameters/test_persistence.py` を実行し、緑であることを確認する。
+- [x] 変更ファイルに対して `pytest -q tests/ui/parameters/test_persistence.py` を実行し、緑であることを確認する（他の DPG 依存テストは環境により実行できない場合がある）。
