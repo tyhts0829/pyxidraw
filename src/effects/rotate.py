@@ -40,7 +40,7 @@ def rotate(
     *,
     auto_center: bool = True,
     pivot: Vec3 = (0.0, 0.0, 0.0),
-    angles_rad: Vec3 = (np.pi / 4, np.pi / 4, np.pi / 4),
+    angles_rad: Vec3 = (0, 0, 0),
 ) -> Geometry:
     """回転（auto_center 対応）。
 
