@@ -189,7 +189,7 @@ class ParameterManager:
                 category_kind="style",
                 value_type="float",
                 default_value=0.0006,
-                range_hint=RangeHint(0.0001, 0.01, step=0.0001),
+                range_hint=RangeHint(0.0001, 0.001, step=0.0001),
             )
             self.store.register(bg_desc, bg_desc.default_value)
             self.store.register(ln_desc, ln_desc.default_value)
@@ -390,7 +390,7 @@ class ParameterManager:
                     category_kind="style",
                     value_type="float",
                     default_value=float(th_default),
-                    range_hint=RangeHint(0.0001, 0.01, step=0.0001),
+                    range_hint=RangeHint(0.0001, 0.001, step=0.0001),
                 )
                 self.store.register(t_desc, t_desc.default_value)
             except Exception:
