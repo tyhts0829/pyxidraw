@@ -26,7 +26,23 @@ Region = tuple[float, float, float, float]
 
 @dataclass
 class AsemicGlyphConfig:
-    """アセミック文字生成の設定パラメータ"""
+    """アセミック文字生成の設定パラメータ。
+
+    min_distance : float, default 0.1
+        ノード間の最小距離。
+    snap_angle_degrees : float, default 60.0
+        ストローク方向のスナップ角度（度）。360 の約数を推奨。
+    smoothing_points : int, default 5
+        コーナー補間に使用する分割数。
+    walk_min_steps : int, default 2
+        ランダムウォークの最小ステップ数。
+    walk_max_steps : int, default 4
+        ランダムウォークの最大ステップ数。
+    poisson_radius_divisor : float, default 8.0
+        Poisson ディスクサンプリングの半径スケール。
+    poisson_trials : int, default 30
+        Poisson ディスクサンプリングの試行回数。
+    """
 
     min_distance: float = 0.1
     snap_angle_degrees: float = 60.0
@@ -79,7 +95,7 @@ def relative_neighborhood_graph(
         tree = None  # フォールバックに切替
 
     edges: list[tuple[int, int]] = []
-    adjacency = {i: [] for i in range(n)}
+    adjacency: dict[int, list[int]] = {i: [] for i in range(n)}
 
     for i in range(n):
         # 近傍候補の取得

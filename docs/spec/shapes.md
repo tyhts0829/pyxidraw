@@ -6,6 +6,7 @@
 
 ## 代表的なシェイプ
 
+- `line(length, angle, ...)`: 原点中心の正規化線分（angle は度単位）。
 - `polygon(n_sides)`: 単位円に内接する正多角形。
 - `grid(nx, ny)`: 1×1 の正方形グリッド（縦横の線数）。
 - `sphere(subdivisions, sphere_type)`: 半径1の球（スタイル切替）。
@@ -20,6 +21,8 @@
 - `attractor(attractor_type, ...)`: ストレンジアトラクタ。
 
 実装は `shapes/*.py` を参照。各シェイプは「関数」として `@shapes.registry.shape()` で登録します。スタブは関数のシグネチャを解析して `G.<name>(...)` の引数を自動生成します。
+
+角度・位相パラメータは shapes/effects ともに degree ベース（度）で受け取り、内部で必要に応じて radian に変換します。名前に `_deg` や `_rad` といった単位サフィックスは付けず、`angle` や `phase` といった意味ベースの名前で統一します。
 
 ## 開発ガイド
 - 形状は `@shape` で関数登録する（継承不要）。

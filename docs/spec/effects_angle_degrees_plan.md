@@ -172,15 +172,15 @@
   - `src/engine/core/lazy_geometry.py::LazyGeometry.rotate` … `angles_rad` でパラメータを持ち回り。
   - `src/engine/core/geometry.py` … `E.rotate(angles_rad=(...))` の使用例。
 - 形状（shapes）
-  - `src/shapes/line.py` … `angle_deg` 引数（すでに degree ベース）。
-  - `src/shapes/lissajous.py` … `phase/phase_y/phase_z` が radian 範囲の RangeHint（`max≈2π`）。
+  - `src/shapes/line.py` … `angle` 引数（degree ベース）。
+  - `src/shapes/lissajous.py` … `phase/phase_y/phase_z` が degree ベース（`docs/spec/shapes_angle_degrees_plan.md` 参照）。
   - `src/shapes/asemic_glyph.py` … `snap_angle_degrees` など degree ベースの内部処理。
 - パレット／LFO 等
   - `src/palette/style.py` … 内部で `phase_L/phase_C` に radian を使用（外部 API ではなく内部実装）。
   - `src/common/lfo.py` / `docs/spec/lfo_spec.md` … ここでは位相を「周期単位」として扱い、rad/deg とは別概念。
 - API スタブ
   - `src/api/__init__.pyi`
-    - `line(..., angle_deg: float, ...)`（shape）。
+    - `line(..., angle: float, ...)`（shape）。
     - `affine(..., angles_rad: Vec3, ...)`（effect）。
     - `rotate(..., angles_rad: Vec3, ...)`（effect）。
     - `repeat(..., angles_rad_step: Vec3, ...)`（effect）。

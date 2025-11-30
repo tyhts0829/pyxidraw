@@ -37,7 +37,7 @@ def test_line_zero_length_produces_empty_geometry() -> None:
 
 
 def test_line_angle_rotates_segment() -> None:
-    g = G.line(length=1.0, angle_deg=90.0)
+    g = G.line(length=1.0, angle=90.0)
     coords, offsets = g.as_arrays(copy=False)
 
     assert offsets.tolist() == [0, 2]

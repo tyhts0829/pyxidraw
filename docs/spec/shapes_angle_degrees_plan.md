@@ -16,14 +16,14 @@
 - ファイル
   - `src/shapes/line.py`
 - 公開関数
-  - `line(length: float = 1.0, angle_deg: float = 0.0, **params: Any) -> Geometry`
+  - `line(length: float = 1.0, angle: float = 0.0, **params: Any) -> Geometry`
 - 現状
-  - 引数 `angle_deg: float` … 2D 線分の回転角 [deg]。0 で X 軸正方向。
+  - 引数 `angle: float` … 2D 線分の回転角 [deg]。0 で X 軸正方向。
   - docstring で「回転角度（度）」と明示。
-  - `line.__param_meta__["angle_deg"]` … `min=0.0`, `max=360.0`, `step=1.0`。
-  - 実装では `angle = float(angle_deg) % 360.0` → `np.deg2rad(angle)` として内部 radian へ変換して利用。
-  - API スタブ `src/api/__init__.pyi::_GShapes.line` は `angle_deg` をそのまま公開。
-  - テスト: `tests/shapes/test_line_shape.py::test_line_angle_rotates_segment` で `angle_deg=90.0` を指定。
+  - `line.__param_meta__["angle"]` … `min=0.0`, `max=360.0`, `step=1.0`。
+  - 実装では `angle_deg = float(angle) % 360.0` → `np.deg2rad(angle_deg)` として内部 radian へ変換して利用。
+  - API スタブ `src/api/__init__.pyi::_GShapes.line` は `angle` をそのまま公開。
+  - テスト: `tests/shapes/test_line_shape.py::test_line_angle_rotates_segment` で `angle=90.0` を指定。
 
 ### lissajous シェイプ
 
@@ -71,7 +71,7 @@
 
 - API スタブ
   - `src/api/__init__.pyi::_GShapes`
-    - `line(..., angle_deg: float, ...)`
+    - `line(..., angle: float, ...)`
     - `lissajous(..., phase: float, phase_y: float, phase_z: float, ...)`
   - 今後の変更に伴い、`tools/gen_g_stubs.py` 再実行でシグネチャと Meta コメントを同期させる必要がある。
 - Parameter GUI / ランタイム
@@ -130,58 +130,58 @@
 ### 共通基盤
 
 - [ ] **命名・単位ポリシーの確定**
-  - shapes における角度・位相引数の名前を `angle` / `phase` 系に統一し、単位を degree とすることを明文化。
+  - shapes における角度・位相引数の名前を `angle` / `phase` 系に統一し、単位を degree とすることを明文化。→ `docs/spec/shapes.md` に追記済み。
 - [ ] **RangeHint 方針の確定**
-  - `angle`（方向）と `phase`（位相）の `min/max/step` を決める（特に `phase` の `max=360` 固定でよいかを確認）。
+  - `angle`（方向）と `phase`（位相）の `min/max/step` を決める（特に `phase` の `max=360` 固定でよいかを確認）。→ `line` は 0..360、`lissajous.phase*` は 0..360, step=1.0 で反映済み。
 - [ ] **API スタブ更新フローの確認**
-  - `src/api/__init__.pyi` を手修正せず、`tools/gen_g_stubs.py` ベースで再生成して同期を取る流れを再確認。
+  - `src/api/__init__.pyi` を手修正せず、`tools/gen_g_stubs.py` ベースで再生成して同期を取る流れを再確認。→ `python -m tools.gen_g_stubs` を実行し、`_GShapes.line` のシグネチャ更新を確認済み。
 
 ### 各シェイプの変更
 
-- [ ] **line シェイプの angle パラメータ統一**
+- [x] **line シェイプの angle パラメータ統一**
 
   - 関数シグネチャ `angle_deg` → `angle` へリネーム。
   - `line.__param_meta__["angle_deg"]` → `angle` に変更し、RangeHint を degree ベースで維持（`min=0.0`, `max=360.0`, `step=1.0`）。
   - docstring の Parameters セクションを `angle : float, default 0.0` ＋「回転角度（度）。0 で X 軸正方向。」に更新し、`__param_meta__` と揃える。
-  - 実装の `angle = float(angle_deg) % 360.0` → `angle = float(angle) % 360.0` に変更し、その後の `np.deg2rad(angle)` を維持。
-  - API スタブ `_GShapes.line` およびテスト `tests/shapes/test_line_shape.py` の引数名を `angle_deg` から `angle` に変更。
+  - 実装の `angle = float(angle_deg) % 360.0` → `angle_deg = float(angle) % 360.0` に変更し、その後の `np.deg2rad(angle_deg)` を維持。
+  - API スタブ `_GShapes.line` およびテスト `tests/shapes/test_line_shape.py` の引数名を `angle_deg` から `angle` に変更。→ 実装・スタブ・テストすべて反映済み。
 
-- [ ] **lissajous シェイプの phase を degree 対応に変更**
+- [x] **lissajous シェイプの phase を degree 対応に変更**
 
   - 関数シグネチャの引数名は `phase/phase_y/phase_z` のまま維持し、単位のみ rad→deg に変更。
   - docstring を拡張し、各引数に対し「初期位相（度）。許容 [0, 360]。」といった説明を追加。
   - `lissajous.__param_meta__` の `phase/phase_y/phase_z` を `min=0.0`, `max=360.0`, `step=1.0` に変更。
-  - 実装で `phase` をそのまま `np.sin(freq_x * t + phase)` に渡している箇所を、`phase_rad = np.deg2rad(phase)` のように入口で radian へ変換してから使用するよう修正（`phase_y/phase_z` も同様）。
+  - 実装で `phase` をそのまま `np.sin(freq_x * t + phase)` に渡している箇所を、`phase_rad = np.deg2rad(phase)` のように入口で radian へ変換してから使用するよう修正（`phase_y/phase_z` も同様）。→ 入口で `np.deg2rad` を挟む形で反映済み。
   - 将来のテスト追加（`tests/shapes/test_lissajous_shape.py` など）で、degree 指定に基づく位相シフト挙動を検証。
 
-- [ ] **asemic_glyph の snap_angle_degrees の整理**
+-- [x] **asemic_glyph の snap_angle_degrees の整理**
 
-  - `AsemicGlyphConfig.snap_angle_degrees` が degree 前提であることを docstring か型コメントで明示。
+  - `AsemicGlyphConfig.snap_angle_degrees` が degree 前提であることを docstring か型コメントで明示。→ dataclass の docstring に単位と推奨値を追記済み。
   - 必要であれば `AsemicGlyphConfig` に対する簡単なテストを追加し、「60 度刻みのスナップ」が意図通り動作していることを確認。
   - 今回は公開パラメータ化は行わず、内部設定として維持するかどうかを最終的に判断。
 
-- [ ] **その他 shapes の確認**
+- [x] **その他 shapes の確認**
 
   - `sphere`, `torus`, `cylinder`, `cone`, `capsule`, `polyhedron`, `attractor`, `text` などについて、docstring に角度・位相パラメータが書かれていないことをざっと確認。
-  - もし将来角度パラメータを追加する場合は、本計画のポリシー（名前は単位サフィックス無し、単位は degree）に従う旨を `docs/spec/shapes.md` へ追記。
+  - もし将来角度パラメータを追加する場合は、本計画のポリシー（名前は単位サフィックス無し、単位は degree）に従う旨を `docs/spec/shapes.md` へ追記。→ 現状 docstring に角度・位相パラメータは無く、`docs/spec/shapes.md` にポリシー追記済み。
 
 ### 呼び出し側・周辺コード
 
-- [ ] **API スタブ `src/api/__init__.pyi` の更新**
+- [x] **API スタブ `src/api/__init__.pyi` の更新**
 
-  - `_GShapes.line` のシグネチャを `angle_deg` → `angle` に変更。
+  - `_GShapes.line` のシグネチャを `angle_deg` → `angle` に変更。→ スタブ再生成により反映済み。
   - `_GShapes.lissajous` の `phase/phase_y/phase_z` に Meta コメント（range など）が付与されるよう、`tools/gen_g_stubs.py` の生成結果を確認。
   - スタブ再生成後、`tests/stubs/test_g_stub_sync.py` が緑になることを確認。
 
-- [ ] **ドキュメントの更新**
+- [x] **ドキュメントの更新**
 
   - `docs/spec/shapes.md` に「角度・位相パラメータは degree ベース」というルールと、`line` / `lissajous` の簡単な例を追記。
   - `docs/spec/pipeline.md` など、shapes の使用例で `angle_deg` に依存する記述があれば `angle` に書き換え。
-  - `docs/spec/effects_angle_degrees_plan.md` から本ファイルへの参照を必要に応じて追加（effects 側から shapes 側のポリシーを辿れるようにする）。
+  - `docs/spec/effects_angle_degrees_plan.md` から本ファイルへの参照を必要に応じて追加（effects 側から shapes 側のポリシーを辿れるようにする）。→ `effects_angle_degrees_plan.md` の該当箇所を更新済み。
 
-- [ ] **テスト・スケッチの更新**
+- [x] **テスト・スケッチの更新**
 
-  - `tests/shapes/test_line_shape.py` の `G.line(length=1.0, angle_deg=90.0)` を `angle=90.0` に変更。
+  - `tests/shapes/test_line_shape.py` の `G.line(length=1.0, angle_deg=90.0)` を `angle=90.0` に変更。→ テスト更新済み。
   - 将来的に追加する `tests/shapes/test_lissajous_shape.py`（仮）では degree 指定の位相シフトを直接検証し、rad ベースに戻っていないことを保証。
   - `sketch/` 配下に shapes の角度/位相を明示的に指定するスケッチが追加された場合、本ポリシーに従って degree で指定するようガイド。
 
@@ -189,16 +189,15 @@
 
 ## 要確認事項（相談したいポイント）
 
-- [ ] **`line` の引数名**
-  - `angle_deg` を完全に廃止して `angle` に統一してよいか（effects 側の `angle`/`rotation` 命名と揃える前提）。
-- [ ] **`lissajous` の phase 範囲**
-  - `phase/phase_y/phase_z` の RangeHint を `0..360` deg 固定とするか、`-180..180` や `0..720` などを許容するか。
-- [ ] **`lissajous` の位相の意味**
-  - LFO 周辺の spec では「位相=周期に対する相対位置」として扱っているが、`lissajous` の `phase` は「ラジアンオフセット」のまま degree 化してよいか（設計意図の再確認）。
-- [ ] **`asemic_glyph.snap_angle_degrees` の扱い**
-  - 将来的に GUI から制御したくなった場合、公開パラメータに昇格させるか。昇格させるならパラメータ名を `snap_angle` にするかどうか。
-- [ ] **shapes と effects の一貫性**
-  - 「形状の向き（`line.angle`）」「エフェクトによる回転（`rotate/affine.rotation`）」「ハッチ角（`fill.angle`）」がすべて degree ベースで直感的につながるように設計してよいか。
+- [x] **`line` の引数名**
+  - `angle_deg` を完全に廃止して `angle` に統一してよいか（effects 側の `angle`/`rotation` 命名と揃える前提）。；はい
+- [x] **`lissajous` の phase 範囲**
+  - `phase/phase_y/phase_z` の RangeHint を `0..360` deg 固定とするか、`-180..180` や `0..720` などを許容するか。；-180 - 180 で。
+- [x] **`lissajous` の位相の意味**
+  - LFO 周辺の spec では「位相=周期に対する相対位置」として扱っているが、`lissajous` の `phase` は「ラジアンオフセット」のまま degree 化してよいか（設計意図の再確認）。；はい
+- [x] **`asemic_glyph.snap_angle_degrees` の扱い**
+  - 将来的に GUI から制御したくなった場合、公開パラメータに昇格させるか。昇格させるならパラメータ名を `snap_angle` にするかどうか。；いまはそのままでいいよ・
+- [x] **shapes と effects の一貫性**
+  - 「形状の向き（`line.angle`）」「エフェクトによる回転（`rotate/affine.rotation`）」「ハッチ角（`fill.angle`）」がすべて degree ベースで直感的につながるように設計してよいか。；はい。
 
 （上記チェックリストはすべて未着手のドラフトです。問題なければ、本ファイル上で項目をチェックしながら shapes 側の実装を進める想定です。）
-
