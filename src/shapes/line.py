@@ -16,17 +16,13 @@ def line(length: float = 1.0, angle: float = 0.0, **params: Any) -> Geometry:
     Parameters
     ----------
     length : float, default 1.0
-        正規化長さ。許容 [0, 1]。0 で空形状。
+        長さ。0 で空形状。
     angle : float, default 0.0
         回転角度（度）。0 で X 軸正方向。
     """
     length_f = float(length)
     if length_f <= 0.0:
         return Geometry.from_lines([])
-
-    max_length = 1.0
-    if length_f > max_length:
-        length_f = max_length
 
     half = 0.5 * length_f
     angle_deg = float(angle) % 360.0
