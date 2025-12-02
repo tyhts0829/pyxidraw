@@ -13,7 +13,13 @@ from typing import Any, Iterable, Sequence
 import dearpygui.dearpygui as dpg  # type: ignore
 
 from .dpg_window_theme import ParameterWindowThemeManager
-from .state import ParameterDescriptor, ParameterLayoutConfig, ParameterStore
+from .state import (
+    ParameterDescriptor,
+    ParameterLayoutConfig,
+    ParameterStore,
+    base_range_for_descriptor,
+    effective_range_for_descriptor,
+)
 
 logger = logging.getLogger("engine.ui.parameters.dpg.content")
 
@@ -605,56 +611,15 @@ class ParameterWindowContentBuilder:
     # ---- レンジ（min/max）ヘルパ ----
     def _base_range(self, desc: ParameterDescriptor) -> tuple[float, float]:
         """Descriptor から UI 用の基本レンジを取得する。"""
-        vt = desc.value_type
-        if vt == "vector":
-            # VectorRangeHint があればそれを、無ければ既定レンジを用いる。
-            try:
-                if desc.vector_hint is not None:
-                    mins = list(desc.vector_hint.min_values)
-                    maxs = list(desc.vector_hint.max_values)
-                else:
-                    if isinstance(desc.default_value, (list, tuple)):
-                        dim = max(2, min(len(desc.default_value), 4))
-                    else:
-                        dim = 3
-                    vh = self._layout.derive_vector_range(dim=dim)
-                    mins = list(vh.min_values)
-                    maxs = list(vh.max_values)
-                base_min = float(min(mins))
-                base_max = float(max(maxs))
-            except Exception:
-                base_min, base_max = 0.0, 1.0
-        else:
-            hint = desc.range_hint or self._layout.derive_range(
-                name=desc.id,
-                value_type=desc.value_type,
-                default_value=desc.default_value,
-            )
-            try:
-                base_min = float(hint.min_value)
-                base_max = float(hint.max_value)
-            except Exception:
-                base_min, base_max = 0.0, 1.0
-        if base_min == base_max:
-            base_max = base_min + 1.0
-        return base_min, base_max
+        return base_range_for_descriptor(desc, layout=self._layout)
 
     def _effective_range(self, desc: ParameterDescriptor) -> tuple[float, float]:
         """基本レンジと Store のオーバーライドをマージした UI レンジを返す。"""
-        base_min, base_max = self._base_range(desc)
-        try:
-            override = self._store.range_override(desc.id)
-        except Exception:
-            override = None
-        if override is None:
-            return base_min, base_max
-        try:
-            mn, mx = float(override[0]), float(override[1])
-        except Exception:
-            return base_min, base_max
-        if not mn < mx:
-            return base_min, base_max
-        return mn, mx
+        return effective_range_for_descriptor(
+            desc,
+            self._store,
+            layout=self._layout,
+        )
 
     def _resolve_canvas_colors(
         self,

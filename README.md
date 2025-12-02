@@ -9,7 +9,6 @@ A python creative coding framework for pen plotter.
 - Shape は関数ベースに統一されました。`@shape def polygon(...)->Geometry` のように登録してください。
 - 旧来の `BaseShape` 継承は撤廃されました。
 - ユーザー拡張の登録経路は `from api import shape`（唯一）です。
-
 - 目的/全体像: `docs/architecture.md`
 - パイプライン/API: `docs/pipeline.md`
 - エフェクト一覧: `docs/effects.md`

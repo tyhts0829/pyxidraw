@@ -375,6 +375,150 @@ class ParameterLayoutConfig:
         )
 
 
+def _vector_dim_from_descriptor(desc: ParameterDescriptor) -> int:
+    """Descriptor の default からベクトル次元を推定する（2..4）。"""
+
+    try:
+        if isinstance(desc.default_value, (list, tuple)):
+            dim = max(2, min(len(desc.default_value), 4))
+            return dim
+    except Exception:
+        return 3
+    return 3
+
+
+def _normalize_vector_bounds(values: Any, dim: int, *, fallback: float) -> list[float]:
+    """ベクトル境界リストを dim 長に整形する（不足は末尾値で補完）。"""
+
+    try:
+        arr = [float(v) for v in list(values)]
+    except Exception:
+        arr = []
+    if not arr:
+        return [float(fallback)] * dim
+    if len(arr) < dim:
+        arr = arr + [arr[-1]] * (dim - len(arr))
+    return arr[:dim]
+
+
+def base_vector_component_ranges(
+    desc: ParameterDescriptor,
+    *,
+    layout: ParameterLayoutConfig | None = None,
+    dim: int | None = None,
+) -> tuple[list[float], list[float]]:
+    """vector 用の成分ごとの基準レンジを返す。"""
+
+    layout = layout or ParameterLayoutConfig()
+    dim = dim or _vector_dim_from_descriptor(desc)
+    try:
+        vh = desc.vector_hint
+        if vh is not None:
+            mins = _normalize_vector_bounds(vh.min_values, dim, fallback=0.0)
+            maxs = _normalize_vector_bounds(vh.max_values, dim, fallback=1.0)
+        else:
+            vh = layout.derive_vector_range(dim=dim)
+            mins = _normalize_vector_bounds(vh.min_values, dim, fallback=0.0)
+            maxs = _normalize_vector_bounds(vh.max_values, dim, fallback=1.0)
+    except Exception:
+        mins = [0.0] * dim
+        maxs = [1.0] * dim
+    return mins, maxs
+
+
+def vector_component_ranges_with_override(
+    desc: ParameterDescriptor,
+    store: ParameterStore,
+    *,
+    layout: ParameterLayoutConfig | None = None,
+    dim: int | None = None,
+) -> tuple[list[float], list[float]]:
+    """vector 用レンジを override 付きで返す。"""
+
+    dim = dim or _vector_dim_from_descriptor(desc)
+    mins, maxs = base_vector_component_ranges(desc, layout=layout, dim=dim)
+    try:
+        override = store.range_override(desc.id)
+    except Exception:
+        override = None
+    if override is None:
+        return mins, maxs
+    try:
+        mn = float(override[0])
+        mx = float(override[1])
+        if mn < mx:
+            return [mn] * dim, [mx] * dim
+    except Exception:
+        return mins, maxs
+    return mins, maxs
+
+
+def base_range_for_descriptor(
+    desc: ParameterDescriptor, layout: ParameterLayoutConfig | None = None
+) -> tuple[float, float]:
+    """Descriptor の range_hint/vector_hint から UI 用の基準レンジを返す。"""
+
+    layout = layout or ParameterLayoutConfig()
+    vt = desc.value_type
+    if vt == "vector":
+        mins, maxs = base_vector_component_ranges(desc, layout=layout)
+        try:
+            base_min = float(min(mins))
+            base_max = float(max(maxs))
+        except Exception:
+            base_min, base_max = 0.0, 1.0
+    else:
+        hint = desc.range_hint or layout.derive_range(
+            name=desc.id,
+            value_type=desc.value_type,
+            default_value=desc.default_value,
+        )
+        try:
+            base_min = float(hint.min_value)
+            base_max = float(hint.max_value)
+        except Exception:
+            base_min, base_max = 0.0, 1.0
+    if base_min == base_max:
+        base_max = base_min + 1.0
+    return base_min, base_max
+
+
+def effective_range_for_descriptor(
+    desc: ParameterDescriptor,
+    store: ParameterStore,
+    *,
+    layout: ParameterLayoutConfig | None = None,
+) -> tuple[float, float]:
+    """基準レンジと UI override を統合した実効レンジを返す。"""
+
+    vt = desc.value_type
+    if vt == "vector":
+        mins, maxs = vector_component_ranges_with_override(desc, store, layout=layout)
+        try:
+            eff_min = float(min(mins))
+            eff_max = float(max(maxs))
+        except Exception:
+            eff_min, eff_max = 0.0, 1.0
+    else:
+        base_min, base_max = base_range_for_descriptor(desc, layout=layout)
+        try:
+            override = store.range_override(desc.id)
+        except Exception:
+            override = None
+        if override is not None:
+            try:
+                mn = float(override[0])
+                mx = float(override[1])
+                if mn < mx:
+                    return mn, mx
+            except Exception:
+                pass
+        eff_min, eff_max = base_min, base_max
+    if eff_min == eff_max:
+        eff_max = eff_min + 1.0
+    return eff_min, eff_max
+
+
 @dataclass(frozen=True)
 class ParameterWindowConfig:
     """Parameter GUI ウィンドウの寸法/タイトル設定。

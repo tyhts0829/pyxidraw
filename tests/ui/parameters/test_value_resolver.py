@@ -3,6 +3,7 @@ import inspect
 import pytest
 
 from engine.ui.parameters.state import ParameterStore
+from engine.ui.parameters.snapshot import extract_overrides
 from engine.ui.parameters.value_resolver import ParameterContext, ParameterValueResolver
 
 
@@ -142,3 +143,73 @@ def test_parameter_context_category_for_shapes_uses_index_suffix():
     )
     desc1 = store.get_descriptor("shape.text#1.amplitude_mm")
     assert desc1.category == "text_1"
+
+
+def test_cc_scaling_uses_range_override_scalar():
+    store = ParameterStore()
+    store.set_cc_provider(lambda: {5: 0.5})
+    store.bind_cc("effect.displace#0.amplitude_mm", 5)
+    store.set_range_override("effect.displace#0.amplitude_mm", 10.0, 20.0)
+
+    resolver = ParameterValueResolver(store)
+    context = ParameterContext(scope="effect", name="displace", index=0)
+    signature = inspect.signature(effect_fn)
+    param_meta = {"amplitude_mm": {"min": 0.0, "max": 1.0, "step": 0.1}}
+
+    resolved = resolver.resolve(
+        context=context,
+        params={},
+        signature=signature,
+        doc=None,
+        param_meta=param_meta,
+        skip={"g"},
+    )
+
+    assert resolved["amplitude_mm"] == pytest.approx(15.0)
+
+
+def test_cc_scaling_uses_range_override_vector_component():
+    store = ParameterStore()
+    store.set_cc_provider(lambda: {3: 0.25})
+    store.bind_cc("effect.rotate#1.rotation::x", 3)
+    store.set_range_override("effect.rotate#1.rotation", -2.0, 2.0)
+
+    resolver = ParameterValueResolver(store)
+    context = ParameterContext(scope="effect", name="rotate", index=1)
+    signature = inspect.signature(vector_effect)
+    param_meta = {"rotation": {"min": (-1.0, -1.0, -1.0), "max": (1.0, 1.0, 1.0)}}
+
+    resolved = resolver.resolve(
+        context=context,
+        params={},
+        signature=signature,
+        doc=None,
+        param_meta=param_meta,
+        skip={"g"},
+    )
+
+    assert resolved["rotation"] == pytest.approx((-1.0, 0.0, 0.0))
+
+
+def test_extract_overrides_applies_range_override_for_cc():
+    store = ParameterStore()
+    store.bind_cc("effect.displace#0.amplitude_mm", 7)
+    store.set_range_override("effect.displace#0.amplitude_mm", 10.0, 20.0)
+
+    resolver = ParameterValueResolver(store)
+    context = ParameterContext(scope="effect", name="displace", index=0)
+    signature = inspect.signature(effect_fn)
+    param_meta = {"amplitude_mm": {"min": 0.0, "max": 1.0, "step": 0.1}}
+
+    resolver.resolve(
+        context=context,
+        params={},
+        signature=signature,
+        doc=None,
+        param_meta=param_meta,
+        skip={"g"},
+    )
+
+    overrides = extract_overrides(store, {7: 0.5})
+
+    assert overrides["effect.displace#0.amplitude_mm"] == pytest.approx(15.0)

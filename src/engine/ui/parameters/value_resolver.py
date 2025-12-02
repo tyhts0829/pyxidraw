@@ -27,10 +27,13 @@ from typing import Any, Mapping, Sequence
 from engine.ui.parameters.state import (
     CategoryKind,
     ParameterDescriptor,
+    ParameterLayoutConfig,
     ParameterStore,
     RangeHint,
     SourceType,
     ValueType,
+    effective_range_for_descriptor,
+    vector_component_ranges_with_override,
 )
 
 # 正規化レイヤは廃止
@@ -104,8 +107,14 @@ class ParameterContext:
 class ParameterValueResolver:
     """パラメータ値とメタデータを ParameterStore と同期させる責務を担う。"""
 
-    def __init__(self, store: ParameterStore) -> None:
+    def __init__(
+        self,
+        store: ParameterStore,
+        *,
+        layout: ParameterLayoutConfig | None = None,
+    ) -> None:
         self._store = store
+        self._layout = layout or ParameterLayoutConfig()
 
     def resolve(
         self,
@@ -298,12 +307,9 @@ class ParameterValueResolver:
         if cc_idx is not None and descriptor.value_type in {"float", "int"}:
             try:
                 cc_val = float(self._store.cc_value(cc_idx))  # 0..1
-                # レンジヒントがあればそれにスケール、無ければ 0..1
-                if descriptor.range_hint is not None:
-                    lo = float(descriptor.range_hint.min_value)
-                    hi = float(descriptor.range_hint.max_value)
-                else:
-                    lo, hi = 0.0, 1.0
+                lo, hi = effective_range_for_descriptor(
+                    descriptor, self._store, layout=self._layout
+                )
                 scaled = lo + (hi - lo) * cc_val
                 if descriptor.value_type == "int":
                     return int(round(scaled))
@@ -561,11 +567,18 @@ class ParameterValueResolver:
             dim_out = min(len(vec), 4)
             try:
                 desc_obj = self._store.get_descriptor(descriptor_id)
-                vh = getattr(desc_obj, "vector_hint", None)
             except Exception:
-                vh = None
-            mins = list(getattr(vh, "min_values", (0.0, 0.0, 0.0, 0.0)))
-            maxs = list(getattr(vh, "max_values", (1.0, 1.0, 1.0, 1.0)))
+                desc_obj = None
+            if desc_obj is not None:
+                mins, maxs = vector_component_ranges_with_override(
+                    desc_obj,
+                    self._store,
+                    layout=self._layout,
+                    dim=dim_out or None,
+                )
+            else:
+                mins = [0.0] * dim_out
+                maxs = [1.0] * dim_out
             changed = False
             for index in range(dim_out):
                 comp_id = f"{descriptor_id}::{_VECTOR_SUFFIX[index]}"

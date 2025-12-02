@@ -19,7 +19,12 @@ from typing import Any, Mapping
 from common.types import ObjectRef as _ObjectRef
 
 from .runtime import activate_runtime, deactivate_runtime
-from .state import ParameterStore
+from .state import (
+    ParameterLayoutConfig,
+    ParameterStore,
+    effective_range_for_descriptor,
+    vector_component_ranges_with_override,
+)
 
 
 def extract_overrides(
@@ -31,6 +36,7 @@ def extract_overrides(
     - キーは `"{scope}.{name}#{index}.{param}"`。
     """
     overrides: dict[str, Any] = {}
+    layout = ParameterLayoutConfig()
     # 1) GUI override（original と異なる current のみ）
     for desc in store.descriptors():
         pid = desc.id
@@ -68,11 +74,7 @@ def extract_overrides(
                 cc_val = float(cc_mapping.get(int(cc_idx), 0.0))
             else:
                 cc_val = float(store.cc_value(cc_idx))  # 0..1（プロバイダ）
-            if desc.range_hint is not None:
-                lo = float(desc.range_hint.min_value)
-                hi = float(desc.range_hint.max_value)
-            else:
-                lo, hi = 0.0, 1.0
+            lo, hi = effective_range_for_descriptor(desc, store, layout=layout)
             scaled = lo + (hi - lo) * cc_val
             # デバッグ出力は抑制
             if desc.value_type == "int":
@@ -113,14 +115,16 @@ def extract_overrides(
         # 2..4 の範囲で実次元に合わせる
         dim = min(max(2, len(vec)), 4)
         vec = (vec + [0.0] * dim)[:dim]
-        # レンジ（ヒント優先、なければ 0..1）
         try:
-            vh = desc.vector_hint
-            mins = list(getattr(vh, "min_values", (0.0, 0.0, 0.0, 0.0)))
-            maxs = list(getattr(vh, "max_values", (1.0, 1.0, 1.0, 1.0)))
+            mins, maxs = vector_component_ranges_with_override(
+                desc,
+                store,
+                layout=layout,
+                dim=dim,
+            )
         except Exception:
-            mins = [0.0, 0.0, 0.0, 0.0]
-            maxs = [1.0, 1.0, 1.0, 1.0]
+            mins = [0.0, 0.0, 0.0, 0.0][:dim]
+            maxs = [1.0, 1.0, 1.0, 1.0][:dim]
         changed = False
         for i in range(dim):
             idx = comp_cc[i]

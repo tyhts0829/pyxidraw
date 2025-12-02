@@ -75,7 +75,7 @@ class ParameterRuntime:
         self._effect_registry = ParameterRegistry()
         self._lazy = True
         self._introspector = FunctionIntrospector()
-        self._resolver = ParameterValueResolver(store)
+        self._resolver = ParameterValueResolver(store, layout=self._layout)
         self._t: float = 0.0
         self._pipeline_counter: int = 0
         # ラベル付きパイプラインの表示名管理（カテゴリ用）
