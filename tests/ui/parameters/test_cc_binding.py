@@ -37,3 +37,33 @@ def test_on_cc_binding_change_clears_on_invalid_input(monkeypatch):
 
     assert builder._store.cc_binding("param.y") is None
     assert ("param.y::cc", "") in recorded
+
+
+def test_widget_change_ignored_during_callback_suspension():
+    builder = _make_builder()
+    builder._callback_suspension = 1
+    builder._on_widget_change(sender=0, app_data=0.5, user_data="param.override")
+    assert builder._store.current_value("param.override") is None
+    builder._callback_suspension = 0
+    builder._on_widget_change(sender=0, app_data=0.5, user_data="param.override")
+    assert builder._store.current_value("param.override") == 0.5
+
+
+def test_store_rgb_respects_callback_suspension():
+    builder = _make_builder()
+    builder._callback_suspension = 1
+    builder.store_rgb01("runner.background", (0.1, 0.2, 0.3, 1.0))
+    assert builder._store.current_value("runner.background") is None
+    builder._callback_suspension = 0
+    builder.store_rgb01("runner.background", (0.1, 0.2, 0.3, 1.0))
+    assert builder._store.current_value("runner.background") == (0.1, 0.2, 0.3, 1.0)
+
+
+def test_cc_binding_change_ignored_during_callback_suspension():
+    builder = _make_builder()
+    builder._callback_suspension = 1
+    builder._on_cc_binding_change(sender=0, app_data="12", user_data="param.cc")
+    assert builder._store.cc_binding("param.cc") is None
+    builder._callback_suspension = 0
+    builder._on_cc_binding_change(sender=0, app_data="12", user_data="param.cc")
+    assert builder._store.cc_binding("param.cc") == 12

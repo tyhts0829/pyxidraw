@@ -1,5 +1,6 @@
 from typing import Mapping
 
+from engine.core.geometry import Geometry
 from engine.ui.parameters.runtime import ParameterRuntime, activate_runtime, deactivate_runtime
 from engine.ui.parameters.state import ParameterLayoutConfig, ParameterStore
 
@@ -26,6 +27,10 @@ dummy_effect_with_defaults.__param_meta__ = {
     "amplitude_mm": {"min": 0.0, "max": 5.0, "step": 0.5},
     "enable": {"min": 0, "max": 1, "step": 1},
 }
+
+
+def dummy_time_effect(g, *, t_sec: float = 0.0):  # noqa: ANN001
+    return g
 
 
 def test_parameter_runtime_tracks_shape_overrides():
@@ -194,5 +199,36 @@ def test_parameter_runtime_relabels_pipeline_categories():
     desc_after = store.get_descriptor(f"effect@{uid}.displace#0.amplitude_mm")
     # 再ラベル後も「新しい base_label + 連番」の形になる
     assert desc_after.category.startswith("poly_effect_new_")
+
+    deactivate_runtime()
+
+
+def test_effect_parameter_tracks_time_without_gui_override():
+    store = ParameterStore()
+    runtime = ParameterRuntime(store, layout=ParameterLayoutConfig())
+    activate_runtime(runtime)
+    geom = Geometry.from_lines([[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]])
+
+    runtime.begin_frame()
+    runtime.set_inputs(0.0)
+    first_params = runtime.before_effect_call(
+        step_index=0,
+        effect_name="time_effect",
+        fn=dummy_time_effect,
+        params={"g": geom, "t_sec": 0.0},
+    )
+    assert first_params["t_sec"] == 0.0
+
+    runtime.begin_frame()
+    runtime.set_inputs(1.0)
+    second_params = runtime.before_effect_call(
+        step_index=0,
+        effect_name="time_effect",
+        fn=dummy_time_effect,
+        params={"g": geom, "t_sec": 0.25},
+    )
+    assert second_params["t_sec"] == 0.25
+    descriptor_id = "effect.time_effect#0.t_sec"
+    assert store.original_value(descriptor_id) == 0.25
 
     deactivate_runtime()

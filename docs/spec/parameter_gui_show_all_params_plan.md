@@ -15,3 +15,7 @@
 ### 実施メモ
 - `ruff check src/engine/ui/parameters/value_resolver.py src/engine/ui/parameters/snapshot.py tests/ui/parameters/test_value_resolver.py` を実行し OK。
 - `pytest -q tests/ui/parameters/test_value_resolver.py` を実行し 9 件成功。
+
+## 追記: GUI override 開始条件
+- Parameter GUI 側で Descriptor 生成直後に DPG が `callback` を発火する挙動が観測されたため、`ParameterWindowContentBuilder` に callback サスペンド機構を導入し、GUI 操作が発生するまでは `ParameterStore` の original 値（= draw/t 由来）を保持する。
+- `on_store_change` などの同期処理はサスペンド下で実行し、実際のユーザー操作時のみ override が書き込まれるようにした。

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -104,6 +105,19 @@ class ParameterWindowContentBuilder:
         self._palette_preview_id: int | str | None = None
         self._palette_swatches_container: int | str | None = None
         self._searchable_enum_state: dict[str, dict[str, Any]] = {}
+        self._callback_suspension: int = 0
+
+    @contextmanager
+    def _suspend_callbacks(self) -> Iterable[None]:
+        """GUI 生成/同期中の callback 起動を抑制する。"""
+        self._callback_suspension += 1
+        try:
+            yield
+        finally:
+            self._callback_suspension = max(0, self._callback_suspension - 1)
+
+    def _callbacks_suspended(self) -> bool:
+        return self._callback_suspension > 0
 
     def build_root_window(self, root_tag: str, title: str) -> None:
         """ルートウィンドウを構築する。Style/パラメータ群は mount 時に追加する。"""
@@ -407,7 +421,8 @@ class ParameterWindowContentBuilder:
     def sync_style_from_store(self) -> None:
         if not self._style_param_ids:
             return
-        self.on_store_change(self._style_param_ids)
+        with self._suspend_callbacks():
+            self.on_store_change(self._style_param_ids)
 
     def build_palette_controls(
         self,
@@ -490,15 +505,17 @@ class ParameterWindowContentBuilder:
     def sync_palette_from_store(self) -> None:
         if not self._palette_param_ids:
             return
-        self.on_store_change(self._palette_param_ids)
-        self._refresh_palette_preview()
+        with self._suspend_callbacks():
+            self.on_store_change(self._palette_param_ids)
+            self._refresh_palette_preview()
 
     def mount_descriptors(self, root_tag: str, descriptors: list[ParameterDescriptor]) -> None:
-        self.build_style_controls(root_tag, descriptors)
-        self.build_palette_controls(root_tag, descriptors)
-        self._build_grouped_table(root_tag, descriptors)
-        self.sync_style_from_store()
-        self.sync_palette_from_store()
+        with self._suspend_callbacks():
+            self.build_style_controls(root_tag, descriptors)
+            self.build_palette_controls(root_tag, descriptors)
+            self._build_grouped_table(root_tag, descriptors)
+            self.sync_style_from_store()
+            self.sync_palette_from_store()
 
     def _build_grouped_table(
         self,
@@ -1142,7 +1159,7 @@ class ParameterWindowContentBuilder:
 
     def _on_widget_change(self, sender: int, app_data: Any, user_data: Any) -> None:  # noqa: D401
         """ウィジェット変更イベントから Store の override を更新する。"""
-        if self._syncing:
+        if self._syncing or self._callbacks_suspended():
             return
         if isinstance(user_data, (list, tuple)) and len(user_data) == 2:
             parent_id = str(user_data[0])
@@ -1166,7 +1183,7 @@ class ParameterWindowContentBuilder:
 
     def _on_minmax_change(self, sender: int, app_data: Any, user_data: Any) -> None:
         """min/max 入力変更からスライダーの表示レンジを更新する。"""
-        if self._syncing:
+        if self._syncing or self._callbacks_suspended():
             return
         try:
             pid, kind = user_data
@@ -1332,6 +1349,8 @@ class ParameterWindowContentBuilder:
         - 数値以外/パース失敗: バインディング解除し、対応する入力テキストを空文字に戻す。
         - 数値: int(float(...)) で解釈し、0..127 にクランプしてバインドする。
         """
+        if self._callbacks_suspended():
+            return
         try:
             pid = str(user_data)
             raw_text = str(app_data)
@@ -1425,6 +1444,8 @@ class ParameterWindowContentBuilder:
         - style.color: HUD と同様の 0–255 相当入力を前提とし、vec3 (RGB 0..1) として保存する。
         - 正規化に失敗した場合は Store を更新せず、例外ログを出力する。
         """
+        if self._callbacks_suspended():
+            return
         try:
             from util.color import normalize_color as _norm
 
