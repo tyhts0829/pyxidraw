@@ -8,6 +8,7 @@ from __future__ import annotations
 なぜ: 実用的なテキスト描画（サイズ/整列/追い込み）を最小依存で提供するため。
 """
 
+import json
 import logging
 import os
 import sys
@@ -240,6 +241,8 @@ class TextRenderer:
 
 # パフォーマンスのためのグローバルインスタンス
 TEXT_RENDERER = TextRenderer()
+_FONT_FILTER_PATH = Path(__file__).resolve().parents[2] / "data" / "fonts" / "usable_fonts.json"
+_FILTERED_FONT_LOOKUP: dict[str, tuple[str, int]] = {}
 
 
 def _get_char_advance_em(char: str, tt_font: Any) -> float:
@@ -346,6 +349,12 @@ def text(
         fi = 0
     if fi < 0:
         fi = 0
+    hint = _FILTERED_FONT_LOOKUP.get(font)
+    if hint is not None:
+        font_path, hint_idx = hint
+        font = font_path
+        if fi == 0 and hint_idx != 0:
+            fi = hint_idx
 
     tt_font = TEXT_RENDERER.get_font(font, fi)
     units_per_em = float(tt_font["head"].unitsPerEm)  # type: ignore[index]
@@ -393,12 +402,54 @@ def text(
 
 # --- GUI 用フォント候補（import 時に 1 回だけ列挙） ---
 def _font_choices() -> list[str]:
-    """Parameter GUI 用のフォント候補（config の search_dirs のみ）。
+    """Parameter GUI 用のフォント候補。
 
-    - OS フォントは含めない（`configs/default.yaml` の fonts.search_dirs のみ使用）。
-    - ファイル stem 名でユニーク化し、アルファベット昇順にする。
-    - 列挙失敗時は空配列を返す（GUI 非表示のまま）。
+    - `data/fonts/usable_fonts.json` があればそれを優先（フィルター済み、display_name を使用）。
+    - 無ければ config の search_dirs のフォントを stem 名で列挙する。
+    - 列挙失敗時は空配列を返す。
     """
+    try:
+        with _FONT_FILTER_PATH.open("r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        entries = data.get("fonts", []) if isinstance(data, dict) else data
+        choices: list[str] = []
+        mapping: dict[str, tuple[str, int]] = {}
+        seen: set[str] = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            raw_path = entry.get("path")
+            if not isinstance(raw_path, str) or not raw_path:
+                continue
+            try:
+                idx = int(entry.get("font_index", 0))
+            except Exception:
+                idx = 0
+            if idx < 0:
+                idx = 0
+            path_obj = Path(raw_path)
+            if not path_obj.exists():
+                continue
+            display = entry.get("display_name") or path_obj.stem
+            name = str(display)
+            candidate = name
+            if candidate in seen:
+                tail = path_obj.name
+                candidate = f"{name} ({tail})"
+                counter = 1
+                while candidate in seen:
+                    counter += 1
+                    candidate = f"{name} ({tail}-{counter})"
+            seen.add(candidate)
+            mapping[candidate] = (str(path_obj), idx)
+            choices.append(candidate)
+        if choices:
+            choices.sort(key=lambda s: s.lower())
+            _FILTERED_FONT_LOOKUP.clear()
+            _FILTERED_FONT_LOOKUP.update(mapping)
+            return choices
+    except Exception:
+        _FILTERED_FONT_LOOKUP.clear()
     try:
         from util.fonts import glob_font_files, resolve_search_dirs  # type: ignore
         from util.utils import load_config  # type: ignore
@@ -423,6 +474,7 @@ def _font_choices() -> list[str]:
         except Exception:
             continue
     stems.sort(key=lambda s: s.lower())
+    _FILTERED_FONT_LOOKUP.clear()
     return stems
 
 
