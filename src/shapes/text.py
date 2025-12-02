@@ -113,7 +113,7 @@ class TextRenderer:
         candidates: list[Path] = []
         if sys.platform == "darwin":
             candidates = [
-                Path("/System/Library/Fonts/SFNS.ttc"),
+                Path("/System/Library/Fonts/Helvetica.ttc"),
                 Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
             ]
         elif sys.platform.startswith("linux"):
@@ -318,7 +318,7 @@ def text(
     *,
     text: str = "HELLO",
     em_size_mm: float = 10.0,
-    font: str = "SFNS",
+    font: str = "Helvetica",
     font_index: int = 0,
     text_align: str = "left",
     tracking_em: float = 0.0,

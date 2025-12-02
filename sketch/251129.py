@@ -28,4 +28,4 @@ def draw(t: float):
 
 
 if __name__ == "__main__":
-    run(draw, canvas_size="A5", render_scale=6, show_hud=False)
+    run(draw, canvas_size="A5", render_scale=10, show_hud=False)
