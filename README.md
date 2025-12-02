@@ -1,8 +1,11 @@
-# PyXidraw6
+# Pyxidraw
+
+A python creative coding framework for pen plotter.
 
 このリポジトリは、ラインベースの幾何生成とエフェクト処理を行い、リアルタイムに描画するための軽量フレームワークです。公開 API を通じて、形状 `G.<name>()` とパイプライン `E.<effect>(...).build()`（または互換の `E.pipeline.<effect>(...).build()`）を組み合わせたスケッチを簡潔に記述できます。
 
 重要（v6.0 以降の破壊的変更）:
+
 - Shape は関数ベースに統一されました。`@shape def polygon(...)->Geometry` のように登録してください。
 - 旧来の `BaseShape` 継承は撤廃されました。
 - ユーザー拡張の登録経路は `from api import shape`（唯一）です。
@@ -17,7 +20,8 @@
 
 ## クイックスタート
 
-1) Python 3.10+ を用意し、仮想環境を作成:
+1. Python 3.10+ を用意し、仮想環境を作成:
+
 ```
 python3.10 -m venv .venv
 . .venv/bin/activate
@@ -27,18 +31,21 @@ pip install -e .[dev]
 
 注記: ModernGL は必須依存です（`pip install -e .[dev]` または `pip install -e .` で自動的に導入されます）。ヘッドレス検証のみを行う場合は `run_sketch(..., init_only=True)` を使用してください（GL を初期化しません）。
 
-2) スタブ生成とスモークテスト:
+2. スタブ生成とスモークテスト:
+
 ```
 PYTHONPATH=src python -m tools.gen_g_stubs
 pytest -q -m smoke
 ```
 
-3) 実行例（プレビュー）:
+3. 実行例（プレビュー）:
+
 ```
 python main.py
 ```
 
 HUD 設定の例（任意）:
+
 ```
 from engine.ui.hud import HUDConfig
 from api.sketch import run_sketch
@@ -55,6 +62,7 @@ HUD 表示切替:
 - 実行中はキーボード `H` で HUD の表示/非表示をトグルする（Parameter GUI にトグルボタンは無い）。
 
 独自 Shape の登録例（最小）:
+
 ```
 from api import shape, G
 from engine.core.geometry import Geometry
@@ -70,6 +78,7 @@ g = G.ring(r=80)
 ```
 
 ### 時間変調（LFO）の使用例
+
 ```
 from api import lfo, cc
 
@@ -83,6 +92,7 @@ def user_draw(t):
 ## 任意依存（実機/高速化など）
 
 パラメータ GUI / cc（現行仕様の要点）
+
 - cc は `api.cc` のグローバル辞書（`cc[i] -> float(0..1)`、未定義は 0.0）。`draw(t)` 内で自由に数値式に利用。
 - GUI は「draw 内で未指定（＝既定値採用）の引数のみ」を対象に表示・調整。
 - 優先順位は「明示引数 > GUI > 既定値」。MIDI→GUI の自動上書きは行わない。
