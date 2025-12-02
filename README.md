@@ -1,6 +1,8 @@
-# Pyxidraw
+# Graft
 
-A python creative coding framework for pen plotter.
+A python-based creative coding framework.
+
+![](data/md/readme_top.png)
 
 このリポジトリは、ラインベースの幾何生成とエフェクト処理を行い、リアルタイムに描画するための軽量フレームワークです。公開 API を通じて、形状 `G.<name>()` とパイプライン `E.<effect>(...).build()`（または互換の `E.pipeline.<effect>(...).build()`）を組み合わせたスケッチを簡潔に記述できます。
 
