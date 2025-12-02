@@ -12,10 +12,10 @@ def draw(t: float):
     copy1_e = E.affine().fill(density=20).label(uid="copy1_effect")
     copy1_l = L(copy1_e(copy1), name="copy1")
 
-    EXPLANATION = "G.Shape()"
-    explanation = G.text(text=EXPLANATION).label(uid="explanation")
-    explanation_e = E.affine().fill(density=5).label(uid="explanation_effect")
-    explanation_l = L(explanation_e(explanation), name="explanation")
+    METHOD = "G.Shape()"
+    method = G.text(text=METHOD).label(uid="method")
+    method_e = E.affine().fill(density=5).label(uid="method_effect")
+    method_l = L(method_e(method), name="method")
 
     g1 = G.polyhedron().label(uid="g1").rotate(x=0.2, y=0.3, z=0.1)
     g1_e = E.affine().label(uid="g1_effect")
@@ -31,7 +31,15 @@ def draw(t: float):
     h_line_e = E.affine().label(uid="h_line_effect")
     h_line_l = L(h_line_e(h_line), name="h_line")
 
-    return title_l, copy1_l, g1_l, g2_l, g3_l, explanation_l, h_line_l
+    COPY2 = """
+    This framework approaches visual design with an audio mindset.
+    A minimal, line-based geometry engine keeps the representation intentionally simple, treating constraints as a source of creativity rather than a limitation. Instead of hiding structure and styling decisions inside a black-box renderer, pyxidraw keeps them close to your code: you build multi-layer sketches where each layer can carry its own color and line weight, echoing pen changes in a plotter. Effects are composed as method-chained processors, forming an effect chain that feels closer to a synth and pedalboard than a monolithic graphics API. MIDI control and LFO-driven modulation keep parameters in constant motion, making geometry something you can “play” rather than merely render. From real-time OpenGL preview to pen-plotter-ready G-code, pyxidraw offers a continuous path from experimental patch to physical output, with new Shapes and Effects defined as lightweight Python decorators. The aim is not just to produce images, but to compose line-based scores that unfold in time, on screen and on paper.
+    """
+    copy2 = G.text(text=COPY2).label(uid="copy2")
+    copy2_e = E.affine().fill(density=15).label(uid="copy2_effect")
+    copy2_l = L(copy2_e(copy2), name="copy2")
+
+    return title_l, copy1_l, g1_l, g2_l, g3_l, method_l, h_line_l, copy2_l
 
 
 if __name__ == "__main__":

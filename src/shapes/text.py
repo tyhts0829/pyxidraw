@@ -482,7 +482,7 @@ setattr(
     text,
     "__param_meta__",
     {
-        "text": {"type": "string", "multiline": True, "height": 80},
+        "text": {"type": "string", "multiline": True, "height": 200},
         "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
         # font は GUI から選択可能にする（候補は設定/OS のフォント列挙に基づく）
         "font": {"choices": _font_choices(), "searchable": True},
