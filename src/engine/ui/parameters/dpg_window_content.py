@@ -951,7 +951,10 @@ class ParameterWindowContentBuilder:
             }
             if ml:
                 kwargs["multiline"] = True
-                kwargs["height"] = int(getattr(self._layout, "row_height", 64))
+                height = int(getattr(desc, "string_height", 0) or 0)
+                if height <= 0:
+                    height = int(getattr(self._layout, "row_height", 64))
+                kwargs["height"] = height
             box = dpg.add_input_text(**kwargs)
             try:
                 dpg.set_item_width(box, -1)
