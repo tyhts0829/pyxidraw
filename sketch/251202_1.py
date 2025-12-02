@@ -36,10 +36,40 @@ def draw(t: float):
     A minimal, line-based geometry engine keeps the representation intentionally simple, treating constraints as a source of creativity rather than a limitation. Instead of hiding structure and styling decisions inside a black-box renderer, pyxidraw keeps them close to your code: you build multi-layer sketches where each layer can carry its own color and line weight, echoing pen changes in a plotter. Effects are composed as method-chained processors, forming an effect chain that feels closer to a synth and pedalboard than a monolithic graphics API. MIDI control and LFO-driven modulation keep parameters in constant motion, making geometry something you can “play” rather than merely render. From real-time OpenGL preview to pen-plotter-ready G-code, pyxidraw offers a continuous path from experimental patch to physical output, with new Shapes and Effects defined as lightweight Python decorators. The aim is not just to produce images, but to compose line-based scores that unfold in time, on screen and on paper.
     """
     copy2 = G.text(text=COPY2).label(uid="copy2")
-    copy2_e = E.affine().fill(density=15).label(uid="copy2_effect")
+    copy2_e = E.affine().fill().label(uid="copy2_effect")
     copy2_l = L(copy2_e(copy2), name="copy2")
 
-    return title_l, copy1_l, g1_l, g2_l, g3_l, method_l, h_line_l, copy2_l
+    grid_background = G.grid().label(uid="grid_background")
+    grid_background_e = E.affine().label(uid="grid_background_effect")
+    grid_background_l = L(grid_background_e(grid_background), name="grid_background")
+
+    circle = G.text().label(uid="circle")
+    circle_e = E.affine().fill().label(uid="circle_effect")
+    circle_l = L(circle_e(circle), name="circle")
+
+    box = G.polygon(phase=45).label(uid="box")
+    box_e = E.affine().fill().repeat().rotate().label(uid="box_effect")
+    box_l = L(box_e(box), name="box")
+
+    FEATURES = "GEOMETRIES | EFFECTS | LAYERS | MIDI | LFO | G-CODE"
+    features = G.text(text=FEATURES).label(uid="features")
+    features_e = E.affine().fill().label(uid="features_effect")
+    features_l = L(features_e(features), name="features")
+
+    return (
+        title_l,
+        copy1_l,
+        g1_l,
+        g2_l,
+        g3_l,
+        method_l,
+        h_line_l,
+        copy2_l,
+        grid_background_l,
+        circle_l,
+        box_l,
+        features_l,
+    )
 
 
 if __name__ == "__main__":
