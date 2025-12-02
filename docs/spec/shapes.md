@@ -7,7 +7,7 @@
 ## 代表的なシェイプ
 
 - `line(length, angle, ...)`: 原点中心の正規化線分（angle は度単位）。
-- `polygon(n_sides)`: 単位円に内接する正多角形。
+- `polygon(n_sides, phase=0)`: 単位円に内接する正多角形。phase で開始角（度）を指定。
 - `grid(nx, ny)`: 1×1 の正方形グリッド（縦横の線数）。
 - `sphere(subdivisions, sphere_type)`: 半径1の球（スタイル切替）。
 - `torus(major_radius, minor_radius, ...)`: トーラス。
