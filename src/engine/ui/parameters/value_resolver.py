@@ -9,8 +9,7 @@
 流れ（概要）:
 1) merge: シグネチャ既定値・ユーザー入力・`skip` を考慮してパラメータをマージ。
 2) resolve: 値種別を判定し、scalar/vector/passthrough に分岐。
-   - scalar/vector: RangeHint を構築しつつ、実値を ParameterStore に register/resolve。
-   - passthrough: 数値以外（列挙/真偽など）は RangeHint なしで register/resolve。
+   - scalar/vector/passthrough: すべて Descriptor を登録し、GUI からの override を反映した実値を返す（明示値も GUI で上書き可能）。
 3) return: override 適用後の実値辞書を返す。
 
 関連:
@@ -196,24 +195,22 @@ class ParameterValueResolver:
         value_type: ValueType,
         param_order: int | None,
     ) -> Any:
-        if source == "default":
-            hint = self._range_hint_from_meta(
-                meta=meta_entry,
-                component_index=None,
-            )
-            descriptor = self._build_descriptor(
-                context=context,
-                descriptor_id=descriptor_id,
-                param_name=param_name,
-                value_type=value_type,
-                default_value=default_actual,
-                range_hint=hint,
-                help_text=doc,
-                param_order=param_order,
-            )
-            return self._register_scalar(descriptor, default_actual)
-        # provided は登録せず、そのまま返す
-        return raw_value
+        hint = self._range_hint_from_meta(
+            meta=meta_entry,
+            component_index=None,
+        )
+        descriptor = self._build_descriptor(
+            context=context,
+            descriptor_id=descriptor_id,
+            param_name=param_name,
+            value_type=value_type,
+            default_value=default_actual,
+            range_hint=hint,
+            help_text=doc,
+            param_order=param_order,
+        )
+        initial_value = raw_value if source == "provided" else default_actual
+        return self._register_scalar(descriptor, initial_value)
 
     def _resolve_vector(
         self,
@@ -228,17 +225,9 @@ class ParameterValueResolver:
         meta_entry: Mapping[str, Any],
         param_order: int | None,
     ) -> tuple[Any, ...]:
-        # 提供値（provided）は登録せず、実値をタプルとしてそのまま返す
-        if source == "provided":
-            if isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes)):
-                try:
-                    return tuple(float(v) for v in raw_value)  # type: ignore[return-value]
-                except Exception:
-                    pass
-            return tuple(self._ensure_sequence(default_actual))
-
-        # default 採用時のみ GUI に登録（親 Descriptor 1 件）。
         default_tuple = self._normalize_vector_default(default_actual)
+        if not self._is_vector(default_actual) and self._is_vector(raw_value):
+            default_tuple = self._normalize_vector_default(raw_value)
         vector_hint = self._vector_range_hint_from_meta(meta_entry, len(default_tuple))
         descriptor = self._build_descriptor(
             context=context,
@@ -251,8 +240,9 @@ class ParameterValueResolver:
             param_order=param_order,
             vector_hint=vector_hint,
         )
-        self._store.register(descriptor, default_tuple)
-        resolved = self._store.resolve(descriptor_id, default_tuple)
+        initial_value = self._initial_vector_value(raw_value, default_tuple, source)
+        self._store.register(descriptor, initial_value)
+        resolved = self._store.resolve(descriptor_id, initial_value)
         base_tuple = self._ensure_vector_tuple(resolved, default_tuple)
         return self._apply_cc_to_vector(descriptor_id, base_tuple)
 
@@ -276,25 +266,23 @@ class ParameterValueResolver:
         supported = self._is_supported_passthrough_type(value_type, choices_list)
         multiline, height = self._string_meta(meta_map, value_type)
         searchable = bool(meta_map.get("searchable")) if value_type == "enum" else False
-        if source == "default":
-            descriptor = self._build_descriptor(
-                context=context,
-                descriptor_id=descriptor_id,
-                param_name=param_name,
-                value_type=value_type,
-                default_value=default_value,
-                range_hint=None,
-                help_text=doc,
-                param_order=param_order,
-                supported=supported,
-                choices=choices_list,
-                string_multiline=multiline,
-                string_height=height,
-                searchable=searchable,
-            )
-            self._store.register(descriptor, value)
-            return self._store.resolve(descriptor.id, value)
-        return value
+        descriptor = self._build_descriptor(
+            context=context,
+            descriptor_id=descriptor_id,
+            param_name=param_name,
+            value_type=value_type,
+            default_value=default_value,
+            range_hint=None,
+            help_text=doc,
+            param_order=param_order,
+            supported=supported,
+            choices=choices_list,
+            string_multiline=multiline,
+            string_height=height,
+            searchable=searchable,
+        )
+        self._store.register(descriptor, value)
+        return self._store.resolve(descriptor.id, value)
 
     def _register_scalar(self, descriptor: ParameterDescriptor, value: Any) -> Any:
         # Descriptor を登録（GUI 表示用）
@@ -543,6 +531,21 @@ class ParameterValueResolver:
             default_values = [0.0, 0.0, 0.0]
         dim = max(2, min(len(default_values), 4))
         return tuple(default_values[:dim])
+
+    @staticmethod
+    def _initial_vector_value(
+        raw_value: Any, default_tuple: tuple[float, ...], source: str
+    ) -> tuple[float, ...]:
+        """登録時に使用するベクトルの初期値を決定する。"""
+
+        if source == "provided":
+            if isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes)):
+                try:
+                    return tuple(float(v) for v in raw_value)  # type: ignore[return-value]
+                except Exception:
+                    return default_tuple
+            return default_tuple
+        return default_tuple
 
     @staticmethod
     def _ensure_vector_tuple(resolved: Any, fallback: tuple[float, ...]) -> tuple[float, ...]:

@@ -64,8 +64,8 @@
 ## パラメータ GUI / cc ルール（現行仕様）
 
 - cc は `api.cc` のグローバル辞書（`cc[i] -> float(0..1)`、未定義は 0.0）。`draw(t)` 内で自由に数値計算に使用。
-- GUI は「draw 内で未指定（＝既定値採用）の引数のみ」を対象に表示・調整する。
-- 優先順位は「明示引数 > GUI > 既定値」。MIDI→GUI の自動上書きは行わない（midi_override は廃止）。
+- GUI はすべての引数を対象に表示し、明示引数で与えた値も GUI から上書きできる。
+- 優先順位は「GUI override > 明示引数 > 既定値」。MIDI→GUI の自動上書きは行わない（midi_override は廃止）。
 - RangeHint は `__param_meta__` がある場合のみ用い、無い場合は 0–1 の既定レンジで扱う（クランプは表示上のみ）。
 - 署名生成（キャッシュ鍵）は `common.param_utils.params_signature` により「float のみ量子化」を行う（`__param_meta__['step']` 優先、未指定は 1e-6／`PXD_PIPELINE_QUANT_STEP` で上書き可、ベクトルは成分ごと）。Effects は量子化後の値が実行引数にも渡る。Shapes は鍵のみ量子化（実行はランタイム解決値）。
 - Runtime は `set_inputs(t)` のみを扱い、cc は関知しない（cc は `api.cc` 内でフレーム毎スナップショットとして更新）。

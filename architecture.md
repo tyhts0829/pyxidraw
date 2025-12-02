@@ -63,7 +63,7 @@
 - パイプライン
   - `PipelineBuilder` でステップを組み立て、`build()` で `Pipeline` を生成。
   - 共通バイパス: 各エフェクトは共通の `bypass: bool` を持つ。Parameter GUI からのトグル、または `E.<effect>(..., bypass=True)` 明示引数でスキップできる（`E.pipeline.<effect>` も同様）。
-    - GUI 優先順位: 「明示引数 > GUI > 既定値」。
+  - GUI 優先順位: 「GUI override > 明示引数 > 既定値」。全パラメータを GUI に登録し、明示値も後から GUI で上書きできる。
     - 実行: `bypass=True` のステップは Pipeline に追加されず、実行負荷は発生しない。
     - キャッシュ: `bypass` は署名生成に含めないため、キャッシュ鍵に影響しない。
   - 厳格検証（build 時の未知パラメータ検出）は行わない。実行時に関数シグネチャで自然に検出され得る。
@@ -357,7 +357,7 @@ Tips:
 - パラメータ UI/cc のルール（現行仕様）
   - cc は `api.cc` のグローバル辞書（`cc[i] -> float(0..1)`、未定義は 0.0）。`draw(t)` 内から数値式として自由に利用する。
   - GUI は「draw 内で未指定（＝シグネチャの既定値が採用された）引数のみ」を対象として表示・調整する。
-  - 値の優先順位は「明示引数 > GUI > 既定値」。MIDI による GUI 上書きは行わない（midi_override は廃止）。
+  - 値の優先順位は「GUI override > 明示引数 > 既定値」。MIDI による GUI 上書きは行わない（midi_override は廃止）。
   - RangeHint は `__param_meta__` がある場合のみ使用し、無い場合は 0–1 の既定レンジで扱う（クランプは表示上のみ）。
   - Runtime は `set_inputs(t)` のみ受け取り、cc は関与しない（cc は `api.cc` でフレーム毎に更新される）。
 - 公開面

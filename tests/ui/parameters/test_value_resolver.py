@@ -3,7 +3,7 @@ import inspect
 import pytest
 
 from engine.ui.parameters.state import ParameterStore
-from engine.ui.parameters.snapshot import extract_overrides
+from engine.ui.parameters.snapshot import SnapshotRuntime, extract_overrides
 from engine.ui.parameters.value_resolver import ParameterContext, ParameterValueResolver
 
 
@@ -44,7 +44,7 @@ def test_parameter_value_resolver_registers_scalars_with_meta():
     assert descriptor.help_text == "Effect doc"
 
 
-def test_parameter_value_resolver_passes_through_provided_actual_value():
+def test_parameter_value_resolver_registers_provided_actual_value():
     store = ParameterStore()
     resolver = ParameterValueResolver(store)
     context = ParameterContext(scope="effect", name="displace", index=0)
@@ -62,9 +62,10 @@ def test_parameter_value_resolver_passes_through_provided_actual_value():
         skip={"g"},
     )
     assert resolved["amplitude_mm"] == pytest.approx(0.5)
-    # provided 値は GUI 対象外のため Store には登録されない
+    # provided 値も Descriptor として登録され、GUI で上書き可能
     stored = store.original_value("effect.displace#0.amplitude_mm")
-    assert stored is None
+    assert stored == pytest.approx(0.5)
+    assert "effect.displace#0.amplitude_mm" in {d.id for d in store.descriptors()}
 
 
 def test_parameter_value_resolver_passes_through_large_actual_value():
@@ -85,6 +86,7 @@ def test_parameter_value_resolver_passes_through_large_actual_value():
         skip={"g"},
     )
     assert resolved["amplitude_mm"] == pytest.approx(2.5)
+    assert store.original_value("effect.displace#0.amplitude_mm") == pytest.approx(2.5)
 
 
 def test_parameter_value_resolver_handles_vector_params_defaults_register_gui():
@@ -213,3 +215,12 @@ def test_extract_overrides_applies_range_override_for_cc():
     overrides = extract_overrides(store, {7: 0.5})
 
     assert overrides["effect.displace#0.amplitude_mm"] == pytest.approx(15.0)
+
+
+def test_snapshot_runtime_overrides_explicit_params():
+    overrides = {"shape.text#0.text": "Updated"}
+    rt = SnapshotRuntime(overrides)
+    rt.begin_frame()
+    rt.set_inputs(0.0)
+    result = rt.before_shape_call("text", lambda **_: None, {"text": "Original"})
+    assert result["text"] == "Updated"

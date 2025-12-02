@@ -7,7 +7,7 @@
 設計要点:
 - 依存境界を保つため、Engine 側からはトップレベル関数 `apply_param_snapshot` を関数注入で呼ぶだけにする。
 - SnapshotRuntime は `ParameterRuntime` と互換のメソッドシグネチャ（before_*_call）を提供し、
-  「明示引数 > GUI > 既定値」の優先順位を保つ（未指定引数にのみ GUI 値を適用）。
+  「GUI override > 明示引数 > 既定値」を適用する（スナップショットにある値は常に実行引数を上書きする）。
 """
 
 from __future__ import annotations
@@ -186,22 +186,19 @@ class SnapshotRuntime:
         return params
 
     def _apply_overrides(self, prefix: str, params: dict[str, Any]) -> dict[str, Any]:
-        # 未指定の引数に限り、該当 prefix の override を適用
+        # 該当 prefix の override を常に適用（GUI 優先）
         updated = dict(params)
         plen = len(prefix)
         for key, value in self._overrides.items():
             if not key.startswith(prefix):
                 continue
-            # 期待形式: scope.name#index.param
             try:
                 # param_name は prefix の次の要素（'.' 区切りの末尾成分）
                 # 例: "shape.circle#0.radius" → "radius"
                 param_name = key[plen:]
                 if param_name.startswith("."):
                     param_name = param_name[1:]
-                # ネストはサポートしない前提（現仕様）
-                # 未指定（キーなし）または None の場合は GUI override を適用
-                if param_name and (param_name not in updated or updated.get(param_name) is None):
+                if param_name:
                     updated[param_name] = value
             except Exception:
                 continue
