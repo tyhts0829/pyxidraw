@@ -97,6 +97,7 @@ class ParameterWindowContentBuilder:
         self._palette_param_ids: set[str] = set()
         self._palette_preview_id: int | str | None = None
         self._palette_swatches_container: int | str | None = None
+        self._searchable_enum_state: dict[str, dict[str, Any]] = {}
 
     def build_root_window(self, root_tag: str, title: str) -> None:
         """ルートウィンドウを構築する。Style/パラメータ群は mount 時に追加する。"""
@@ -937,11 +938,20 @@ class ParameterWindowContentBuilder:
         if vt == "enum":
             items = list(desc.choices or [])
             default = str(value) if value is not None else (items[0] if items else "")
+            search_enabled = bool(getattr(desc, "searchable", False)) or str(desc.id).endswith(
+                ".font"
+            )
             use_radio = False
             if desc.id == "palette.type":
                 use_radio = True
             elif len(items) <= 5:
                 use_radio = True
+            if search_enabled:
+                use_radio = False
+            if search_enabled:
+                return self._create_searchable_combo(
+                    parent=parent, desc=desc, items=items, default=default
+                )
             if use_radio:
                 return dpg.add_radio_button(
                     tag=desc.id,
@@ -993,6 +1003,33 @@ class ParameterWindowContentBuilder:
         if vt == "int":
             return self._create_int(parent, desc, value)
         return self._create_float(parent, desc, value)
+
+    def _create_searchable_combo(
+        self, *, parent: int | str, desc: ParameterDescriptor, items: list[str], default: str
+    ) -> int | str:
+        """検索入力付きのコンボボックスを生成する。"""
+        base_items = list(items)
+        container = dpg.add_group(parent=parent, horizontal=False)
+        search_tag = f"{desc.id}::search"
+        search_box = dpg.add_input_text(
+            tag=search_tag,
+            parent=container,
+            hint="filter",
+            callback=self._on_enum_filter_change,
+            user_data=desc.id,
+        )
+        self._set_full_width(search_box)
+        combo = dpg.add_combo(
+            tag=desc.id,
+            items=base_items,
+            parent=container,
+            default_value=default,
+            callback=self._on_widget_change,
+            user_data=desc.id,
+        )
+        self._set_full_width(combo)
+        self._searchable_enum_state[desc.id] = {"items": base_items, "combo_id": desc.id}
+        return combo
 
     def _create_int(
         self,
@@ -1107,6 +1144,33 @@ class ParameterWindowContentBuilder:
         """Store の現在値があればそれを、なければ Descriptor の既定値を返す。"""
         v = self._store.current_value(desc.id)
         return v if v is not None else desc.default_value
+
+    def _on_enum_filter_change(self, sender: int | str, app_data: Any, user_data: Any) -> None:
+        """検索入力の変更に応じてコンボの候補をフィルターする。"""
+        if self._syncing:
+            return
+        param_id = str(user_data)
+        state = self._searchable_enum_state.get(param_id)
+        if not state:
+            return
+        base_items = list(state.get("items", []))
+        combo_id = state.get("combo_id", param_id)
+        text = str(app_data or "")
+        norm = text.lower()
+        filtered = (
+            [item for item in base_items if norm in str(item).lower()] if norm else list(base_items)
+        )
+        try:
+            current = dpg.get_value(combo_id)
+        except Exception:
+            current = None
+        if current:
+            filtered.insert(0, str(current))
+        filtered = self._dedup_items(filtered)
+        try:
+            dpg.configure_item(combo_id, items=filtered)
+        except Exception:
+            return
 
     def _on_widget_change(self, sender: int, app_data: Any, user_data: Any) -> None:  # noqa: D401
         """ウィジェット変更イベントから Store の override を更新する。"""
@@ -1440,6 +1504,19 @@ class ParameterWindowContentBuilder:
             except Exception:
                 continue
         return 0
+
+    @staticmethod
+    def _dedup_items(items: Sequence[str]) -> list[str]:
+        """順序を保ったまま重複を取り除く。"""
+        seen: set[str] = set()
+        out: list[str] = []
+        for item in items:
+            key = str(item)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(key)
+        return out
 
     def _set_full_width(self, item_id: int | str) -> None:
         """ウィジェット幅をセル幅いっぱいに広げる（失敗時は既定幅のまま）。"""

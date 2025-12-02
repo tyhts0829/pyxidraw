@@ -266,6 +266,7 @@ class ParameterValueResolver:
         choices_list = self._extract_choices(meta_map)
         supported = self._is_supported_passthrough_type(value_type, choices_list)
         multiline, height = self._string_meta(meta_map, value_type)
+        searchable = bool(meta_map.get("searchable")) if value_type == "enum" else False
         if source == "default":
             descriptor = self._build_descriptor(
                 context=context,
@@ -280,6 +281,7 @@ class ParameterValueResolver:
                 choices=choices_list,
                 string_multiline=multiline,
                 string_height=height,
+                searchable=searchable,
             )
             self._store.register(descriptor, value)
             return self._store.resolve(descriptor.id, value)
@@ -651,6 +653,7 @@ class ParameterValueResolver:
         choices: list[str] | None = None,
         string_multiline: bool | None = None,
         string_height: int | None = None,
+        searchable: bool = False,
     ) -> ParameterDescriptor:
         """ParameterDescriptor を組み立てる共通ヘルパ。"""
 
@@ -672,6 +675,7 @@ class ParameterValueResolver:
             choices=choices,
             string_multiline=bool(string_multiline) if string_multiline is not None else False,
             string_height=string_height or 0,
+            searchable=bool(searchable),
         )
 
 

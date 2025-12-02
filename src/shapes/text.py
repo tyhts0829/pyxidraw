@@ -485,7 +485,7 @@ setattr(
         "text": {"type": "string", "multiline": True, "height": 80},
         "em_size_mm": {"type": "number", "min": 1.0, "max": 100.0, "step": 0.5},
         # font は GUI から選択可能にする（候補は設定/OS のフォント列挙に基づく）
-        "font": {"choices": _font_choices()},
+        "font": {"choices": _font_choices(), "searchable": True},
         "font_index": {"type": "integer", "min": 0, "max": 32, "step": 1},
         "text_align": {"choices": ["left", "center", "right"]},
         "tracking_em": {"type": "number", "min": 0.0, "max": 0.5, "step": 0.01},
