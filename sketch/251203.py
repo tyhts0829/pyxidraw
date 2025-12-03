@@ -3,7 +3,7 @@ from api import E, G, run
 
 def draw(t: float):
     poly = G.grid()
-    effect = E.affine().subdivide().displace(t_sec=t * 0.1)
+    effect = E.affine().subdivide().displace(t_sec=t * 0.1).rotate()
     return effect(poly)
 
 

@@ -131,6 +131,8 @@ user draw(t) -> Geometry  --WorkerPool--> SwapBuffer --Renderer(ModernGL)--> Win
 - `effects/`: 幾何処理のオペレータ群と `registry.py`。
   - 代表例: `affine(auto_center: bool, pivot: Vec3, rotation: Vec3, scale: Vec3, delta: Vec3)` —
     `auto_center=True` でジオメトリの平均座標を中心に使用。`False` で `pivot` を使用。
+  - `displace`: Perlin ノイズ変位。`amplitude_gradient` / `frequency_gradient` で軸方向に
+    振幅と空間周波数を線形変調し、`min_gradient_factor` / `max_gradient_factor` でソフトクランプ。
 - `shapes/`: プリミティブ形状と `registry.py`。
 - `common/`, `util/`: ロギング、型、幾何ユーティリティ、定数、設定ロード。
 

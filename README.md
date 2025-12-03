@@ -26,6 +26,9 @@ if __name__ == "__main__":
 ## Features
 
 - All parameters for shapes and effects can be tweaked live through the Parameter GUI.
+- `api.G` generates primitive shapes such as sphere, polyhedron, grid, and more.
+- `api.E` plets you modulate and transform shapes.
+- `api.run` take user draw function
 - `api.cc` links MIDI controllers to parameters so that sliders, knobs, or pads can drive sketches.
 - `api.lfo` provides tempo-synced oscillators for modulating any numeric parameter over time.
 - `api.L` defines layers, allowing colors, stroke widths, and other styling attributes to be managed per layer.
