@@ -763,6 +763,30 @@ def run_sketch(
                     runtime.overlay.show_message(f"Saved MP4: {path}")
         except Exception as exc:
             logger.warning("failed to stop video recorder on close: %s", exc, exc_info=True)
+        # MIDI 調整値を GUI 永続化にも反映する（終了時に 1 度だけ）
+        try:
+            if parameter_manager is not None:
+                from engine.ui.parameters.snapshot import extract_overrides as _extract_overrides
+                from engine.ui.parameters.persistence import save_overrides as _save_overrides
+
+                cc_map_on_close = None
+                try:
+                    cc_map_on_close = cc_snapshot_fn() if callable(cc_snapshot_fn) else None
+                except Exception:
+                    cc_map_on_close = None
+                overrides_on_close = _extract_overrides(parameter_manager.store, cc_map_on_close)
+                try:
+                    for pid, val in overrides_on_close.items():
+                        try:
+                            parameter_manager.store.set_override(pid, val)
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                _ = overrides_on_close  # lint 抑制（store の状態をそのまま保存に使う）
+                _save_overrides(parameter_manager.store, script_path=None)
+        except Exception as exc:
+            logger.debug("failed to persist GUI overrides on close: %s", exc, exc_info=True)
         try:
             if use_midi and runtime.midi_manager is not None:
                 runtime.midi_manager.save_cc()

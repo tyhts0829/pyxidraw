@@ -8,4 +8,4 @@ def draw(t: float):
 
 
 if __name__ == "__main__":
-    run(draw, canvas_size="SQUARE_300", render_scale=4)
+    run(draw, canvas_size="SQUARE_300", render_scale=6)

@@ -292,9 +292,16 @@ class ParameterValueResolver:
             cc_idx = self._store.cc_binding(descriptor.id)
         except Exception:
             cc_idx = None
-        if cc_idx is not None and descriptor.value_type in {"float", "int"}:
+        base_value = self._store.resolve(descriptor.id, value)
+        if (
+            cc_idx is not None
+            and descriptor.value_type in {"float", "int"}
+            and self._store.has_cc_data()
+        ):
             try:
-                cc_val = float(self._store.cc_value(cc_idx))  # 0..1
+                cc_val, cc_present = self._store.cc_value_with_presence(cc_idx)
+                if not cc_present:
+                    return base_value
                 lo, hi = effective_range_for_descriptor(
                     descriptor, self._store, layout=self._layout
                 )
@@ -306,7 +313,7 @@ class ParameterValueResolver:
                 # フェイルソフト: CC 適用に失敗したら通常経路
                 pass
         # 通常経路（override があればそれを適用）
-        return self._store.resolve(descriptor.id, value)
+        return base_value
 
     # _register_vector は親 Descriptor 化に伴い廃止
 
@@ -589,10 +596,12 @@ class ParameterValueResolver:
                     cc_idx = self._store.cc_binding(comp_id)
                 except Exception:
                     cc_idx = None
-                if cc_idx is None:
+                if cc_idx is None or not self._store.has_cc_data():
                     continue
                 try:
-                    cc_val = float(self._store.cc_value(cc_idx))
+                    cc_val, cc_present = self._store.cc_value_with_presence(cc_idx)
+                    if not cc_present:
+                        continue
                     lo = float(mins[index]) if index < len(mins) else 0.0
                     hi = float(maxs[index]) if index < len(maxs) else 1.0
                     vec[index] = lo + (hi - lo) * cc_val

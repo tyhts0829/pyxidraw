@@ -251,6 +251,11 @@ class ParameterStore:
 
     def cc_value(self, index: int) -> float:
         """指定 CC 番号の 0..1 値を返す（未定義は 0.0）。"""
+        val, _ = self.cc_value_with_presence(index)
+        return val
+
+    def cc_value_with_presence(self, index: int) -> tuple[float, bool]:
+        """指定 CC 番号の 0..1 値と、値が存在したかのフラグを返す。"""
         try:
             i = int(index)
         except Exception:
@@ -258,14 +263,41 @@ class ParameterStore:
         provider = self._cc_provider
         try:
             mapping = provider() if callable(provider) else {}
-            v = float(mapping.get(i, 0.0))
-            if v < 0.0:
-                return 0.0
-            if v > 1.0:
-                return 1.0
-            return v
         except Exception:
-            return 0.0
+            mapping = {}
+        present = False
+        try:
+            if isinstance(mapping, Mapping):
+                if i in mapping:
+                    v = float(mapping[i])
+                    present = True
+                else:
+                    v = 0.0
+            else:
+                v = float(mapping[i])  # type: ignore[index]
+                present = True
+        except Exception:
+            v = 0.0
+            present = False
+        if v < 0.0:
+            v = 0.0
+        if v > 1.0:
+            v = 1.0
+        return v, present
+
+    def has_cc_data(self) -> bool:
+        """現在の CC プロバイダに値があるかを返す。"""
+        provider = self._cc_provider
+        try:
+            mapping = provider() if callable(provider) else {}
+        except Exception:
+            return False
+        try:
+            if isinstance(mapping, Mapping):
+                return bool(mapping)
+            return bool(mapping)
+        except Exception:
+            return False
 
     def bind_cc(self, param_id: str, index: int | None) -> None:
         """パラメータに CC 番号をバインド/解除する（None で解除）。"""

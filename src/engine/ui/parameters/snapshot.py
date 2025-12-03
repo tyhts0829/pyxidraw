@@ -57,6 +57,7 @@ def extract_overrides(
         overrides[pid] = cur
 
     # 2) CC バインドの適用（数値スカラ）。GUI 値があっても CC を優先。
+    use_cc = bool(cc_mapping)  # 空/None のときは CC 適用をスキップ
     for desc in store.descriptors():
         if desc.value_type not in {"float", "int"}:
             continue
@@ -66,11 +67,11 @@ def extract_overrides(
             cc_idx = store.cc_binding(pid)
         except Exception:
             cc_idx = None
-        if cc_idx is None:
+        if cc_idx is None or not use_cc:
             continue
         try:
             # 優先: 呼び出し元から渡された cc_mapping（フレーム固有）
-            if cc_mapping is not None and isinstance(cc_mapping, Mapping):
+            if use_cc and isinstance(cc_mapping, Mapping):
                 cc_val = float(cc_mapping.get(int(cc_idx), 0.0))
             else:
                 cc_val = float(store.cc_value(cc_idx))  # 0..1（プロバイダ）
@@ -96,7 +97,7 @@ def extract_overrides(
             comp_cc: list[int | None] = [store.cc_binding(f"{pid}::{s}") for s in suffixes]
         except Exception:
             comp_cc = [None, None, None, None]
-        if not any(x is not None for x in comp_cc):
+        if not use_cc or not any(x is not None for x in comp_cc):
             continue
         # ベースベクトル（current→original→default の順で取得）
         try:
