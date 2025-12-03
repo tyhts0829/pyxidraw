@@ -25,14 +25,17 @@ if __name__ == "__main__":
 
 ## Features
 
-- All parameters for shapes and effects can be tweaked live through the Parameter GUI.
-- `api.G` generates primitive shapes such as sphere, polyhedron, grid, and more.
-- `api.E` plets you modulate and transform shapes.
-- `api.run` take user draw function
-- `api.cc` links MIDI controllers to parameters so that sliders, knobs, or pads can drive sketches.
-- `api.lfo` provides tempo-synced oscillators for modulating any numeric parameter over time.
-- `api.L` defines layers, allowing colors, stroke widths, and other styling attributes to be managed per layer.
-- Press `P` (`Shift+P` for high resolution) to save a screenshot, `V` (`Shift+V`) to capture a video, and `G` to export G-code for pen plotters.
+- `api.G` lets you generate primitive shapes such as `sphere`, `polyhedron`, `grid`, and more.
+- `api.E` lets you modulate and transform shapes such as `affine`, `fill`, `repeat`, and more.
+- `api.L` lets you define layers so you can manage colors, stroke widths, and other styling attributes per layer.
+- `api.run` lets you render any shapes, effects, and layers that a user-defined `draw(t)` function returns on each frame.
+- `api.cc` lets you map MIDI controllers to parameters so sliders, knobs, and pads can drive your sketches.
+- `api.lfo` lets you create tempo-synced oscillators for modulating any numeric parameter over time.
+- `Parameter GUI` lets you tweak all shape and effect parameters live while the sketch is running.
+- `Keyboard shortcuts` let you capture output while a sketch is running:
+  - `P` lets you save a screenshot (`Shift+P` for high resolution).
+  - `V` lets you record a video of the sketch (`Shift+V` for high resolution).
+  - `G` lets you export per-layer G-code for pen plotters.
 
 ## Configurations
 
